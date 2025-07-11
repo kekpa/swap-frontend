@@ -232,7 +232,7 @@ export const useWebSocketQuerySync = (entityId: string) => {
    */
   const handleTransactionUpdateOptimistically = (data: TransactionUpdateData) => {
     // Update transaction in recent transactions cache
-    const recentTransactionsKey = queryKeys.recentTransactionsByEntity(entityId);
+    const recentTransactionsKey = queryKeys.recentTransactions(entityId, 20);
     
     queryClient.setQueryData(recentTransactionsKey, (oldTransactions: any[] | undefined) => {
       if (!oldTransactions) return oldTransactions;
@@ -258,7 +258,7 @@ export const useWebSocketQuerySync = (entityId: string) => {
   const invalidateMessageQueries = (data: MessageData) => {
     // Invalidate timeline for this specific interaction
     queryClient.invalidateQueries({
-      queryKey: queryKeys.timelineByInteraction(data.interaction_id),
+      queryKey: queryKeys.timeline(data.interaction_id),
       refetchType: 'none', // Don't refetch immediately since we have optimistic data
     });
 
@@ -270,7 +270,7 @@ export const useWebSocketQuerySync = (entityId: string) => {
 
     // Invalidate search results if this might affect them
     queryClient.invalidateQueries({
-      queryKey: queryKeys.searchEntities(),
+      queryKey: queryKeys.search,
       refetchType: 'none',
     });
 
@@ -283,13 +283,13 @@ export const useWebSocketQuerySync = (entityId: string) => {
   const invalidateTransactionQueries = (data: TransactionUpdateData) => {
     // Invalidate recent transactions
     queryClient.invalidateQueries({
-      queryKey: queryKeys.recentTransactionsByEntity(entityId),
+      queryKey: queryKeys.recentTransactions(entityId, 20),
       refetchType: 'active',
     });
 
     // Invalidate all transaction queries
     queryClient.invalidateQueries({
-      queryKey: queryKeys.transactions(),
+      queryKey: queryKeys.transactions,
       refetchType: 'active',
     });
 
@@ -344,7 +344,7 @@ export const useWebSocketQueryInvalidation = () => {
 
   const invalidateTransactions = (entityId: string) => {
     queryClient.invalidateQueries({
-      queryKey: queryKeys.recentTransactionsByEntity(entityId),
+      queryKey: queryKeys.recentTransactions(entityId, 20),
       refetchType: 'active',
     });
   };
@@ -358,7 +358,7 @@ export const useWebSocketQueryInvalidation = () => {
 
   const invalidateTimeline = (interactionId: string) => {
     queryClient.invalidateQueries({
-      queryKey: queryKeys.timelineByInteraction(interactionId),
+      queryKey: queryKeys.timeline(interactionId),
       refetchType: 'active',
     });
   };

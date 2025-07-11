@@ -40,6 +40,7 @@ export const queryKeys = {
   
   // User/Profile related queries
   profile: ['profile'] as const,
+  userProfile: (entityId: string) => ['profile', 'user', entityId] as const,
   currentProfile: (entityId: string) => ['profile', 'current', entityId] as const,
   profileDetails: (entityId: string) => ['profile', 'details', entityId] as const,
   
