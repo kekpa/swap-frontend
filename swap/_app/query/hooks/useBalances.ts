@@ -153,33 +153,40 @@ export const useBalances = (entityId: string) => {
     queryKey: queryKeys.balancesByEntity(entityId),
     queryFn: () => fetchBalancesLocalFirst(entityId),
     
-    // Local-first configuration
-    staleTime: 2 * 60 * 1000, // 2 minutes - consider data fresh
-    gcTime: 10 * 60 * 1000,   // 10 minutes - keep in memory
+    // True local-first configuration
+    staleTime: 5 * 60 * 1000, // 5 minutes - balance data can be slightly stale
+    gcTime: 24 * 60 * 60 * 1000, // 24 hours - keep in memory longer for offline use
     
-    // Network behavior
-    networkMode: 'offlineFirst', // Show cached data when offline
+    // Network behavior optimized for local-first
+    networkMode: 'offlineFirst', // Always show cached data first
     refetchOnWindowFocus: false, // Don't refetch on focus (mobile optimization)
     refetchOnReconnect: true,    // Refetch when network reconnects
+    refetchOnMount: true,        // Check for updates on mount, but don't block
     
-    // Always try to get data, even if cached
-    refetchOnMount: 'always',
+    // Background updates without blocking UI
+    refetchInterval: 10 * 60 * 1000, // Background refresh every 10 minutes when active
+    refetchIntervalInBackground: false, // Don't refetch when app is backgrounded
     
-    // Error handling
+    // Error handling optimized for offline scenarios
     retry: (failureCount, error: any) => {
       // Don't retry if offline
       if (!networkService.isOnline) {
         return false;
       }
       
-      // Don't retry on 4xx errors
+      // Don't retry on client errors (4xx)
       if (error?.status >= 400 && error?.status < 500) {
         return false;
       }
       
-      // Retry up to 2 times for network errors
-      return failureCount < 2;
+      // Conservative retry for financial data
+      return failureCount < 1;
     },
+    
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+    
+    // Advanced local-first options
+    structuralSharing: true, // Optimize re-renders by sharing unchanged data
   });
 };
 
