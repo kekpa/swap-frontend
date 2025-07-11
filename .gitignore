@@ -4,9 +4,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Environment variables - ALL VARIANTS
+# Environment variables - ALL VARIANTS (but allow templates)
 .env
-.env.*
 .env.local
 .env.development
 .env.test
@@ -14,6 +13,9 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
+# Allow template files
+!.env.template
+!.env.*.template
 
 # Expo
 .expo/
