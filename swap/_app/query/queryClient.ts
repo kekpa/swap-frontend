@@ -5,10 +5,14 @@
  * - Background refetch when app becomes active
  * - Intelligent caching with proper stale times
  * - Network-aware behavior
+ * - Persistent cache with AsyncStorage
  */
 
 import { QueryClient } from '@tanstack/react-query';
 import { AppState, Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createAsyncStoragePersister } from '@tanstack/query-sync-storage-persister';
+import { persistQueryClient } from '@tanstack/react-query-persist-client';
 import { logger } from '../utils/logger';
 import { networkService } from '../services/NetworkService';
 
@@ -56,6 +60,46 @@ export const queryClient = new QueryClient({
   },
 });
 
+// Create AsyncStorage persister for cache persistence
+export const asyncStoragePersister = createAsyncStoragePersister({
+  storage: AsyncStorage,
+  key: 'SWAP_TANSTACK_QUERY_CACHE',
+  serialize: JSON.stringify,
+  deserialize: JSON.parse,
+  // Keep cache for 7 days when app is not used
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+});
+
+// Initialize cache persistence
+let persistenceInitialized = false;
+
+export const initializeCachePersistence = async () => {
+  if (persistenceInitialized) return;
+  
+  try {
+    logger.info('[QueryClient] 🔄 Initializing cache persistence...');
+    
+    await persistQueryClient({
+      queryClient,
+      persister: asyncStoragePersister,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      buster: 'v1.0', // Update when cache structure changes
+      dehydrateOptions: {
+        // Only persist successful queries
+        shouldDehydrateQuery: (query) => {
+          return query.state.status === 'success';
+        },
+      },
+    });
+    
+    persistenceInitialized = true;
+    logger.info('[QueryClient] ✅ Cache persistence initialized successfully');
+  } catch (error) {
+    logger.error('[QueryClient] ❌ Failed to initialize cache persistence:', error);
+    // Don't throw - app should work without persistence
+  }
+};
+
 // React Native App State integration
 let appStateSubscription: any = null;
 
@@ -92,8 +136,11 @@ export const setupNetworkRefetch = () => {
 };
 
 // Initialize integrations
-export const initializeQueryClient = () => {
+export const initializeQueryClient = async () => {
   logger.info('[QueryClient] Initializing TanStack Query with React Native optimizations');
+  
+  // Initialize cache persistence first
+  await initializeCachePersistence();
   
   setupAppStateRefetch();
   setupNetworkRefetch();
