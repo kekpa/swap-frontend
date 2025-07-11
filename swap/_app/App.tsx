@@ -18,7 +18,7 @@ import { LogLevel, setLogLevel, setLogCategory } from "./utils/logger";
 import { NavigationContainer } from "@react-navigation/native";
 import RootNavigator from "./navigation/rootNavigator";
 import { AuthProvider } from "./features/auth/context/AuthContext";
-import { DataProvider } from "@/_app/contexts/DataContext";
+import { DataProvider } from "./contexts/DataContext";
 import { RefreshProvider } from "./contexts/RefreshContext";
 import { QueryProvider } from "./query/QueryProvider";
 import { ToastContainer } from "./components/Toast";

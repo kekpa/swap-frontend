@@ -2,7 +2,7 @@
  * QueryProvider Component
  * 
  * Provides TanStack Query context to the entire app.
- * Handles QueryClient initialization and cleanup with cache persistence.
+ * Handles QueryClient initialization and cleanup.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -10,17 +10,6 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { queryClient, initializeQueryClient, cleanupQueryClient } from './queryClient';
 import { logger } from '../utils/logger';
-
-// Conditionally import React Query DevTools for development
-let ReactQueryDevtools: React.ComponentType<any> | null = null;
-if (__DEV__) {
-  try {
-    const devtools = require('@tanstack/react-query-devtools');
-    ReactQueryDevtools = devtools.ReactQueryDevtools;
-  } catch (error) {
-    logger.warn('[QueryProvider] React Query DevTools not available:', error);
-  }
-}
 
 interface QueryProviderProps {
   children: React.ReactNode;
@@ -56,7 +45,7 @@ export const QueryProvider: React.FC<QueryProviderProps> = ({ children }) => {
     };
   }, []);
 
-  // Show loading while initializing cache persistence
+  // Show loading while initializing
   if (!isInitialized && !initError) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
@@ -69,14 +58,7 @@ export const QueryProvider: React.FC<QueryProviderProps> = ({ children }) => {
   return (
     <QueryClientProvider client={queryClient}>
       {children}
-      {/* Add React Query DevTools in development mode */}
-      {__DEV__ && ReactQueryDevtools && (
-        <ReactQueryDevtools 
-          initialIsOpen={false} 
-          client={queryClient}
-          buttonPosition="bottom-right"
-        />
-      )}
+      {/* TODO: Re-add DevTools after fixing web component issues */}
     </QueryClientProvider>
   );
 };
