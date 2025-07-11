@@ -4,9 +4,16 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Environment variables
+# Environment variables - ALL VARIANTS
 .env
 .env.*
+.env.local
+.env.development
+.env.test
+.env.production
+.env.development.local
+.env.test.local
+.env.production.local
 
 # Expo
 .expo/
@@ -20,7 +27,6 @@ web-build/
 *.p12
 *.key
 *.mobileprovision
-*.orig.*
 web-build/
 
 # macOS
