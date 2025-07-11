@@ -15,13 +15,22 @@ import { createAsyncStoragePersister } from '@tanstack/query-sync-storage-persis
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
 import { logger } from '../utils/logger';
 import { networkService } from '../services/NetworkService';
+import { staleTimeManager, getStaleTimeForQuery } from './config/staleTimeConfig';
 
 // Create QueryClient with React Native optimizations
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       // Local-first: Show cached data immediately, refetch in background
-      staleTime: 2 * 60 * 1000, // 2 minutes - data considered fresh
+      // Dynamic stale time based on query type and user behavior
+      staleTime: (query) => {
+        const queryKey = query.queryKey;
+        if (Array.isArray(queryKey) && queryKey.length > 0) {
+          const queryType = typeof queryKey[0] === 'string' ? queryKey[0] : 'default';
+          return getStaleTimeForQuery(queryType);
+        }
+        return 2 * 60 * 1000; // 2 minutes default
+      },
       gcTime: 10 * 60 * 1000,   // 10 minutes - garbage collection time (formerly cacheTime)
       
       // Network behavior
@@ -108,6 +117,9 @@ export const setupAppStateRefetch = () => {
     appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
       logger.debug('[QueryClient] App state changed to:', nextAppState);
       
+      // Update stale time manager behavior based on app state
+      staleTimeManager.adjustForAppState(nextAppState);
+      
       if (nextAppState === 'active') {
         // App became active - refetch stale queries
         queryClient.invalidateQueries();
@@ -122,6 +134,9 @@ export const setupNetworkRefetch = () => {
   networkService.on('online', () => {
     logger.debug('[QueryClient] Network reconnected - refetching stale queries');
     
+    // Update stale time manager for online state
+    staleTimeManager.adjustForNetwork(true, false);
+    
     // Refetch all queries when coming back online
     queryClient.invalidateQueries();
   });
@@ -129,6 +144,9 @@ export const setupNetworkRefetch = () => {
   // Pause queries when offline
   networkService.on('offline', () => {
     logger.debug('[QueryClient] Network disconnected - pausing background refetch');
+    
+    // Update stale time manager for offline state
+    staleTimeManager.adjustForNetwork(false);
     
     // TanStack Query will automatically pause background refetch when offline
     // due to networkMode: 'offlineFirst' configuration
