@@ -1,0 +1,237 @@
+// Updated: Set as placeholder for web version - grid rendering handled by map library - 2024-07-02
+// Updated: Implemented vector tile grid with proper visibility control - 2024-07-04
+// Updated: Fixed vector source type to work properly with GeoJSON data - 2024-07-04
+// Updated: Fixed grid to use consistent geohash level 9 with proper full coverage - 2024-07-10
+// Updated: Fixed grid fade transitions and persistence across map style changes - 2024-07-12
+// Updated: Improved grid rendering with smooth transitions and unified appearance - 2024-07-12
+// Updated: Refactored to use persistent layers/source for stability - 2024-07-12
+// Updated: Replaced H3 with standard geohash algorithm - 2024-07-03
+// Updated: Added vector tile support for improved grid performance - 2024-07-04
+// Updated: Fixed grid to use consistent geohash level 9 with proper alignment - 2024-07-10
+// Updated: Improved grid generation with pre-loading and smoother transitions - 2024-07-12
+// Updated: Added detailed logging for troubleshooting grid disappearance - 2024-07-12
+// Updated: Tied initialization to map 'load' event for reliability - 2024-07-12
+// Updated: Reverted to create/destroy logic, adjusted thresholds for smoothness - 2024-07-12
+// Updated: Made create/destroy logic more robust to prevent state errors - 2024-07-12
+// Updated: Implemented delayed destroy for smoother fade-out, refined style handling - 2024-07-12
+// Updated: Simplified style change handling, relying on main effect for recreation - 2024-07-12
+// Updated: Reinstated persistent layer strategy with robust state handling - 2024-07-12
+// Updated: Added more detailed logging to visibility check function - 2024-07-12
+// Updated: Final attempt - Robust create/destroy, smaller padding, experimental clear-update - 2024-07-12
+// Updated: Removed potentially problematic map.loaded() check from main effect - 2024-07-12
+// Updated: Allow main effect to run create/listeners even if map.loaded() is transiently false - 2024-07-12
+// Updated: Removed experimental clear-update, debounced zoomEnd update for smoothness - 2024-07-12
+// Updated: Ensure initial data load happens reliably after grid creation - 2024-07-12
+// Updated: Explicitly tie initial grid creation to map 'load' event - 2024-07-12
+// Updated: Corrected initial map load effect logic - 2024-07-12
+// Updated: Initial WebGL setup for grid overlay - 2024-07-16
+// Updated: Refactored to use Deck.gl for grid overlay - 2024-07-16
+// Updated: Fixed linter errors - 2024-07-16
+// Updated: Debounced grid generation and added smooth fade transition - 2024-07-16
+// Updated: Fixed linter errors from debounce/transition implementation - 2024-07-16
+// Updated: Increased fade duration, debounce time, adjusted styling and fade logic - 2024-07-16
+// Updated: Used inline type for mapType prop - 2024-07-16
+// Updated: Fixed discontinuous grid by reverting to proper padding - 2024-07-26
+
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { DeckGL, LineLayer, MapView } from 'deck.gl';
+// import { easing } from 'popmotion'; // Removed popmotion dependency
+import debounce from 'lodash.debounce';
+// import { BoundingBox, MapLayerType } from '../types/map'; // Import MapLayerType - Removed
+import { BoundingBox } from '../../../../swap/_app/types/map'; // Keep BoundingBox
+import { ZOOM_THRESHOLDS, GRID } from '../../../../swap/_app/constants/mapConstants';
+import { generateCompleteGeohashGrid } from '../services/gridService';
+
+// Helper to convert GeoJSON Polygons from gridService to LineLayer data
+function geohashGridToLines(gridData: GeoJSON.FeatureCollection): Array<{ sourcePosition: [number, number], targetPosition: [number, number] }> {
+  const lines: Array<{ sourcePosition: [number, number], targetPosition: [number, number] }> = [];
+  if (!gridData || !gridData.features) {
+    return lines;
+  }
+
+  gridData.features.forEach(feature => {
+    if (feature.geometry.type === 'Polygon') {
+      const coordinates = feature.geometry.coordinates[0]; // Exterior ring
+      if (coordinates && coordinates.length > 1) {
+        for (let i = 0; i < coordinates.length - 1; i++) {
+          // Ensure coordinates are valid numbers
+          const p1 = coordinates[i];
+          const p2 = coordinates[i + 1];
+          if (p1 && p2 && typeof p1[0] === 'number' && typeof p1[1] === 'number' &&
+              typeof p2[0] === 'number' && typeof p2[1] === 'number') {
+            lines.push({
+              sourcePosition: [p1[0], p1[1]], // lng, lat
+              targetPosition: [p2[0], p2[1]]  // lng, lat
+            });
+          }
+        }
+      }
+    }
+  });
+  return lines;
+}
+
+// Component props
+interface GridOverlayProps {
+  mapInstance: any; // The MapLibre instance
+  zoomLevel: number;
+  visible?: boolean;
+  // mapType: MapLayerType; // Use imported type - Removed
+  mapType: 'standard' | 'satellite'; // Use inline union type
+}
+
+// Reduce debounce time - long debounce causes more gaps
+const DEBOUNCE_GRID_UPDATE_MS = 100; // Reduced debounce time
+const FADE_TRANSITION_DURATION = 500; // Kept the same
+const GRID_LINE_WIDTH = 0.3; // Thinner lines
+const GRID_COLOR_STANDARD: [number, number, number] = [180, 180, 180]; // Light gray
+const GRID_COLOR_SATELLITE: [number, number, number] = [204, 204, 204]; // Light Gray (#CCCCCC) for satellite
+
+/**
+ * GridOverlay for web using Deck.gl
+ * Renders grid lines onto a separate canvas overlay, synchronized with MapLibre.
+ * Includes debounced grid updates and smooth fade transitions.
+ */
+const GridOverlay2: React.FC<GridOverlayProps> = ({ mapInstance, zoomLevel, visible = true, mapType }) => {
+  const deckRef = useRef<any | null>(null);
+  const [viewState, setViewState] = useState<any>({}); // Deck.gl view state
+  const [gridLines, setGridLines] = useState<Array<{ sourcePosition: [number, number], targetPosition: [number, number] }>>([]);
+
+  const shouldShowGrid = visible && zoomLevel >= ZOOM_THRESHOLDS.GRID_FADE_IN;
+  // Base opacity target (0 or 1 based on zoom)
+  const targetGridOpacity = shouldShowGrid ? 1 : 0;
+
+  // --- Debounced Grid Generation --- //
+  const debouncedUpdateGridLines = useMemo(() =>
+    debounce((currentMapInstance: any) => {
+      if (!currentMapInstance || !visible) {
+        // Don't generate if map gone or explicitly hidden
+        return;
+      }
+      // Only generate if zoom level warrants it
+      if (zoomLevel < ZOOM_THRESHOLDS.GRID_FADE_IN) {
+        // Don't generate if below threshold
+        return;
+      }
+
+      console.log('[GridOverlay2 DeckGL] Debounced grid generation triggered.');
+      try {
+        const bounds = currentMapInstance.getBounds();
+        
+        // Use the standard bounds without manual padding override
+        const boundingBox: BoundingBox = {
+          minLng: bounds.getWest(),
+          maxLng: bounds.getEast(),
+          minLat: bounds.getSouth(),
+          maxLat: bounds.getNorth(),
+        };
+        
+        // Use the standard GRID.EXTRA_PADDING_PERCENT from constants
+        // Don't override with hardcoded values
+        const gridData = generateCompleteGeohashGrid(boundingBox, GRID.GEOHASH_PRECISION);
+        const lines = geohashGridToLines(gridData);
+        console.log(`[GridOverlay2 DeckGL] Generated ${lines.length} grid line segments.`);
+        
+        // Only update state if new lines were actually generated
+        if (lines.length > 0) {
+        setGridLines(lines);
+        }
+      } catch (e) {
+        console.error("[GridOverlay2 DeckGL] Error during debounced grid generation:", e);
+      }
+    }, DEBOUNCE_GRID_UPDATE_MS), [visible, zoomLevel]);
+
+  // --- Synchronize Deck.gl View State with MapLibre --- //
+  useEffect(() => {
+    if (!mapInstance) return;
+
+    const updateViewStateAndTriggerGrid = () => {
+      if (!mapInstance) return;
+      const { lng, lat } = mapInstance.getCenter();
+      // Update camera view state immediately
+      setViewState({
+        longitude: lng,
+        latitude: lat,
+        zoom: mapInstance.getZoom(),
+        pitch: mapInstance.getPitch(),
+        bearing: mapInstance.getBearing(),
+      });
+
+      // Trigger the debounced grid update if conditions are met
+      if (visible && zoomLevel >= ZOOM_THRESHOLDS.GRID_FADE_IN) {
+          debouncedUpdateGridLines(mapInstance);
+      }
+      // If conditions are not met, the debounced function won't run or will return early,
+      // allowing the existing lines to fade out via the transition.
+    };
+
+    // Initial sync
+    updateViewStateAndTriggerGrid();
+
+    // Listen to map events
+    mapInstance.on('move', updateViewStateAndTriggerGrid);
+    mapInstance.on('zoom', updateViewStateAndTriggerGrid);
+    mapInstance.on('pitch', updateViewStateAndTriggerGrid);
+    mapInstance.on('rotate', updateViewStateAndTriggerGrid);
+
+    return () => {
+      // Clean up listeners and cancel any pending debounced calls
+      mapInstance.off('move', updateViewStateAndTriggerGrid);
+      mapInstance.off('zoom', updateViewStateAndTriggerGrid);
+      mapInstance.off('pitch', updateViewStateAndTriggerGrid);
+      mapInstance.off('rotate', updateViewStateAndTriggerGrid);
+      debouncedUpdateGridLines.cancel();
+    };
+  }, [mapInstance, visible, zoomLevel, debouncedUpdateGridLines]); // Add zoomLevel and visible
+
+   // Trigger grid update explicitly when visibility or threshold crossing changes
+   // This ensures grid appears/disappears correctly without waiting for map move
+  useEffect(() => {
+    if (visible && zoomLevel >= ZOOM_THRESHOLDS.GRID_FADE_IN) {
+        debouncedUpdateGridLines(mapInstance);
+    }
+    // No cleanup cancellation needed here as the main effect handles it.
+  }, [visible, zoomLevel, mapInstance, debouncedUpdateGridLines]);
+
+  // --- Define Deck.gl Layers --- //
+  const gridColor = mapType === 'satellite' ? GRID_COLOR_SATELLITE : GRID_COLOR_STANDARD;
+  const layers = [
+    new LineLayer({
+      id: 'geohash-grid-lines',
+      data: gridLines,
+      getSourcePosition: d => d.sourcePosition,
+      getTargetPosition: d => d.targetPosition,
+      // Target color based on mapType and final desired opacity
+      getColor: [gridColor[0], gridColor[1], gridColor[2], Math.floor(targetGridOpacity * 255)],
+      getWidth: GRID_LINE_WIDTH,
+      widthUnits: 'pixels',
+      transitions: {
+        getColor: {
+          duration: FADE_TRANSITION_DURATION,
+          enter: (value: number[]) => [value[0], value[1], value[2], 0]
+        }
+      }
+    })
+  ];
+
+  // --- Render DeckGL Component --- //
+  return (
+    <DeckGL
+      ref={deckRef}
+      viewState={viewState} // Control view state externally
+      controller={false} // Let MapLibre control the view
+      views={new MapView({id: 'maplibre-view', controller: false})} // Match MapLibre view
+      layers={layers}
+      style={{
+        position: 'absolute',
+        top: '0px',
+        left: '0px',
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none' // Let map handle interactions
+      }}
+    />
+  );
+};
+
+export default React.memo(GridOverlay2);

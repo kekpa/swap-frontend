@@ -1,0 +1,951 @@
+// Updated: Integrated all components to match titato.html design - 2023-06-26
+// Updated: Responsive design to match mobile app on small screens - 2024-06-30
+// Updated: Fixed search results not closing with back button on web - 2024-06-30
+// Updated: Fixed React hooks error with search focus handling - 2024-07-01
+// Updated: Added direct force-update mechanism for SearchResults visibility - 2024-07-01
+// Updated: Enhanced search results closing behavior on web platform - 2024-07-02
+// Updated: Refactored to use centralized search focus state from mapStore - 2024-07-02
+// Updated: Added dropdown-style search results for larger web screens - 2024-07-02
+// Updated: Implemented standard geohash grid (level 9) with universal coords - 2024-07-03
+// Updated: Fixed grid visibility when switching between map layers - 2024-07-03
+// Updated: Enhanced grid visibility to ensure it shows on top of both map layers - 2024-07-03
+// Updated: Fixed grid rendering issue where it was visible at lower zoom levels - 2024-07-04
+// Updated: Completely rewritten grid implementation using vector tiles for performance - 2024-07-04
+// Updated: Switched to experimental GridOverlay (WebGL) - 2024-07-16
+// Updated: Changed selected cell styling to match shared violet theme - 2024-07-26
+// Updated: Fixed cell outline styling for MapLibre compatibility - 2024-07-26
+// Updated: Fixed location pin behavior to match mobile - 2024-07-26
+// Updated: Added blue dot for user location and conditional violet pin for selections - 2024-07-26
+// Updated: Improved location marker and selection pin behavior - 2024-07-31
+// Updated: Increased marker sizes and applied consistent styling - 2024-08-01
+// Updated: Fixed selection pin visibility and improved dot appearance - 2024-08-01
+// Updated: Increased marker sizes and applied consistent styling - 2024-08-01
+// Updated: Improved SVG pin visibility with distinct styling - 2024-08-01
+// Updated: Fixed missing selection pin and visibility threshold - 2024-08-01
+// Updated: Reverted to original pin icon style - 2024-08-01
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { StyleSheet, View, Alert, Text, TouchableOpacity, Platform, Dimensions } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { Ionicons } from '@expo/vector-icons';
+import maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { useMapStore } from '../../store/mapStore';
+import { MapLayerType, MAP_STYLES, ZOOM_THRESHOLDS, GRID, DEFAULT_ZOOM_LEVEL, LOCATION_DOT, PIN } from '../../constants/mapConstants';
+import { getVisibleBounds, encodeGeohash, decodeGeohash, calculateGridOpacity, getBoundsOfCell } from '../../services/gridService';
+import { BoundingBox, Region, SearchResult } from '../../types/map';
+import { fetchLocations, Location, searchLocations, SearchAPIResult } from '../../services/MapapiService';
+import debounce from 'lodash.debounce';
+
+// Import UI components
+import SearchBar from './components/SearchBar';
+import MapControls from './components/MapControls.web';
+import LayerToggle from './components/LayerToggle';
+import LocationDetails from './components/LocationDetails';
+import SearchResults from './components/SearchResults';
+import GridOverlay from './components/GridOverlay.web';
+
+// Google Maps API key from env vars - using process.env.GOOGLE_MAPS_API_KEY directly
+const GOOGLE_MAPS_API_KEY = 'AIzaSyBYC--xbjKY7H-BXiDiSbhYdkaODCVyhWI';
+
+// Geohash resolution for approximately 4.8m squares
+const GEOHASH_PRECISION = 9;
+
+// Check if the device is mobile sized
+const isMobileSize = () => {
+  const windowWidth = Dimensions.get('window').width;
+  return windowWidth < 768;
+};
+
+// Define a more specific type for the selected location state
+interface SelectedLocationState {
+  name?: string;      // Optional name from DB location or search result
+  geohash: string;     // Geohash (calculated or from DB)
+  coordinates: { 
+    latitude: number; 
+    longitude: number 
+  };
+  isNearBorder: boolean; // Keep hardcoded for now
+  alternatives: Array<{ code: string; distance: number }>; // Keep hardcoded for now
+}
+
+const MapScreen = () => {
+  // Map container reference
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  
+  // Local state
+  const [bounds, setBounds] = useState<BoundingBox>({
+    minLat: 0,
+    minLng: 0,
+    maxLat: 0,
+    maxLng: 0,
+  });
+  const [mapInitialized, setMapInitialized] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<SelectedLocationState>({
+    geohash: 'table.chair.lamp',
+    coordinates: { latitude: 37.7749, longitude: -122.4194 },
+    isNearBorder: true,
+    alternatives: [
+      { code: 'table.chair.book', distance: 15 },
+      { code: 'table.spot.lamp', distance: 18 }
+    ]
+  });
+  const [isMobile, setIsMobile] = useState(isMobileSize());
+  const [selectedGridCell, setSelectedGridCell] = useState<string | null>(null);
+  const [isMapStyleChanging, setIsMapStyleChanging] = useState(false);
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  
+  // Mock data for demonstration
+  const recentSearches: SearchResult[] = [
+    { id: '1', name: 'Maxime Boutique Hotel', address: 'Port-au-Prince, Haiti', isRecent: true },
+    { id: '2', name: 'Cauphy.com', address: 'Rebecca, Petion-Ville, Haiti', isRecent: true },
+    { id: '3', name: 'restaurants', isRecent: true },
+  ];
+  
+  const favorites = [
+    { name: 'Home', address: '7 Rue Darwin, Place Boyer, Haiti', count: 1 },
+    { name: 'Work', address: 'BRIDES, 8 Rue Metellus, Haiti', count: 1 },
+    { name: 'Favorites', address: '', count: 270 },
+  ];
+  
+  // Add a force update counter to ensure SearchResults visibility changes propagate
+  const [forceUpdateCounter, setForceUpdateCounter] = useState(0);
+  
+  // Reference to track if we're running on web
+  const isWeb = Platform.OS === 'web';
+  
+  // Debounce timer reference
+  const gridUpdateTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Add state for selection
+  const [selectionPinVisible, setSelectionPinVisible] = useState(true);
+  const [selectionMarker, setSelectionMarker] = useState<maplibregl.Marker | null>(null);
+  const [userLocationMarker, setUserLocationMarker] = useState<HTMLDivElement | null>(null);
+  
+  // Add ref for selection marker to prevent multiple pins
+  const selectionMarkerRef = useRef<maplibregl.Marker | null>(null);
+  
+  // Add ref for user location marker
+  const userLocationMarkerRef = useRef<HTMLDivElement | null>(null);
+  
+  // Add state for fetched locations
+  const [locations, setLocations] = useState<Location[]>([]);
+  
+  // Check screen size for mobile view
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(isMobileSize());
+    };
+    
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    
+    return () => {
+      window.removeEventListener('resize', checkScreenSize);
+    };
+  }, []);
+  
+  // Global map state from store
+  const { 
+    region, 
+    mapType, 
+    showGrid, 
+    zoomLevel,
+    isSearchFocused,
+    setRegion, 
+    setMapType, 
+    toggleGrid, 
+    setZoomLevel,
+    setIsLoading,
+    setSearchFocused
+  } = useMapStore();
+  
+  // Get user's current location on component mount
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const userRegion = {
+            ...region,
+            latitude: latitude,
+            longitude: longitude,
+          };
+          setRegion(userRegion);
+          
+          // Calculate initial geohash and update selected location state
+          const initialGeohash = encodeGeohash(latitude, longitude, GEOHASH_PRECISION);
+          setSelectedLocation({
+            name: undefined, // No name for initial current location
+            geohash: initialGeohash,
+            coordinates: { latitude, longitude },
+            isNearBorder: true, // TODO: Recalculate based on actual coords
+            alternatives: []
+          });
+          
+          // Initialize map centered on user location
+          initializeMap(userRegion);
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+          // Initialize map with default location if geolocation fails
+          const defaultGeohash = encodeGeohash(region.latitude, region.longitude, GEOHASH_PRECISION);
+          setSelectedLocation(prevState => ({ ...prevState, geohash: defaultGeohash }));
+          initializeMap(region);
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 10000 }
+      );
+    } else {
+      // Initialize map with default location if geolocation is not supported
+      const defaultGeohash = encodeGeohash(region.latitude, region.longitude, GEOHASH_PRECISION);
+      setSelectedLocation(prevState => ({ ...prevState, geohash: defaultGeohash }));
+      initializeMap(region);
+    }
+  }, []); // Empty dependency array to run only once on mount
+  
+  // Function to load locations from backend
+  const loadLocations = async () => {
+    console.log('[MapScreen.web] Loading locations from backend...');
+    setIsLoading(true);
+    try {
+      const fetchedLocations = await fetchLocations();
+      console.log('[MapScreen.web] Successfully fetched locations:', fetchedLocations);
+      setLocations(fetchedLocations);
+      // Render markers after fetching
+      renderLocationMarkers(fetchedLocations);
+    } catch (error) {
+      console.error('[MapScreen.web] Failed to fetch locations:', error);
+      Alert.alert('Error', 'Could not load locations from the server.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Function to render markers on the map
+  const locationMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const renderLocationMarkers = (locationsToRender: Location[]) => {
+    if (!mapRef.current) return;
+
+    // Clear existing location markers first
+    locationMarkersRef.current.forEach(marker => marker.remove());
+    locationMarkersRef.current = [];
+
+    console.log(`[MapScreen.web] Rendering ${locationsToRender.length} location markers.`);
+    locationsToRender.forEach(location => {
+      if (!location.latitude || !location.longitude) {
+        console.warn(`[MapScreen.web] Skipping location with missing coordinates: ${location.id}`);
+        return;
+      }
+
+      // Use MapLibre default blue marker 
+      const marker = new maplibregl.Marker({ color: '#007bff' }) // Standard blue color
+        .setLngLat([location.longitude, location.latitude])
+        // Remove popup
+        // .setPopup(new maplibregl.Popup({ offset: 25 }).setText(location.name || 'Unnamed Location')) 
+        .addTo(mapRef.current!);
+        
+      // Get the marker element to add click listener
+      const markerEl = marker.getElement();
+      markerEl.style.cursor = 'pointer'; // Keep pointer cursor
+      markerEl.addEventListener('click', (e) => {
+        e.stopPropagation(); 
+        console.log(`[MapScreen.web] Clicked location marker: ${location.name || location.id}`);
+        
+        // --- Geohash Handling --- 
+        // Use DB geohash for display state, but ALWAYS calculate precise one for cell highlight
+        const displayGeohash = location.geohash || encodeGeohash(location.latitude, location.longitude, GEOHASH_PRECISION);
+        const preciseMarkerGeohash = encodeGeohash(location.latitude, location.longitude, GEOHASH_PRECISION);
+        console.log(`[MapScreen.web] Display Geohash: ${displayGeohash}, Precise Geohash for Cell: ${preciseMarkerGeohash}`);
+
+        setSelectedLocation({
+          name: location.name,
+          geohash: displayGeohash, // Use DB or calculated for display
+          coordinates: { latitude: location.latitude, longitude: location.longitude },
+          isNearBorder: true, 
+          alternatives: [] 
+        });
+
+        // Use the PRECISELY CALCULATED geohash to update the cell
+        setSelectedGridCell(preciseMarkerGeohash); 
+        updateSelectedCell(preciseMarkerGeohash); // Pass precise geohash here
+
+        // Hide violet pin
+        if (selectionMarkerRef.current) {
+          selectionMarkerRef.current.remove();
+          selectionMarkerRef.current = null;
+          setSelectionPinVisible(false); 
+        }
+      });
+        
+      locationMarkersRef.current.push(marker); 
+    });
+  };
+
+  // Initialize map with given region
+  const initializeMap = (mapRegion: Region) => {
+    if (!mapContainerRef.current || mapInitialized) return;
+    
+    // Calculate initial zoom based on NEW thresholds
+    const initialZoom = ZOOM_THRESHOLDS.GRID_FADE_IN + 0.2; // e.g., 18.7
+    console.log(`[MapScreen] Initializing map instance with zoom: ${initialZoom}`);
+
+    // Initialize MapLibre GL JS map
+    mapRef.current = new maplibregl.Map({
+      container: mapContainerRef.current,
+      style: MAP_STYLES.MAPLIBRE_BRIGHT,
+      center: [mapRegion.longitude, mapRegion.latitude],
+      zoom: initialZoom, // Set initial zoom for the map instance
+      attributionControl: false, 
+      maxZoom: 20 
+    });
+    
+    // Add user location blue dot - make perfectly circular
+    const userLocationElement = document.createElement('div');
+    userLocationElement.className = 'user-location-marker';
+    
+    // Create blue dot styles with updated size and perfect circle
+    userLocationElement.style.width = `${LOCATION_DOT.SIZE}px`;
+    userLocationElement.style.height = `${LOCATION_DOT.SIZE}px`;
+    userLocationElement.style.borderRadius = '50%'; // Ensure perfect circle
+    userLocationElement.style.backgroundColor = LOCATION_DOT.COLOR;
+    userLocationElement.style.borderWidth = `${LOCATION_DOT.BORDER_WIDTH}px`;
+    userLocationElement.style.borderStyle = 'solid';
+    userLocationElement.style.borderColor = LOCATION_DOT.BORDER_COLOR;
+    userLocationElement.style.boxShadow = '0 0 3px rgba(0,0,0,0.3)';
+    
+    // Add to map
+    new maplibregl.Marker({
+      element: userLocationElement,
+    })
+      .setLngLat([mapRegion.longitude, mapRegion.latitude])
+      .addTo(mapRef.current);
+    
+    // Store element ref for potential updates
+    userLocationMarkerRef.current = userLocationElement;
+    
+    // Update the event listener for zoom change
+    mapRef.current.on('zoom', () => {
+      if (!mapRef.current) return;
+      const newZoom = mapRef.current.getZoom();
+      setZoomLevel(newZoom); // Update store on map interaction
+      
+      // Clear selected cell if zoomed out too far
+      if (newZoom < ZOOM_THRESHOLDS.GRID_FADE_IN) {
+        if (selectedGridCell) { // Only clear if one is selected
+          console.log(`[MapScreen.web] Zoom level ${newZoom} below threshold ${ZOOM_THRESHOLDS.GRID_FADE_IN}, clearing selected cell.`);
+          setSelectedGridCell(null); // Clear the state
+          // Update the map source to remove the visual highlight
+          const selectedCellSource = mapRef.current.getSource('selected-cell') as maplibregl.GeoJSONSource;
+          if (selectedCellSource && selectedCellSource.setData) {
+            selectedCellSource.setData({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[]] } });
+          }
+        }
+      }
+      
+      // Update bounds for grid overlay (if GridOverlay component uses it)
+      const bounds = mapRef.current.getBounds();
+      setBounds({
+        minLat: bounds.getSouth(),
+        minLng: bounds.getWest(),
+        maxLat: bounds.getNorth(),
+        maxLng: bounds.getEast(),
+      });
+    });
+    
+    // Event listener for move end
+    mapRef.current.on('moveend', () => {
+      if (!mapRef.current) return;
+      const center = mapRef.current.getCenter();
+      setRegion({
+        ...mapRegion,
+        latitude: center.lat,
+        longitude: center.lng,
+      });
+    });
+    
+    // Event listener for click to update selected cell (NOT user location)
+    mapRef.current.on('click', (e) => {
+      if (!mapRef.current) return;
+      
+      // This code now only runs if the click WASN'T on a blue marker (due to stopPropagation)
+      console.log('[MapScreen.web] Clicked map background');
+
+      const clickLat = e.lngLat.lat;
+      const clickLng = e.lngLat.lng;
+      const geohash = encodeGeohash(clickLat, clickLng, GEOHASH_PRECISION);
+      setSelectedGridCell(geohash);
+      updateSelectedCell(geohash);
+      
+      // Update location details for the clicked point (using geohash)
+      setSelectedLocation({
+        name: undefined, // Clear name on general map click
+        geohash: geohash, // Use the geohash from the click
+        coordinates: { latitude: clickLat, longitude: clickLng },
+        isNearBorder: true, 
+        alternatives: []
+      });
+      
+      // Determine if the pin should be visible based on current zoom level
+      const showPin = zoomLevel < ZOOM_THRESHOLDS.PIN_VISIBILITY;
+      
+      // Create or update selection marker (the violet pin)
+      if (selectionMarkerRef.current) {
+        selectionMarkerRef.current.setLngLat([clickLng, clickLat]);
+        const element = selectionMarkerRef.current.getElement();
+        element.style.display = showPin ? 'block' : 'none';
+      } else {
+        const newMarker = new maplibregl.Marker({ color: PIN.COLOR, scale: 1.3 })
+          .setLngLat([clickLng, clickLat])
+          .addTo(mapRef.current);
+        selectionMarkerRef.current = newMarker;
+        const element = newMarker.getElement();
+        element.style.display = showPin ? 'block' : 'none';
+      }
+      setSelectionPinVisible(showPin);
+    });
+    
+    // Wait for map to load before adding sources and layers
+    mapRef.current.on('load', () => {
+      if (!mapRef.current) return;
+      
+      // Add selected cell source and layer only - grid now handled by GridOverlay
+      mapRef.current.addSource('selected-cell', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Polygon',
+            coordinates: [[]]
+          }
+        }
+      });
+      
+      mapRef.current.addLayer({
+        id: 'selected-cell-fill',
+        type: 'fill',
+        source: 'selected-cell',
+        paint: {
+          'fill-color': GRID.SELECTED_CELL_FILL,
+          'fill-outline-color': GRID.SELECTED_CELL_STROKE,
+          'fill-opacity': 1.0, // Full opacity - transparency is in the color definition
+        }
+      });
+
+      // Add separate line layer for outline thickness control
+      mapRef.current.addLayer({
+        id: 'selected-cell-border',
+        type: 'line',
+        source: 'selected-cell',
+        paint: {
+          'line-color': GRID.SELECTED_CELL_STROKE,
+          'line-width': 1 // Match mobile 2px width
+        }
+      });
+
+      // Load locations once the map style is loaded
+      loadLocations(); 
+    });
+    
+    setMapInitialized(true);
+  };
+  
+  // Update the selected cell display
+  const updateSelectedCell = (geohash: string) => {
+    if (!mapRef.current || !mapRef.current.isStyleLoaded()) return;
+    
+    try {
+      // Check if the selected-cell source exists
+      if (!mapRef.current.getSource('selected-cell')) {
+        // If we're in style change transition, wait for it to complete
+        if (isMapStyleChanging) {
+          console.log('[MapScreen] Waiting for style change to complete before updating selected cell');
+          return;
+        }
+        
+        // Add the selected cell source and layer
+        mapRef.current.addSource('selected-cell', {
+          type: 'geojson',
+          data: {
+            type: 'Feature',
+            properties: {},
+            geometry: {
+              type: 'Polygon',
+              coordinates: [[]]
+            }
+          }
+        });
+        
+        mapRef.current.addLayer({
+          id: 'selected-cell-fill',
+          type: 'fill',
+          source: 'selected-cell',
+          paint: {
+            'fill-color': GRID.SELECTED_CELL_FILL,
+            'fill-outline-color': GRID.SELECTED_CELL_STROKE,
+            'fill-opacity': 1.0, // Full opacity - transparency is in the color definition
+          }
+        });
+        
+        // Add separate line layer for outline thickness control
+        mapRef.current.addLayer({
+          id: 'selected-cell-border',
+          type: 'line',
+          source: 'selected-cell',
+          paint: {
+            'line-color': GRID.SELECTED_CELL_STROKE,
+            'line-width': 2 // Match mobile 2px width
+          }
+        });
+        
+        // If still not available, return
+        if (!mapRef.current.getSource('selected-cell')) return;
+      }
+      
+      const cell = decodeGeohash(geohash);
+      if (!cell) return;
+      
+      // Create polygon coordinates for the selected cell
+      const coordinates = [
+        [cell.bbox.sw[0], cell.bbox.sw[1]],
+        [cell.bbox.sw[0], cell.bbox.ne[1]],
+        [cell.bbox.ne[0], cell.bbox.ne[1]],
+        [cell.bbox.ne[0], cell.bbox.sw[1]],
+        [cell.bbox.sw[0], cell.bbox.sw[1]]
+      ];
+      
+      // Update the selected cell source
+      const selectedCellSource = mapRef.current.getSource('selected-cell') as maplibregl.GeoJSONSource;
+      if (selectedCellSource && selectedCellSource.setData) {
+        selectedCellSource.setData({
+          type: 'Feature',
+          properties: { id: geohash },
+          geometry: {
+            type: 'Polygon',
+            coordinates: [coordinates]
+          }
+        });
+      }
+    } catch (error) {
+      console.error('[MapScreen] Error updating selected cell:', error);
+    }
+  };
+  
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      mapRef.current?.remove();
+    };
+  }, []);
+  
+  // Handle map type changes
+  useEffect(() => {
+    if (!mapRef.current) return;
+    
+    // Save current map state
+    const currentZoom = mapRef.current.getZoom();
+    const currentCenter = mapRef.current.getCenter();
+    
+    // Mark that style is changing to prevent errors during transition
+    setIsMapStyleChanging(true);
+    
+    if (mapType === MapLayerType.SATELLITE) {
+      console.log('Switching to satellite view with key:', GOOGLE_MAPS_API_KEY);
+      
+      // Switch to Google Maps satellite layer
+      mapRef.current.setStyle({
+        version: 8,
+        sources: {
+          'google-satellite': {
+            type: 'raster',
+            tiles: [
+              `https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}&key=${GOOGLE_MAPS_API_KEY}`,
+            ],
+            tileSize: 256,
+          },
+        },
+        layers: [
+          {
+            id: 'google-satellite-layer',
+            type: 'raster',
+            source: 'google-satellite',
+            minzoom: 0,
+            maxzoom: 21,
+          },
+        ],
+      });
+    } else {
+      console.log('Switching to standard view');
+      
+      // Switch back to OpenStreetMap Bright style
+      mapRef.current.setStyle(MAP_STYLES.MAPLIBRE_BRIGHT);
+    }
+    
+    // Force re-add grid after style change
+    mapRef.current.once('style.load', () => {
+      if (!mapRef.current) return;
+      
+      console.log('[MapScreen] Style loaded, restoring map state');
+      
+      // Restore camera position
+      mapRef.current.setCenter(currentCenter);
+      mapRef.current.setZoom(currentZoom);
+      
+      // Wait a moment for style to fully load
+      setTimeout(() => {
+        // Early return if map reference is no longer valid
+        if (!mapRef.current) return;
+        
+        // Style changes are complete
+        setIsMapStyleChanging(false);
+        
+        // Re-add selected cell source and layer if needed
+        if (mapRef.current && !mapRef.current.getSource('selected-cell')) {
+          mapRef.current.addSource('selected-cell', {
+            type: 'geojson',
+            data: {
+              type: 'Feature',
+              properties: {},
+              geometry: {
+                type: 'Polygon',
+                coordinates: [[]]
+              }
+            }
+          });
+          
+          mapRef.current.addLayer({
+            id: 'selected-cell-fill',
+            type: 'fill',
+            source: 'selected-cell',
+            paint: {
+              'fill-color': GRID.SELECTED_CELL_FILL,
+              'fill-outline-color': GRID.SELECTED_CELL_STROKE,
+              'fill-opacity': 1.0, // Full opacity - transparency is in the color definition
+            }
+          });
+          
+          // Add separate line layer for outline thickness control
+          mapRef.current.addLayer({
+            id: 'selected-cell-border',
+            type: 'line',
+            source: 'selected-cell',
+            paint: {
+              'line-color': GRID.SELECTED_CELL_STROKE,
+              'line-width': 2 // Match mobile 2px width
+            }
+          });
+        }
+        
+        // If there is a selected cell, update its display
+        if (selectedGridCell) {
+          updateSelectedCell(selectedGridCell);
+        }
+      }, 500); // Longer delay to ensure all style operations are complete
+    });
+  }, [mapType]);
+  
+  // Ensure pin visibility updates when zoom changes
+  useEffect(() => {
+    if (!selectionMarkerRef.current) return;
+    
+    console.log(`[MapScreen.web] Zoom changed to ${zoomLevel}, threshold is ${ZOOM_THRESHOLDS.PIN_VISIBILITY}`);
+    
+    // Show pin when zoomed out, hide when zoomed in
+    const showPin = zoomLevel < ZOOM_THRESHOLDS.PIN_VISIBILITY;
+    
+    // Update marker visibility
+    const element = selectionMarkerRef.current.getElement();
+    element.style.display = showPin ? 'block' : 'none';
+    
+    setSelectionPinVisible(showPin);
+  }, [zoomLevel]);
+  
+  const handleSearch = useCallback(debounce(async (query: string) => {
+    setSearchQuery(query);
+    if (query.length > 2) { // Only search if query is long enough
+      console.log(`[MapScreen.web] Debounced search triggered for: ${query}`);
+      setIsLoading(true);
+      try {
+        // Call the actual API
+        const results = await searchLocations(query);
+        console.log('[MapScreen.web] Search API results:', results);
+        // Map API results to the format expected by SearchResults component
+        const formattedResults: SearchResult[] = results.map((item: SearchAPIResult) => ({
+          id: item.id,
+          name: item.name,
+          address: item.address || '',
+          latitude: item.latitude, // Include coordinates
+          longitude: item.longitude,
+          // category: item.category // Add category if returned by API
+        }));
+        setSearchResults(formattedResults);
+      } catch (error) {
+        console.error('[MapScreen.web] Search API error:', error);
+        setSearchResults([]); // Clear results on error
+        Alert.alert('Search Error', 'Could not perform search.');
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      setSearchResults([]); // Clear results if query is too short
+    }
+  }, 500), [setIsLoading]); // Debounce search input by 500ms, include setIsLoading dependency
+  
+  // Handle search focus change - using useCallback to prevent recreation on each render
+  const handleSearchFocusChange = useCallback((focused: boolean) => {
+    console.log('[MapScreen.web] Search focus changed:', focused);
+    
+    // Update global state to control SearchResults visibility
+    setSearchFocused(focused);
+    
+    // Force component tree update for web platform
+    if (isWeb) {
+      // Increment counter to force component tree update
+      setForceUpdateCounter(prev => prev + 1);
+      
+      // When closing search results
+      if (!focused) {
+        // Clear search query to reset the search experience
+        setSearchQuery('');
+        setSearchResults([]);
+        
+        // Clear any active element focus
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+        
+        // Force UI update by toggling a class on the body
+        document.body.classList.add('search-closed');
+        setTimeout(() => document.body.classList.remove('search-closed'), 50);
+        
+        // Manually trigger a reflow to ensure state is properly reflected in the DOM
+        document.body.getBoundingClientRect();
+      }
+    }
+  }, [isWeb, setSearchFocused]);
+  
+  // Handle search result selection
+  const handleSearchResultPress = (result: SearchResult) => {
+    console.log("[MapScreen.web] Search result pressed:", result);
+    // Close search overlay
+    setSearchFocused(false);
+
+    // Check if coordinates exist
+    if (result.latitude && result.longitude) {
+      const coordinates = {
+        latitude: result.latitude,
+        longitude: result.longitude
+      };
+      
+      console.log(`[MapScreen.web] Moving map to search result: ${result.name}`, coordinates);
+
+      // Update selected location details (using data from search result)
+      // Still keeps alternatives/isNearBorder hardcoded as requested
+      setSelectedLocation({
+        name: result.name, // Use name from search result
+        geohash: result.name, // Use name as code fallback for search result
+        coordinates: coordinates,
+        isNearBorder: true, // Recalculate later if needed
+        alternatives: []
+      });
+
+      // Fly map to the selected location
+      if (mapRef.current) {
+        mapRef.current.flyTo({
+          center: [coordinates.longitude, coordinates.latitude],
+          zoom: ZOOM_THRESHOLDS.GRID_FADE_IN + 0.2, // Zoom in closer
+          speed: 1.5
+        });
+        
+        // Remove previous selection marker if it exists
+        if (selectionMarkerRef.current) {
+          selectionMarkerRef.current.remove();
+          selectionMarkerRef.current = null;
+        }
+        
+        // Create a new selection marker at the result location
+        const newMarker = new maplibregl.Marker({ 
+          color: PIN.COLOR, 
+          scale: 1.3 
+        })
+          .setLngLat([coordinates.longitude, coordinates.latitude])
+          .addTo(mapRef.current);
+          
+        selectionMarkerRef.current = newMarker;
+        
+        // Check initial pin visibility based on zoom level after flying
+        const showPin = (mapRef.current.getZoom() || DEFAULT_ZOOM_LEVEL) < ZOOM_THRESHOLDS.PIN_VISIBILITY;
+        const element = newMarker.getElement();
+        element.style.display = showPin ? 'block' : 'none';
+        setSelectionPinVisible(showPin);
+
+      } else {
+        console.warn('[MapScreen.web] Map ref not available to fly to search result');
+      }
+    } else {
+      console.warn(`[MapScreen.web] Search result ${result.name} (ID: ${result.id}) is missing coordinates.`);
+      Alert.alert('Location Missing', 'Coordinates not available for this search result.');
+    }
+  };
+  
+  const handleMapTypeToggle = (type: 'standard' | 'satellite') => {
+    setMapType(type);
+  };
+  
+  const handleZoomIn = () => {
+    if (!mapRef.current) return;
+    mapRef.current.zoomIn();
+  };
+  
+  const handleZoomOut = () => {
+    if (!mapRef.current) return;
+    mapRef.current.zoomOut();
+  };
+  
+  // Handle current location
+  const handleCurrentLocation = () => {
+    if (!mapRef.current) {
+      console.warn('Map is not initialized');
+      return;
+    }
+    
+    try {
+      // Get current position
+      navigator.geolocation.getCurrentPosition((position) => {
+        const { latitude, longitude } = position.coords;
+        
+        // Fly to current location
+        if (mapRef.current) {
+          mapRef.current.flyTo({
+            center: [longitude, latitude],
+            zoom: ZOOM_THRESHOLDS.GRID_FADE_IN + 0.5, // Zoom to show grid
+            essential: true, // Animation is considered essential (won't be disabled)
+          });
+        }
+      }, (error) => {
+        console.error('Error getting current location:', error);
+      });
+    } catch (error) {
+      console.error('Error handling current location:', error);
+    }
+  };
+  
+  return (
+    <View style={styles.container}>
+      <StatusBar style="dark" />
+      
+      {/* Map Container */}
+      <div 
+        ref={mapContainerRef} 
+        style={{ 
+          width: '100%', 
+          height: '100%' 
+        }} 
+      />
+      
+      {/* Grid Overlay - using the new vector tile implementation */}
+      {mapInitialized && mapRef.current && (
+        <GridOverlay
+          mapInstance={mapRef.current}
+          zoomLevel={zoomLevel}
+          visible={showGrid}
+          mapType={mapType}
+        />
+      )}
+      
+      {/* UI Components */}
+      <SearchBar 
+        onSearch={handleSearch} 
+        onFocusChange={handleSearchFocusChange}
+      />
+      
+      {/* Search Results */}
+      {isSearchFocused && (
+        <SearchResults
+          visible={isSearchFocused}
+          query={searchQuery}
+          results={searchResults}
+          recentSearches={recentSearches}
+          favorites={favorites}
+          onResultPress={handleSearchResultPress}
+          key={`search-results-${forceUpdateCounter}`} // Force recreate component when visibility changes
+        />
+      )}
+      
+      {/* Conditional rendering based on screen size */}
+      {isMobile ? (
+        // Mobile controls - simpler UI for small screens
+        <>
+          {/* Mobile Layer Toggle */}
+          <LayerToggle
+            currentLayer={mapType}
+            onToggle={handleMapTypeToggle}
+          />
+          
+          {/* Mobile Current Location Button */}
+          <TouchableOpacity 
+            style={styles.myLocationButton}
+            onPress={handleCurrentLocation}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="locate" size={24} color="#8b14fd" />
+          </TouchableOpacity>
+        </>
+      ) : (
+        // Desktop controls - full controls for larger screens
+        <>
+          <MapControls 
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onCurrentLocation={handleCurrentLocation}
+          />
+          
+          <LayerToggle
+            currentLayer={mapType}
+            onToggle={handleMapTypeToggle}
+          />
+        </>
+      )}
+      
+      {/* Location Details - same on both mobile and desktop */}
+      <LocationDetails 
+        locationName={selectedLocation.name}
+        locationGeohash={selectedLocation.geohash}
+        coordinates={selectedLocation.coordinates}
+        isNearBorder={selectedLocation.isNearBorder}
+        alternatives={selectedLocation.alternatives}
+      />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    position: 'relative',
+  },
+  myLocationButton: {
+    position: 'absolute',
+    right: 16,
+    bottom: 160, // Position above layer toggle
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    // Add subtle border for definition
+    borderWidth: 0.5,
+    borderColor: 'rgba(0,0,0,0.05)',
+  },
+});
+
+export default MapScreen; 

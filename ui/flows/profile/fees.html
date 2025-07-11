@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fees and Rates - Swap Payment System</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            min-width: 1600px;
+        }
+        .container-wide {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 0 10px;
+        }
+        .back-link {
+            display: inline-block;
+            margin: 20px 10px;
+            color: #8b14fd;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        .device-frame {
+            width: 350px;
+            height: 750px;
+            border-radius: 36px;
+            border: 10px solid #333;
+            overflow: hidden;
+            position: relative;
+            margin: 10px;
+            display: inline-block;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+            background-color: white;
+        }
+        .device-content {
+            height: 100%;
+            overflow-y: scroll;
+            position: relative;
+            -ms-overflow-style: none;  /* Hide scrollbar for IE and Edge */
+            scrollbar-width: none;  /* Hide scrollbar for Firefox */
+            padding-bottom: 20px;
+        }
+        .device-content::-webkit-scrollbar {
+            display: none; /* Hide scrollbar for Chrome, Safari and Opera */
+        }
+
+        /* Header Component */
+        .page-header {
+            position: sticky;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background-color: #ffffff;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            border-bottom: 1px solid #f1f5f9;
+            z-index: 100;
+        }
+        
+        .back-button {
+            color: #8b14fd;
+            margin-right: 12px;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .header-title {
+            font-weight: 600;
+            font-size: 17px;
+            color: #111827;
+            flex: 1;
+        }
+
+        /* Fees Styles */
+        .fees-container {
+            padding: 20px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #8b14fd;
+            margin-bottom: 12px;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .info-card {
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+        }
+
+        .info-card-header {
+            padding: 16px;
+            border-bottom: 1px solid #f3f4f6;
+            display: flex;
+            align-items: center;
+        }
+
+        .info-card-icon {
+            width: 32px;
+            height: 32px;
+            background: #f8f4ff;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            color: #8b14fd;
+        }
+
+        .info-card-title {
+            font-weight: 600;
+            font-size: 16px;
+            color: #111827;
+        }
+
+        .fee-list {
+            padding: 0;
+        }
+
+        .fee-item {
+            display: flex;
+            padding: 14px 16px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .fee-item:last-child {
+            border-bottom: none;
+        }
+
+        .fee-name {
+            width: 60%;
+            font-size: 14px;
+            color: #111827;
+        }
+
+        .fee-value {
+            width: 40%;
+            font-size: 14px;
+            font-weight: 600;
+            color: #111827;
+            text-align: right;
+        }
+
+        .fee-free {
+            color: #10b981;
+            font-weight: 600;
+        }
+
+        .currency-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            padding: 16px;
+        }
+
+        .currency-card {
+            background: #f8f4ff;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .currency-name {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            color: #111827;
+        }
+
+        .exchange-rate {
+            font-size: 16px;
+            font-weight: 600;
+            color: #8b14fd;
+        }
+
+        .rate-timestamp {
+            text-align: center;
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 12px;
+            font-style: italic;
+        }
+
+        .disclaimer {
+            font-size: 12px;
+            color: #6b7280;
+            padding: 0 16px;
+            margin-top: 16px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-wide">
+        <a href="../../design.html" class="back-link">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            Back to UI Design System
+        </a>
+        
+        <h1 class="text-3xl font-bold mb-4 text-center">Fees and Rates</h1>
+        <h2 class="text-xl font-medium mb-3 text-center">Transaction Fees & Exchange Rates</h2>
+
+        <div class="flex flex-wrap justify-center">
+            <!-- Fees and Rates Screen -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="page-header">
+                        <div class="back-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </div>
+                        <div class="header-title">Fees and Rates</div>
+                    </div>
+
+                    <div class="fees-container">
+                        <!-- Transaction Fees -->
+                        <div class="section-title">Transaction Fees</div>
+                        <div class="info-card">
+                            <div class="info-card-header">
+                                <div class="info-card-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <div class="info-card-title">Swap to Swap</div>
+                            </div>
+                            <div class="fee-list">
+                                <div class="fee-item">
+                                    <div class="fee-name">Send Money (Same Currency)</div>
+                                    <div class="fee-value fee-free">Free</div>
+                                </div>
+                                <div class="fee-item">
+                                    <div class="fee-name">Send Money (Currency Conversion)</div>
+                                    <div class="fee-value">0.5%</div>
+                                </div>
+                                <div class="fee-item">
+                                    <div class="fee-name">Request Money</div>
+                                    <div class="fee-value fee-free">Free</div>
+                                </div>
+                                <div class="fee-item">
+                                    <div class="fee-name">Split Bills</div>
+                                    <div class="fee-value fee-free">Free</div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        <!-- Withdrawal Fees -->
+                        <div class="section-title">Withdrawal Fees</div>
+                        <div class="info-card">
+                            <div class="info-card-header">
+                                <div class="info-card-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                                    </svg>
+                                </div>
+                                <div class="info-card-title">Withdrawal Options</div>
+                            </div>
+                            <div class="fee-list">
+                                <div class="fee-item">
+                                    <div class="fee-name">ATM Withdrawal</div>
+                                    <div class="fee-value">$2.50 + 1%</div>
+                                </div>
+                                <div class="fee-item">
+                                    <div class="fee-name">Bank Transfer (Standard)</div>
+                                    <div class="fee-value">$1.00</div>
+                                </div>
+                                <div class="fee-item">
+                                    <div class="fee-name">Bank Transfer (Express)</div>
+                                    <div class="fee-value">$5.00</div>
+                                </div>
+                                <div class="fee-item">
+                                    <div class="fee-name">International Wire Transfer</div>
+                                    <div class="fee-value">$25.00</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Transaction Limits -->
+                        <div class="section-title">Transaction Limits</div>
+                        <div class="info-card">
+                            <div class="info-card-header">
+                                <div class="info-card-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                    </svg>
+                                </div>
+                                <div class="info-card-title">Standard Account Limits</div>
+                            </div>
+                            <div class="fee-list">
+                                <div class="fee-item">
+                                    <div class="fee-name">Daily Withdrawal Limit</div>
+                                    <div class="fee-value">$1,000</div>
+                                </div>
+                                <div class="fee-item">
+                                    <div class="fee-name">Monthly Withdrawal Limit</div>
+                                    <div class="fee-value">$10,000</div>
+                                </div>
+                                <div class="fee-item">
+                                    <div class="fee-name">Single Transaction Limit</div>
+                                    <div class="fee-value">$5,000</div>
+                                </div>
+                                <div class="fee-item">
+                                    <div class="fee-name">Annual Transaction Total</div>
+                                    <div class="fee-value">$120,000</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Exchange Rates -->
+                        <div class="section-title">Current Exchange Rates</div>
+                        <div class="info-card">
+                            <div class="info-card-header">
+                                <div class="info-card-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 8l3 5m0 0l3-5m-3 5v4m-3-5h6m-6 3h6m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <div class="info-card-title">Popular Currencies</div>
+                            </div>
+                            <div class="currency-grid">
+                                <div class="currency-card">
+                                    <div class="currency-name">USD to SGD</div>
+                                    <div class="exchange-rate">1.36</div>
+                                </div>
+                                <div class="currency-card">
+                                    <div class="currency-name">EUR to SGD</div>
+                                    <div class="exchange-rate">1.47</div>
+                                </div>
+                                <div class="currency-card">
+                                    <div class="currency-name">GBP to SGD</div>
+                                    <div class="exchange-rate">1.72</div>
+                                </div>
+                                <div class="currency-card">
+                                    <div class="currency-name">AUD to SGD</div>
+                                    <div class="exchange-rate">0.90</div>
+                                </div>
+                                <div class="currency-card">
+                                    <div class="currency-name">JPY to SGD</div>
+                                    <div class="exchange-rate">0.0091</div>
+                                </div>
+                                <div class="currency-card">
+                                    <div class="currency-name">CNY to SGD</div>
+                                    <div class="exchange-rate">0.19</div>
+                                </div>
+                            </div>
+                            <div class="rate-timestamp">Rates updated: May 15, 2023 at 04:30 PM</div>
+                        </div>
+
+                        <div class="disclaimer">
+                            <p>All fees are subject to change. Exchange rates are updated every 60 minutes during business days. A currency conversion spread of 0.5% is applied to all currency conversions in addition to the shown exchange rate.</p>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

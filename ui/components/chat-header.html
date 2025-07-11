@@ -1,0 +1,81 @@
+<!-- Chat Header Component - Copy this entire block into your pages -->
+<style>
+    .chat-header {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 70px;
+        background-color: white;
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        border-bottom: 1px solid #f1f5f9;
+        z-index: 100;
+    }
+    
+    .back-button {
+        color: #555;
+        margin-right: 12px;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .contact-photo {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        overflow: hidden;
+        margin-right: 10px;
+    }
+    
+    .contact-photo img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .contact-name {
+        font-weight: 600;
+        font-size: 18px;
+        color: #333;
+        flex: 1;
+    }
+    
+    .chat-actions {
+        display: flex;
+        gap: 8px;
+    }
+    
+    .action-icon {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #555;
+    }
+</style>
+
+<div class="chat-header">
+    <div class="back-button">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+    </div>
+    <div class="contact-photo">
+        <img src="https://ui-avatars.com/api/?name=Sarah+Johnson&background=2cd049&color=fff" alt="Contact">
+    </div>
+    <div class="contact-name">Sarah Johnson</div>
+    <div class="chat-actions">
+        <div class="action-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+            </svg>
+        </div>
+    </div>
+</div>
+<!-- End Chat Header Component --> 

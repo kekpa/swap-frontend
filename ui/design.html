@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swap Paymen System - UI Design System</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+        .flow-section {
+            margin-bottom: 30px;
+        }
+        .flow-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            padding-left: 20px;
+            color: #333;
+        }
+        .flow-list {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+        }
+        .flow-item {
+            padding: 16px 20px;
+            border-bottom: 1px solid #f1f5f9;
+            transition: all 0.2s;
+        }
+        .flow-item:hover {
+            background-color: #f8fafc;
+        }
+        .flow-item:last-child {
+            border-bottom: none;
+        }
+        .flow-link {
+            color: #8b14fd;
+            font-weight: 500;
+            text-decoration: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .flow-link:hover {
+            text-decoration: underline;
+        }
+        .brand-purple {
+            color: #8b14fd;
+        }
+        .brand-green {
+            color: #2cd049;
+        }
+        .brand-orange {
+            color: #ffb746;
+        }
+        
+        /* Status badges */
+        .status-badge {
+            font-size: 12px;
+            font-weight: 500;
+            padding: 3px 8px;
+            border-radius: 12px;
+            margin-left: 10px;
+        }
+        .status-completed {
+            background-color: #dcfce7;
+            color: #16a34a;
+        }
+        .status-in-progress {
+            background-color: #f3f0ff;
+            color: #8b14fd;
+        }
+        .status-planned {
+            background-color: #e5e7eb;
+            color: #4b5563;
+        }
+        .status-testing {
+            background-color: #dbeafe;
+            color: #2563eb;
+        }
+        
+        .link-content {
+            display: flex;
+            align-items: center;
+        }
+        
+        .right-content {
+            display: flex;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mx-auto p-6 max-w-4xl">
+        <header class="mb-10 text-center">
+            <h1 class="text-4xl font-bold mb-2">Swap Payment System</h1>
+            <p class="text-xl text-gray-600">UI Design System & Flow Navigation</p>
+        </header>
+
+        <!-- Onboarding Flow -->
+        <div class="flow-section">
+            <h2 class="flow-title">Onboarding Flow</h2>
+            <div class="flow-list">
+                <div class="flow-item">
+                    <a href="flows/onboarding/welcome_walkthrough.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Welcome & Walkthrough Screen</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                
+                <div class="flow-item">
+                    <a href="flows/onboarding/signup.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Sign Up</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/onboarding/signin.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Sign In</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/onboarding/profile_setup.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Profile Setup</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Wallet Flow (Transactions) -->
+        <div class="flow-section">
+            <h2 class="flow-title">Wallet Flow</h2>
+            <div class="flow-list">
+                <div class="flow-item">
+                    <a href="flows/wallet/wallet.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Wallet Dashboard</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/wallet/accounts.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Accounts</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-planned">Planned</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/wallet/add-money.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Add Money</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/wallet/withdraw.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Withdraw Money</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/wallet/currency-exchange.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Currency Exchange</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-planned">Planned</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Offers Flow -->
+        <div class="flow-section">
+            <h2 class="flow-title">Offers Flow</h2>
+            <div class="flow-list">
+                <div class="flow-item">
+                    <a href="flows/offers/points-dashboard.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Points Dashboard</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/offers/scan_receipt.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Scan</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-planned">Planned</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interactions Flow (Messages) -->
+        <div class="flow-section">
+            <h2 class="flow-title">Interactions Flow</h2>
+            <div class="flow-list">
+                <div class="flow-item">
+                    <a href="flows/interactions/chat.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Chat</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/interactions/send-activity.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Send Activity (Money, etc)</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/wallet/create-group.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Create Group</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-planned">Planned</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/interactions/ratings.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Ratings</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-planned">Planned</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Map Flow -->
+        <div class="flow-section">
+            <h2 class="flow-title">Map Flow</h2>
+            <div class="flow-list">
+                <div class="flow-item">
+                    <a href="flows/map/map.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Map</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-planned">Planned</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Profile Flow -->
+        <div class="flow-section">
+            <h2 class="flow-title">Profile Flow</h2>
+            <div class="flow-list">
+                <div class="flow-item">
+                    <a href="flows/profile/profile.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Profile</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/profile/kyc.html" class="flow-link">
+                        <div class="link-content">
+                            <span>KYC Onboarding</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/profile/personal-information.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Personal Information</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/profile/identity-verification.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Identity Verification</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/profile/selfie-verification.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Selfie Verification</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/profile/security-setup.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Security Setup</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/profile/account.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Account Information</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/profile/security.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Security & Privacy Settings</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/profile/fees.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Fees and Rates</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/profile/settings.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Settings</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-planned">Planned</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/profile/helpcenter.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Helpcenter</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-planned">Planned</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Components -->
+        <div class="flow-section mb-8">
+            <h2 class="flow-title">Components</h2>
+            <div class="flow-list">
+                <div class="flow-item">
+                    <a href="components/header.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Header</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="components/navbar.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Bottom Navigation</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

@@ -1,0 +1,93 @@
+<!-- Search Header Component - Copy this entire block into your pages -->
+<style>
+    .header-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 70px;
+        background-color: white;
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        z-index: 100;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    
+    .profile-photo {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        overflow: hidden;
+    }
+    
+    .profile-photo img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .search-bar {
+        flex: 1;
+        margin: 0 12px;
+        position: relative;
+    }
+    
+    .search-bar input {
+        width: 100%;
+        padding: 8px 12px 8px 36px;
+        background-color: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 20px;
+        font-size: 14px;
+        outline: none;
+        transition: all 0.2s;
+    }
+    
+    .search-bar input:focus {
+        border-color: #8b14fd;
+        background-color: white;
+    }
+    
+    .search-bar svg {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 16px;
+        height: 16px;
+        color: #94a3b8;
+    }
+    
+    .notification-icon {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #555;
+    }
+    
+    .notification-icon svg {
+        width: 24px;
+        height: 24px;
+    }
+</style>
+
+<div class="header-container">
+    <div class="profile-photo">
+        <img src="https://ui-avatars.com/api/?name=John+Smith&background=8b14fd&color=fff" alt="Profile">
+    </div>
+    <div class="search-bar">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+        </svg>
+        <input type="text" placeholder="Search for transactions, contacts...">
+    </div>
+    <div class="notification-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
+        </svg>
+    </div>
+</div>
+<!-- End Search Header Component --> 

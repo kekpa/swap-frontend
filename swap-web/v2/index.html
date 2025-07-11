@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ht">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swap</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header class="header">
+        <div class="container nav-container">
+            <a href="#" class="logo">Swap<span>.</span></a>
+            <nav class="main-nav">
+                <ul class="nav-links">
+                    <li><a href="#for-you" data-i18n-key="nav.for_you"></a></li>
+                    <li><a href="#for-business" data-i18n-key="nav.for_business"></a></li>
+                    <li><a href="#our-vision" data-i18n-key="nav.our_vision"></a></li>
+                </ul>
+                <div class="lang-switcher">
+                    <button id="lang-btn" aria-label="Choose language">
+                        <span id="current-lang-flag"></span>
+                        <span id="current-lang-name"></span>
+                        <i class="fas fa-caret-down"></i>
+                    </button>
+                    <ul id="lang-menu">
+                        <li><a href="#" class="lang-link" data-lang="ht"><span class="lang-flag">🇭🇹</span><span data-i18n-key="lang.switcher.ayisyen"></span></a></li>
+                        <li><a href="#" class="lang-link" data-lang="fr"><span class="lang-flag">🇫🇷</span><span data-i18n-key="lang.switcher.francais"></span></a></li>
+                        <li><a href="#" class="lang-link" data-lang="en"><span class="lang-flag">🇬🇧</span><span data-i18n-key="lang.switcher.english"></span></a></li>
+                    </ul>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div class="container animate-on-scroll">
+                <h1 id="hero-title" data-i18n-template="hero.title.template" data-i18n-words="hero.rotating.words"></h1>
+                <p data-i18n-key="hero.subtitle"></p>
+                <p class="slogan" data-i18n-key="hero.slogan"></p>
+                <div class="hero-buttons">
+                    <a href="#" class="btn btn-dark"><i class="fab fa-apple"></i><span data-i18n-key="hero.cta_apple"></span></a>
+                    <a href="#" class="btn btn-light"><i class="fab fa-google-play"></i><span data-i18n-key="hero.cta_android"></span></a>
+                </div>
+            </div>
+        </section>
+
+        <!-- <section class="pain-section">
+            <div class="container animate-on-scroll">
+                 <div class="section-header">
+                    <h2 data-i18n-key="pain.title"></h2>
+                 </div>
+                <div class="pain-grid">
+                    <div class="card old-way">
+                        <h3 data-i18n-key="pain.old_way.title"></h3>
+                        <ul>
+                            <li><i class="fas fa-times-circle"></i><span data-i18n-key="pain.old_way.line1"></span></li>
+                            <li><i class="fas fa-times-circle"></i><span data-i18n-key="pain.old_way.line2"></span></li>
+                            <li><i class="fas fa-times-circle"></i><span data-i18n-key="pain.old_way.line3"></span></li>
+                            <li><i class="fas fa-times-circle"></i><span data-i18n-key="pain.old_way.line4"></span></li>
+                        </ul>
+                    </div>
+                    <div class="card swap-way">
+                        <h3 data-i18n-key="pain.swap_way.title"></h3>
+                        <ul>
+                            <li><i class="fas fa-check-circle"></i><span data-i18n-key="pain.swap_way.line1"></span></li>
+                            <li><i class="fas fa-check-circle"></i><span data-i18n-key="pain.swap_way.line2"></span></li>
+                            <li><i class="fas fa-check-circle"></i><span data-i18n-key="pain.swap_way.line3"></span></li>
+                            <li><i class="fas fa-check-circle"></i><span data-i18n-key="pain.swap_way.line4"></span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section> -->
+
+        <section id="for-you" class="pillar-section dark">
+            <div class="pillar-content">
+                <div class="pillar-text-container">
+                    <div class="pillar-text animate-on-scroll">
+                        <span class="pillar-tag" data-i18n-key="for_you.tag"></span>
+                        <h2 class="pillar-title" data-i18n-key="for_you.title"></h2>
+                        <ul class="feature-list">
+                            <li><i class="fas fa-comments"></i><div><strong data-i18n-key="for_you.feature1.title"></strong><span data-i18n-key="for_you.feature1.text"></span></div></li>
+                            <li><i class="fas fa-shield-alt"></i><div><strong data-i18n-key="for_you.feature2.title"></strong><span data-i18n-key="for_you.feature2.text"></span></div></li>
+                            <li><i class="fas fa-globe-americas"></i><div><strong data-i18n-key="for_you.feature3.title"></strong><span data-i18n-key="for_you.feature3.text"></span></div></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="pillar-visual animate-on-scroll">
+                    <img src="assets/Swap-informal-economy.jpg" alt="People using Swap on their phones">
+                </div>
+            </div>
+        </section>
+
+        <section id="for-business" class="pillar-section">
+            <div class="pillar-content reversed">
+                <div class="pillar-visual animate-on-scroll">
+                     <img src="assets/swap-pay2.png" alt="Small business owner accepting a Swap payment">
+                </div>
+                <div class="pillar-text-container">
+                    <div class="pillar-text animate-on-scroll">
+                        <span class="pillar-tag" data-i18n-key="for_business.tag"></span>
+                        <h2 class="pillar-title" data-i18n-key="for_business.title"></h2>
+                        <p class="pillar-description" data-i18n-key="for_business.subtitle"></p>
+                        <ul class="feature-list">
+                            <li><i class="fas fa-address-card"></i> <div><strong data-i18n-key="for_business.feature1.title"></strong><span data-i18n-key="for_business.feature1.text"></span></div></li>
+                            <li><i class="fas fa-tools"></i> <div><strong data-i18n-key="for_business.feature3.title"></strong><span data-i18n-key="for_business.feature3.text"></span></div></li>
+                            <li><i class="fas fa-users"></i> <div><strong data-i18n-key="for_business.feature2.title"></strong><span data-i18n-key="for_business.feature2.text"></span></div></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="our-vision" class="vision-section">
+            <div class="container">
+                <div class="section-header animate-on-scroll">
+                    <h2 data-i18n-key="our_vision.title"></h2>
+                    <p data-i18n-key="our_vision.subtitle"></p>
+                </div>
+                <div class="animate-on-scroll">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h3 data-i18n-key="our_vision.step1.title"></h3>
+                            <p data-i18n-key="our_vision.step1.text"></p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h3 data-i18n-key="our_vision.step2.title"></h3>
+                            <p data-i18n-key="our_vision.step2.text"></p>
+                            <div class="coming-soon-wrapper">
+                                <span class="coming-soon" data-i18n-key="our_vision.coming_soon"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h3 data-i18n-key="our_vision.step3.title"></h3>
+                            <p data-i18n-key="our_vision.step3.text"></p>
+                            <div class="coming-soon-wrapper">
+                                <span class="coming-soon" data-i18n-key="our_vision.coming_soon"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="trust-section">
+            <div class="container">
+                 <div class="section-header animate-on-scroll">
+                    <h2 data-i18n-key="trust.title"></h2>
+                 </div>
+                <div class="trust-grid animate-on-scroll">
+                    <div class="trust-item">
+                        <i class="fas fa-exchange-alt"></i>
+                        <h3 data-i18n-key="trust.feature1.title"></h3>
+                        <p data-i18n-key="trust.feature1.text"></p>
+                    </div>
+                    <div class="trust-item">
+                        <i class="fas fa-eye-slash"></i>
+                        <h3 data-i18n-key="trust.feature2.title"></h3>
+                        <p data-i18n-key="trust.feature2.text"></p>
+                    </div>
+                    <div class="trust-item">
+                        <i class="fas fa-shopping-cart"></i>
+                        <h3 data-i18n-key="trust.feature3.title"></h3>
+                        <p data-i18n-key="trust.feature3.text"></p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="cta-section" id="cta">
+            <div class="container animate-on-scroll">
+                <h2 data-i18n-key="final_cta.title"></h2>
+                <p data-i18n-key="final_cta.subtitle"></p>
+                <a href="mailto:contact@swap.ht" class="btn" data-i18n-key="final_cta.button"></a>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <div class="container footer-content">
+            <div class="footer-about">
+                <a href="#" class="logo">Swap<span>.</span></a>
+                <p data-i18n-key="footer.about"></p>
+                <p class="slogan" data-i18n-key="footer.slogan"></p>
+            </div>
+            <div class="footer-section">
+                <h4 data-i18n-key="footer.product"></h4>
+                <a href="#for-you" data-i18n-key="nav.for_you"></a>
+                <a href="#for-business" data-i18n-key="nav.for_business"></a>
+                <a href="#our-vision" data-i18n-key="nav.our_vision"></a>
+            </div>
+            <div class="footer-section">
+                <h4 data-i18n-key="footer.company"></h4>
+                <a href="#" data-i18n-key="footer.company.about"></a>
+                <a href="#" data-i18n-key="footer.company.legal_act"></a>
+                <a href="mailto:contact@swap.ht" data-i18n-key="footer.company.contact"></a>
+            </div>
+            <div class="footer-section">
+                <h4 data-i18n-key="footer.legal"></h4>
+                <a href="#" data-i18n-key="footer.legal.terms"></a>
+                <a href="#" data-i18n-key="footer.legal.privacy"></a>
+            </div>
+        </div>
+        <div class="container footer-bottom">
+            <p data-i18n-key="footer.copyright"></p>
+        </div>
+    </footer>
+
+    <script src="main.js"></script>
+</body>
+</html> 

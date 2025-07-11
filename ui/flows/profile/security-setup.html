@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Setup - Swap Payment System</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            min-width: 1600px;
+        }
+        .container-wide {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 0 10px;
+        }
+        .back-link {
+            display: inline-block;
+            margin: 20px 10px;
+            color: #8b14fd;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        .device-frame {
+            width: 350px;
+            height: 750px;
+            border-radius: 36px;
+            border: 10px solid #333;
+            overflow: hidden;
+            position: relative;
+            margin: 10px;
+            display: inline-block;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+            background-color: white;
+        }
+        .device-content {
+            height: 100%;
+            overflow-y: scroll;
+            position: relative;
+            -ms-overflow-style: none;  /* Hide scrollbar for IE and Edge */
+            scrollbar-width: none;  /* Hide scrollbar for Firefox */
+            padding: 0;
+        }
+        .device-content::-webkit-scrollbar {
+            display: none; /* Hide scrollbar for Chrome, Safari and Opera */
+        }
+
+        /* Header Component */
+        .page-header {
+            position: sticky;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background-color: #ffffff;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            border-bottom: 1px solid #f1f5f9;
+            z-index: 100;
+        }
+        
+        .back-button {
+            color: #8b14fd;
+            margin-right: 12px;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .header-title {
+            font-weight: 600;
+            font-size: 17px;
+            color: #111827;
+            flex: 1;
+        }
+
+        /* Timeline styles */
+        .timeline-container {
+            padding: 0 24px 0 20px;
+            margin-bottom: 30px;
+            position: relative;
+        }
+
+        .timeline-main-line {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 36px;
+            width: 1px;
+            background-color: #d1d5db;
+            z-index: 0;
+        }
+
+        .timeline-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .timeline-status {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #ffffff;
+            border: 1px solid #d1d5db;
+            margin-right: 16px;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .timeline-status.completed {
+            background-color: #8b14fd;
+            border-color: #8b14fd;
+            color: white;
+        }
+
+        .timeline-content {
+            padding-top: 4px;
+            flex: 1;
+        }
+
+        .timeline-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #111827;
+            margin-bottom: 3px;
+        }
+
+        .timeline-description {
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .status-description {
+            font-size: 14px;
+            color: #4b5563;
+            text-align: center;
+            margin-bottom: 32px;
+            margin-top: 10px;
+            line-height: 1.6;
+            max-width: 95%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Continue button */
+        .continue-button {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            background-color: #8b14fd;
+            color: white;
+            font-weight: 500;
+            font-size: 16px;
+            text-align: center;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 32px;
+        }
+        
+        .continue-button:hover {
+            background-color: #7b13e0;
+        }
+
+        .continue-button:disabled {
+            background-color: #d1d5db;
+            cursor: not-allowed;
+        }
+
+        /* Security Setup Styles */
+        .security-container {
+            padding: 20px;
+        }
+
+        .security-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #111827;
+        }
+
+        .security-subtitle {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 24px;
+        }
+
+        .security-options {
+            margin-bottom: 20px;
+        }
+
+        .security-option {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            transition: all 0.2s;
+        }
+
+        .security-option:hover {
+            border-color: #8b14fd;
+            background-color: #f5f3ff;
+        }
+
+        .security-option.selected {
+            border-color: #8b14fd;
+            background-color: #f5f3ff;
+        }
+
+        .security-icon {
+            width: 40px;
+            height: 40px;
+            background-color: #f3f4f6;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 16px;
+            flex-shrink: 0;
+            color: #8b14fd;
+        }
+
+        .security-info {
+            flex: 1;
+        }
+
+        .security-name {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 2px;
+            color: #111827;
+        }
+
+        .security-description {
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .security-check {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid #d1d5db;
+            margin-left: 12px;
+            flex-shrink: 0;
+        }
+
+        .security-option.selected .security-check {
+            background-color: #8b14fd;
+            border-color: #8b14fd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        /* Passcode Styles */
+        .passcode-container {
+            text-align: center;
+            padding: 20px;
+        }
+
+        .passcode-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #111827;
+        }
+
+        .passcode-subtitle {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 30px;
+        }
+
+        .passcode-dots {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        .passcode-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #e5e7eb;
+        }
+
+        .passcode-dot.filled {
+            background-color: #8b14fd;
+        }
+
+        .passcode-keypad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-gap: 16px;
+            max-width: 280px;
+            margin: 0 auto 30px auto;
+        }
+
+        .passcode-key {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background-color: white;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 500;
+            color: #111827;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .passcode-key:hover {
+            background-color: #f9fafb;
+        }
+
+        .passcode-key.empty {
+            background-color: transparent;
+            border: none;
+            box-shadow: none;
+        }
+
+        .passcode-key.delete {
+            background-color: transparent;
+            border: none;
+            color: #8b14fd;
+            box-shadow: none;
+        }
+
+        /* Biometric Setup Styles */
+        .biometric-container {
+            padding: 20px;
+            text-align: center;
+        }
+
+        .biometric-illustration {
+            width: 120px;
+            height: 120px;
+            margin: 20px auto 30px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #8b14fd;
+        }
+
+        .success-container {
+            padding: 20px;
+            text-align: center;
+        }
+
+        .success-check {
+            width: 80px;
+            height: 80px;
+            background-color: #8b14fd;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            margin: 30px auto;
+        }
+
+        .success-title {
+            font-size: 22px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 12px;
+        }
+
+        .success-subtitle {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 40px;
+            line-height: 1.6;
+            max-width: 85%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-wide">
+        <a href="../../design.html" class="back-link">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            Back to UI Design System
+        </a>
+        
+        <h1 class="text-3xl font-bold mb-4 text-center">Security Setup</h1>
+        <h2 class="text-xl font-medium mb-3 text-center">KYC Verification Flow</h2>
+
+        <div class="flex flex-wrap justify-center">
+            <!-- Screen 1: Timeline Overview -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="page-header">
+                        <div class="back-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </div>
+                        <div class="header-title">Security Setup</div>
+                    </div>
+
+                    <p class="status-description">
+                        The final step is to secure your account with a passcode. You'll be able to set up biometric protection (Face ID or Touch ID) later in settings.
+                    </p>
+                    
+                    <!-- Timeline -->
+                    <div class="timeline-container">
+                        <!-- Main timeline vertical bar -->
+                        <div class="timeline-main-line"></div>
+                        
+                        <!-- Step 1: Setup Account -->
+                        <div class="timeline-item">
+                            <div class="timeline-status completed">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">Set up Swap account</div>
+                                <div class="timeline-description">Account created successfully</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 2: Confirm Phone -->
+                        <div class="timeline-item">
+                            <div class="timeline-status completed">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">Confirm your phone number</div>
+                                <div class="timeline-description">Receive verification code</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 3: Confirm Email -->
+                        <div class="timeline-item">
+                            <div class="timeline-status completed">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">Confirm your email address</div>
+                                <div class="timeline-description">Email confirmed</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 4: Personal Information -->
+                        <div class="timeline-item">
+                            <div class="timeline-status completed">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">Your personal information</div>
+                                <div class="timeline-description">Full name, Date of birth, Country of residence, Citizenship</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 5: Verify Identity -->
+                        <div class="timeline-item">
+                            <div class="timeline-status completed">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">Verify your identity</div>
+                                <div class="timeline-description">Upload ID document</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 6: Take Selfie -->
+                        <div class="timeline-item">
+                            <div class="timeline-status completed">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">Take a selfie</div>
+                                <div class="timeline-description">Verify photo matches ID</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 7: Set Security (Current Step) -->
+                        <div class="timeline-item">
+                            <div class="timeline-status" style="background-color: #8b14fd; border-color: #8b14fd;">
+                                <!-- Empty status for current step but highlighted -->
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title" style="color: #8b14fd; font-weight: 600;">Set up security</div>
+                                <div class="timeline-description">Create a 6-digit passcode</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Continue Button -->
+                    <div style="padding: 0 20px 20px 20px;">
+                        <button class="continue-button">
+                            Continue
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screen 2: Create Passcode (replacing the Security Options screen) -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="page-header">
+                        <div class="back-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </div>
+                        <div class="header-title">Create Passcode</div>
+                    </div>
+
+                    <div class="passcode-container">
+                        <h2 class="passcode-title">Create your passcode</h2>
+                        <p class="passcode-subtitle">Enter a 6-digit passcode you'll use to log in to your account.</p>
+
+                        <div class="passcode-dots mt-8 mb-12">
+                            <div class="passcode-dot"></div>
+                            <div class="passcode-dot"></div>
+                            <div class="passcode-dot"></div>
+                            <div class="passcode-dot"></div>
+                            <div class="passcode-dot"></div>
+                            <div class="passcode-dot"></div>
+                        </div>
+
+                        <div class="passcode-keypad">
+                            <div class="passcode-key">1</div>
+                            <div class="passcode-key">2</div>
+                            <div class="passcode-key">3</div>
+                            <div class="passcode-key">4</div>
+                            <div class="passcode-key">5</div>
+                            <div class="passcode-key">6</div>
+                            <div class="passcode-key">7</div>
+                            <div class="passcode-key">8</div>
+                            <div class="passcode-key">9</div>
+                            <div class="passcode-key empty"></div>
+                            <div class="passcode-key">0</div>
+                            <div class="passcode-key delete">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 001.414.586H19a2 2 0 002-2V7a2 2 0 00-2-2h-8.172a2 2 0 00-1.414.586L3 12z" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        <p class="text-sm text-gray-600 mt-8">
+                            This passcode will be used to access your account.<br>
+                            Make sure it's secure and don't share it with anyone.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screen 3: Confirm Passcode -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="page-header">
+                        <div class="back-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </div>
+                        <div class="header-title">Confirm Passcode</div>
+                    </div>
+
+                    <div class="passcode-container">
+                        <h2 class="passcode-title">Confirm your passcode</h2>
+                        <p class="passcode-subtitle">Re-enter your 6-digit passcode to confirm.</p>
+
+                        <div class="passcode-dots mt-8 mb-12">
+                            <div class="passcode-dot filled"></div>
+                            <div class="passcode-dot filled"></div>
+                            <div class="passcode-dot filled"></div>
+                            <div class="passcode-dot filled"></div>
+                            <div class="passcode-dot filled"></div>
+                            <div class="passcode-dot"></div>
+                        </div>
+
+                        <div class="passcode-keypad">
+                            <div class="passcode-key">1</div>
+                            <div class="passcode-key">2</div>
+                            <div class="passcode-key">3</div>
+                            <div class="passcode-key">4</div>
+                            <div class="passcode-key">5</div>
+                            <div class="passcode-key">6</div>
+                            <div class="passcode-key">7</div>
+                            <div class="passcode-key">8</div>
+                            <div class="passcode-key">9</div>
+                            <div class="passcode-key empty"></div>
+                            <div class="passcode-key">0</div>
+                            <div class="passcode-key delete">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 001.414.586H19a2 2 0 002-2V7a2 2 0 00-2-2h-8.172a2 2 0 00-1.414.586L3 12z" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        <p class="text-sm text-gray-600 mt-8">
+                            This passcode will be used to access your account.<br>
+                            Make sure it's secure and don't share it with anyone.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screen 4: Success Screen -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="page-header">
+                        <div class="back-button" style="visibility: hidden;">
+                            <!-- Hidden back button for consistency -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </div>
+                        <div class="header-title">Verification Complete</div>
+                        <div style="width: 36px;"></div> <!-- Spacer to balance header -->
+                    </div>
+
+                    <div class="success-container pt-10">
+                        <div class="success-check">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                        </div>
+                        <h2 class="success-title">Verification completed!</h2>
+                        <p class="success-subtitle">
+                            Your account has been successfully verified. You can now access all features of Swap.
+                        </p>
+
+                        <button class="continue-button">
+                            Continue to Swap
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

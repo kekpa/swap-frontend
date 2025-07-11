@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swap Payment System - Header Component</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #333;
+            min-width: 1600px;
+        }
+        .container-wide {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 0 10px;
+        }
+        .component-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #333;
+        }
+        .component-description {
+            margin-bottom: 24px;
+            color: #555;
+            max-width: 800px;
+        }
+        .device-frame {
+            width: 375px;
+            height: 200px;
+            background-color: #fff;
+            border-radius: 30px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            margin: 10px;
+            display: inline-block;
+            position: relative;
+        }
+        .header-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            background-color: white;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .profile-photo {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            overflow: hidden;
+        }
+        .profile-photo img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .search-bar {
+            flex: 1;
+            margin: 0 12px;
+            position: relative;
+        }
+        .search-bar input {
+            width: 100%;
+            padding: 8px 12px 8px 36px;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s;
+        }
+        .search-bar input:focus {
+            border-color: #8b14fd;
+            background-color: white;
+        }
+        .search-bar svg {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            color: #94a3b8;
+        }
+        .notification-icon {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #555;
+        }
+        .notification-icon svg {
+            width: 24px;
+            height: 24px;
+        }
+        .header-with-title {
+            padding: 16px;
+            background-color: white;
+            display: flex;
+            align-items: center;
+        }
+        .back-button {
+            color: #555;
+            margin-right: 12px;
+        }
+        .header-title {
+            font-weight: 600;
+            font-size: 18px;
+            color: #333;
+        }
+        .header-actions {
+            margin-left: auto;
+            display: flex;
+            gap: 8px;
+        }
+        .variant-title {
+            font-size: 18px;
+            font-weight: 500;
+            margin: 10px;
+            color: #333;
+        }
+        .back-link {
+            display: inline-block;
+            margin: 20px 10px;
+            color: #8b14fd;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-wide">
+        <a href="../design.html" class="back-link">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            Back to UI Design System
+        </a>
+        
+        <h1 class="text-3xl font-bold mb-4 text-center">App Header Component</h1>
+        <p class="component-description text-center mx-auto">
+            The header component provides navigation context and quick access to search and notifications. It comes in different variants for different app contexts.
+        </p>
+
+        <h2 class="text-xl font-medium mb-3 text-center">Header Variants</h2>
+        <div class="flex flex-wrap justify-center">
+            <!-- Main Search Header -->
+            <div class="device-frame">
+                <h2 class="variant-title">Search Header</h2>
+                <div class="header-container">
+                    <div class="profile-photo">
+                        <img src="https://ui-avatars.com/api/?name=John+Smith&background=8b14fd&color=fff" alt="Profile">
+                    </div>
+                    <div class="search-bar">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+                        </svg>
+                        <input type="text" placeholder="Search for transactions, contacts...">
+                    </div>
+                    <div class="notification-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
+                        </svg>
+                    </div>
+                </div>
+                <p class="px-4 py-2 text-sm">Used on the main dashboard and wallet screens. Features profile access, search functionality, and notification alerts.</p>
+            </div>
+
+            <!-- Screen Title Header -->
+            <div class="device-frame">
+                <h2 class="variant-title">Screen Title Header</h2>
+                <div class="header-with-title">
+                    <div class="back-button">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                        </svg>
+                    </div>
+                    <div class="header-title">Transaction Details</div>
+                    <div class="header-actions">
+                        <div class="notification-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <p class="px-4 py-2 text-sm">Used on secondary screens that require a descriptive title and back navigation. Optional action buttons on the right.</p>
+            </div>
+
+            <!-- Chat Header -->
+            <div class="device-frame">
+                <h2 class="variant-title">Chat Header</h2>
+                <div class="header-with-title">
+                    <div class="back-button">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                        </svg>
+                    </div>
+                    <div class="profile-photo" style="width: 36px; height: 36px;">
+                        <img src="https://ui-avatars.com/api/?name=Sarah+Johnson&background=2cd049&color=fff" alt="Contact">
+                    </div>
+                    <div class="header-title ml-2">Sarah Johnson</div>
+                    <div class="header-actions">
+                        <div class="notification-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <p class="px-4 py-2 text-sm">Specialized header for chat interfaces, showing the contact's profile picture, name, and communication options.</p>
+            </div>
+
+            <!-- Transaction Header -->
+            <div class="device-frame">
+                <h2 class="variant-title">Transaction Header</h2>
+                <div class="header-with-title" style="flex-direction: column; align-items: flex-start;">
+                    <div style="display: flex; width: 100%; align-items: center; margin-bottom: 12px;">
+                        <div class="back-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </div>
+                        <div class="header-title">Send Money</div>
+                        <div class="header-actions">
+                            <div class="notification-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="width: 100%; height: 30px; background-color: #f1f5f9; border-radius: 15px; display: flex; padding: 2px;">
+                        <div style="flex: 1; text-align: center; background-color: #8b14fd; color: white; border-radius: 15px; font-size: 12px; display: flex; align-items: center; justify-content: center;">
+                            Amount
+                        </div>
+                        <div style="flex: 1; text-align: center; font-size: 12px; display: flex; align-items: center; justify-content: center; color: #555;">
+                            Recipient
+                        </div>
+                        <div style="flex: 1; text-align: center; font-size: 12px; display: flex; align-items: center; justify-content: center; color: #555;">
+                            Review
+                        </div>
+                    </div>
+                </div>
+                <p class="px-4 py-2 text-sm">Enhanced header for multi-step processes like transactions, featuring progress indicators and contextual information.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile Setup - Swap Payment System</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            min-width: 1600px;
+        }
+        .container-wide {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 0 10px;
+        }
+        .device-frame {
+            width: 350px;
+            height: 750px;
+            border-radius: 36px;
+            border: 10px solid #333;
+            overflow: hidden;
+            position: relative;
+            margin: 10px;
+            display: inline-block;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+            background-color: white;
+        }
+        .device-content {
+            height: 100%;
+            overflow-y: auto;
+            position: relative;
+            padding: 20px;
+            -ms-overflow-style: none;  /* Hide scrollbar for IE and Edge */
+            scrollbar-width: none;  /* Hide scrollbar for Firefox */
+        }
+        .device-content::-webkit-scrollbar {
+            display: none; /* Hide scrollbar for Chrome, Safari and Opera */
+        }
+        .brand-purple {
+            background-color: #8b14fd;
+        }
+        .brand-green {
+            background-color: #2cd049;
+        }
+        .brand-orange {
+            background-color: #ffb746;
+        }
+        .primary-btn {
+            background-color: #8b14fd;
+            border-radius: 12px;
+            padding: 14px;
+            color: white;
+            font-weight: 600;
+            width: 100%;
+            transition: all 0.2s;
+        }
+        .primary-btn:hover {
+            background-color: #7a10e0;
+        }
+        .secondary-btn {
+            background-color: rgba(139, 20, 253, 0.1);
+            border-radius: 12px;
+            padding: 14px;
+            color: #8b14fd;
+            font-weight: 600;
+            width: 100%;
+            transition: all 0.2s;
+        }
+        .secondary-btn:hover {
+            background-color: rgba(139, 20, 253, 0.15);
+        }
+        .back-link {
+            display: inline-block;
+            margin: 20px 10px;
+            color: #8b14fd;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        .back-button {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            padding: 0;
+            margin-bottom: 8px;
+        }
+        .selection-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 10px 16px;
+            border-radius: 50px;
+            border: 1px solid #e2e8f0;
+            margin: 0 8px 12px 0;
+            font-size: 14px;
+            font-weight: 500;
+            color: #64748b;
+            background-color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .selection-badge.selected {
+            background-color: rgba(139, 20, 253, 0.1);
+            border-color: #8b14fd;
+            color: #8b14fd;
+        }
+        .selection-badge:hover {
+            border-color: #cbd5e1;
+            background-color: #f8fafc;
+        }
+        .selection-badge.selected:hover {
+            background-color: rgba(139, 20, 253, 0.15);
+        }
+        .keypad-container {
+            margin-top: 20px;
+        }
+        .passcode-dots {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+        .passcode-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background-color: #e2e8f0;
+            margin: 0 10px;
+        }
+        .passcode-dot.filled {
+            background-color: #8b14fd;
+        }
+        .keypad-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .keypad-button {
+            width: 70px;
+            height: 70px;
+            border-radius: 35px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 500;
+            background-color: white;
+            border: 1px solid #e2e8f0;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .keypad-button:hover {
+            background-color: #f8fafc;
+        }
+        .keypad-subtext {
+            font-size: 10px;
+            font-weight: normal;
+            color: #64748b;
+            letter-spacing: 1px;
+        }
+        .face-id-circle {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            background-color: #f1f5f9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 30px;
+        }
+        .skip-link {
+            display: block;
+            text-align: center;
+            margin-top: 16px;
+            color: #8b14fd;
+            font-weight: 500;
+            text-decoration: none;
+        }
+        .skip-link:hover {
+            text-decoration: underline;
+        }
+        .feature-image {
+            width: 200px;
+            height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 32px auto;
+        }
+        .feature-icon {
+            width: 140px;
+            height: 140px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-wide">
+        <a href="../../design.html" class="back-link">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            Back to UI Design System
+        </a>
+        
+        <h1 class="text-3xl font-bold mb-6 text-center">Profile Setup Flow</h1>
+        
+        <div class="flex flex-wrap justify-center">
+            <!-- Screen 1: How You Heard About Us -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="h-full flex flex-col">
+                        <!-- Back button -->
+                        <button class="back-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                        </button>
+                        
+                        <div class="flex-1">            
+                            <div class="mb-8">
+                                <h1 class="text-2xl font-bold mb-2">Ki jan ou tande pale de Swap</h1>
+                                <p class="text-gray-600 mb-4">Sa ap ede nou pèsonalize eksperyans ou.</p>
+                                
+                                <div class="mt-6">
+                                    <div class="selection-badge selected">
+                                        <span class="mr-2">•</span>
+                                        Fanmi / Zanmi
+                                    </div>
+                                    <div class="selection-badge">
+                                        <span class="mr-2">•</span>
+                                        Yon Biznis
+                                    </div>
+                                    <div class="selection-badge">
+                                        <span class="mr-2">•</span>
+                                        Nan Travay mwen
+                                    </div>
+                                    <div class="selection-badge">
+                                        <span class="mr-2">•</span>
+                                        Google
+                                    </div>
+                                    <div class="selection-badge">
+                                        <span class="mr-2">•</span>
+                                        YouTube
+                                    </div>
+                                    <div class="selection-badge">
+                                        <span class="mr-2">•</span>
+                                        TikTok
+                                    </div>
+                                    <div class="selection-badge">
+                                        <span class="mr-2">•</span>
+                                        Twitter
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-auto">
+                            <button class="primary-btn">Kontinye</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Screen 2: Notification Activation -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="h-full flex flex-col">
+                        <!-- Back button -->
+                        <button class="back-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                        </button>
+                        
+                        <div class="flex-1 flex flex-col items-center justify-center">
+                            <div class="mb-6 text-center">
+                                <div class="feature-image">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="feature-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                                    </svg>
+                                </div>
+                                
+                                <h1 class="text-2xl font-bold mb-2">Aktive notifikasyon yo</h1>
+                                <p class="text-gray-600 mb-6">Nou ka fè w konnen lè yon bagay enpòtan rive, tankou alèt sekirite oswa aktivite kont.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-auto">
+                            <button class="primary-btn mb-4">Wi, fè m konnen</button>
+                            <a href="#" class="skip-link">Map fè sa pita</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Screen 3: Passcode Setup -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="h-full flex flex-col">
+                        <!-- Back button -->
+                        <button class="back-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                        </button>
+                        
+                        <div class="flex-1 flex flex-col justify-center">
+                            <div class="text-center mb-8">
+                                <h1 class="text-2xl font-bold mb-2">Set your passcode</h1>
+                                <p class="text-gray-600">Fast and easy login</p>
+                            </div>
+                            
+                            <div class="passcode-dots">
+                                <div class="passcode-dot"></div>
+                                <div class="passcode-dot"></div>
+                                <div class="passcode-dot"></div>
+                                <div class="passcode-dot"></div>
+                            </div>
+                            
+                            <div class="keypad-container">
+                                <div class="keypad-row">
+                                    <button class="keypad-button">1</button>
+                                    <button class="keypad-button">
+                                        2
+                                        <span class="keypad-subtext">ABC</span>
+                                    </button>
+                                    <button class="keypad-button">
+                                        3
+                                        <span class="keypad-subtext">DEF</span>
+                                    </button>
+                                </div>
+                                <div class="keypad-row">
+                                    <button class="keypad-button">
+                                        4
+                                        <span class="keypad-subtext">GHI</span>
+                                    </button>
+                                    <button class="keypad-button">
+                                        5
+                                        <span class="keypad-subtext">JKL</span>
+                                    </button>
+                                    <button class="keypad-button">
+                                        6
+                                        <span class="keypad-subtext">MNO</span>
+                                    </button>
+                                </div>
+                                <div class="keypad-row">
+                                    <button class="keypad-button">
+                                        7
+                                        <span class="keypad-subtext">PQRS</span>
+                                    </button>
+                                    <button class="keypad-button">
+                                        8
+                                        <span class="keypad-subtext">TUV</span>
+                                    </button>
+                                    <button class="keypad-button">
+                                        9
+                                        <span class="keypad-subtext">WXYZ</span>
+                                    </button>
+                                </div>
+                                <div class="keypad-row">
+                                    <div style="width: 70px;"></div>
+                                    <button class="keypad-button">0</button>
+                                    <button class="keypad-button">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 001.414.586H19a2 2 0 002-2V7a2 2 0 00-2-2h-8.172a2 2 0 00-1.414.586L3 12z" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-auto">
+                            <button class="primary-btn">Continue</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Screen 4: Biometric Authentication Setup -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="h-full flex flex-col">
+                        <!-- Back button -->
+                        <button class="back-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                            </svg>
+                        </button>
+                        
+                        <div class="flex-1 flex flex-col justify-center">
+                            <div class="feature-image">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="#8b14fd" stroke-width="1.5">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2Z" />
+                                    <path d="M8 14C8.6 14.5 9.5 15 12 15C14.5 15 15.4 14.5 16 14" stroke-linecap="round" />
+                                    <circle cx="9" cy="9" r="1.5" fill="#8b14fd" />
+                                    <circle cx="15" cy="9" r="1.5" fill="#8b14fd" />
+                                </svg>
+                            </div>
+                            
+                            <div class="text-center mb-10">
+                                <h1 class="text-2xl font-bold mb-3">Instant and secure login with Face ID</h1>
+                                <p class="text-gray-600">You can instantly and securely log in to your account using biometric data</p>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-auto">
+                            <button class="primary-btn mb-3">Enable</button>
+                            <a href="#" class="skip-link">Skip</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Toggle selection badges
+        document.querySelectorAll('.selection-badge').forEach(badge => {
+            badge.addEventListener('click', function() {
+                this.classList.toggle('selected');
+            });
+        });
+    </script>
+</body>
+</html> 

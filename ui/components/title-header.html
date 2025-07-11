@@ -1,0 +1,64 @@
+<!-- Screen Title Header Component - Copy this entire block into your pages -->
+<style>
+    .header-with-title {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 70px;
+        background-color: white;
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        border-bottom: 1px solid #f1f5f9;
+        z-index: 100;
+    }
+    
+    .back-button {
+        color: #555;
+        margin-right: 12px;
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .header-title {
+        font-weight: 600;
+        font-size: 18px;
+        color: #333;
+        flex: 1;
+    }
+    
+    .header-actions {
+        display: flex;
+        gap: 8px;
+    }
+    
+    .action-icon {
+        width: 40px;
+        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #555;
+    }
+</style>
+
+<div class="header-with-title">
+    <div class="back-button">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+    </div>
+    <div class="header-title">Transaction Details</div>
+    <div class="header-actions">
+        <div class="action-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7" />
+            </svg>
+        </div>
+    </div>
+</div>
+<!-- End Screen Title Header Component --> 

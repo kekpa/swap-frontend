@@ -1,0 +1,46 @@
+/* Updated: Added style for company note - 2024-04-27 */
+body {
+  background: #f7f7f7;
+  color: #222;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.container {
+  background: #fff;
+  padding: 2rem 3rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+  text-align: center;
+}
+
+h1 {
+  margin-bottom: 1rem;
+  font-size: 2.5rem;
+  letter-spacing: 1px;
+}
+
+p {
+  font-size: 1.2rem;
+  color: #666;
+}
+
+.company-note {
+  margin-top: 2rem;
+  font-size: 1rem;
+  color: #aaa;
+  font-style: italic;
+}
+
+.logo {
+  width: 200px;
+  height: auto;
+  border-radius: 24px;
+  display: block;
+  margin: 32px auto 24px auto;
+} 

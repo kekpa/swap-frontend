@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - Swap Payment System</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            min-width: 1600px;
+        }
+        .container-wide {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 0 10px;
+        }
+        .device-frame {
+            width: 350px;
+            height: 750px;
+            border-radius: 36px;
+            border: 10px solid #333;
+            overflow: hidden;
+            position: relative;
+            margin: 10px;
+            display: inline-block;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+            background-color: white;
+        }
+        .device-content {
+            height: 100%;
+            overflow-y: auto;
+            position: relative;
+            padding: 20px;
+            -ms-overflow-style: none;  /* Hide scrollbar for IE and Edge */
+            scrollbar-width: none;  /* Hide scrollbar for Firefox */
+        }
+        .device-content::-webkit-scrollbar {
+            display: none; /* Hide scrollbar for Chrome, Safari and Opera */
+        }
+        .brand-purple {
+            background-color: #8b14fd;
+        }
+        .brand-green {
+            background-color: #2cd049;
+        }
+        .brand-orange {
+            background-color: #ffb746;
+        }
+        .primary-btn {
+            background-color: #8b14fd;
+            border-radius: 12px;
+            padding: 14px;
+            color: white;
+            font-weight: 600;
+            width: 100%;
+            transition: all 0.2s;
+        }
+        .primary-btn:hover {
+            background-color: #7a10e0;
+        }
+        .secondary-btn {
+            background-color: rgba(139, 20, 253, 0.1);
+            border-radius: 12px;
+            padding: 14px;
+            color: #8b14fd;
+            font-weight: 600;
+            width: 100%;
+            transition: all 0.2s;
+        }
+        .secondary-btn:hover {
+            background-color: rgba(139, 20, 253, 0.15);
+        }
+        .rounded-input {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 14px;
+            width: 100%;
+            margin-bottom: 16px;
+            background-color: #f8fafc;
+            height: 48px;
+            transition: all 0.2s;
+        }
+        .rounded-input:focus {
+            outline: none;
+            border-color: #8b14fd;
+            box-shadow: 0 0 0 2px rgba(139, 20, 253, 0.1);
+        }
+        .back-link {
+            display: inline-block;
+            margin: 20px 10px;
+            color: #8b14fd;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        .avatar {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background-color: #2cd049;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 24px;
+            margin: 0 auto;
+        }
+        .tab {
+            padding: 12px;
+            text-align: center;
+            font-weight: 500;
+            width: 50%;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab.active {
+            color: #8b14fd;
+            border-bottom: 2px solid #8b14fd;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .pin-input {
+            width: 50px;
+            height: 50px;
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 600;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            background-color: #f8fafc;
+        }
+        .pin-input:focus {
+            outline: none;
+            border-color: #8b14fd;
+            box-shadow: 0 0 0 2px rgba(139, 20, 253, 0.1);
+        }
+        .account-info {
+            display: flex;
+            align-items: center;
+            padding: 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            background-color: rgba(139, 20, 253, 0.05);
+            margin-bottom: 20px;
+        }
+        .biometric-option {
+            width: 60px;
+            height: 60px;
+            border-radius: 12px;
+            background-color: #f8fafc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #e2e8f0;
+            margin: 0 auto;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .biometric-option:hover {
+            background-color: rgba(139, 20, 253, 0.05);
+            border-color: #8b14fd;
+        }
+        .verification-input {
+            width: 50px;
+            height: 50px;
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 600;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            background-color: #f8fafc;
+        }
+        .verification-input:focus {
+            outline: none;
+            border-color: #8b14fd;
+            box-shadow: 0 0 0 2px rgba(139, 20, 253, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container-wide">
+        <a href="../../design.html" class="back-link">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            Back to UI Design System
+        </a>
+        
+        <h1 class="text-3xl font-bold mb-6 text-center">Sign In Flow</h1>
+        
+        <div class="flex flex-wrap justify-center">
+            <!-- Account Selection Screen -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="h-full flex flex-col">
+                        <!-- Header -->
+                        <div class="pt-8 mb-8">
+                            <h1 class="text-2xl font-bold text-center">Welcome back</h1>
+                            <p class="text-gray-500 text-center">Sign in to your account</p>
+                        </div>
+                        
+                        <!-- Account Info -->
+                        <div class="account-info">
+                            <div class="flex-shrink-0 mr-4">
+                                <div class="avatar">JS</div>
+                            </div>
+                            <div class="flex-grow">
+                                <div class="font-medium text-lg">John Smith</div>
+                                <div class="text-sm text-gray-500">+1 123 *** 789</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Authentication Tabs -->
+                        <div class="mb-6">
+                            <div class="flex">
+                                <div class="tab active" id="tab-pin">PIN Code</div>
+                                <div class="tab" id="tab-password">Password</div>
+                            </div>
+                            
+                            <!-- PIN Tab Content -->
+                            <div class="tab-content active" id="content-pin">
+                                <div class="mt-6">
+                                    <div class="flex justify-center space-x-3 mb-4">
+                                        <input type="password" maxlength="1" class="pin-input" inputmode="numeric" pattern="[0-9]*">
+                                        <input type="password" maxlength="1" class="pin-input" inputmode="numeric" pattern="[0-9]*">
+                                        <input type="password" maxlength="1" class="pin-input" inputmode="numeric" pattern="[0-9]*">
+                                        <input type="password" maxlength="1" class="pin-input" inputmode="numeric" pattern="[0-9]*">
+                                    </div>
+                                    <div class="text-center mb-4">
+                                        <a href="#" class="text-sm text-purple-600 font-medium">Forgot PIN?</a>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Password Tab Content -->
+                            <div class="tab-content" id="content-password">
+                                <div class="mt-6">
+                                    <input type="password" class="rounded-input" placeholder="Enter your password">
+                                    <div class="text-center mb-4">
+                                        <a href="#" class="text-sm text-purple-600 font-medium">Forgot password?</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Spacer to push content down -->
+                        <div class="flex-grow"></div>
+                        
+                        <!-- Biometric Option -->
+                        <div class="mb-6 text-center">
+                            <p class="text-sm text-gray-500 mb-4">Or use biometric authentication</p>
+                            <div class="biometric-option">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
+                                </svg>
+                            </div>
+                            <p class="text-xs mt-2">Biometric Authentication</p>
+                        </div>
+                        
+                        <!-- Sign In Button -->
+                        <div class="mb-4">
+                            <button class="primary-btn">Sign In</button>
+                            <div class="text-center mt-4">
+                                <a href="signup_signin.html" class="text-sm text-purple-600 font-medium">Use a different account</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Forgot Password Screen - Enter Email -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="h-full flex flex-col">
+                        <!-- Header with Back Button -->
+                        <div class="mb-6 flex items-center">
+                            <button class="p-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                </svg>
+                            </button>
+                            <div class="flex-grow"></div>
+                        </div>
+                        
+                        <!-- Content -->
+                        <div class="mb-8">
+                            <h1 class="text-2xl font-bold text-center mb-2">Forgot Password</h1>
+                            <p class="text-gray-500 text-center mb-6">Enter your email address to receive a verification code</p>
+                            
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+                                <input type="email" class="rounded-input" placeholder="Enter your email">
+                            </div>
+                        </div>
+                        
+                        <!-- Spacer to push content down -->
+                        <div class="flex-grow"></div>
+                        
+                        <!-- Button -->
+                        <div>
+                            <button class="primary-btn">Send Code</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Forgot Password Screen - Verify OTP -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="h-full flex flex-col">
+                        <!-- Header with Back Button -->
+                        <div class="mb-6 flex items-center">
+                            <button class="p-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                </svg>
+                            </button>
+                            <div class="flex-grow"></div>
+                        </div>
+                        
+                        <!-- Content -->
+                        <div class="mb-8">
+                            <h1 class="text-2xl font-bold text-center mb-2">Verification Code</h1>
+                            <p class="text-gray-500 text-center mb-6">Enter the 4-digit code sent to your email</p>
+                            
+                            <div class="mb-8">
+                                <div class="flex justify-center space-x-3 mb-6">
+                                    <input type="text" maxlength="1" class="verification-input" inputmode="numeric" pattern="[0-9]*">
+                                    <input type="text" maxlength="1" class="verification-input" inputmode="numeric" pattern="[0-9]*">
+                                    <input type="text" maxlength="1" class="verification-input" inputmode="numeric" pattern="[0-9]*">
+                                    <input type="text" maxlength="1" class="verification-input" inputmode="numeric" pattern="[0-9]*">
+                                </div>
+                                
+                                <div class="text-center">
+                                    <p class="text-sm text-gray-500 mb-2">Didn't receive the code?</p>
+                                    <a href="#" class="text-sm text-purple-600 font-medium">Resend Code</a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Spacer to push content down -->
+                        <div class="flex-grow"></div>
+                        
+                        <!-- Button -->
+                        <div>
+                            <button class="primary-btn">Verify</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Forgot Password Screen - New Password -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="h-full flex flex-col">
+                        <!-- Header with Back Button -->
+                        <div class="mb-6 flex items-center">
+                            <button class="p-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                                </svg>
+                            </button>
+                            <div class="flex-grow"></div>
+                        </div>
+                        
+                        <!-- Content -->
+                        <div class="mb-8">
+                            <h1 class="text-2xl font-bold text-center mb-2">Set New Password</h1>
+                            <p class="text-gray-500 text-center mb-6">Create a new password for your account</p>
+                            
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+                                <input type="password" class="rounded-input" placeholder="Enter new password">
+                                
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Confirm Password</label>
+                                <input type="password" class="rounded-input" placeholder="Confirm new password">
+                            </div>
+                            
+                            <div class="text-sm text-gray-500 mb-4">
+                                <p class="mb-2">Password must contain:</p>
+                                <ul class="space-y-1 pl-4">
+                                    <li class="flex items-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-green-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                        </svg>
+                                        At least 8 characters
+                                    </li>
+                                    <li class="flex items-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-green-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                        </svg>
+                                        One uppercase letter
+                                    </li>
+                                    <li class="flex items-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-green-500 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                        </svg>
+                                        One number or special character
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <!-- Spacer to push content down -->
+                        <div class="flex-grow"></div>
+                        
+                        <!-- Button -->
+                        <div>
+                            <button class="primary-btn">Reset Password</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simple tab functionality
+        document.getElementById('tab-password').addEventListener('click', function() {
+            document.getElementById('tab-password').classList.add('active');
+            document.getElementById('tab-pin').classList.remove('active');
+            document.getElementById('content-password').classList.add('active');
+            document.getElementById('content-pin').classList.remove('active');
+        });
+        
+        document.getElementById('tab-pin').addEventListener('click', function() {
+            document.getElementById('tab-pin').classList.add('active');
+            document.getElementById('tab-password').classList.remove('active');
+            document.getElementById('content-pin').classList.add('active');
+            document.getElementById('content-password').classList.remove('active');
+        });
+        
+        // Auto-focus on PIN inputs
+        const pinInputs = document.querySelectorAll('.pin-input');
+        pinInputs.forEach((input, index) => {
+            input.addEventListener('input', function() {
+                if (this.value.length === 1 && index < pinInputs.length - 1) {
+                    pinInputs[index + 1].focus();
+                }
+            });
+            
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Backspace' && !this.value && index > 0) {
+                    pinInputs[index - 1].focus();
+                }
+            });
+        });
+
+        // Focus on first PIN input on page load
+        window.onload = function() {
+            pinInputs[0].focus();
+        };
+        
+        // Auto-focus on verification code inputs
+        const verificationInputs = document.querySelectorAll('.verification-input');
+        verificationInputs.forEach((input, index) => {
+            input.addEventListener('input', function() {
+                if (this.value.length === 1 && index < verificationInputs.length - 1) {
+                    verificationInputs[index + 1].focus();
+                }
+            });
+            
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Backspace' && !this.value && index > 0) {
+                    verificationInputs[index - 1].focus();
+                }
+            });
+        });
+    </script>
+</body>
+</html> 

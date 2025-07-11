@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Information - Swap Payment System</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            min-width: 1600px;
+        }
+        .container-wide {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 0 10px;
+        }
+        .back-link {
+            display: inline-block;
+            margin: 20px 10px;
+            color: #8b14fd;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        .device-frame {
+            width: 350px;
+            height: 750px;
+            border-radius: 36px;
+            border: 10px solid #333;
+            overflow: hidden;
+            position: relative;
+            margin: 10px;
+            display: inline-block;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+            background-color: white;
+        }
+        .device-content {
+            height: 100%;
+            overflow-y: scroll;
+            position: relative;
+            -ms-overflow-style: none;  /* Hide scrollbar for IE and Edge */
+            scrollbar-width: none;  /* Hide scrollbar for Firefox */
+            padding: 0;
+        }
+        .device-content::-webkit-scrollbar {
+            display: none; /* Hide scrollbar for Chrome, Safari and Opera */
+        }
+
+        /* Header Component */
+        .page-header {
+            position: sticky;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background-color: #ffffff;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            border-bottom: 1px solid #f1f5f9;
+            z-index: 100;
+        }
+        
+        .back-button {
+            color: #8b14fd;
+            margin-right: 12px;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .header-title {
+            font-weight: 600;
+            font-size: 17px;
+            color: #111827;
+            flex: 1;
+        }
+
+        /* Timeline styles */
+        .timeline-container {
+            padding: 0 24px 0 20px;
+            margin-bottom: 30px;
+            position: relative;
+        }
+
+        .timeline-main-line {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 36px;
+            width: 1px;
+            background-color: #d1d5db;
+            z-index: 0;
+        }
+
+        .timeline-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .timeline-status {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #ffffff;
+            border: 1px solid #d1d5db;
+            margin-right: 16px;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .timeline-status.completed {
+            background-color: #8b14fd;
+            border-color: #8b14fd;
+            color: white;
+        }
+
+        .timeline-content {
+            padding-top: 4px;
+            flex: 1;
+        }
+
+        .timeline-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #111827;
+            margin-bottom: 3px;
+        }
+
+        .timeline-description {
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .status-description {
+            font-size: 14px;
+            color: #4b5563;
+            text-align: center;
+            margin-bottom: 32px;
+            margin-top: 10px;
+            line-height: 1.6;
+            max-width: 95%;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Form elements */
+        .form-container {
+            padding: 20px;
+        }
+
+        .form-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #111827;
+        }
+
+        .form-subtitle {
+            font-size: 14px;
+            color: #6b7280;
+            margin-bottom: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #374151;
+            margin-bottom: 6px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 15px;
+            color: #111827;
+            background-color: #fff;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #8b14fd;
+            box-shadow: 0 0 0 2px rgba(139, 20, 253, 0.1);
+        }
+
+        .form-input::placeholder {
+            color: #9ca3af;
+        }
+
+        .form-select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 15px;
+            color: #111827;
+            background-color: #fff;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 16px;
+        }
+
+        .form-select:focus {
+            outline: none;
+            border-color: #8b14fd;
+            box-shadow: 0 0 0 2px rgba(139, 20, 253, 0.1);
+        }
+
+        /* Date picker */
+        .date-picker {
+            display: flex;
+            gap: 10px;
+        }
+
+        .date-picker select {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 15px;
+            color: #111827;
+            background-color: #fff;
+        }
+
+        /* Continue button */
+        .continue-button {
+            display: block;
+            width: 100%;
+            padding: 15px;
+            background-color: #8b14fd;
+            color: white;
+            font-weight: 500;
+            font-size: 16px;
+            text-align: center;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 32px;
+        }
+        
+        .continue-button:hover {
+            background-color: #7b13e0;
+        }
+
+        .continue-button:disabled {
+            background-color: #d1d5db;
+            cursor: not-allowed;
+        }
+
+        /* Virtual keyboard */
+        .virtual-keyboard {
+            padding: 5px;
+            background-color: #f3f4f6;
+            border-top: 1px solid #d1d5db;
+            position: sticky;
+            bottom: 0;
+            left: 0;
+            right: 0;
+        }
+
+        .keyboard-row {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 8px;
+        }
+
+        .keyboard-key {
+            width: 32px;
+            height: 40px;
+            background-color: white;
+            border-radius: 5px;
+            margin: 0 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #111827;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .keyboard-key.wide {
+            width: auto;
+            padding: 0 10px;
+        }
+
+        .keyboard-key.space {
+            width: 120px;
+        }
+
+        .keyboard-actions {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-wide">
+        <a href="../../design.html" class="back-link">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            Back to UI Design System
+        </a>
+        
+        <h1 class="text-3xl font-bold mb-4 text-center">Personal Information</h1>
+        <h2 class="text-xl font-medium mb-3 text-center">KYC Verification Flow</h2>
+
+        <div class="flex flex-wrap justify-center">
+            <!-- Screen 1: Timeline Overview -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="page-header">
+                        <div class="back-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </div>
+                        <div class="header-title">KYC Verification</div>
+                    </div>
+
+                    <p class="status-description">
+                        Complete the following steps to open your bank account and manage it from your smartphone:
+                    </p>
+                    
+                    <!-- Timeline -->
+                    <div class="timeline-container">
+                        <!-- Main timeline vertical bar -->
+                        <div class="timeline-main-line"></div>
+                        
+                        <!-- Step 1: Setup Account -->
+                        <div class="timeline-item">
+                            <div class="timeline-status completed">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">Set up Swap account</div>
+                                <div class="timeline-description">Account created successfully</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 2: Confirm Phone -->
+                        <div class="timeline-item">
+                            <div class="timeline-status completed">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">Confirm your phone number</div>
+                                <div class="timeline-description">Receive verification code</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 3: Confirm Email -->
+                        <div class="timeline-item">
+                            <div class="timeline-status completed">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">Confirm your email address</div>
+                                <div class="timeline-description">Email confirmed</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 4: Personal Information (Current Step) -->
+                        <div class="timeline-item">
+                            <div class="timeline-status" style="background-color: #8b14fd; border-color: #8b14fd;">
+                                <!-- Empty status for current step but highlighted -->
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title" style="color: #8b14fd; font-weight: 600;">Your personal information</div>
+                                <div class="timeline-description">Full name, Date of birth, Country of residence, Citizenship</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 5: Verify Identity -->
+                        <div class="timeline-item">
+                            <div class="timeline-status">
+                                <!-- Empty status for incomplete -->
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">Verify your identity</div>
+                                <div class="timeline-description">Upload ID document</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 6: Take Selfie -->
+                        <div class="timeline-item">
+                            <div class="timeline-status">
+                                <!-- Empty status for incomplete -->
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">Take a selfie</div>
+                                <div class="timeline-description">Verify photo matches ID</div>
+                            </div>
+                        </div>
+                        
+                        <!-- Step 7: Set Security -->
+                        <div class="timeline-item">
+                            <div class="timeline-status">
+                                <!-- Empty status for incomplete -->
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">Set up security</div>
+                                <div class="timeline-description">Choose your passcode</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Continue Button -->
+                    <div style="padding: 0 20px 20px 20px;">
+                        <button class="continue-button">
+                            Continue
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screen 2: Country of residence -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="page-header">
+                        <div class="back-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </div>
+                        <div class="header-title">Country of residence</div>
+                    </div>
+
+                    <div class="form-container">
+                        <h2 class="form-title">Country of residence</h2>
+                        <p class="form-subtitle">The country where you live. We will use this information to set up your account.</p>
+
+                        <div class="form-group">
+                            <label class="form-label" for="country">Select country</label>
+                            <select class="form-select" id="country">
+                                <option value="" disabled selected>Select country</option>
+                                <option value="sg">Singapore</option>
+                                <option value="my">Malaysia</option>
+                                <option value="id">Indonesia</option>
+                                <option value="th">Thailand</option>
+                                <option value="ph">Philippines</option>
+                                <option value="vn">Vietnam</option>
+                                <option value="hk">Hong Kong</option>
+                                <option value="au">Australia</option>
+                                <option value="us">United States</option>
+                                <option value="uk">United Kingdom</option>
+                                <option value="ca">Canada</option>
+                            </select>
+                        </div>
+
+                        <p class="form-subtitle text-xs mt-4">
+                            By continuing, you agree to our <a href="#" class="text-purple-600">Terms of Service</a> and <a href="#" class="text-purple-600">Privacy Policy</a>.
+                        </p>
+
+                        <button class="continue-button" disabled>
+                            Continue
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screen 3: Name as in ID -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="page-header">
+                        <div class="back-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </div>
+                        <div class="header-title">Name as in ID</div>
+                    </div>
+
+                    <div class="form-container">
+                        <h2 class="form-title">Name as in ID</h2>
+                        <p class="form-subtitle">Enter exactly as in your official documents.</p>
+
+                        <div class="form-group">
+                            <label class="form-label" for="first-name">First name</label>
+                            <input type="text" class="form-input" id="first-name" placeholder="First name">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="middle-name">Middle name (optional)</label>
+                            <input type="text" class="form-input" id="middle-name" placeholder="Middle name">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="last-name">Last name</label>
+                            <input type="text" class="form-input" id="last-name" placeholder="Last name">
+                        </div>
+
+                        <button class="continue-button">
+                            Continue
+                        </button>
+                    </div>
+
+                    <!-- Virtual Keyboard -->
+                    <div class="virtual-keyboard">
+                        <div class="keyboard-row">
+                            <div class="keyboard-key">Q</div>
+                            <div class="keyboard-key">W</div>
+                            <div class="keyboard-key">E</div>
+                            <div class="keyboard-key">R</div>
+                            <div class="keyboard-key">T</div>
+                            <div class="keyboard-key">Y</div>
+                            <div class="keyboard-key">U</div>
+                            <div class="keyboard-key">I</div>
+                            <div class="keyboard-key">O</div>
+                            <div class="keyboard-key">P</div>
+                        </div>
+                        <div class="keyboard-row">
+                            <div class="keyboard-key">A</div>
+                            <div class="keyboard-key">S</div>
+                            <div class="keyboard-key">D</div>
+                            <div class="keyboard-key">F</div>
+                            <div class="keyboard-key">G</div>
+                            <div class="keyboard-key">H</div>
+                            <div class="keyboard-key">J</div>
+                            <div class="keyboard-key">K</div>
+                            <div class="keyboard-key">L</div>
+                        </div>
+                        <div class="keyboard-row">
+                            <div class="keyboard-key wide">⇧</div>
+                            <div class="keyboard-key">Z</div>
+                            <div class="keyboard-key">X</div>
+                            <div class="keyboard-key">C</div>
+                            <div class="keyboard-key">V</div>
+                            <div class="keyboard-key">B</div>
+                            <div class="keyboard-key">N</div>
+                            <div class="keyboard-key">M</div>
+                            <div class="keyboard-key wide">⌫</div>
+                        </div>
+                        <div class="keyboard-row">
+                            <div class="keyboard-key wide">123</div>
+                            <div class="keyboard-key space"></div>
+                            <div class="keyboard-key wide">return</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screen 4: Date of birth -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="page-header">
+                        <div class="back-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </div>
+                        <div class="header-title">Date of birth</div>
+                    </div>
+
+                    <div class="form-container">
+                        <h2 class="form-title">Date of birth</h2>
+                        <p class="form-subtitle">Your birth date as it appears on your official documents.</p>
+
+                        <div class="form-group">
+                            <div class="date-picker flex gap-2">
+                                <div class="relative w-1/3">
+                                    <select id="birth-day" class="appearance-none w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-700 pr-8 focus:outline-none focus:border-purple-500">
+                                        <option value="" disabled selected>Day</option>
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                        <option value="5">5</option>
+                                        <!-- More days would be here -->
+                                        <option value="31">31</option>
+                                    </select>
+                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                        <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                            <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div class="relative w-1/3">
+                                    <select id="birth-month" class="appearance-none w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-700 pr-8 focus:outline-none focus:border-purple-500">
+                                        <option value="" disabled selected>Month</option>
+                                        <option value="1">January</option>
+                                        <option value="2">February</option>
+                                        <option value="3">March</option>
+                                        <option value="4">April</option>
+                                        <option value="5">May</option>
+                                        <option value="6">June</option>
+                                        <option value="7">July</option>
+                                        <option value="8">August</option>
+                                        <option value="9">September</option>
+                                        <option value="10">October</option>
+                                        <option value="11">November</option>
+                                        <option value="12">December</option>
+                                    </select>
+                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                        <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                            <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div class="relative w-1/3">
+                                    <select id="birth-year" class="appearance-none w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-700 pr-8 focus:outline-none focus:border-purple-500">
+                                        <option value="" disabled selected>Year</option>
+                                        <option value="2005">2005</option>
+                                        <option value="2004">2004</option>
+                                        <option value="2003">2003</option>
+                                        <!-- More years would be here -->
+                                        <option value="1950">1950</option>
+                                    </select>
+                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                        <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                                            <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button class="continue-button">
+                            Continue
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Second row of screens -->
+        <div class="flex flex-wrap justify-center mt-8">
+            <!-- Screen 5: Home address -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="page-header">
+                        <div class="back-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </div>
+                        <div class="header-title">Home address</div>
+                    </div>
+
+                    <div class="form-container">
+                        <h2 class="form-title">Home address</h2>
+                        <p class="form-subtitle">Please enter your home address exactly as it appears on your official documents.</p>
+
+                        <div class="form-group">
+                            <label class="form-label" for="address-line1">Address line 1</label>
+                            <input type="text" class="form-input" id="address-line1" placeholder="Building, street">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="address-line2">Address line 2 (optional)</label>
+                            <input type="text" class="form-input" id="address-line2" placeholder="Apartment, suite, unit">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="city">City</label>
+                            <input type="text" class="form-input" id="city" placeholder="City">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="postal-code">Postal code</label>
+                            <input type="text" class="form-input" id="postal-code" placeholder="Postal code">
+                        </div>
+
+                        <button class="continue-button">
+                            Continue
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screen 6: Citizenship status -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="page-header">
+                        <div class="back-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </div>
+                        <div class="header-title">Citizenship status</div>
+                    </div>
+
+                    <div class="form-container">
+                        <h2 class="form-title">Are you a citizen of Singapore?</h2>
+                        <p class="form-subtitle">We need this information to open your fintech account.</p>
+
+                        <div class="mt-6 flex flex-col space-y-4">
+                            <button class="border border-gray-300 rounded-lg p-4 text-left flex items-center justify-between">
+                                <span>Yes</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+
+                            <button class="border border-gray-300 rounded-lg p-4 text-left flex items-center justify-between">
+                                <span>No</span>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <button class="continue-button mt-12">
+                            Continue
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screen 7: Review personal info -->
+            <div class="device-frame">
+                <div class="device-content">
+                    <div class="page-header">
+                        <div class="back-button">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </div>
+                        <div class="header-title">Review information</div>
+                    </div>
+
+                    <div class="form-container">
+                        <h2 class="form-title">Review your information</h2>
+                        <p class="form-subtitle">Please make sure all details are correct before proceeding.</p>
+
+                        <div class="mt-6 space-y-4">
+                            <div class="border border-gray-200 rounded-lg p-4">
+                                <div class="text-sm text-gray-500">Full name</div>
+                                <div class="font-medium mt-1">John Smith</div>
+                            </div>
+
+                            <div class="border border-gray-200 rounded-lg p-4">
+                                <div class="text-sm text-gray-500">Date of birth</div>
+                                <div class="font-medium mt-1">January 15, 1985</div>
+                            </div>
+
+                            <div class="border border-gray-200 rounded-lg p-4">
+                                <div class="text-sm text-gray-500">Country of residence</div>
+                                <div class="font-medium mt-1">Singapore</div>
+                            </div>
+
+                            <div class="border border-gray-200 rounded-lg p-4">
+                                <div class="text-sm text-gray-500">Home address</div>
+                                <div class="font-medium mt-1">
+                                    79 Anson Road, #20-01<br>
+                                    Singapore 079906
+                                </div>
+                            </div>
+
+                            <div class="border border-gray-200 rounded-lg p-4">
+                                <div class="text-sm text-gray-500">Citizenship</div>
+                                <div class="font-medium mt-1">Singapore Citizen</div>
+                            </div>
+                        </div>
+
+                        <button class="continue-button">
+                            Confirm and Continue
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screen 8: Blank for future use or placeholder -->
+            <div class="device-frame" style="visibility: hidden;">
+                <div class="device-content">
+                    <!-- Placeholder -->
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 
