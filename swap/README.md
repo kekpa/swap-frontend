@@ -17,7 +17,7 @@ The project includes three environment files:
 | Variable                             | Description                                  | Default                                  |
 | ------------------------------------ | -------------------------------------------- | ---------------------------------------- |
 | `EXPO_PUBLIC_ENV`                    | Current environment (development/production) | development                              |
-| `EXPO_PUBLIC_SUPABASE_URL`           | Supabase URL                                 | https://eynubzrqxdqnvguzncid.supabase.co |
+| `EXPO_PUBLIC_SUPABASE_URL`           | Supabase URL                                 | your_supabase_url_here |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY`      | Supabase anonymous key                       | (key value)                              |
 | `EXPO_PUBLIC_NEST_API_URL`           | Backend API URL                              | http://127.0.0.1:3000                    |
 | `EXPO_PUBLIC_ENABLE_DEV_TOOLS`       | Enable development tools                     | true                                     |
