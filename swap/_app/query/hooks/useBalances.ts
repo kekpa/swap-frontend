@@ -2,13 +2,13 @@
  * useBalances Hook
  * 
  * TanStack Query hook for wallet balances with local-first architecture.
- * Integrates with existing BalanceManager and SQLite repositories.
+ * Uses direct API calls and SQLite repositories for optimal caching.
  */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { logger } from '../../utils/logger';
 import { queryKeys } from '../queryKeys';
-import { balanceManager } from '../../services/BalanceManager';
+import { balanceApi } from '../api/balanceApi';
 import { currencyWalletsRepository, CurrencyWallet } from '../../localdb/CurrencyWalletsRepository';
 import { WalletBalance } from '../../types/wallet.types';
 import { networkService } from '../../services/NetworkService';
@@ -57,11 +57,30 @@ const fetchBalancesLocalFirst = async (entityId: string): Promise<WalletBalance[
       return [];
     }
     
-    // Use existing BalanceManager to fetch fresh data
-    await balanceManager.fetchWalletBalances();
+    // Fetch fresh data directly from API
+    const apiBalances = await balanceApi.fetchBalances(entityId);
     
-    // Get the fresh data from cache after refresh
-    const freshBalances = await currencyWalletsRepository.getAllCurrencyWallets();
+    // Convert API format to repository format and save to local cache
+    const repositoryBalances: CurrencyWallet[] = apiBalances.map(balance => ({
+      id: balance.wallet_id,
+      account_id: balance.account_id,
+      currency_id: balance.currency_id,
+      currency_code: balance.currency_code,
+      currency_symbol: balance.currency_symbol,
+      currency_name: balance.currency_name,
+      balance: balance.balance,
+      reserved_balance: balance.reserved_balance,
+      available_balance: balance.available_balance,
+      balance_last_updated: balance.balance_last_updated,
+      is_active: balance.is_active,
+      is_primary: balance.isPrimary,
+    }));
+    
+    // Save to local repository for offline access
+    await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances);
+    
+    // Get the fresh data that was just saved
+    const freshBalances = repositoryBalances;
     
     if (freshBalances && freshBalances.length > 0) {
       logger.debug(`[useBalances] ✅ FRESH: Loaded ${freshBalances.length} balances from API`);
@@ -176,9 +195,10 @@ export const useRefreshBalances = (entityId: string) => {
     logger.debug('[useRefreshBalances] 🔄 Manual refresh triggered');
     
     try {
-      // Invalidate and refetch the balances query
+      // Force refetch by invalidating cache and triggering immediate refetch
       await queryClient.invalidateQueries({
         queryKey: queryKeys.balancesByEntity(entityId),
+        refetchType: 'active', // Immediately refetch active queries
       });
       
       logger.debug('[useRefreshBalances] ✅ Manual refresh completed');
