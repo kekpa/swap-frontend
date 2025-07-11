@@ -43,11 +43,18 @@ export const queryKeys = {
   userProfile: (entityId: string) => ['profile', 'user', entityId] as const,
   currentProfile: (entityId: string) => ['profile', 'current', entityId] as const,
   profileDetails: (entityId: string) => ['profile', 'details', entityId] as const,
+  kycStatus: (entityId: string) => ['kyc', 'status', entityId] as const,
+  verificationStatus: (entityId: string) => ['verification', 'status', entityId] as const,
   
   // Contact related queries
   contacts: ['contacts'] as const,
   contactsByEntity: (entityId: string) => ['contacts', 'entity', entityId] as const,
   contactDetails: (contactId: string) => ['contacts', 'details', contactId] as const,
+  
+  // Conversation related queries
+  conversations: ['conversations'] as const,
+  recentConversations: (entityId: string, options?: any) => ['conversations', 'recent', entityId, options] as const,
+  conversationDetails: (conversationId: string) => ['conversations', 'details', conversationId] as const,
   
   // System/Reference data queries
   currencies: ['currencies'] as const,
