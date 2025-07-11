@@ -46,7 +46,7 @@ import SearchResults from './components/SearchResults';
 import GridOverlay from './components/GridOverlay.web';
 
 // Google Maps API key from env vars - using process.env.GOOGLE_MAPS_API_KEY directly
-const GOOGLE_MAPS_API_KEY = 'AIzaSyBYC--xbjKY7H-BXiDiSbhYdkaODCVyhWI';
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 
 // Geohash resolution for approximately 4.8m squares
 const GEOHASH_PRECISION = 9;
