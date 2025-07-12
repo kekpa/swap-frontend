@@ -6,9 +6,9 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { logger } from '../../utils/logger';
+import logger from '../../utils/logger';
 import { queryKeys } from '../queryKeys';
-import { apiClient } from '../../services/ApiClient';
+import apiClient from '../../_api/apiClient';
 import { getStaleTimeForQuery } from '../config/staleTimeConfig';
 
 // User profile interface
