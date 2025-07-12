@@ -32,6 +32,7 @@ import API_PATHS from '../../_api/apiPaths';
 import { websocketService } from '../../services/websocketService';
 import { useTheme } from '../../theme/ThemeContext';
 import { Theme } from '../../theme/theme';
+import { useTimeline } from '../../query/hooks/useTimeline';
 import { useData } from '../../contexts/DataContext';
 import { SendMessageRequest, MessageType, Message as ApiMessage, MessageStatus } from '../../types/message.types';
 import { TimelineItem, TimelineItemType as ImportedTimelineItemType, MessageTimelineItem, TransactionTimelineItem, DateSeparatorTimelineItem } from '../../types/timeline.types';
@@ -247,10 +248,16 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
   const {
     getOrCreateDirectInteraction,
     sendMessage,
-    fetchInteractionTimeline,
-    interactionTimeline,
-    isLoadingTimeline,
   } = useData();
+  
+  // TanStack Query hook for timeline - replaces fetchInteractionTimeline and interactionTimeline from useData()
+  const {
+    timeline: interactionTimeline,
+    isLoading: isLoadingTimeline,
+    refetch: refetchTimeline,
+    isError: hasTimelineError,
+    error: timelineError
+  } = useTimeline(currentInteractionId || '', { enabled: !!currentInteractionId });
   
   const { 
     contactId, 
