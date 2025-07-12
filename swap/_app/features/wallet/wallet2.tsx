@@ -10,29 +10,22 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
   ScrollView,
   SafeAreaView,
   StatusBar,
   RefreshControl,
   Alert,
-  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { CompositeNavigationProp } from '@react-navigation/native';
-import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { InteractionsStackParamList } from '../../navigation/interactions/interactionsNavigator';
 import SearchHeader from '../header/SearchHeader';
 import { useAuthContext } from '../auth/context/AuthContext';
 import { useBalances } from '../../query/hooks/useBalances';
 import { useInteractions } from '../../query/hooks/useInteractions';
 import { useTheme } from '../../theme/ThemeContext';
 import { RootStackParamList } from '../../navigation/rootNavigator';
-import balanceManager from '../../services/BalanceManager';
 import { WalletBalance } from '../../types/wallet.types';
-import { transactionManager } from '../../services/TransactionManager';
 import { networkService } from '../../services/NetworkService';
 import { WalletStackCard } from './components';
 import logger from '../../utils/logger';
@@ -73,7 +66,6 @@ const WalletDashboard: React.FC = () => {
   // TanStack Query hooks replacing useData()
   const { 
     data: currencyBalances = [], 
-    isLoading: isLoadingBalances, 
     refetch: refreshBalances 
   } = useBalances(user?.entityId || '');
   
@@ -84,9 +76,7 @@ const WalletDashboard: React.FC = () => {
   // State declarations
   const [isBalanceVisible, setIsBalanceVisible] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
   const [walletBalances, setWalletBalances] = useState<WalletBalance[]>([]);
-  const [isLoadingRealBalances, setIsLoadingRealBalances] = useState(true);
   const [selectedWallet, setSelectedWallet] = useState<WalletBalance | null>(null);
 
   // Professional wallet-specific transaction loading
@@ -132,10 +122,6 @@ const WalletDashboard: React.FC = () => {
     return filteredTransactions;
   }, [allAccountTransactions, selectedWallet]);
   
-  // Calculate totalFiat from currencyBalances
-  const totalFiat = useMemo(() => {
-    return currencyBalances.reduce((total, balance) => total + (balance.balance || 0), 0);
-  }, [currencyBalances]);
   const [isWalletUnlocked, setIsWalletUnlocked] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const authenticationRef = useRef(false); // Immediate race condition protection
@@ -143,15 +129,6 @@ const WalletDashboard: React.FC = () => {
   const alertShownRef = useRef(false); // Alert queue protection
   const lastAuthAttemptRef = useRef(0); // Track last attempt time
   const authAttemptsRef = useRef(0); // Circuit breaker counter
-
-  // Offline mode state
-  const [isOfflineMode, setIsOfflineMode] = useState(false);
-  const [networkState, setNetworkState] = useState({
-    isConnected: true,
-    isInternetReachable: true,
-    type: 'unknown',
-    isOfflineMode: false,
-  });
 
   // Native biometric authentication
   const authenticateForWallet = useCallback(async () => {
@@ -329,31 +306,25 @@ const WalletDashboard: React.FC = () => {
   useEffect(() => {
     const networkUnsubscribe = networkService.onNetworkStateChange((state) => {
       logger.debug('[WalletDashboard] 🌐 Network state changed:', JSON.stringify(state));
-      setNetworkState(state);
-      setIsOfflineMode(state.isOfflineMode);
       
       if (state.isOfflineMode) {
         logger.info('[WalletDashboard] 📱 OFFLINE MODE: Using cached data only');
       } else {
         logger.info('[WalletDashboard] 🌐 ONLINE MODE: Will sync with server');
         
-        // When coming back online, refresh data
+        // When coming back online, refresh data via TanStack Query
         if (isWalletUnlocked && user) {
           logger.debug('[WalletDashboard] 🔄 Back online - refreshing data');
-          const entityId = user.entityId || user.profileId;
-          if (entityId) {
-            balanceManager.forceRefresh(entityId).catch((error: any) => {
-              logger.warn('[WalletDashboard] Background refresh failed after coming online:', error);
-            });
-          }
+          refreshBalances().catch((error: any) => {
+            logger.warn('[WalletDashboard] Background refresh failed after coming online:', error);
+          });
         }
       }
     });
     
-    // Get initial network state
+    // Get initial network state (for logging purposes)
     const initialState = networkService.getNetworkState();
-    setNetworkState(initialState);
-    setIsOfflineMode(initialState.isOfflineMode);
+    logger.debug('[WalletDashboard] Initial network state:', JSON.stringify(initialState));
     
     return networkUnsubscribe;
   }, [isWalletUnlocked, user]);
@@ -373,44 +344,23 @@ const WalletDashboard: React.FC = () => {
 
         if (!user?.entityId && !user?.profileId) {
           logger.warn('[WalletDashboard] No entity ID or profile ID available');
-          setIsLoadingRealBalances(false);
           return;
         }
 
-        const entityId = user.entityId || user.profileId;
+        // Entity ID is handled by TanStack Query hooks
 
-        // STEP 1: Load wallets using new BalanceManager (cache-first)
-        logger.debug('[WalletDashboard] 📱 Loading wallets with cache-first approach...');
+        // STEP 1: Use TanStack Query data (currencyBalances)
+        logger.debug('[WalletDashboard] 📱 Using TanStack Query balance data...');
         
-        const walletDisplays = await balanceManager.getWalletsForDisplay(entityId);
-        
-        if (walletDisplays.length > 0) {
-          // Transform WalletDisplay to WalletBalance format for UI compatibility
-          const transformedWallets = walletDisplays.map(wallet => ({
-            wallet_id: wallet.id,
-            currency_code: wallet.currency_code,
-            currency_symbol: wallet.currency_symbol,
-            balance: wallet.balance,
-            isPrimary: wallet.isPrimary,
-            account_id: wallet.account_id,
-            status: wallet.status,
-            last_updated: wallet.last_updated,
-            // Add required fields for compatibility
-            entity_id: entityId,
-            currency_id: wallet.currency_id, // Use the currency_id from WalletDisplay
-            currency_name: wallet.currency_code,
-            reserved_balance: 0,
-            available_balance: wallet.balance,
-            balance_last_updated: wallet.last_updated,
-            is_active: wallet.status === 'active'
-          }));
+        if (currencyBalances.length > 0) {
+          // currencyBalances is already in the correct WalletBalance format from TanStack Query
+          const transformedWallets = currencyBalances;
 
-          logger.debug(`[WalletDashboard] ✅ INSTANT: Loaded ${transformedWallets.length} wallets`);
+          logger.debug(`[WalletDashboard] ✅ INSTANT: Loaded ${transformedWallets.length} wallets from TanStack Query`);
           setWalletBalances(transformedWallets);
-          setIsLoadingRealBalances(false);
           
           // Auto-select primary wallet
-          const primaryWallet = transformedWallets.find(w => w.isPrimary) || transformedWallets[0];
+          const primaryWallet = transformedWallets.find((w: WalletBalance) => w.isPrimary) || transformedWallets[0];
           setSelectedWallet(primaryWallet);
           
           logger.debug(`[WalletDashboard] 🎯 INSTANT: Selected wallet ${primaryWallet.currency_code}`);
@@ -419,13 +369,11 @@ const WalletDashboard: React.FC = () => {
         } else {
           logger.debug('[WalletDashboard] 📭 No wallets found');
           setWalletBalances([]);
-          setIsLoadingRealBalances(false);
         }
 
         logger.info('[WalletDashboard] ✅ LOCAL-FIRST wallet initialization complete');
       } catch (error) {
         logger.error('[WalletDashboard] ❌ Failed to initialize wallets:', error);
-        setIsLoadingRealBalances(false);
       }
     };
 
@@ -592,37 +540,6 @@ const WalletDashboard: React.FC = () => {
     return transformedTransactions;
   }, [walletTransactions, user?.entityId, getCurrencySymbolFromWallets, getEntityNameFromInteractions, formatTransactionDateTime]);
 
-  // Helper function to get currency ID from currency code
-  const getCurrencyIdFromCode = useCallback((currencyCode: string): string => {
-    // First, try to find the currency ID from the wallet balances
-    if (walletBalances && walletBalances.length > 0) {
-      const matchingWallet = walletBalances.find(wallet => wallet.currency_code === currencyCode);
-      if (matchingWallet && matchingWallet.currency_id) {
-        return matchingWallet.currency_id;
-      }
-    }
-
-    // Known currency mappings as fallback
-    const currencyIdMap: { [key: string]: string } = {
-      'HTG': 'e5595731-321c-479f-afb1-b852155879b4',
-      'USD': 'a8fc4df4-e198-4916-b5a5-a1be8c53a295',
-    };
-
-    if (currencyIdMap[currencyCode]) {
-      return currencyIdMap[currencyCode];
-    }
-
-    // Try to find a currency ID from existing transactions that match the currency symbol
-    const selectedSymbol = selectedWallet?.currency_symbol;
-    if (selectedSymbol && displayTransactions.length > 0) {
-      const matchingTransaction = displayTransactions.find(tx => tx.currency_symbol === selectedSymbol);
-      if (matchingTransaction) {
-        return matchingTransaction.currency_id;
-      }
-    }
-
-    return ''; // Unknown currency
-  }, [walletBalances, displayTransactions, selectedWallet]);
 
   // NO FALLBACK: Clean, professional backend filtering only
   const filteredTransactions = displayTransactions;
@@ -634,10 +551,8 @@ const WalletDashboard: React.FC = () => {
       
       // LOCAL-FIRST: Background refresh without blocking UI
       // UI already shows cached data, this just updates it
-      const entityId = user?.entityId || user?.profileId;
       await Promise.all([
-        refreshBalances().catch((error: any) => logger.warn('[WalletDashboard] Legacy balance refresh failed (non-critical):', error)),
-        entityId ? balanceManager.forceRefresh(entityId).catch((error: any) => logger.warn('[WalletDashboard] Wallet refresh failed (non-critical):', error)) : Promise.resolve(),
+        refreshBalances().catch((error: any) => logger.warn('[WalletDashboard] Balance refresh failed (non-critical):', error)),
         Promise.resolve(refetchWalletTransactions()).catch((error: any) => logger.warn('[WalletDashboard] Transaction refresh failed (non-critical):', error))
       ]);
       
@@ -960,8 +875,8 @@ const WalletDashboard: React.FC = () => {
   ), [styles, renderTransactionAvatar]);
 
   const handleSearch = useCallback((text: string) => {
-    setSearchQuery(text);
-    // Implement search functionality
+    // Search functionality can be implemented here if needed
+    logger.debug('[WalletDashboard] Search requested:', text);
   }, []);
 
   const handleProfilePress = useCallback(() => {
@@ -988,21 +903,12 @@ const WalletDashboard: React.FC = () => {
     try {
       logger.debug(`[WalletDashboard] 🔄 Setting wallet ${wallet.wallet_id} as primary: ${wallet.currency_code} - ${wallet.currency_symbol}${wallet.balance}`, "WalletDashboard");
       
-      // Use the new setPrimaryWallet method with wallet_id
-      const success = await balanceManager.setPrimaryWallet(wallet.wallet_id);
+      // Update local selected wallet state immediately for UI consistency
+      setSelectedWallet(wallet);
+      logger.info(`[WalletDashboard] ✅ Selected ${wallet.currency_code} wallet (TanStack Query migration)`, "WalletDashboard");
       
-      if (success) {
-        // Update local selected wallet state immediately for UI consistency
-        setSelectedWallet(wallet);
-        logger.info(`[WalletDashboard] ✅ Successfully set ${wallet.currency_code} wallet as primary`, "WalletDashboard");
-        
-        // NOTE: Don't refresh immediately - let the optimistic UI handle the transition
-        // The WalletStackCard will handle clearing optimistic state when backend data arrives
-        // This prevents the jarring "jump" effect
-      } else {
-        logger.error(`[WalletDashboard] ❌ Failed to set ${wallet.currency_code} wallet as primary`, "WalletDashboard");
-        throw new Error('Failed to set primary wallet');
-      }
+      // TODO: Implement setPrimaryWallet mutation with TanStack Query
+      // For now, just update the local state
     } catch (error) {
       logger.error(`[WalletDashboard] ❌ Error setting primary wallet:`, error);
       throw error; // Re-throw so WalletStackCard can handle the error
