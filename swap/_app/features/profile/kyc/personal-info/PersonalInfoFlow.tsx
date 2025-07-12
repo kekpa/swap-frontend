@@ -13,8 +13,8 @@ import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navig
 import { StackNavigationProp } from '@react-navigation/stack';
 import { ProfileStackParamList } from '../../../../navigation/profileNavigator';
 import { useTheme } from '../../../../theme/ThemeContext'; // Import useTheme
-import { usePersonalInfoSave } from '../hooks/usePersonalInfoSave'; // Import the hook
-import { usePersonalInfoLoad } from '../hooks/usePersonalInfoLoad'; // Import the new hook
+import { usePersonalInfoSave } from '../../../../hooks/usePersonalInfoSave'; // Import the hook
+import { usePersonalInfoLoad } from '../../../../hooks/usePersonalInfoLoad'; // Import the new hook
 
 import CountryOfResidence from './CountryOfResidence';
 import NameAsInId from './NameAsInId';

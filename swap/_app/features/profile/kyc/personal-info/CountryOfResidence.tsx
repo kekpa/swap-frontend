@@ -12,7 +12,7 @@ import { Picker } from '@react-native-picker/picker';
 import { useTheme } from '../../../../theme/ThemeContext';
 import { Theme } from '../../../../theme/theme';
 import { useCountries } from '../../../../query/hooks/useCountries';
-import { usePersonalInfoLoad } from '../hooks/usePersonalInfoLoad';
+import { usePersonalInfoLoad } from '../../../../hooks/usePersonalInfoLoad';
 
 interface CountryOfResidenceProps {
   onBack: () => void;

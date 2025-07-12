@@ -12,7 +12,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '../../../../theme/ThemeContext';
 import { Theme } from '../../../../theme/theme';
 import { useFocusEffect } from '@react-navigation/native';
-import { usePersonalInfoLoad } from '../hooks/usePersonalInfoLoad';
+import { usePersonalInfoLoad } from '../../../../hooks/usePersonalInfoLoad';
 
 interface DateOfBirthProps {
   onBack: () => void;
