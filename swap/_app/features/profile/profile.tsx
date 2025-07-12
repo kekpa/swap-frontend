@@ -21,7 +21,7 @@ import { ProfileStackParamList } from "../../navigation/profileNavigator";
 import { useTheme, availableThemes, ThemeName } from "../../theme/ThemeContext";
 import { Theme } from "../../theme/theme";
 import { useKycStatus } from "./kyc/hooks/useKycStatus";
-import { useData } from "../../contexts/DataContext";
+import { useUserProfile } from "../../query/hooks/useUserProfile";
 
 // Define a type for the route params ProfileScreen might receive when opened as ProfileModal
 // These params are passed to ProfileModal, not ProfileStackParamList for the 'Profile' screen itself.
@@ -183,12 +183,16 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const auth = useAuth(); // This is useAuth() hook, not context directly for logout
   const authContext = useAuthContext(); // Use this for user data and context logout
   const { theme } = useTheme(); // Get current theme for styling ProfileScreen itself
-  const { verificationStatus, isBiometricAvailable, refreshStatus, isLoading } = useKycStatus();
-  const { isInitialLoadComplete, isLoadingUserData, verificationStatus: dataContextVerificationStatus } = useData(); // Get loading states from DataContext
+  const { verificationStatus, isBiometricAvailable, refreshStatus, isLoading: isKycLoading } = useKycStatus();
+  const { data: userProfile, isLoading: isLoadingUserProfile, refetch: refetchProfile } = useUserProfile(authContext.user?.entityId);
+  
+  // Determine if initial load is complete based on both KYC and profile data
+  const isInitialLoadComplete = !isKycLoading && !isLoadingUserProfile;
+  const isLoadingUserData = isLoadingUserProfile;
   
   console.log("🔥 [ProfileScreen] 📊 Verification status from useKycStatus:", verificationStatus);
-  console.log("🔥 [ProfileScreen] 📊 Verification status from DataContext:", dataContextVerificationStatus);
-  console.log("🔥 [ProfileScreen] 📊 Loading states:", { isInitialLoadComplete, isLoadingUserData, isLoading });
+  console.log("🔥 [ProfileScreen] 📊 User profile from useUserProfile:", userProfile);
+  console.log("🔥 [ProfileScreen] 📊 Loading states:", { isInitialLoadComplete, isLoadingUserData, isKycLoading });
 
   const user = authContext.user; // Get user from AuthContext
 
@@ -197,14 +201,15 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     React.useCallback(() => {
       console.log('[ProfileScreen] Screen focused, checking for verification status updates.');
       
-      // Only refresh if we don't have verification status or it's been a while
-      if (!verificationStatus || !dataContextVerificationStatus) {
-        console.log('[ProfileScreen] Missing verification status, triggering refresh');
+      // Only refresh if we don't have verification status or user profile
+      if (!verificationStatus || !userProfile) {
+        console.log('[ProfileScreen] Missing verification status or user profile, triggering refresh');
         refreshStatus();
+        refetchProfile();
       } else {
-        console.log('[ProfileScreen] Verification status available, using cached data');
+        console.log('[ProfileScreen] Verification status and user profile available, using cached data');
       }
-    }, [refreshStatus, verificationStatus, dataContextVerificationStatus])
+    }, [refreshStatus, verificationStatus, userProfile, refetchProfile])
   );
 
   const allStepsCompleted = useMemo(() => {

@@ -18,7 +18,8 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { CommonActions, StackActions } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { InteractionsStackParamList } from '../../navigation/interactions/interactionsNavigator';
-import { useData, EntitySearchResult } from '../../contexts/DataContext';
+import { useSearchEntities } from '../../query/hooks/useSearchEntities';
+import { EntitySearchResult } from '../../contexts/DataContext';
 import logger from '../../utils/logger';
 import { RootStackParamList } from '../../navigation/rootNavigator';
 import contactsService, { ContactMatch, DeviceContact, NormalizedContact } from '../../services/ContactsService';
@@ -62,7 +63,12 @@ interface SearchResult {
 const NewInteraction2: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  const { searchAll, entitySearchResults, isLoadingEntitySearch } = useData();
+  // TanStack Query hook for search - replaces useData() search functions
+  const {
+    results: { entities: entitySearchResults },
+    isLoading: isLoadingEntitySearch,
+    refetch: refetchSearch
+  } = useSearchEntities({ query: searchQuery, enabled: searchQuery.length >= 2 });
   
   // getInitials can be removed if ContactList handles it or it's not needed elsewhere
   const getInitials = (name: string): string => {

@@ -250,15 +250,6 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     sendMessage,
   } = useData();
   
-  // TanStack Query hook for timeline - replaces fetchInteractionTimeline and interactionTimeline from useData()
-  const {
-    timeline: interactionTimeline,
-    isLoading: isLoadingTimeline,
-    refetch: refetchTimeline,
-    isError: hasTimelineError,
-    error: timelineError
-  } = useTimeline(currentInteractionId || '', { enabled: !!currentInteractionId });
-  
   const { 
     contactId, 
     contactName, 
@@ -270,6 +261,21 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     showTransferCompletedModal,
     transferDetails,
   } = route.params || {};
+
+  // State declarations
+  const [activeTab, setActiveTab] = useState<ImportedTimelineItemType | 'all'>('all');
+  const [messageInput, setMessageInput] = useState("");
+  const [isSending, setIsSending] = useState(false);
+  const [currentInteractionId, setCurrentInteractionId] = useState<string | null>(passedInteractionId || null);
+  
+  // TanStack Query hook for timeline - replaces fetchInteractionTimeline and interactionTimeline from useData()
+  const {
+    timeline: interactionTimeline,
+    isLoading: isLoadingTimeline,
+    refetch: refetchTimeline,
+    isError: hasTimelineError,
+    error: timelineError
+  } = useTimeline(currentInteractionId || '', { enabled: !!currentInteractionId });
 
   useEffect(() => {
     logger.debug(
@@ -286,11 +292,6 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
       "ContactInteractionHistory"
     );
   }, [contactId, contactName, contactInitials, forceRefresh, routeTimestamp, passedInteractionId, showTransferCompletedModal, transferDetails]);
-  
-  const [activeTab, setActiveTab] = useState<ImportedTimelineItemType | 'all'>('all');
-  const [messageInput, setMessageInput] = useState("");
-  const [isSending, setIsSending] = useState(false);
-  const [currentInteractionId, setCurrentInteractionId] = useState<string | null>(passedInteractionId || null);
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [currentTransferDetails, setCurrentTransferDetails] = useState<any>(null);
@@ -523,16 +524,16 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     initializeInteraction();
   }, [passedInteractionId, contactId, getOrCreateDirectInteraction, loadTimelineData]);
 
-  // Fetch data with improved local-first approach
-  const fetchData = useCallback(async (options?: { forceRefresh?: boolean; silentUpdate?: boolean }) => {
+  // Fetch data with TanStack Query refetch
+  const fetchData = useCallback(async () => {
     if (!currentInteractionId) return;
 
     try {      
-      await fetchInteractionTimeline(currentInteractionId, options);
+      refetchTimeline();
     } catch (error) {
       logger.error('[ContactInteractionHistory] Error fetching timeline', error);
     }
-  }, [currentInteractionId, fetchInteractionTimeline]);
+  }, [currentInteractionId, refetchTimeline]);
   
   useEffect(() => {
     if (currentInteractionId) {
@@ -801,7 +802,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     setActiveTab('all');
     if (currentInteractionId) {
       // Force refresh after completing a transfer to ensure latest data
-      fetchData({ forceRefresh: true, silentUpdate: false });
+      fetchData();
     }
   };
 
@@ -853,7 +854,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
       
       if (currentInteractionId) {
         // Force refresh when returning from send money to ensure latest transaction is shown
-        fetchData({ forceRefresh: true, silentUpdate: false });
+        fetchData();
       }
     }
   }, [route.params?.forceRefresh, route.params?.timestamp, currentInteractionId, fetchData]);
