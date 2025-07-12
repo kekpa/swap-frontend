@@ -13,6 +13,7 @@ import logger from '../utils/logger';
 import { websocketService } from './websocketService';
 import { webSocketHandler } from './WebSocketHandler';
 import { messageManager } from './MessageManager';
+import { IS_DEVELOPMENT } from '../config/env';
 import { transactionManager } from './TransactionManager';
 import { TimelineManager } from './TimelineManager';
 import { networkService } from './NetworkService';
@@ -44,7 +45,7 @@ class AppLifecycleManager {
     }
 
     logger.debug('[AppLifecycleManager] User authenticated, initializing services', 'lifecycle');
-    console.log('🔥 [AppLifecycleManager] 🚀 STARTING service initialization...');
+    if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🚀 STARTING service initialization...');
 
     try {
       // Initialize WebSocket connection
@@ -54,7 +55,7 @@ class AppLifecycleManager {
       await this.initializeNetworkService(authContext);
       
       this.isInitialized = true;
-      console.log('🔥 [AppLifecycleManager] ✅ All services initialized successfully');
+      if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] ✅ All services initialized successfully');
       
     } catch (error) {
       logger.error('[AppLifecycleManager] ❌ Service initialization failed:', error);
@@ -67,29 +68,29 @@ class AppLifecycleManager {
    */
   private async initializeWebSocket(getAccessToken: () => Promise<string>): Promise<void> {
     try {
-      console.log('🔥 [AppLifecycleManager] 🧪 Testing WebSocket connection...');
+      if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🧪 Testing WebSocket connection...');
       const isConnected = websocketService.isSocketConnected();
       const isAuthenticated = websocketService.isSocketAuthenticated();
       
-      console.log('🔥 [AppLifecycleManager] WebSocket status:', {
+      if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] WebSocket status:', {
         isConnected,
         isAuthenticated
       });
       
       if (!isConnected) {
-        console.log('🔥 [AppLifecycleManager] 🔌 WebSocket not connected, attempting to connect...');
+        if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🔌 WebSocket not connected, attempting to connect...');
         const token = await getAccessToken();
         if (token) {
           await websocketService.connect(token);
-          console.log('🔥 [AppLifecycleManager] ✅ WebSocket connected successfully');
+          if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] ✅ WebSocket connected successfully');
         }
       }
       
       // Initialize the WebSocketHandler
-      console.log('🔥 [AppLifecycleManager] 🧪 Initializing WebSocket event handlers...');
+      if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🧪 Initializing WebSocket event handlers...');
       webSocketHandler.initialize();
       
-      console.log('🔥 [AppLifecycleManager] 💰 Balance data handled by TanStack Query hooks');
+      if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 💰 Balance data handled by TanStack Query hooks');
       
     } catch (error) {
       console.error('🔥 [AppLifecycleManager] ❌ WebSocket initialization failed:', error);
@@ -140,7 +141,7 @@ class AppLifecycleManager {
    * Cleanup all services when user logs out
    */
   cleanup(): void {
-    console.log('🔥 [AppLifecycleManager] ⚠️  CLEANING UP ALL SERVICES');
+    if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] ⚠️  CLEANING UP ALL SERVICES');
     logger.debug('[AppLifecycleManager] Cleaning up all services for user logout', 'lifecycle');
     
     // Clear all TimelineManager instances

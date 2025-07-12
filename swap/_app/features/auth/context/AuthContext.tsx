@@ -54,15 +54,6 @@ const DEV_USER_EMAIL = "fof+htjght@brides.ht";
 
 
 
-// --- HARDCODED USER FOR FRONTEND DEVELOPMENT ---
-// This mock data is used only when MOCK_USER_ENABLED is true
-const MOCK_USER_ENABLED = false; // MODIFIED: Disabled mock user
-const MOCK_USER = {
-  id: DEV_USER_ID,
-  profileId: DEV_USER_PROFILE_ID,
-  email: DEV_USER_EMAIL
-};
-// --- END HARDCODED USER ---
 
 // Use AuthLevel and AuthContextType from types file
 
@@ -960,24 +951,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const forceLogout = async (): Promise<void> => {
-    if (MOCK_USER_ENABLED) return;
     
     console.warn('🚨 [ForceLogout] Forcing logout due to auth error');
     await logout();
   };
 
   const handleSignUp = async (userData: UserData): Promise<any> => {
-    if (MOCK_USER_ENABLED) {
-      return { success: true, message: "Mock signup successful" };
-    }
     return authHook.createAuthUser(userData);
   };
 
   const checkEmailConfirmation = async (email: string): Promise<boolean> => {
-    if (MOCK_USER_ENABLED) {
-      setShowConfirmationModal(true);
-      return true;
-    }
     setShowConfirmationModal(true);
     return false;
   };

@@ -21,55 +21,6 @@ import {
 import { jwtDecode } from "jwt-decode";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// MOCK MODE CONFIGURATION
-// This should match the setting in AuthContext.tsx
-const MOCK_USER_ENABLED = false;
-
-// Mock data responses for common endpoints
-const MOCK_RESPONSES = {
-  '/accounts': [
-    { 
-      id: '1', 
-      name: 'Main Account', 
-      balance: '10000', 
-      currencies: { code: 'HTG', symbol: 'G' } 
-    },
-    { 
-      id: '2', 
-      name: 'USD Account', 
-      balance: '150', 
-      currencies: { code: 'USD', symbol: '$' } 
-    }
-  ],
-  '/transactions': [
-    {
-      id: '1',
-      amount: '500',
-      currency: 'HTG',
-      description: 'Coffee shop',
-      createdAt: new Date(Date.now() - 3600000).toISOString(),
-      type: 'debit'
-    },
-    {
-      id: '2',
-      amount: '1200',
-      currency: 'HTG',
-      description: 'Grocery store',
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-      type: 'debit'
-    },
-    {
-      id: '3',
-      amount: '5000',
-      currency: 'HTG',
-      description: 'Salary deposit',
-      createdAt: new Date(Date.now() - 172800000).toISOString(),
-      type: 'credit'
-    }
-  ],
-  '/interactions': []
-};
-// END MOCK MODE CONFIGURATION
 
 // Define the interface for the call history
 interface ApiCallInfo {
@@ -179,12 +130,6 @@ const getCacheTTL = (url: string): number => {
   return CACHE_CONFIG.defaultTTL;
 };
 
-// Before creating the client
-console.log("========= DEBUG URL CONFIGURATION =========");
-console.log("DIRECT ENV VAR:", process.env.EXPO_PUBLIC_NEST_API_URL);
-console.log("CONSTANTS VALUE:", Constants.expoConfig?.extra?.EXPO_PUBLIC_NEST_API_URL);
-console.log("CONSTANTS FULL:", JSON.stringify(Constants.expoConfig?.extra || {}, null, 2));
-console.log("==========================================");
 
 // Base URL construction
 const baseURL = Constants.expoConfig?.extra?.EXPO_PUBLIC_NEST_API_URL || 'http://localhost:3000';
@@ -198,17 +143,6 @@ const apiClient = axios.create({
   },
 });
 
-// Debug logging for API configuration
-console.log("[DEBUG] API Client Configuration:", {
-  baseURL: baseURL + '/api/v1',
-  envVars: {
-    EXPO_PUBLIC_NEST_API_URL: process.env.EXPO_PUBLIC_NEST_API_URL,
-    NODE_ENV: process.env.NODE_ENV,
-  },
-  constants: {
-    expoConfig: Constants.expoConfig,
-  },
-});
 
 // Add an advice function to help developers avoid the api prefix issue
 const logApiWarning = () => {
@@ -229,63 +163,7 @@ CORRECT:   apiClient.get('/users/profile')
 // Log the warning once on application startup
 logApiWarning();
 
-// Helper function to get mock response based on URL pattern
-const getMockResponse = (url: string): any => {
-  // Ensure MOCK_RESPONSES is treated as having string keys
-  const mockResponsesWithStringKeys = MOCK_RESPONSES as Record<string, any>;
 
-  // Try exact match first
-  if (mockResponsesWithStringKeys[url]) {
-    return mockResponsesWithStringKeys[url];
-  }
-  
-  // Try partial matches
-  for (const endpoint in mockResponsesWithStringKeys) {
-    if (url.includes(endpoint)) {
-      return mockResponsesWithStringKeys[endpoint];
-    }
-  }
-  
-  // Default empty response
-  return [];
-};
-
-// Add a request interceptor for mock mode
-apiClient.interceptors.request.use(
-  async (config) => {
-    // If mock mode is enabled, intercept all requests and return mock data
-    if (MOCK_USER_ENABLED && config.method?.toLowerCase() === 'get') {
-      const url = config.url || '';
-      logger.debug(`[MOCK MODE] Intercepting request to ${url}`, "api");
-      
-      return {
-        ...config,
-        adapter: () => {
-          const mockData = getMockResponse(url);
-          logger.debug(`[MOCK MODE] Returning mock data for ${url}`, "api");
-          
-          return Promise.resolve({
-            data: mockData,
-            status: 200,
-            statusText: "OK (Mock)",
-            headers: {},
-            config: config,
-            cached: false,
-          });
-        },
-      };
-    }
-    
-    // For non-GET requests in mock mode, log but allow them through
-    // They will be handled in the response interceptor
-    if (MOCK_USER_ENABLED && config.method?.toLowerCase() !== 'get') {
-      logger.debug(`[MOCK MODE] Non-GET request to ${config.url} will return success without actual API call`, "api");
-    }
-    
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
 
 // Add a request interceptor for URL debugging
 apiClient.interceptors.request.use(
@@ -429,10 +307,6 @@ const isTokenAboutToExpire = (token: string): boolean => {
 // Add a request interceptor for token and caching
 apiClient.interceptors.request.use(
   async (config) => {
-    // If in mock mode, skip actual API authentication
-    if (MOCK_USER_ENABLED) {
-      return config;
-    }
     
     const endpoint = config.url || "";
     const rateLimitExpiry = rateLimitedEndpoints.get(endpoint);
@@ -608,18 +482,6 @@ apiClient.interceptors.response.use(
       return response;
     }
     
-    // For mock mode non-GET requests (which weren't caught by the request interceptor)
-    if (MOCK_USER_ENABLED && response.config.method?.toLowerCase() !== 'get') {
-      logger.debug(`[MOCK MODE] Simulating success response for ${response.config.method} ${response.config.url}`, "api");
-      
-      // Create a fake successful response
-      return {
-        ...response,
-        data: { success: true, message: "Operation successful (mock)" },
-        status: 200,
-        statusText: "OK (Mock)",
-      };
-    }
     
     // Cache successful GET responses that are cacheable
     if (
@@ -651,35 +513,6 @@ apiClient.interceptors.response.use(
     return response;
   },
   async (error: AxiosError) => {
-    // In mock mode, convert errors to successful responses
-    if (MOCK_USER_ENABLED) {
-      const config = error.config as any;
-      if (!config) return Promise.reject(error);
-      
-      logger.debug(`[MOCK MODE] Converting error to success for ${config.method} ${config.url}`, "api");
-      
-      // For GET requests, return empty array or appropriate mock data
-      if (config.method?.toLowerCase() === 'get') {
-        return Promise.resolve({
-          data: getMockResponse(config.url || ''),
-          status: 200,
-          statusText: "OK (Mock)",
-          headers: {},
-          config: config,
-          cached: false
-        });
-      }
-      
-      // For non-GET requests, return success object
-      return Promise.resolve({
-        data: { success: true, message: "Operation successful (mock)" },
-        status: 200,
-        statusText: "OK (Mock)",
-        headers: {},
-        config: config,
-        cached: false
-      });
-    }
     
     // Skip retry for requests that already have a retry flag
     const originalRequest = error.config as any;
@@ -944,18 +777,6 @@ const setProfileId = (profileId: string | null) => {
 
 // Update the post method with custom timeout
 const post = async (url: string, data?: any, config?: AxiosRequestConfig) => {
-  // If in mock mode, return success without making actual API call
-  if (MOCK_USER_ENABLED) {
-    logger.debug(`[MOCK MODE] Simulating POST to ${url}`, "api");
-    return Promise.resolve({
-      data: { success: true, message: "Operation successful (mock)" },
-      status: 200,
-      statusText: "OK (Mock)",
-      headers: {},
-      config: { url, method: 'post', ...config },
-      cached: false
-    });
-  }
 
   const requestConfig = {
     timeout: url.includes("/transactions") ? 60000 : 30000,
@@ -977,19 +798,6 @@ const post = async (url: string, data?: any, config?: AxiosRequestConfig) => {
 
 // Override the get method to handle mock mode
 const get = async (url: string, config?: AxiosRequestConfig) => {
-  // If in mock mode, return mock data without making actual API call
-  if (MOCK_USER_ENABLED) {
-    const mockData = getMockResponse(url);
-    logger.debug(`[MOCK MODE] Simulating GET to ${url}`, "api");
-    return Promise.resolve({
-      data: mockData,
-      status: 200,
-      statusText: "OK (Mock)",
-      headers: {},
-      config: { url, method: 'get', ...config },
-      cached: false
-    });
-  }
   
   return apiClient.get(url, config);
 };
@@ -997,17 +805,6 @@ const get = async (url: string, config?: AxiosRequestConfig) => {
 // Override the put method to handle mock mode
 const put = async (url: string, data?: any, config?: AxiosRequestConfig) => {
   // If in mock mode, return success without making actual API call
-  if (MOCK_USER_ENABLED) {
-    logger.debug(`[MOCK MODE] Simulating PUT to ${url}`, "api");
-    return Promise.resolve({
-      data: { success: true, message: "Operation successful (mock)" },
-      status: 200,
-      statusText: "OK (Mock)",
-      headers: {},
-      config: { url, method: 'put', ...config },
-      cached: false
-    });
-  }
   
   return apiClient.put(url, data, config);
 };
@@ -1015,17 +812,6 @@ const put = async (url: string, data?: any, config?: AxiosRequestConfig) => {
 // Override the delete method to handle mock mode
 const del = async (url: string, config?: AxiosRequestConfig) => {
   // If in mock mode, return success without making actual API call
-  if (MOCK_USER_ENABLED) {
-    logger.debug(`[MOCK MODE] Simulating DELETE to ${url}`, "api");
-    return Promise.resolve({
-      data: { success: true, message: "Operation successful (mock)" },
-      status: 200,
-      statusText: "OK (Mock)",
-      headers: {},
-      config: { url, method: 'delete', ...config },
-      cached: false
-    });
-  }
   
   return apiClient.delete(url, config);
 };
@@ -1033,17 +819,6 @@ const del = async (url: string, config?: AxiosRequestConfig) => {
 // Override the patch method to handle mock mode
 const patch = async (url: string, data?: any, config?: AxiosRequestConfig) => {
   // If in mock mode, return success without making actual API call
-  if (MOCK_USER_ENABLED) {
-    logger.debug(`[MOCK MODE] Simulating PATCH to ${url}`, "api");
-    return Promise.resolve({
-      data: { success: true, message: "Operation successful (mock)" },
-      status: 200,
-      statusText: "OK (Mock)",
-      headers: {},
-      config: { url, method: 'patch', ...config },
-      cached: false
-    });
-  }
   
   return apiClient.patch(url, data, config);
 };
@@ -1064,9 +839,6 @@ const enhancedApiClient = {
   // Add token management functions
   refreshToken: async () => {
     // Skip token refresh in mock mode
-    if (MOCK_USER_ENABLED) {
-      return true;
-    }
     
     try {
       const token = await refreshAccessToken();
@@ -1083,9 +855,6 @@ const enhancedApiClient = {
   
   isAuthTokenValid: async () => {
     // Always return true in mock mode
-    if (MOCK_USER_ENABLED) {
-      return true;
-    }
     
     const token = await getAccessToken();
     return token && !isTokenExpired(token);
