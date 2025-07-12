@@ -10,6 +10,7 @@ import logger from '../../utils/logger';
 import { queryKeys } from '../queryKeys';
 import apiClient from '../../_api/apiClient';
 import { getStaleTimeForQuery } from '../config/staleTimeConfig';
+import { createRetryFunction } from '../../utils/errorHandler';
 
 // User profile interface matching PersonalUserProfileDto from backend
 export interface UserProfile {
@@ -65,13 +66,7 @@ export const useUserProfile = (entityId?: string) => {
     enabled: !!entityId,
     staleTime: getStaleTimeForQuery('userProfile'),
     networkMode: 'offlineFirst',
-    retry: (failureCount, error: any) => {
-      // Don't retry on 404 (profile not found) or 403 (access denied)
-      if (error?.status === 404 || error?.status === 403) {
-        return false;
-      }
-      return failureCount < 2;
-    },
+    retry: createRetryFunction(2),
     meta: {
       errorMessage: 'Failed to load user profile',
     },

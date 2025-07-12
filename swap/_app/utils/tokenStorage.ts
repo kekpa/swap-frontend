@@ -1,6 +1,7 @@
 import * as SecureStore from "expo-secure-store";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
+import { handleStorageError, handleAuthError } from './errorHandler';
 
 // Keys for storing tokens
 const ACCESS_TOKEN_KEY = "swap_access_token";
@@ -30,7 +31,7 @@ export const saveAccessToken = async (token: string): Promise<void> => {
       await AsyncStorage.setItem(ACCESS_TOKEN_KEY, token);
     }
   } catch (error) {
-    console.error("Error saving access token:", error);
+    handleStorageError(error, 'save access token');
     throw error;
   }
 };
@@ -46,7 +47,7 @@ export const getAccessToken = async (): Promise<string | null> => {
       return await AsyncStorage.getItem(ACCESS_TOKEN_KEY);
     }
   } catch (error) {
-    console.error("Error getting access token:", error);
+    handleStorageError(error, 'get access token');
     return null;
   }
 };
@@ -62,7 +63,7 @@ export const saveRefreshToken = async (token: string): Promise<void> => {
       await AsyncStorage.setItem(REFRESH_TOKEN_KEY, token);
     }
   } catch (error) {
-    console.error("Error saving refresh token:", error);
+    handleStorageError(error, 'save refresh token');
     throw error;
   }
 };
@@ -78,7 +79,7 @@ export const getRefreshToken = async (): Promise<string | null> => {
       return await AsyncStorage.getItem(REFRESH_TOKEN_KEY);
     }
   } catch (error) {
-    console.error("Error getting refresh token:", error);
+    handleStorageError(error, 'get refresh token');
     return null;
   }
 };
@@ -96,7 +97,7 @@ export const clearTokens = async (): Promise<void> => {
       await AsyncStorage.removeItem(REFRESH_TOKEN_KEY);
     }
   } catch (error) {
-    console.error("Error clearing tokens:", error);
+    handleStorageError(error, 'clear tokens');
     throw error;
   }
 };

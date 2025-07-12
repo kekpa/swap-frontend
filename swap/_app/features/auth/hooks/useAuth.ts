@@ -22,6 +22,7 @@ import {
   saveRefreshToken,
 } from "../../../utils/tokenStorage";
 import logger from "../../../utils/logger";
+import { handleAuthError, getUserErrorMessage } from '../../../utils/errorHandler';
 import { UserData as SharedUserData } from "../../../types/auth.types"; // Import shared type
 import { AUTH_PATHS, USER_PATHS } from "../../../_api/apiPaths"; // Import AUTH_PATHS and USER_PATHS
 
@@ -92,38 +93,9 @@ export function useAuth() {
         profileId: data.profileId,
       };
     } catch (err: any) {
-      // More detailed error handling for debugging
-      const responseData = err.response?.data;
-      const statusCode = err.response?.status;
-      const errorMessage = responseData?.message || err.message || "Signup failed";
-      
-      setError(errorMessage);
-      
-      if (isDevelopment) {
-        console.error("🔴 SIGNUP ERROR DETAILS:", {
-          status: statusCode,
-          data: responseData,
-          message: err.message,
-          config: {
-            url: err.config?.url,
-            baseURL: err.config?.baseURL,
-            method: err.config?.method,
-          }
-        });
-        
-        logger.error("Signup error:", {
-          error: errorMessage,
-          response: responseData,
-          status: statusCode
-        });
-        
-        // If it's a 500 error, could be a backend issue
-        if (statusCode === 500) {
-          console.error("Backend server error during signup. Check server logs for details.");
-        }
-      }
-      
-      throw new Error(errorMessage);
+      const authError = handleAuthError(err, 'signup');
+      setError(getUserErrorMessage(authError));
+      throw authError;
     } finally {
       setIsLoading(false);
     }

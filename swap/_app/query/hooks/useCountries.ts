@@ -5,11 +5,11 @@
  * Local-first approach with SQLite caching and background sync.
  */
 
-import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../queryKeys';
 import apiClient from '../../_api/apiClient';
 import { API_PATHS } from '../../_api/apiPaths';
 import logger from '../../utils/logger';
+import { useStandardQuery, createQueryResponse } from './useStandardQuery';
 
 export interface Country {
   code: string;
@@ -86,29 +86,24 @@ const fetchCountries = async (): Promise<CountryOption[]> => {
  * useCountries Hook - TanStack Query with Local-First Architecture
  */
 export const useCountries = (): UseCountriesReturn => {
-  const queryResult = useQuery({
-    queryKey: queryKeys.countries,
-    queryFn: fetchCountries,
-    staleTime: 1000 * 60 * 60 * 24, // 24 hours - countries don't change often
-    gcTime: 1000 * 60 * 60 * 24 * 7, // 7 days cache
-    networkMode: 'offlineFirst',
-    retry: (failureCount, error: any) => {
-      // Don't retry on client errors
-      if (error?.status >= 400 && error?.status < 500) {
-        return false;
-      }
-      return failureCount < 2;
-    },
-    meta: {
-      errorMessage: 'Failed to load countries',
-    },
-  });
+  const queryResult = useStandardQuery(
+    queryKeys.countries,
+    fetchCountries,
+    'reference', // Long-lived reference data
+    {
+      meta: {
+        errorMessage: 'Failed to load countries',
+      },
+    }
+  );
 
+  const response = createQueryResponse(queryResult, [{ label: 'Select country', value: '' }]);
+  
   return {
-    countries: queryResult.data || [{ label: 'Select country', value: '' }],
-    loading: queryResult.isLoading,
-    error: queryResult.error ? (queryResult.error as any).message || 'Failed to fetch countries' : null,
-    refetch: queryResult.refetch,
+    countries: response.data,
+    loading: response.loading,
+    error: response.error,
+    refetch: response.refetch,
   };
 };
 

@@ -25,6 +25,9 @@ export * from './useKycStatus';
 // Reference data hooks
 export * from './useCountries';
 
+// Standardized query utilities
+export * from './useStandardQuery';
+
 // Search hooks
 export * from './useSearchEntities';
 
