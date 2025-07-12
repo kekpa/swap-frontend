@@ -6,11 +6,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { AuthGuard } from "../features/auth/components/AuthGuard";
 import WalletNavigator from "./walletNavigator";
 import InteractionsNavigator from "./interactions/interactionsNavigator";
-import OffersNavigator from "./offersNavigator";
+import ShopNavigator from "./shopNavigator";
 import MapNavigator from "./mapNavigator";
 import { getFocusedRouteNameFromRoute, RouteProp } from '@react-navigation/native';
 import { ViewStyle, Platform } from "react-native";
 import { useTheme } from "../theme/ThemeContext";
+import OffersNavigator from "./offersNavigator";
 
 const Tab = createBottomTabNavigator();
 
@@ -48,10 +49,10 @@ export default function AppNavigator() {
               iconName = focused ? "wallet" : "wallet-outline";
             } else if (route.name === "Contacts") {
               iconName = focused ? "people" : "people-outline";
-            // } else if (route.name === "Map") {
-            //   iconName = focused ? "map" : "map-outline";
-            } else if (route.name === "Offers") {
-              iconName = focused ? "cash" : "cash-outline";
+            } else if (route.name === "Map") {
+              iconName = focused ? "map" : "map-outline";
+            } else if (route.name === "Shop") {
+              iconName = focused ? "cart" : "cart-outline";
             }
 
             return (
@@ -88,29 +89,17 @@ export default function AppNavigator() {
           name="Contacts" 
           component={InteractionsNavigator}
         />
-        {/* <Tab.Screen 
+        <Tab.Screen 
           name="Map" 
           component={MapNavigator}
-          listeners={({ navigation, route }) => ({
-            tabPress: e => {
-              const routeName = getFocusedRouteNameFromRoute(route);
-              if (routeName && hideOnScreens.includes(routeName)) {
-                navigation.reset({ index: 0, routes: [{ name: route.name }] });
-              }
-            },
-          })}
-        /> */}
+        />
+        <Tab.Screen 
+          name="Shop" 
+          component={ShopNavigator}
+        />
         {/* <Tab.Screen 
           name="Offers" 
           component={OffersNavigator}
-          listeners={({ navigation, route }) => ({
-            tabPress: e => {
-              const routeName = getFocusedRouteNameFromRoute(route);
-              if (routeName && hideOnScreens.includes(routeName)) {
-                navigation.reset({ index: 0, routes: [{ name: route.name }] });
-              }
-            },
-          })}
         /> */}
       </Tab.Navigator>
     </AuthGuard>
