@@ -20,7 +20,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { User, AuthContextType, UserData, PhoneVerification, AuthLevel } from '../../../types/auth.types';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../../../hooks/useAuth';
 import { getAccessToken, clearTokens, saveAccessToken, saveRefreshToken } from '../../../utils/tokenStorage';
 import apiClient, { authEvents } from '../../../_api/apiClient';
 import { AUTH_EVENTS } from '../../../types/api.types';

@@ -14,7 +14,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect, useRoute, RouteProp, CommonActions } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { useAuth } from "../auth/hooks/useAuth";
+import { useAuth } from "../../hooks/useAuth";
 import { useAuthContext } from "../auth/context/AuthContext";
 import logger from "../../utils/logger";
 import { ProfileStackParamList } from "../../navigation/profileNavigator";
