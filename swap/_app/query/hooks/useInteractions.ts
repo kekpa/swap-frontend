@@ -198,6 +198,8 @@ export const useInteractions = (
     enabled: enabled && isAuthenticated && !!user,
     staleTime: 2 * 60 * 1000, // 2 minutes - interactions can be slightly stale
     gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
+    refetchOnMount: false, // Don't refetch on mount to prevent loading glitches
+    notifyOnChangeProps: ['data', 'error'], // Only notify on data/error changes, not loading states
     refetchOnWindowFocus: false, // Don't refetch on window focus
     refetchOnReconnect: true, // Refetch when coming back online
     retry: (failureCount, error: any) => {

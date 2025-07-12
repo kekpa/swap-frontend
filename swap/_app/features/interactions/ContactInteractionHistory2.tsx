@@ -33,6 +33,8 @@ import { websocketService } from '../../services/websocketService';
 import { useTheme } from '../../theme/ThemeContext';
 import { Theme } from '../../theme/theme';
 import { useTimeline } from '../../query/hooks/useTimeline';
+import { queryKeys } from '../../query/queryKeys';
+import { queryClient } from '../../query/queryClient';
 // DataContext replaced with TanStack Query hooks
 import { useSendMessage } from '../../query/mutations/useSendMessage';
 import { useGetOrCreateDirectInteraction } from '../../query/mutations/useCreateInteraction';
@@ -269,14 +271,36 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
   const [isSending, setIsSending] = useState(false);
   const [currentInteractionId, setCurrentInteractionId] = useState<string | null>(passedInteractionId || null);
   
-  // TanStack Query hook for timeline - replaces fetchInteractionTimeline and interactionTimeline from useData()
+  // 🚀 SIMPLIFIED TanStack Query usage - no complex local-first loading
   const {
-    timeline: interactionTimeline,
+    timeline: timelineItems,
     isLoading: isLoadingTimeline,
     refetch: refetchTimeline,
     isError: hasTimelineError,
-    error: timelineError
+    error: timelineError,
+    isRefetching
   } = useTimeline(currentInteractionId || '', { enabled: !!currentInteractionId });
+
+  // Debug logging for timeline state
+  useEffect(() => {
+    logger.debug(
+      `[ContactInteractionHistory] 📊 TIMELINE STATE: currentInteractionId=${currentInteractionId}, timelineItems.length=${timelineItems.length}, isLoadingTimeline=${isLoadingTimeline}, hasTimelineError=${hasTimelineError}`,
+      "ContactInteractionHistory"
+    );
+  }, [currentInteractionId, timelineItems.length, isLoadingTimeline, hasTimelineError]);
+
+  // PROFESSIONAL: Intelligent loading state - only show loading if no data AND actually loading
+  const shouldShowLoading = isLoadingTimeline && timelineItems.length === 0;
+  const hasAnyData = timelineItems.length > 0;
+
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [currentTransferDetails, setCurrentTransferDetails] = useState<any>(null);
+  
+  // Network state for offline handling
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  
+  const flatListRef = useRef<FlatList<TimelineItem>>(null);
+  const styles = useMemo(() => createGlobalStyles(theme), [theme]);
 
   useEffect(() => {
     logger.debug(
@@ -293,336 +317,106 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
       "ContactInteractionHistory"
     );
   }, [contactId, contactName, contactInitials, forceRefresh, routeTimestamp, passedInteractionId, showTransferCompletedModal, transferDetails]);
-  const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([]);
-  const [showTransferModal, setShowTransferModal] = useState(false);
-  const [currentTransferDetails, setCurrentTransferDetails] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true); // New state for overall loading
-  const [isSyncing, setIsSyncing] = useState(false); // New state for sync indicator
-  const [error, setError] = useState<string | null>(null); // New state for error
-  
-  // Offline mode state
-  const [isOfflineMode, setIsOfflineMode] = useState(false);
-  const [networkState, setNetworkState] = useState({
-    isConnected: true,
-    isInternetReachable: true,
-    type: 'unknown',
-    isOfflineMode: false,
-  });
-
-  // Timeline manager instance
-  const timelineManager = useRef<ReturnType<typeof getTimelineManager> | null>(null);
-  const flatListRef = useRef<FlatList<TimelineItem>>(null);
-
-  const styles = useMemo(() => createGlobalStyles(theme), [theme]);
-  
-  // Initialize timeline manager when interaction ID is available
-  useEffect(() => {
-    if (currentInteractionId) {
-      timelineManager.current = getTimelineManager(currentInteractionId);
-
-      // Listen for timeline updates
-      const handleTimelineUpdate = (items: TimelineItem[]) => {
-        setTimelineItems(items);
-      };
-
-      timelineManager.current.on('timeline:updated', handleTimelineUpdate);
-    
-      // Set initial timeline items
-      setTimelineItems(timelineManager.current.getTimelineItems());
-
-      return () => {
-        if (timelineManager.current) {
-          timelineManager.current.removeListener('timeline:updated', handleTimelineUpdate);
-        }
-      };
-    }
-  }, [currentInteractionId]);
-
-  // 🚀 Local-first timeline loading with instant UI
-  const loadTimelineData = useCallback(async (forceRefresh = false) => {
-    if (!currentInteractionId || !currentUser?.entityId) {
-      console.log('📱 [ContactInteractionHistory2] ⚠️ Missing interactionId or user entity, skipping timeline load');
-      return;
-    }
-
-    console.log(`📱 [ContactInteractionHistory2] 🚀 Loading timeline for interaction: ${currentInteractionId}, user: ${currentUser.entityId}, forceRefresh: ${forceRefresh}`);
-
-    try {
-      // STEP 1: Load from local cache INSTANTLY (no loading state)
-      console.log('📱 [ContactInteractionHistory2] 📱 STEP 1: Loading from local cache...');
-      const localTimeline = await timelineRepository.getTimelineForInteraction(
-        currentInteractionId, 
-        100
-        // No user filtering here since API already filters and saves user-specific data
-      );
-      
-      console.log(`📱 [ContactInteractionHistory2] 📱 Local timeline loaded: ${localTimeline.length} items`);
-      
-      // ALWAYS show cached data immediately (even if empty)
-        setTimelineItems(localTimeline);
-      setIsLoading(false); // NEVER show loading screen after local load
-        console.log('📱 [ContactInteractionHistory2] ✅ Timeline UI updated with cached data (INSTANT)');
-
-      // STEP 2: Background sync ONLY if online
-      if (networkService.isOffline()) {
-        console.log('📱 [ContactInteractionHistory2] 📱 OFFLINE MODE: Skipping background sync');
-        setIsSyncing(false);
-        return;
-      }
-
-      if (!forceRefresh && localTimeline.length > 0) {
-        // Skip background sync if we have recent data (unless forced)
-        console.log('📱 [ContactInteractionHistory2] ⏱️ Skipping background sync - have cached data');
-        return;
-      }
-
-      // Show subtle sync indicator ONLY (not blocking loading)
-      setIsSyncing(true);
-      console.log('📱 [ContactInteractionHistory2] 🔄 STEP 2: Starting background sync...');
-      
-      const response = await apiClient.get(`/interactions/${currentInteractionId}/timeline?limit=100&entity_id=${currentUser.entityId}`);
-      console.log(`📱 [ContactInteractionHistory2] 🌐 API response:`, {
-        status: response.status,
-        itemCount: response.data?.items?.length || 0
-      });
-
-      if (response.data?.items && Array.isArray(response.data.items)) {
-        const apiItems = response.data.items;
-        console.log(`📱 [ContactInteractionHistory2] 🌐 Processing ${apiItems.length} items from API`);
-
-        // Save to local cache in background
-        const manager = timelineManager.current || getTimelineManager(currentInteractionId);
-        manager.setTimelineItems(apiItems);
-        
-        // Update UI only if we got new/different data
-        const hasNewData = apiItems.length !== localTimeline.length || 
-                          JSON.stringify(apiItems.slice(0, 5)) !== JSON.stringify(localTimeline.slice(0, 5));
-        
-        if (hasNewData) {
-          setTimelineItems(apiItems);
-          console.log('📱 [ContactInteractionHistory2] ✅ Timeline UI updated with fresh API data');
-        } else {
-          console.log('📱 [ContactInteractionHistory2] ✅ No new data from API, keeping cached version');
-        }
-      }
-
-    } catch (error) {
-      console.error('📱 [ContactInteractionHistory2] ❌ Error loading timeline:', error);
-      // NEVER show error if we have cached data - just log it
-      if (timelineItems.length === 0) {
-        setError('Failed to load conversation');
-      }
-    } finally {
-      setIsSyncing(false);
-      console.log('📱 [ContactInteractionHistory2] 🏁 Timeline loading completed');
-    }
-  }, [currentInteractionId, currentUser?.entityId]);
 
   // Monitor network state changes for offline mode handling
   useEffect(() => {
     const networkUnsubscribe = networkService.onNetworkStateChange((state) => {
-      logger.debug('[ContactInteractionHistory] 🌐 Network state changed:', JSON.stringify(state));
-      setNetworkState(state);
+      logger.debug('[ContactInteractionHistory] Network state changed:', JSON.stringify(state));
       setIsOfflineMode(state.isOfflineMode);
-      
-      if (state.isOfflineMode) {
-        logger.info('[ContactInteractionHistory] 📱 OFFLINE MODE: Using cached data only');
-        // Clear any loading states when going offline
-        setIsLoading(false);
-        setIsSyncing(false);
-      } else {
-        logger.info('[ContactInteractionHistory] 🌐 ONLINE MODE: Will sync with server');
-        
-        // When coming back online, refresh data if we have an interaction
-        if (currentInteractionId) {
-          logger.debug('[ContactInteractionHistory] 🔄 Back online - refreshing timeline');
-          // Create a local function to avoid dependency issues
-          const refreshTimeline = async () => {
-            try {
-              console.log(`📱 [ContactInteractionHistory2] 🚀 Loading timeline for interaction: ${currentInteractionId}, user: ${currentUser?.entityId}, forceRefresh: true`);
-              
-              // STEP 1: Load from local cache INSTANTLY
-              const localTimeline = await timelineRepository.getTimelineForInteraction(currentInteractionId, 100);
-              setTimelineItems(localTimeline);
-              setIsLoading(false);
-              
-              // STEP 2: Background sync
-              if (!networkService.isOffline()) {
-                setIsSyncing(true);
-                const response = await apiClient.get(`/interactions/${currentInteractionId}/timeline?limit=100&entity_id=${currentUser?.entityId}`);
-                
-                if (response.data?.items && Array.isArray(response.data.items)) {
-                  const manager = timelineManager.current || getTimelineManager(currentInteractionId);
-                  manager.setTimelineItems(response.data.items);
-                  setTimelineItems(response.data.items);
-                }
-                setIsSyncing(false);
-              }
-            } catch (error) {
-              console.error('📱 [ContactInteractionHistory2] ❌ Error refreshing timeline:', error);
-              setIsSyncing(false);
-            }
-          };
-          
-          refreshTimeline().catch(error => {
-            logger.warn('[ContactInteractionHistory] Background refresh failed after coming online:', error);
-          });
-        }
-      }
     });
     
     // Get initial network state
     const initialState = networkService.getNetworkState();
-    setNetworkState(initialState);
     setIsOfflineMode(initialState.isOfflineMode);
     
     return networkUnsubscribe;
-      }, [currentInteractionId]);
+  }, []);
 
-  // Sync DataContext timeline data into TimelineManager
-  useEffect(() => {
-    if (currentInteractionId && timelineManager.current && interactionTimeline.length > 0) {
-      logger.debug(`[ContactInteractionHistory] Syncing ${interactionTimeline.length} timeline items from DataContext to TimelineManager`, "ContactInteractionHistory");
-      
-      // Filter timeline items for this specific interaction
-      const filteredItems = interactionTimeline.filter(item => 
-        (item as any).interaction_id === currentInteractionId
-      );
-
-      logger.debug(`[ContactInteractionHistory] Found ${filteredItems.length} items for interaction ${currentInteractionId}`, "ContactInteractionHistory");
-      
-      // Set the timeline items in TimelineManager
-      timelineManager.current.setTimelineItems(filteredItems);
-    }
-  }, [currentInteractionId, interactionTimeline]);
-
-  // Initialize interaction and load data immediately
+  // Initialize interaction - simplified
   useEffect(() => {
     const initializeInteraction = async () => {
+      logger.debug(
+        `[ContactInteractionHistory] 🚀 INITIALIZING INTERACTION: passedInteractionId=${passedInteractionId}, contactId=${contactId}`,
+        "ContactInteractionHistory"
+      );
+      
       if (passedInteractionId) {
         logger.debug(
-          `[ContactInteractionHistory] Interaction ID was directly passed: ${passedInteractionId}, using it.`,
-          "ContactInteractionHistory",
+          `[ContactInteractionHistory] ✅ Using passed interaction ID: ${passedInteractionId}`,
+          "ContactInteractionHistory"
         );
-        if (currentInteractionId !== passedInteractionId) {
-          setCurrentInteractionId(passedInteractionId);
-        }
-        setIsLoading(false);
+        setCurrentInteractionId(passedInteractionId);
       } else if (contactId) {
         logger.debug(
-          `[ContactInteractionHistory] No interaction ID passed, attempting to get/create for contact (entityId): ${contactId}`,
-          "ContactInteractionHistory",
+          `[ContactInteractionHistory] 🔄 Getting/creating interaction for contact: ${contactId}`,
+          "ContactInteractionHistory"
         );
         try {
+          logger.debug(
+            `[ContactInteractionHistory] 📞 Calling getOrCreateDirectInteraction with contactId: ${contactId}`,
+            "ContactInteractionHistory"
+          );
           const newInteractionId = await getOrCreateDirectInteraction(contactId);
+          
           if (newInteractionId) {
-            setCurrentInteractionId(newInteractionId);
-
             logger.debug(
-              `[ContactInteractionHistory] Set currentInteractionId to: ${newInteractionId} for contact ${contactId}`,
-              "ContactInteractionHistory",
+              `[ContactInteractionHistory] ✅ SUCCESS: Set interaction ID: ${newInteractionId}`,
+              "ContactInteractionHistory"
             );
+            setCurrentInteractionId(newInteractionId);
           } else {
-            // No interaction exists yet - show empty state immediately
-            setIsLoading(false);
-            logger.warn(
-              `[ContactInteractionHistory] Could not get/create interaction ID for contact ${contactId}. Timeline will be empty, sending a message will create it.`,
-              "ContactInteractionHistory",
+            logger.error(
+              `[ContactInteractionHistory] ❌ ERROR: getOrCreateDirectInteraction returned null for contactId: ${contactId}`,
+              "ContactInteractionHistory"
             );
           }
-        } catch (error: unknown) {
-          setIsLoading(false); // Never leave in loading state
+        } catch (error) {
           logger.error(
-            `[ContactInteractionHistory] Error in getOrCreateDirectInteraction for contact ${contactId}`,
-            error instanceof Error ? error.message : String(error),
-            "ContactInteractionHistory",
+            `[ContactInteractionHistory] ❌ EXCEPTION: Error getting/creating interaction for contact ${contactId}`,
+            error,
+            "ContactInteractionHistory"
           );
         }
       } else {
-        // No contact or interaction - show empty state immediately
-        setIsLoading(false);
         logger.warn(
-          '[ContactInteractionHistory] Mounted without passedInteractionId or contactId. Cannot determine interaction.',
+          `[ContactInteractionHistory] ⚠️ WARNING: No passedInteractionId or contactId provided`,
           "ContactInteractionHistory"
         );
       }
     };
 
     initializeInteraction();
-      }, [passedInteractionId, contactId]);
+  }, [passedInteractionId, contactId, getOrCreateDirectInteraction]);
 
-  // Fetch data with TanStack Query refetch
-  const fetchData = useCallback(async () => {
-    if (!currentInteractionId) return;
-
-    try {      
-      refetchTimeline();
-    } catch (error) {
-      logger.error('[ContactInteractionHistory] Error fetching timeline', error);
-    }
-  }, [currentInteractionId, refetchTimeline]);
-  
-  useEffect(() => {
-    if (currentInteractionId) {
-      logger.debug(
-        `[ContactInteractionHistory] currentInteractionId is now ${currentInteractionId}, relying on DataContext for timeline data.`,
-        "ContactInteractionHistory",
-      );
-      
-      // 🎯 NEW APPROACH: Let DataContext handle ALL timeline fetching
-      // Screen components should ONLY consume DataContext state
-      // This eliminates duplicate API calls and coordination issues
-      
-      // Check if DataContext already has timeline data for this interaction
-      const existingTimelineData = interactionTimeline.filter(item => 
-        (item as any).interaction_id === currentInteractionId
-      );
-      
-      if (existingTimelineData.length > 0) {
-        logger.debug(`[ContactInteractionHistory] ✅ DataContext has ${existingTimelineData.length} timeline items, using existing data`, "ContactInteractionHistory");
-      } else {
-        logger.debug(`[ContactInteractionHistory] 📡 No timeline data in DataContext, will wait for preload/fetch to complete`, "ContactInteractionHistory");
-        // DataContext preload will handle fetching - we just wait for it
-      }
-      
-      // 🚫 REMOVED: No more duplicate fetching from screen components
-      // DataContext.preloadRecentTimelines() and fetchInteractionTimeline() handle all data loading
-    }
-  }, [currentInteractionId, interactionTimeline]);
-
-  // Enhanced focus effect with local-first pattern - NO MORE AGGRESSIVE REFETCHING
+  // Enhanced focus effect - simplified
   useFocusEffect(
     useCallback(() => {
       logger.debug(
         `[ContactInteractionHistory] Screen focused. contactId: ${contactId}, currentInteractionId: ${currentInteractionId}`,
-        "ContactInteractionHistory",
+        "ContactInteractionHistory"
       );
       
-      // DON'T fetch data on every focus - this causes loading icons and destroys optimistic messages
-      // Only join WebSocket room for real-time updates
+      // Join WebSocket room for real-time updates
       if (currentInteractionId) {
         if (websocketService.isSocketAuthenticated()) {
-          logger.debug(`[WebSocket] Screen focused. Joining interaction room: ${currentInteractionId}`, "ContactInteractionHistory");
+          logger.debug(`[WebSocket] Joining interaction room: ${currentInteractionId}`, "ContactInteractionHistory");
           websocketService.joinInteraction(currentInteractionId);
         } else {
-            const detail = currentInteractionId 
-                ? `Interaction ID: ${currentInteractionId}` 
-                : 'Interaction ID is null';
-            logger.warn('[WebSocket] Screen focused, but socket not authenticated. Cannot join room.', detail);
+          logger.warn('[WebSocket] Socket not authenticated. Cannot join room.');
         }
       }
       
       return () => {
         logger.debug(
           `[ContactInteractionHistory] Screen unfocused. contactId: ${contactId}`,
-          "ContactInteractionHistory",
+          "ContactInteractionHistory"
         );
         if (currentInteractionId) {
-            logger.debug(`[WebSocket] Screen unfocused. Leaving interaction room: ${currentInteractionId}`, "ContactInteractionHistory");
-            websocketService.leaveInteraction(currentInteractionId);
+          logger.debug(`[WebSocket] Leaving interaction room: ${currentInteractionId}`, "ContactInteractionHistory");
+          websocketService.leaveInteraction(currentInteractionId);
         }
       };
-    }, [contactId, currentInteractionId]), // Remove fetchData dependency
+    }, [contactId, currentInteractionId])
   );
 
   const handleBackPress = () => {
@@ -667,60 +461,27 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
 
   const handleSendMessage = async () => {
     if (!messageInput.trim() || !currentUser?.entityId || !currentInteractionId) {
-        const errorDetails = {
-            messageInputEmpty: !messageInput.trim(),
-            currentUserMissing: !currentUser?.entityId,
-            interactionIdMissing: !currentInteractionId
-        };
-        logger.warn("Cannot send message: Missing input, user/entity ID, or interaction ID.", 
-            `Details: ${JSON.stringify(errorDetails)}`);
-        if (!currentInteractionId) alert("Error: Chat session not ready. Please try again.");
-        return;
+      const errorDetails = {
+        messageInputEmpty: !messageInput.trim(),
+        currentUserMissing: !currentUser?.entityId,
+        interactionIdMissing: !currentInteractionId
+      };
+      logger.warn("Cannot send message: Missing input, user/entity ID, or interaction ID.", 
+        `Details: ${JSON.stringify(errorDetails)}`);
+      if (!currentInteractionId) alert("Error: Chat session not ready. Please try again.");
+      return;
     }
 
     setIsSending(true);
-    const idempotencyKey = `local-${Date.now()}-${Math.random().toString(36).substring(2,8)}`;
     const messageToSend = messageInput.trim();
     setMessageInput('');
 
     try {
-      // Add optimistic message via timeline manager
-      const optimisticId = `opt-${Date.now()}-${Math.random().toString(36).substring(2,7)}`;
-      timelineManager.current?.addMessage({
-        id: optimisticId,
-      interaction_id: currentInteractionId, 
-      content: messageToSend,
-        sender_entity_id: currentUser.entityId,
-      message_type: APIMessageType.TEXT,
-        metadata: {
-          isOptimistic: true,
-          idempotency_key: idempotencyKey,
-        },
-      });
-
-      // Send via API
-      const messageDto: SendMessageRequest & { 
-        recipient_id: string; 
-        idempotency_key: string;
-        interaction_id: string;
-      } = {
-        interaction_id: currentInteractionId, 
-        recipient_id: contactId,
-        content: messageToSend,
-        message_type: APIMessageType.TEXT,
-        idempotency_key: idempotencyKey,
-        metadata: { 
-          optimisticId,
-          client_timestamp: new Date().toISOString(),
-        },
-      };
-
       const sentMessage = await sendMessageMutation.mutateAsync({
         interactionId: currentInteractionId,
         recipientEntityId: contactId,
         content: messageToSend,
-        messageType: 'text',
-        metadata: messageDto.metadata
+        messageType: 'text'
       });
       
       if (!sentMessage) {
@@ -740,17 +501,16 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     setActiveTab(tab);
   };
   
-  // Get filtered timeline items from timeline manager
-  const getValidFilterType = (tab: ImportedTimelineItemType | 'all'): 'all' | 'message' | 'transaction' => {
-    if (tab === 'all' || tab === 'message' || tab === 'transaction') {
-      return tab;
+  // Filter timeline items based on active tab
+  const filteredItems = useMemo(() => {
+    if (activeTab === 'all') {
+      return timelineItems;
     }
-    return 'all';
-  };
-  
-  const filteredItems = timelineManager.current?.getFilteredItems(
-    getValidFilterType(activeTab)
-  ) || [];
+    return timelineItems.filter(item => {
+      const itemType = item.itemType || item.type;
+      return itemType === activeTab;
+    });
+  }, [timelineItems, activeTab]);
   
   const renderTimelineItem = ({ item }: { item: TimelineItem }) => {
     if ((item.itemType === 'message' || item.type === 'message') && 
@@ -774,32 +534,20 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
       const txItem = item as TransactionTimelineItem;
       
       // Determine transaction direction based on from_entity_id and to_entity_id
-      // This works regardless of whether backend uses single or double-entry
       const currentUserEntityId = currentUser?.entityId;
       let isSentByCurrentUser: boolean;
       
-      // Debug logging
-      logger.debug(`[Transaction Alignment] Transaction ${txItem.id}: currentUser=${currentUserEntityId}, from=${txItem.from_entity_id}, to=${txItem.to_entity_id}, entry_type=${txItem.metadata?.entry_type}`, "ContactInteractionHistory");
-      
       if (currentUserEntityId === txItem.from_entity_id) {
-        // Current user is the sender - show on RIGHT
         isSentByCurrentUser = true;
-        logger.debug(`[Transaction Alignment] User is SENDER - showing on RIGHT`, "ContactInteractionHistory");
       } else if (currentUserEntityId === txItem.to_entity_id) {
-        // Current user is the receiver - show on LEFT  
         isSentByCurrentUser = false;
-        logger.debug(`[Transaction Alignment] User is RECEIVER - showing on LEFT`, "ContactInteractionHistory");
       } else {
-        // Fallback: if current user is neither sender nor receiver, 
-        // check entry_type for backward compatibility
         const entryType = txItem.metadata?.entry_type;
-        logger.debug(`[Transaction Alignment] User is NEITHER sender nor receiver - using fallback entry_type: ${entryType}`, "ContactInteractionHistory");
         if (entryType === 'CREDIT') {
           isSentByCurrentUser = true;
         } else if (entryType === 'DEBIT') {
           isSentByCurrentUser = false;
         } else {
-          // Final fallback - assume received if we can't determine
           isSentByCurrentUser = false;
         }
       }
@@ -828,16 +576,14 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     return null;
   };
 
-  useLayoutEffect(() => { if (Platform.OS === 'ios') StatusBar.setBarStyle(theme.name.includes('dark') ? 'light-content' : 'dark-content', true); }, [theme]);
+  useLayoutEffect(() => { 
+    if (Platform.OS === 'ios') StatusBar.setBarStyle(theme.name.includes('dark') ? 'light-content' : 'dark-content', true); 
+  }, [theme]);
 
   const handleCloseTransferCompletedModal = () => {
     setShowTransferModal(false);
     setCurrentTransferDetails(null);
     setActiveTab('all');
-    if (currentInteractionId) {
-      // Force refresh after completing a transfer to ensure latest data
-      fetchData();
-    }
   };
 
   useEffect(() => {
@@ -847,10 +593,9 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     }
   }, [route.params?.showTransferCompletedModal]);
 
-  // Enhanced empty state component that handles inverted display
+  // Enhanced empty state component that handles normal display
   const renderEmptyState = useCallback(() => {
-    const isInverted = true; // Since we always use inverted={true}
-    const emptyStateStyle = isInverted ? styles.emptyStateInverted : styles.emptyState;
+    const emptyStateStyle = styles.emptyState; // CRITICAL FIX: Use normal empty state since list is no longer inverted
     
     let emptyMessage = 'No messages yet';
     if (activeTab === 'transaction') {
@@ -865,37 +610,15 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
         <Text style={styles.emptyStateText}>
           {emptyMessage}
         </Text>
-        {/* Show subtle loading indicator during background sync */}
-        {isLoadingTimeline && (
-          <View style={{ marginTop: 16, alignItems: 'center' }}>
-            <ActivityIndicator size="small" color={theme.colors.primary} />
-            <Text style={{ marginTop: 8, fontSize: 12, color: theme.colors.textSecondary }}>
-              Syncing...
-            </Text>
-          </View>
-        )}
       </View>
     );
-  }, [isLoadingTimeline, activeTab, styles, theme.colors.grayMedium, theme.colors.primary, theme.colors.textSecondary]);
+  }, [activeTab, styles, theme.colors.grayMedium]);
 
-  // Handle returning from send money screen - force refresh to show new transaction
-  useEffect(() => {
-    if (route.params?.forceRefresh || route.params?.timestamp) {
-      logger.debug('[ContactInteractionHistory] Detected route params indicating refresh needed', "ContactInteractionHistory", {
-        forceRefresh: route.params?.forceRefresh,
-        timestamp: route.params?.timestamp
-      });
-      
-      if (currentInteractionId) {
-        // Force refresh when returning from send money to ensure latest transaction is shown
-        fetchData();
-      }
-    }
-  }, [route.params?.forceRefresh, route.params?.timestamp, currentInteractionId, fetchData]);
+  // 🚀 WHATSAPP-STYLE: Never show loading screen if we have ANY data (even stale)
+  const shouldShowLoadingScreen = shouldShowLoading && !hasAnyData;
 
-  // 🚀 LOCAL-FIRST: Never show blocking loading screen after local-first loading
-  // Always show the main UI with empty state if no data, and subtle sync indicator if loading
-
+  // CRITICAL: If we have ANY data, show it immediately - never show loading
+  if (shouldShowLoadingScreen) {
     return (
       <View style={styles.outerContainer}>
         <StatusBar barStyle={theme.name.includes('dark') ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
@@ -911,6 +634,32 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
             </View>
             <View style={styles.headerContent}>
               <Text style={styles.headerName}>{contactName}</Text>
+            </View>
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={styles.loadingText}>Loading conversation...</Text>
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.outerContainer}>
+      <StatusBar barStyle={theme.name.includes('dark') ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={theme.colors.primary} />
+          </TouchableOpacity>
+          <View style={styles.avatarContainer}>
+            <View style={[styles.avatar, { backgroundColor: contactAvatarColor || theme.colors.secondary }]}>
+              <Text style={styles.avatarText}>{contactInitials}</Text>
+            </View>
+          </View>
+          <View style={styles.headerContent}>
+            <Text style={styles.headerName}>{contactName}</Text>
             {/* Show offline indicator in header */}
             {isOfflineMode && (
               <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>
@@ -926,19 +675,15 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
         </View>
 
         <View style={styles.filterBar}>
-          <TouchableOpacity style={[styles.filterBadge, activeTab === 'all' && styles.activeFilterBadge]} onPress={() => handleTabChange('all')}><Text style={[styles.filterBadgeText, activeTab === 'all' && styles.activeFilterBadgeText]}>All</Text></TouchableOpacity>
-          <TouchableOpacity style={[styles.filterBadge, activeTab === 'transaction' && styles.activeFilterBadge]} onPress={() => handleTabChange('transaction')}><Text style={[styles.filterBadgeText, activeTab === 'transaction' && styles.activeFilterBadgeText]}>Transactions</Text></TouchableOpacity>
-          <TouchableOpacity style={[styles.filterBadge, activeTab === 'message' && styles.activeFilterBadge]} onPress={() => handleTabChange('message')}><Text style={[styles.filterBadgeText, activeTab === 'message' && styles.activeFilterBadgeText]}>Messages</Text></TouchableOpacity>
-          
-          {/* Show subtle sync indicator in filter bar */}
-          {isSyncing && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 8 }}>
-              <ActivityIndicator size="small" color={theme.colors.primary} />
-              <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginLeft: 4 }}>
-                Syncing...
-              </Text>
-            </View>
-          )}
+          <TouchableOpacity style={[styles.filterBadge, activeTab === 'all' && styles.activeFilterBadge]} onPress={() => handleTabChange('all')}>
+            <Text style={[styles.filterBadgeText, activeTab === 'all' && styles.activeFilterBadgeText]}>All</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.filterBadge, activeTab === 'transaction' && styles.activeFilterBadge]} onPress={() => handleTabChange('transaction')}>
+            <Text style={[styles.filterBadgeText, activeTab === 'transaction' && styles.activeFilterBadgeText]}>Transactions</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.filterBadge, activeTab === 'message' && styles.activeFilterBadge]} onPress={() => handleTabChange('message')}>
+            <Text style={[styles.filterBadgeText, activeTab === 'message' && styles.activeFilterBadgeText]}>Messages</Text>
+          </TouchableOpacity>
         </View>
         
         <FlatList
@@ -950,9 +695,17 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
             styles.timelineContent, 
             { flexGrow: 1, justifyContent: filteredItems.length > 0 ? 'flex-start' : 'center' }
           ]}
-          inverted={true}
+          inverted={false} // CRITICAL FIX: Remove inverted to show proper chronological order (oldest to newest)
           ListEmptyComponent={renderEmptyState}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetching}
+              onRefresh={refetchTimeline}
+              colors={[theme.colors.primary]}
+              tintColor={theme.colors.primary}
+            />
+          }
         />
         
         <KeyboardAvoidingView 
@@ -960,15 +713,30 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
           keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
           style={{ flexShrink: 0 }}
         >
-        <View style={styles.chatInputContainer}>
+          <View style={styles.chatInputContainer}>
             <TouchableOpacity style={styles.actionButton} onPress={handleSendMoney}>
-            <Text style={styles.emojiButton}>🤑</Text>
-          </TouchableOpacity>
-            <TextInput style={styles.chatInput} placeholder="Type a message..." placeholderTextColor={theme.colors.textTertiary} value={messageInput} onChangeText={setMessageInput} multiline={true} />
-            <TouchableOpacity style={[styles.sendButton, (!messageInput.trim() || isSending) && styles.disabledSendButton]} onPress={handleSendMessage} disabled={!messageInput.trim() || isSending || !currentInteractionId}>
-              {isSending ? <ActivityIndicator size="small" color={theme.colors.white} /> : <Ionicons name="arrow-forward" size={20} color={theme.colors.white} />}
-          </TouchableOpacity>
-        </View>
+              <Text style={styles.emojiButton}>🤑</Text>
+            </TouchableOpacity>
+            <TextInput 
+              style={styles.chatInput} 
+              placeholder="Type a message..." 
+              placeholderTextColor={theme.colors.textTertiary} 
+              value={messageInput} 
+              onChangeText={setMessageInput} 
+              multiline={true} 
+            />
+            <TouchableOpacity 
+              style={[styles.sendButton, (!messageInput.trim() || isSending) && styles.disabledSendButton]} 
+              onPress={handleSendMessage} 
+              disabled={!messageInput.trim() || isSending || !currentInteractionId}
+            >
+              {isSending ? (
+                <ActivityIndicator size="small" color={theme.colors.white} />
+              ) : (
+                <Ionicons name="arrow-forward" size={20} color={theme.colors.white} />
+              )}
+            </TouchableOpacity>
+          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </View>

@@ -1,18 +1,21 @@
-// Created: Local SQLite interaction storage for offline capability - 2025-05-22
-// Updated: Completely refactored to use centralized DatabaseManager - 2025-05-29
+// Updated: InteractionRepository with proper schema support - 2025-01-12
+
 import * as SQLite from 'expo-sqlite';
-import { Platform } from 'react-native';
-import logger from '../utils/logger';
 import { databaseManager } from './DatabaseManager';
 import { eventEmitter } from '../utils/eventEmitter';
+import logger from '../utils/logger';
 
 /**
- * Interaction object for SQLite storage
+ * Local interaction interface - matches Supabase schema
  */
 export interface LocalInteraction {
   id: string;
   name?: string | null;
   is_group?: boolean;
+  relationship_id?: string | null;
+  created_by_entity_id?: string | null;
+  is_active?: boolean;
+  created_at?: string;
   updated_at?: string;
   last_message_snippet?: string | null;
   last_message_at?: string | null;
@@ -22,9 +25,10 @@ export interface LocalInteraction {
 }
 
 /**
- * Interaction member object for SQLite storage
+ * Local interaction member interface - matches Supabase schema
  */
 export interface LocalInteractionMember {
+  id?: string;
   interaction_id: string;
   entity_id: string;
   role: string;
@@ -32,10 +36,11 @@ export interface LocalInteractionMember {
   avatar_url?: string | null;
   entity_type: string;
   joined_at?: string;
+  last_read_at?: string;
 }
 
 /**
- * Professional interaction repository using centralized database management
+ * Repository for managing interactions in local SQLite database
  */
 export class InteractionRepository {
   private static instance: InteractionRepository;
@@ -69,24 +74,29 @@ export class InteractionRepository {
   }
 
   /**
-   * Check if SQLite is available in the current environment
+   * Check if database is available
    */
   public async isDatabaseAvailable(): Promise<boolean> {
     try {
       await this.getDatabase();
       const available = databaseManager.isDatabaseReady();
       logger.debug(`[InteractionRepository] Database ready: ${available}`);
-      
-      if (Platform.OS === 'web') {
-        logger.debug('[InteractionRepository] Platform is web, SQLite not supported');
-        return false;
-      }
-      
       return available;
     } catch (error) {
       logger.debug('[InteractionRepository] Database not available:', error instanceof Error ? error.message : String(error));
       return false;
     }
+  }
+
+  /**
+   * Generate a UUID for interaction members
+   */
+  private generateUUID(): string {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
   }
 
   /**
@@ -133,15 +143,20 @@ export class InteractionRepository {
       const db = await this.getDatabase();
       const statement = await db.prepareAsync(`
         INSERT OR REPLACE INTO interactions (
-          id, name, is_group, updated_at, last_message_snippet, 
-          last_message_at, unread_count, icon_url, metadata
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, name, is_group, relationship_id, created_by_entity_id, is_active,
+          created_at, updated_at, last_message_snippet, last_message_at, 
+          unread_count, icon_url, metadata
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       
       await statement.executeAsync(
         interaction.id,
         interaction.name || null,
         interaction.is_group ? 1 : 0,
+        interaction.relationship_id || null,
+        interaction.created_by_entity_id || 'unknown', // Provide default to avoid NOT NULL constraint
+        interaction.is_active !== undefined ? (interaction.is_active ? 1 : 0) : 1,
+        interaction.created_at || new Date().toISOString(),
         interaction.updated_at || new Date().toISOString(),
         interaction.last_message_snippet || null,
         interaction.last_message_at || null,
@@ -167,16 +182,24 @@ export class InteractionRepository {
     try {
       const db = await this.getDatabase();
       await db.runAsync(
-        `INSERT OR REPLACE INTO interactions (id, name, is_group, updated_at, last_message_snippet, last_message_at, unread_count, icon_url, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR REPLACE INTO interactions (
+          id, name, is_group, relationship_id, created_by_entity_id, is_active,
+          created_at, updated_at, last_message_snippet, last_message_at, 
+          unread_count, icon_url, metadata
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           interaction.id,
-          interaction.name ?? '',
-          interaction.is_group ?? false,
-          interaction.updated_at ?? '',
-          interaction.last_message_snippet ?? '',
-          interaction.last_message_at ?? '',
+          interaction.name ?? null,
+          interaction.is_group ? 1 : 0,
+          interaction.relationship_id ?? null,
+          interaction.created_by_entity_id ?? 'unknown', // Provide default to avoid NOT NULL constraint
+          interaction.is_active !== undefined ? (interaction.is_active ? 1 : 0) : 1,
+          interaction.created_at ?? new Date().toISOString(),
+          interaction.updated_at ?? new Date().toISOString(),
+          interaction.last_message_snippet ?? null,
+          interaction.last_message_at ?? null,
           interaction.unread_count ?? 0,
-          interaction.icon_url ?? '',
+          interaction.icon_url ?? null,
           JSON.stringify(interaction.metadata ?? {})
         ]
       );
@@ -238,19 +261,21 @@ export class InteractionRepository {
       for (const member of members) {
         const statement = await db.prepareAsync(`
           INSERT OR REPLACE INTO interaction_members (
-            interaction_id, entity_id, role, display_name, 
-            avatar_url, entity_type, joined_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            id, interaction_id, entity_id, role, display_name, 
+            avatar_url, entity_type, joined_at, last_read_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         
         await statement.executeAsync(
+          member.id || this.generateUUID(), // Generate ID if not provided
           member.interaction_id,
           member.entity_id,
           member.role,
           member.display_name || null,
           member.avatar_url || null,
           member.entity_type,
-          member.joined_at || new Date().toISOString()
+          member.joined_at || new Date().toISOString(),
+          member.last_read_at || new Date().toISOString()
         );
         
         await statement.finalizeAsync();
@@ -387,7 +412,7 @@ export class InteractionRepository {
         members: membersByInteraction.get(interaction.id) || []
       }));
       
-      logger.info(`[InteractionRepository] Retrieved ${result.length} interactions with members in single query`);
+      logger.info(`[InteractionRepository] Retrieved ${result.length} interactions with members`);
       return result;
       
     } catch (error) {
@@ -397,10 +422,13 @@ export class InteractionRepository {
   }
 
   /**
-   * Check if interaction data exists locally
+   * Check if we have any local interactions
    */
   public async hasLocalInteractions(): Promise<boolean> {
+    logger.debug('[InteractionRepository] Checking for local interactions');
+    
     if (!(await this.isDatabaseAvailable())) {
+      logger.warn('[InteractionRepository] Database not available for hasLocalInteractions');
       return false;
     }
     
@@ -408,12 +436,12 @@ export class InteractionRepository {
       const db = await this.getDatabase();
       const statement = await db.prepareAsync('SELECT COUNT(*) as count FROM interactions');
       const result = await statement.executeAsync();
-      const row = await result.getFirstAsync() as { count: number } | null;
+      const row = await result.getFirstAsync() as { count: number };
       await statement.finalizeAsync();
       
-      const count = row?.count ?? 0;
-      logger.debug(`[InteractionRepository] Local interaction count: ${count}`);
-      return count > 0;
+      const hasInteractions = row.count > 0;
+      logger.debug(`[InteractionRepository] Has local interactions: ${hasInteractions} (count: ${row.count})`);
+      return hasInteractions;
       
     } catch (error) {
       logger.error('[InteractionRepository] Error checking for local interactions:', error instanceof Error ? error.message : String(error));
@@ -422,22 +450,24 @@ export class InteractionRepository {
   }
 
   /**
-   * Update interaction's last message and timestamp
+   * Update interaction's last message info
    */
   public async updateInteractionLastMessage(
     interactionId: string, 
     messageSnippet: string, 
     messageTimestamp: string
   ): Promise<void> {
-    if (!(await this.isDatabaseAvailable()) || !interactionId) {
-      logger.warn('[InteractionRepository] Database not available or missing interaction ID for updateInteractionLastMessage');
+    logger.debug(`[InteractionRepository] Updating last message for interaction: ${interactionId}`);
+    
+    if (!(await this.isDatabaseAvailable())) {
+      logger.warn('[InteractionRepository] Database not available for updateInteractionLastMessage');
       return;
     }
     
     try {
       const db = await this.getDatabase();
       const statement = await db.prepareAsync(`
-        UPDATE interactions
+        UPDATE interactions 
         SET last_message_snippet = ?, last_message_at = ?, updated_at = ?
         WHERE id = ?
       `);
@@ -459,5 +489,4 @@ export class InteractionRepository {
 }
 
 // Export singleton instance
-export const interactionRepository = InteractionRepository.getInstance();
-export default interactionRepository; 
+export const interactionRepository = InteractionRepository.getInstance(); 

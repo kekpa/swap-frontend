@@ -316,15 +316,17 @@ export class MessageRepository {
       );
 
       if (!existingInteraction) {
-        // Create a minimal interaction record
+        // Create a minimal interaction record with required fields
         await db.runAsync(
           `INSERT OR IGNORE INTO interactions (
-            id, name, is_group, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?)`,
+            id, name, is_group, created_by_entity_id, is_active, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [
             interactionId,
             'Unknown Interaction', // Default name
             0, // Not a group by default
+            'system', // Default created_by_entity_id (required field)
+            1, // Active by default
             new Date().toISOString(),
             new Date().toISOString()
           ]
@@ -347,10 +349,12 @@ export class MessageRepository {
     
     await db.runAsync(
       `INSERT OR REPLACE INTO messages (
-        id, interaction_id, sender_entity_id, content, message_type, created_at, metadata
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        id, topic, extension, interaction_id, sender_entity_id, content, message_type, created_at, metadata
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         message.id,
+        'chat', // CRITICAL FIX: Provide default topic value
+        'text', // CRITICAL FIX: Provide default extension value
         message.interaction_id,
         message.sender_entity_id,
         message.content,
@@ -368,9 +372,11 @@ export class MessageRepository {
     try {
       const db = await this.getDatabase();
       await db.runAsync(
-        `INSERT OR REPLACE INTO messages (id, interaction_id, sender_entity_id, content, message_type, created_at, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR REPLACE INTO messages (id, topic, extension, interaction_id, sender_entity_id, content, message_type, created_at, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           message.id,
+          'chat', // CRITICAL FIX: Provide default topic value
+          'text', // CRITICAL FIX: Provide default extension value
           message.interaction_id ?? '',
           message.sender_entity_id ?? '',
           message.content ?? '',

@@ -4,6 +4,7 @@ import { SQLiteDatabase } from 'expo-sqlite';
 
 /**
  * Initialize interaction-related tables in SQLite database
+ * Schema matches Supabase database structure exactly
  */
 export async function initializeInteractionSchema(db: SQLiteDatabase): Promise<void> {
   try {
@@ -13,13 +14,17 @@ export async function initializeInteractionSchema(db: SQLiteDatabase): Promise<v
     await db.runAsync(`DROP TABLE IF EXISTS interactions;`);
     console.log('[Database] Dropped old interaction tables (if they existed).');
 
-    // Create interactions table
+    // Create interactions table - matches Supabase schema exactly
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS interactions (
         id TEXT PRIMARY KEY NOT NULL,
         name TEXT,
-        is_group INTEGER,
-        updated_at TEXT,
+        is_group INTEGER DEFAULT 0,
+        relationship_id TEXT,
+        created_by_entity_id TEXT NOT NULL,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
         last_message_snippet TEXT,
         last_message_at TEXT,
         unread_count INTEGER DEFAULT 0,
@@ -28,17 +33,18 @@ export async function initializeInteractionSchema(db: SQLiteDatabase): Promise<v
       );
     `);
     
-    // Create interaction_members table
+    // Create interaction_members table - matches Supabase schema exactly
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS interaction_members (
+        id TEXT PRIMARY KEY NOT NULL,
         interaction_id TEXT NOT NULL,
         entity_id TEXT NOT NULL,
-        role TEXT NOT NULL,
+        role TEXT DEFAULT 'member',
+        joined_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        last_read_at TEXT DEFAULT CURRENT_TIMESTAMP,
         display_name TEXT,
         avatar_url TEXT,
         entity_type TEXT NOT NULL,
-        joined_at TEXT,
-        PRIMARY KEY (interaction_id, entity_id),
         FOREIGN KEY (interaction_id) REFERENCES interactions(id) ON DELETE CASCADE
       );
     `);
@@ -55,11 +61,27 @@ export async function initializeInteractionSchema(db: SQLiteDatabase): Promise<v
     `);
     
     await db.runAsync(`
+      CREATE INDEX IF NOT EXISTS idx_interactions_created_by_entity 
+      ON interactions(created_by_entity_id);
+    `);
+    
+    await db.runAsync(`
       CREATE INDEX IF NOT EXISTS idx_interaction_members_entity_id 
       ON interaction_members(entity_id);
     `);
     
-    console.log('[Database] Interaction schema initialized successfully');
+    await db.runAsync(`
+      CREATE INDEX IF NOT EXISTS idx_interaction_members_interaction_id 
+      ON interaction_members(interaction_id);
+    `);
+    
+    // Create unique constraint for interaction_id + entity_id
+    await db.runAsync(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_interaction_members_unique 
+      ON interaction_members(interaction_id, entity_id);
+    `);
+    
+    console.log('[Database] Interaction schema initialized successfully - matches Supabase structure');
   } catch (error) {
     console.error('[Database] Failed to initialize interaction schema:', error);
     throw error;

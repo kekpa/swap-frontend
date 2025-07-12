@@ -4,7 +4,7 @@ import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
 import logger from '../utils/logger';
 import { TimelineItem, TransactionTimelineItem } from '../types/timeline.types';
-import { Transaction } from '../types/transaction.types';
+import { Transaction, ProcessedByType } from '../types/transaction.types';
 import { databaseManager } from './DatabaseManager';
 import { eventEmitter } from '../utils/eventEmitter';
 
@@ -96,15 +96,17 @@ export class TransactionRepository {
       );
 
       if (!existingInteraction) {
-        // Create a minimal interaction record
+        // Create a minimal interaction record with required fields
         await db.runAsync(
           `INSERT OR IGNORE INTO interactions (
-            id, name, is_group, created_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?)`,
+            id, name, is_group, created_by_entity_id, is_active, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [
             interactionId,
             'Unknown Interaction', // Default name
             0, // Not a group by default
+            'system', // Default created_by_entity_id (required field)
+            1, // Active by default
             new Date().toISOString(),
             new Date().toISOString()
           ]
@@ -238,6 +240,72 @@ export class TransactionRepository {
   } catch (error) {
       logger.error(`[TransactionRepository] Error getting transactions for interaction ${interactionId}: ${error instanceof Error ? error.message : String(error)}`);
     return [];
+    }
+  }
+
+  /**
+   * Get transactions for a specific account (WhatsApp-style local-first)
+   */
+  public async getTransactionsByAccount(
+    accountId: string,
+    limit = 20
+  ): Promise<Transaction[]> {
+    logger.debug(`[TransactionRepository] Getting transactions for account: ${accountId}, limit: ${limit}`);
+    
+    if (!(await this.isSQLiteAvailable())) {
+      logger.warn(`[TransactionRepository] SQLite not available, returning empty array for account: ${accountId}`);
+      return [];
+    }
+    
+    try {
+      const db = await this.getDatabase();
+      
+      const sql = `
+        SELECT * FROM transactions 
+        WHERE (from_account_id = ? OR to_account_id = ?)
+        ORDER BY datetime(created_at) DESC 
+        LIMIT ?
+      `;
+      const params = [accountId, accountId, limit];
+      
+      logger.debug(`[TransactionRepository] Database ready: ${databaseManager.isDatabaseReady()}`);
+      
+      const rows = await db.getAllAsync(sql, params);
+      logger.debug(`[TransactionRepository] Retrieved ${rows.length} transactions from DB for account: ${accountId}`);
+      
+      const transactions: Transaction[] = rows.map((row: any) => ({
+        id: String(row.id),
+        from_account_id: row.from_account_id,
+        to_account_id: row.to_account_id,
+        amount: row.amount,
+        currency_id: row.currency_id,
+        status: row.status || 'pending',
+        transaction_type: row.transaction_type || 'transfer',
+        description: row.description || '',
+        interaction_id: row.interaction_id,
+        created_at: row.created_at,
+        metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
+        processed_by_type: ProcessedByType.SYSTEM, // Default to system for cached transactions
+        
+        // Additional fields for wallet compatibility
+        to_entity_id: row.to_entity_id,
+        from_entity_id: row.from_entity_id,
+        currency_symbol: 'G', // Default - will be overridden by API data
+        
+        // Currency info that wallet expects
+        currency: {
+          id: row.currency_id,
+          code: 'HTG', // Default - will be overridden by API data
+          symbol: 'G',
+          name: 'Haitian Gourde'
+        }
+      }));
+      
+      logger.info(`[TransactionRepository] Successfully parsed ${transactions.length} transactions for account: ${accountId}`);
+      return transactions;
+    } catch (error) {
+      logger.error(`[TransactionRepository] Error getting transactions for account: ${error}`, 'transaction_repository');
+      return [];
     }
   }
 

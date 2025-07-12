@@ -51,7 +51,7 @@ const WalletStackCard: React.FC<WalletStackCardProps> = ({
   isLoading = false,
   isSyncing = false,
 }) => {
-  const theme = useTheme();
+  const { theme } = useTheme();
   
   // Debug logging for local-first verification
   useEffect(() => {
@@ -66,10 +66,11 @@ const WalletStackCard: React.FC<WalletStackCardProps> = ({
     }
   }, [wallets]);
   
-  // ALL hooks must be called at the top level consistently
+  // All hooks must be called at the top level consistently
   const [isExpanded, setIsExpanded] = useState(false);
   const [loadingWalletId, setLoadingWalletId] = useState<string | null>(null);
-  const [optimisticPrimaryId, setOptimisticPrimaryId] = useState<string | null>(null);
+  // REMOVED: Optimistic state is now handled by TanStack Query mutation
+  // const [optimisticPrimaryId, setOptimisticPrimaryId] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   
@@ -101,21 +102,13 @@ const WalletStackCard: React.FC<WalletStackCardProps> = ({
     return unsubscribe;
   }, []);
 
-  // Create optimistic wallets list for smooth UI updates
-  const optimisticWallets = useMemo(() => {
-    if (!optimisticPrimaryId) return wallets;
-    
-    // Create optimistic version where the selected wallet is primary
-    return wallets.map(wallet => ({
-      ...wallet,
-      isPrimary: wallet.wallet_id === optimisticPrimaryId
-    }));
-  }, [wallets, optimisticPrimaryId]);
+  // REMOVED: Optimistic wallets list is no longer needed
+  // const optimisticWallets = useMemo(() => { ... });
 
   // Sort wallets to ensure PRIMARY wallet is first when collapsed, bottom when expanded
   const sortedWallets = useMemo(() => {
-    // Use optimistic wallets for sorting
-    const walletsToSort = optimisticWallets;
+    // Use the wallets prop directly - it's now optimistically updated by TanStack Query
+    const walletsToSort = wallets;
     
     // DEBUG: Log wallet primary status
     console.log('[WalletStackCard] 🔍 DEBUG WALLETS:', walletsToSort.map(w => 
@@ -134,19 +127,10 @@ const WalletStackCard: React.FC<WalletStackCardProps> = ({
     console.log('[WalletStackCard] 🔍 DEBUG SORTED ORDER:', sorted.map(w => `${w.currency_code}(${w.currency_symbol}${w.balance})`).join(', '));
     
     return sorted;
-  }, [optimisticWallets]);
+  }, [wallets]);
 
-  // Clear optimistic state when backend data confirms the change
-  useEffect(() => {
-    if (optimisticPrimaryId && !isTransitioning) {
-      // Check if the backend data now matches our optimistic state
-      const backendPrimary = wallets.find(wallet => wallet.isPrimary);
-      if (backendPrimary && backendPrimary.wallet_id === optimisticPrimaryId) {
-        // Backend confirmed our optimistic change - clear optimistic state
-        setOptimisticPrimaryId(null);
-      }
-    }
-  }, [wallets, optimisticPrimaryId, isTransitioning]);
+  // REMOVED: Optimistic state clearing is no longer needed
+  // useEffect(() => { ... });
 
   // Initialize animated values for new cards and animate position changes
   useEffect(() => {
@@ -219,12 +203,12 @@ const WalletStackCard: React.FC<WalletStackCardProps> = ({
       // Prevent multiple selections during transition
       if (isTransitioning || loadingWalletId) return;
       
-      // If expanded, implement optimistic UI for smooth transition
+      // If expanded, set loading state and call the mutation
       setIsTransitioning(true);
       setLoadingWalletId(wallet.wallet_id);
       
-      // 1. IMMEDIATELY update optimistic state for instant UI feedback
-      setOptimisticPrimaryId(wallet.wallet_id);
+      // REMOVED: Optimistic update is now handled by the mutation
+      // setOptimisticPrimaryId(wallet.wallet_id);
       
       // 2. Add scale animation for visual feedback
       Animated.sequence([
@@ -270,7 +254,8 @@ const WalletStackCard: React.FC<WalletStackCardProps> = ({
         } else {
           // For other errors in online mode, revert optimistic state
           logger.warn('[WalletStackCard] Failed to update primary wallet:', error);
-        setOptimisticPrimaryId(null);
+        // REMOVED: Rollback is handled by the mutation's onError
+        // setOptimisticPrimaryId(null);
         }
       } finally {
         setIsTransitioning(false);

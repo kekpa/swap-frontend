@@ -8,6 +8,7 @@
 import apiClient from './apiClient';
 import { WalletBalance } from '../types/wallet.types';
 import { logger } from '../utils/logger';
+import { API_PATHS } from './apiPaths';
 
 // API Response interfaces matching actual backend response
 export interface WalletApiResponse {
@@ -27,225 +28,200 @@ export interface WalletApiResponse {
 }
 
 export interface BalanceApiResponse {
-  success: boolean;
-  data: WalletApiResponse[];
-  timestamp: string;
-}
-
-export interface WalletApiSingleResponse {
-  success: boolean;
-  data: {
-    wallet: WalletBalance;
-    transactions_count?: number;
+  data: WalletApiResponse[] | string;
+  meta: {
+    timestamp: number;
+    requestId: string;
   };
-  timestamp: string;
 }
 
 /**
+ * Helper function to parse complex nested JSON structure from backend
+ */
+const parseComplexBackendResponse = (data: any): WalletApiResponse[] => {
+  logger.debug('[BalanceApiService] 🔍 Parsing complex backend response:', typeof data === 'string' ? data.substring(0, 200) + '...' : JSON.stringify(data).substring(0, 200) + '...');
+  
+  let result = data;
+  
+  // Handle multiple levels of JSON string parsing
+  let parseAttempts = 0;
+  while (typeof result === 'string' && parseAttempts < 5) {
+    try {
+      logger.debug(`[BalanceApiService] 🔄 Parsing JSON string (attempt ${parseAttempts + 1})`);
+      result = JSON.parse(result);
+      parseAttempts++;
+    } catch (parseError) {
+      logger.error(`[BalanceApiService] ❌ Failed to parse JSON string (attempt ${parseAttempts + 1}):`, parseError instanceof Error ? parseError : new Error(String(parseError)));
+      break;
+    }
+  }
+  
+  // Handle different response structures
+  if (Array.isArray(result)) {
+    logger.debug('[BalanceApiService] ✅ Found direct array response');
+    return result;
+  }
+  
+  if (result && typeof result === 'object') {
+    // Check for nested data structures
+    const keys = Object.keys(result);
+    logger.debug(`[BalanceApiService] 🔍 Object keys: ${keys.join(', ')}`);
+    
+    // Look for array-like structure (numbered keys)
+    const numberedKeys = keys.filter(key => /^\d+$/.test(key)).sort((a, b) => parseInt(a) - parseInt(b));
+    if (numberedKeys.length > 0) {
+      logger.debug(`[BalanceApiService] ✅ Found numbered keys structure with ${numberedKeys.length.toString()} items`);
+      return numberedKeys.map(key => {
+        const item = result[key];
+        return typeof item === 'string' ? JSON.parse(item) : item;
+      });
+    }
+    
+    // Check for data property
+    if (result.data) {
+      logger.debug('[BalanceApiService] ✅ Found data property, recursing');
+      return parseComplexBackendResponse(result.data);
+    }
+  }
+  
+  logger.warn(`[BalanceApiService] ⚠️ Unexpected response structure, returning empty array`);
+  return [];
+};
+
+/**
+ * Transform API response to WalletBalance format
+ */
+const transformToWalletBalance = (apiWallet: WalletApiResponse): WalletBalance => {
+  return {
+    wallet_id: apiWallet.wallet_id,
+    account_id: apiWallet.account_id, // CRITICAL FIX: Include account_id
+    entity_id: apiWallet.entity_id,   // CRITICAL FIX: Include entity_id
+    currency_id: apiWallet.currency_id, // CRITICAL FIX: Include currency_id
+    currency_code: apiWallet.currency_code,
+    currency_symbol: apiWallet.currency_symbol,
+    currency_name: apiWallet.currency_name,
+    balance: apiWallet.balance,
+    available_balance: apiWallet.available_balance,
+    reserved_balance: apiWallet.reserved_balance,
+    balance_last_updated: apiWallet.balance_last_updated,
+    is_active: apiWallet.is_active, // CRITICAL FIX: Use correct property name
+    isPrimary: apiWallet.is_primary, // UI-specific field
+    last_updated: apiWallet.balance_last_updated || new Date().toISOString(),
+  };
+};
+
+/**
  * Balance API Service Class
- * 
- * Provides direct API access for balance operations without dependencies on service managers.
  */
 export class BalanceApiService {
   /**
-   * Fetch wallet balances for a specific entity
+   * Get wallet balances for a specific entity
    */
-  static async fetchBalances(entityId: string): Promise<WalletBalance[]> {
+  public static async getWalletBalances(entityId: string): Promise<WalletBalance[]> {
+    logger.debug(`[BalanceApiService] 🚀 Fetching wallet balances for entity: ${entityId}`);
+    
     try {
-      logger.debug('[BalanceApiService] 📡 Fetching balances for entity:', entityId);
-
-      // Use the correct endpoint that works according to the logs
-      const response = await apiClient.get(`/wallets/entity/${entityId}`, {
-        timeout: 10000, // 10 second timeout
-      });
-
-      logger.debug('[BalanceApiService] 🔍 Raw API response:', response.data);
-
-      // Handle the response - check if data is already parsed correctly
-      let wallets: WalletApiResponse[] = [];
+      const response = await apiClient.get(API_PATHS.WALLET.BY_ENTITY(entityId));
+      logger.debug(`[BalanceApiService] 📥 Raw API response:`, typeof response.data === 'string' ? response.data.substring(0, 200) + '...' : JSON.stringify(response.data).substring(0, 200) + '...');
       
-      if (response.data && response.data.data) {
-        const responseData = response.data.data;
-        
-        logger.debug('[BalanceApiService] 🔍 Data type and structure:', JSON.stringify({
-          dataType: typeof responseData,
-          isArray: Array.isArray(responseData),
-          dataKeys: typeof responseData === 'object' && responseData !== null ? Object.keys(responseData) : [],
-          sampleData: Array.isArray(responseData) ? responseData[0] : responseData
-        }));
-        
-        // Check if data is already an array (HTTP client parsed it)
-        if (Array.isArray(responseData)) {
-          wallets = responseData;
-          logger.debug('[BalanceApiService] ✅ Data is already an array:', wallets.length.toString());
-        } 
-        // Check if data is an object with numeric keys (parsed object format)
-        else if (typeof responseData === 'object' && responseData !== null) {
-          const entries = Object.entries(responseData);
-          wallets = entries.map(([key, value]) => {
-            if (typeof value === 'string') {
-              try {
-                return JSON.parse(value);
-              } catch {
-                logger.warn('[BalanceApiService] Failed to parse wallet string:', value);
-                return null;
-              }
-            }
-            return value as WalletApiResponse;
-          }).filter(Boolean);
-          logger.debug('[BalanceApiService] ✅ Parsed from object format:', wallets.length.toString());
-        }
-        // Handle stringified JSON format
-        else if (typeof responseData === 'string') {
-          try {
-            const parsed = JSON.parse(responseData);
-            if (Array.isArray(parsed)) {
-              wallets = parsed;
-            } else {
-              const entries = Object.entries(parsed);
-              wallets = entries.map(([key, value]) => {
-                if (typeof value === 'string') {
-                  try {
-                    return JSON.parse(value);
-                  } catch {
-                    return null;
-                  }
-                }
-                return value as WalletApiResponse;
-              }).filter(Boolean);
-            }
-            logger.debug('[BalanceApiService] ✅ Parsed from string format:', wallets.length.toString());
-          } catch (parseError) {
-            logger.error('[BalanceApiService] ❌ Failed to parse stringified data:', parseError);
-            throw new Error('Invalid JSON format in response');
-          }
-        }
+      // Parse the complex nested JSON response
+      const parsedWallets = parseComplexBackendResponse(response.data);
+      
+      if (!Array.isArray(parsedWallets)) {
+        logger.warn(`[BalanceApiService] ⚠️ Expected array but got: ${typeof parsedWallets}`);
+        return [];
+      }
+      
+      // Transform to frontend format
+      const transformedWallets = parsedWallets.map(transformToWalletBalance);
+      
+      logger.info(`[BalanceApiService] ✅ Successfully fetched ${transformedWallets.length.toString()} balances for entity: ${entityId}`);
+      
+      // Debug log the primary wallet
+      const primaryWallet = transformedWallets.find(w => w.isPrimary);
+      if (primaryWallet) {
+        logger.debug(`[BalanceApiService] 🎯 Primary wallet: ${primaryWallet.currency_code} (${primaryWallet.wallet_id})`);
       } else {
-        logger.warn('[BalanceApiService] ⚠️ No data field in response');
-        logger.debug('[BalanceApiService] 🐛 Response structure:', JSON.stringify({
-          hasResponseData: !!response.data,
-          responseKeys: response.data ? Object.keys(response.data) : [],
-          fullResponse: response.data
-        }));
+        logger.warn(`[BalanceApiService] ⚠️ No primary wallet found in ${transformedWallets.length.toString()} wallets`);
       }
       
-      // Transform the API response to match WalletBalance interface
-      const transformedWallets: WalletBalance[] = wallets.map((wallet: WalletApiResponse) => ({
-        wallet_id: wallet.wallet_id,
-        account_id: wallet.account_id,
-        entity_id: wallet.entity_id,
-        currency_id: wallet.currency_id,
-        currency_code: wallet.currency_code,
-        currency_symbol: wallet.currency_symbol,
-        currency_name: wallet.currency_name,
-        balance: wallet.balance || 0,
-        reserved_balance: wallet.reserved_balance || 0,
-        available_balance: wallet.available_balance || wallet.balance || 0,
-        balance_last_updated: wallet.balance_last_updated,
-        is_active: wallet.is_active,
-        isPrimary: wallet.is_primary,
-      }));
-      
-      logger.debug('[BalanceApiService] ✅ Successfully fetched balances:', `count: ${transformedWallets.length}, entityId: ${entityId}`);
-
       return transformedWallets;
-
-    } catch (error) {
-      logger.error('[BalanceApiService] ❌ Failed to fetch balances:', {
-        entityId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Fetch balance for a specific wallet
-   */
-  static async fetchWalletBalance(walletId: string): Promise<WalletBalance> {
-    try {
-      logger.debug('[BalanceApiService] 📡 Fetching balance for wallet:', walletId);
-
-      const response = await apiClient.get(`/wallets/${walletId}/balance`);
-
-      if (!response.data.success) {
-        throw new Error('API returned unsuccessful response');
-      }
-
-      const wallet = response.data.data.wallet;
       
-      logger.debug('[BalanceApiService] ✅ Successfully fetched wallet balance:', `walletId: ${walletId}, balance: ${wallet.available_balance}, currency: ${wallet.currency_code}`);
-
-      return wallet;
-
     } catch (error) {
-      logger.error('[BalanceApiService] ❌ Failed to fetch wallet balance:', {
-        walletId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Refresh balance for a specific wallet
-   */
-  static async refreshWalletBalance(walletId: string): Promise<WalletBalance> {
-    try {
-      logger.debug('[BalanceApiService] 🔄 Refreshing balance for wallet:', walletId);
-
-      const response = await apiClient.post(`/wallets/${walletId}/refresh-balance`);
-
-      if (!response.data.success) {
-        throw new Error('API returned unsuccessful response');
-      }
-
-      const wallet = response.data.data.wallet;
-      
-      logger.debug('[BalanceApiService] ✅ Successfully refreshed wallet balance:', `walletId: ${walletId}, balance: ${wallet.available_balance}, currency: ${wallet.currency_code}`);
-
-      return wallet;
-
-    } catch (error) {
-      logger.error('[BalanceApiService] ❌ Failed to refresh wallet balance:', {
-        walletId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Get exchange rates for currency conversion
-   */
-  static async getExchangeRates(baseCurrency: string = 'USD'): Promise<Record<string, number>> {
-    try {
-      logger.debug('[BalanceApiService] 📡 Fetching exchange rates for base currency:', baseCurrency);
-
-      const response = await apiClient.get(`/currency/exchange-rates`, {
-        params: { base: baseCurrency },
-      });
-
-      if (!response.data.success) {
-        throw new Error('API returned unsuccessful response');
-      }
-
-      const rates = response.data.data.rates;
-      
-      logger.debug('[BalanceApiService] ✅ Successfully fetched exchange rates:', `baseCurrency: ${baseCurrency}, ratesCount: ${Object.keys(rates).length}`);
-
-      return rates;
-
-    } catch (error) {
-      logger.error('[BalanceApiService] ❌ Failed to fetch exchange rates:', {
-        baseCurrency,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      logger.error('[BalanceApiService] ❌ Failed to fetch wallet balances:', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
 }
 
-// Export the service for use in TanStack Query hooks
-export const balanceApi = BalanceApiService;
-export default BalanceApiService;
+/**
+ * Standalone function for getting wallet balances (used by hooks)
+ */
+export const getWalletBalances = async (entityId: string): Promise<WalletBalance[]> => {
+  return BalanceApiService.getWalletBalances(entityId);
+};
+
+/**
+ * CRITICAL FIX: Add the missing fetchBalances function that useBalances is trying to call
+ */
+export const fetchBalances = async (entityId: string): Promise<WalletBalance[]> => {
+  return BalanceApiService.getWalletBalances(entityId);
+};
+
+/**
+ * Set wallet as primary
+ */
+export const setPrimaryWallet = async (walletId: string): Promise<WalletBalance> => {
+  logger.debug(`[BalanceApiService] 🔄 Setting wallet ${walletId} as primary`);
+  
+  try {
+    const response = await apiClient.patch(`/wallets/${walletId}/primary`);
+    logger.debug(`[BalanceApiService] ✅ Primary wallet set successfully`);
+    
+    // Handle the response data - it's a single wallet object, not an array
+    let walletData = response.data;
+    
+    // If response has a 'data' property, extract it
+    if (walletData && typeof walletData === 'object' && walletData.data) {
+      walletData = walletData.data;
+    }
+    
+    // If the data is a JSON string, parse it
+    if (typeof walletData === 'string') {
+      try {
+        walletData = JSON.parse(walletData);
+      } catch (parseError) {
+        logger.error('[BalanceApiService] ❌ Failed to parse wallet data JSON:', parseError);
+        throw new Error('Invalid JSON response from setPrimaryWallet');
+      }
+    }
+    
+    // Validate that we have a wallet object with required fields
+    if (!walletData || typeof walletData !== 'object' || !walletData.wallet_id) {
+      logger.error('[BalanceApiService] ❌ Invalid wallet data structure:', walletData);
+      throw new Error('Invalid wallet data structure from setPrimaryWallet');
+    }
+    
+    // Transform to WalletBalance format
+    const transformedWallet = transformToWalletBalance(walletData);
+    logger.debug(`[BalanceApiService] ✅ Successfully transformed primary wallet: ${transformedWallet.currency_code}`);
+    
+    return transformedWallet;
+    
+  } catch (error) {
+    logger.error('[BalanceApiService] ❌ Failed to set primary wallet:', error instanceof Error ? error : new Error(String(error)));
+    throw error;
+  }
+};
+
+/**
+ * Default export object with all functions (for backward compatibility)
+ */
+const balanceApi = {
+  getWalletBalances,
+  fetchBalances, // CRITICAL: This was missing!
+  setPrimaryWallet, // CRITICAL: Add the missing setPrimaryWallet function
+  BalanceApiService,
+};
+
+export default balanceApi;

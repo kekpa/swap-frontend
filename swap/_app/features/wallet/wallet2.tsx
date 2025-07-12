@@ -32,6 +32,11 @@ import logger from '../../utils/logger';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useWalletTransactions } from '../../query/hooks/useRecentTransactions';
 
+// 🚀 PROFESSIONAL: Add intelligent preloading for WhatsApp-style instant loading
+import { queryClient } from '../../query/queryClient';
+import { queryKeys } from '../../query/queryKeys';
+import { transactionManager } from '../../services/TransactionManager';
+
 interface WalletTransaction {
   id: string;
   name: string;
@@ -64,12 +69,27 @@ const WalletDashboard: React.FC = () => {
   const user = authContext.user;
   
   // TanStack Query hooks replacing useData()
+  const entityId = user?.entityId || '';
+  
+  // Debug logging for entityId
+  useEffect(() => {
+    logger.debug(`[WalletDashboard] 🔍 ENTITY DEBUG: user=${!!user}, entityId="${entityId}", userEntityId="${user?.entityId}"`);
+    if (user) {
+      logger.debug(`[WalletDashboard] 🔍 USER DATA:`, JSON.stringify({
+        id: user.id,
+        entityId: user.entityId,
+        profileId: user.profileId,
+        firstName: user.firstName
+      }, null, 2));
+    }
+  }, [user, entityId]);
+  
   const { 
     data: currencyBalances = [], 
     isLoading: isLoadingBalances,
     error: balancesError,
     refetch: refreshBalances 
-  } = useBalances(user?.entityId || '');
+  } = useBalances(entityId);
   
   const { 
     interactions: interactionsList = [] 
@@ -92,10 +112,45 @@ const WalletDashboard: React.FC = () => {
     }
   }, [currencyBalances, isLoadingBalances, balancesError]);
 
+  // 🚀 PROFESSIONAL: Intelligent preloading of wallet transaction data (WhatsApp-style)
+  useEffect(() => {
+    if (currencyBalances && currencyBalances.length > 0 && user?.entityId) {
+      // Find the primary wallet's account for preloading transactions
+      const primaryWallet = currencyBalances.find(w => w.isPrimary);
+      const accountIdToPreload = primaryWallet?.account_id || currencyBalances[0]?.account_id;
+      
+      if (accountIdToPreload) {
+        logger.debug(`[WalletDashboard] 🚀 PRELOADING: Starting transaction preload for account: ${accountIdToPreload}`, "WalletDashboard");
+        
+        // Preload transactions in background with small delay to avoid overwhelming
+        setTimeout(() => {
+          // Check if we already have cached transaction data
+          const existingData = queryClient.getQueryData(queryKeys.transactionsByAccount(accountIdToPreload, 4));
+          if (!existingData) {
+            logger.debug(`[WalletDashboard] 🔄 PRELOADING: No cached transactions found, prefetching for instant UX`, "WalletDashboard");
+            
+            // Prefetch transaction data for instant loading
+            queryClient.prefetchQuery({
+              queryKey: queryKeys.transactionsByAccount(accountIdToPreload, 4),
+              queryFn: async () => {
+                const result = await transactionManager.getTransactionsForAccount(accountIdToPreload, 4, 0);
+                return result?.data || [];
+              },
+              staleTime: 10 * 60 * 1000, // 10 minutes
+            }).catch(error => {
+              logger.debug(`[WalletDashboard] ⚠️ PRELOADING: Transaction prefetch failed (non-critical): ${error}`, "WalletDashboard");
+            });
+          } else {
+            logger.debug(`[WalletDashboard] ✅ PRELOADING: Cached transaction data exists, skipping prefetch`, "WalletDashboard");
+          }
+        }, 200); // 200ms delay for background preloading
+      }
+    }
+  }, [currencyBalances, user?.entityId]);
+
   // State declarations
   const [isBalanceVisible, setIsBalanceVisible] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [walletBalances, setWalletBalances] = useState<WalletBalance[]>([]);
   const [selectedWallet, setSelectedWallet] = useState<WalletBalance | null>(null);
 
   // Professional wallet-specific transaction loading
@@ -351,52 +406,34 @@ const WalletDashboard: React.FC = () => {
   // Enhanced wallet initialization with offline mode support
   useEffect(() => {
     if (!isWalletUnlocked || !user) {
-      // Clear data when wallet is locked
-      setWalletBalances([]);
+      // Clear selected wallet when wallet is locked
       setSelectedWallet(null);
       return;
     }
 
-    const initializeWalletsLocalFirst = async () => {
-      try {
-        logger.debug('[WalletDashboard] 🚀 LOCAL-FIRST: Starting wallet initialization...');
-
-        if (!user?.entityId && !user?.profileId) {
-          logger.warn('[WalletDashboard] No entity ID or profile ID available');
-          return;
-        }
-
-        // Entity ID is handled by TanStack Query hooks
-
-        // STEP 1: Use TanStack Query data (currencyBalances)
-        logger.debug('[WalletDashboard] 📱 Using TanStack Query balance data...');
-        
-        if (currencyBalances.length > 0) {
-          // currencyBalances is already in the correct WalletBalance format from TanStack Query
-          const transformedWallets = currencyBalances;
-
-          logger.debug(`[WalletDashboard] ✅ INSTANT: Loaded ${transformedWallets.length} wallets from TanStack Query`);
-          setWalletBalances(transformedWallets);
-          
-          // Auto-select primary wallet
-          const primaryWallet = transformedWallets.find((w: WalletBalance) => w.isPrimary) || transformedWallets[0];
+    // 🚀 WHATSAPP-STYLE: Auto-select primary wallet from TanStack Query data
+    if (currencyBalances.length > 0) {
+      const primaryWallet = currencyBalances.find((w: WalletBalance) => w.isPrimary) || currencyBalances[0];
+      
+      // CRITICAL FIX: Always update selectedWallet to match the current primary from TanStack Query
+      // This ensures optimistic updates are immediately reflected in the UI
+      if (!selectedWallet || selectedWallet.wallet_id !== primaryWallet.wallet_id) {
+        setSelectedWallet(primaryWallet);
+        logger.debug(`[WalletDashboard] 🎯 INSTANT: Auto-selected ${primaryWallet.currency_code} wallet (${primaryWallet.isPrimary ? 'PRIMARY' : 'FALLBACK'})`, "WalletDashboard");
+      } else {
+        // Even if wallet_id matches, update the wallet object to get latest isPrimary status
+        if (selectedWallet.isPrimary !== primaryWallet.isPrimary) {
           setSelectedWallet(primaryWallet);
-          
-          logger.debug(`[WalletDashboard] 🎯 INSTANT: Selected wallet ${primaryWallet.currency_code}`);
-          
-          // Transactions will be automatically loaded by TanStack Query hook
-        } else {
-          logger.debug('[WalletDashboard] 📭 No wallets found');
-          setWalletBalances([]);
+          logger.debug(`[WalletDashboard] 🔄 SYNC: Updated ${primaryWallet.currency_code} wallet primary status to ${primaryWallet.isPrimary}`, "WalletDashboard");
         }
-
-        logger.info('[WalletDashboard] ✅ LOCAL-FIRST wallet initialization complete');
-      } catch (error) {
-        logger.error('[WalletDashboard] ❌ Failed to initialize wallets:', error);
       }
-    };
-
-    initializeWalletsLocalFirst();
+    } else {
+      // Clear selected wallet if no balances available
+      if (selectedWallet) {
+        setSelectedWallet(null);
+        logger.debug(`[WalletDashboard] 📭 No wallets available, cleared selection`, "WalletDashboard");
+      }
+    }
 
     // Cleanup on unmount or user change
     return () => {
@@ -408,7 +445,7 @@ const WalletDashboard: React.FC = () => {
       // Reset authentication state
       authenticationRef.current = false;
     };
-  }, [isWalletUnlocked, user?.id, user?.entityId]);
+  }, [isWalletUnlocked, user?.id, user?.entityId, currencyBalances, selectedWallet]);
 
   // Helper function to resolve entity name from interactions
   const getEntityNameFromInteractions = useCallback((entityId: string): string => {
@@ -473,7 +510,7 @@ const WalletDashboard: React.FC = () => {
 
   // Helper function to get currency symbol from wallet balances
   const getCurrencySymbolFromWallets = useCallback((currencyId: string): string => {
-    if (!walletBalances || walletBalances.length === 0) {
+    if (!currencyBalances || currencyBalances.length === 0) {
       // Fallback to hardcoded mapping if no wallet balances available
       if (currencyId === 'a8fc4df4-e198-4916-b5a5-a1be8c53a295') {
         return '$'; // USD
@@ -485,7 +522,7 @@ const WalletDashboard: React.FC = () => {
     }
 
     // Find the wallet with matching currency_id and get its symbol
-    const matchingWallet = walletBalances.find(wallet => {
+    const matchingWallet = currencyBalances.find(wallet => {
       return wallet.currency_id === currencyId;
     });
 
@@ -514,7 +551,7 @@ const WalletDashboard: React.FC = () => {
     };
 
     // Check if we can infer from wallet balances
-    for (const wallet of walletBalances) {
+    for (const wallet of currencyBalances) {
       const lowerCurrencyCode = wallet.currency_code.toLowerCase();
       if (currencyMap[lowerCurrencyCode]) {
         return wallet.currency_symbol || currencyMap[lowerCurrencyCode];
@@ -522,7 +559,7 @@ const WalletDashboard: React.FC = () => {
     }
     
     return '?'; // Unknown currency
-  }, [walletBalances]);
+  }, [currencyBalances]);
 
   // Professional transaction transformation using TanStack Query data
   const displayTransactions = useMemo(() => {
@@ -802,22 +839,6 @@ const WalletDashboard: React.FC = () => {
       alignItems: 'center',
       padding: theme.spacing.md,
     },
-    
-    // LOCAL-FIRST: Sync indicator styles
-    syncIndicator: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: theme.spacing.sm,
-      backgroundColor: theme.colors.card,
-      borderRadius: theme.borderRadius.sm,
-      marginBottom: theme.spacing.sm,
-    },
-    syncText: {
-      fontSize: theme.typography.fontSize.sm,
-      color: theme.colors.textSecondary,
-      marginLeft: theme.spacing.xs,
-    },
   }), [theme]);
 
   const handleAvatarPress = useCallback((transaction: WalletTransaction) => {
@@ -1033,7 +1054,7 @@ const WalletDashboard: React.FC = () => {
       >
         <View>
           <WalletStackCard
-            wallets={walletBalances}
+            wallets={currencyBalances}
             selectedWalletId={selectedWallet?.wallet_id}
             isBalanceVisible={isBalanceVisible}
             onToggleVisibility={toggleBalanceVisibility}
@@ -1077,13 +1098,6 @@ const WalletDashboard: React.FC = () => {
             {/* PROFESSIONAL: Clean backend filtering with no fallback */}
             {filteredTransactions.length > 0 ? (
               <>
-                {/* Subtle sync indicator when refreshing background data */}
-                {isLoadingWalletTransactions && (
-                  <View style={styles.syncIndicator}>
-                    <Ionicons name="sync" size={12} color={theme.colors.textSecondary} />
-                    <Text style={styles.syncText}>Syncing latest transactions...</Text>
-                  </View>
-                )}
                 {filteredTransactions.map((item: WalletTransaction) => renderTransactionItem(item))}
               </>
             ) : isLoadingWalletTransactions ? (

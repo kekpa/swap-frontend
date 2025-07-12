@@ -81,6 +81,7 @@ export class CurrencyWalletsRepository {
    */
   public async insertCurrencyWallet(wallet: CurrencyWallet): Promise<void> {
     logger.debug(`[CurrencyWalletsRepository] Inserting currency wallet: ${wallet.id}`);
+    logger.debug(`[CurrencyWalletsRepository] 🔍 WALLET DATA DEBUG:`, JSON.stringify(wallet, null, 2));
     
     if (!(await this.isSQLiteAvailable())) {
       logger.warn(`[CurrencyWalletsRepository] SQLite not available, aborting save for: ${wallet.id}`);
@@ -89,6 +90,7 @@ export class CurrencyWalletsRepository {
     
     if (!wallet.id || !wallet.account_id || !wallet.currency_id) {
       logger.warn('[CurrencyWalletsRepository] Missing required fields (id, account_id, currency_id), aborting save');
+      logger.warn(`[CurrencyWalletsRepository] 🔍 MISSING FIELDS DEBUG: id=${wallet.id}, account_id=${wallet.account_id}, currency_id=${wallet.currency_id}`);
       return;
     }
     

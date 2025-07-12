@@ -13,7 +13,7 @@ import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
-import { logger } from '../utils/logger';
+import logger from '../utils/logger';
 import { networkService } from '../services/NetworkService';
 import { staleTimeManager } from './config/staleTimeConfig';
 
@@ -56,50 +56,44 @@ const createAsyncStoragePersister = () => {
   }
 };
 
-/**
- * Create QueryClient with React Native optimizations
- */
+// PROFESSIONAL: Optimized QueryClient for local-first banking app
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Serve stale data immediately, then refetch in background
-      staleTime: staleTimeManager.getStaleTime('balance'),
+      // WHATSAPP-STYLE: Prioritize cached data
+      staleTime: 10 * 60 * 1000, // 10 minutes - longer staleness for better UX
+      gcTime: 60 * 60 * 1000, // 1 hour - keep data longer in memory
       
-      // Cache data for 5 minutes by default
-      gcTime: 5 * 60 * 1000,
+      // LOCAL-FIRST: Prefer cached data over network
+      networkMode: 'offlineFirst',
       
-      // Retry failed requests with exponential backoff
+      // PERFORMANCE: Reduce unnecessary refetches
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
+      refetchOnMount: false, // Don't refetch if we have cached data
+      
+      // RELIABILITY: Conservative retry strategy
       retry: (failureCount, error: any) => {
-        // Don't retry on 4xx errors (client errors)
-        if (error?.response?.status >= 400 && error?.response?.status < 500) {
-          return false;
-        }
-        
-        // Retry up to 3 times for other errors
-        return failureCount < 3;
+        // Don't retry client errors (4xx)
+        if (error?.status >= 400 && error?.status < 500) return false;
+        // Only retry server errors (5xx) up to 2 times
+        return failureCount < 2;
       },
-      
-      // Retry delay with exponential backoff
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
       
-      // Refetch on window focus (when app becomes active)
-      refetchOnWindowFocus: true,
+      // PERFORMANCE: Enable structural sharing for better re-renders
+      structuralSharing: true,
       
-      // Refetch on reconnect
-      refetchOnReconnect: true,
-      
-      // Don't refetch on mount if data is fresh
-      refetchOnMount: false,
-      
-      // Network mode - always try to fetch, but serve cache if offline
-      networkMode: 'offlineFirst',
+      // UX: Use placeholder data for smoother transitions
+      placeholderData: (previousData: any) => previousData,
     },
     mutations: {
-      // Retry mutations up to 2 times
-      retry: 2,
+      // RELIABILITY: Retry mutations more aggressively
+      retry: 3,
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
       
-      // Network mode for mutations
-      networkMode: 'offlineFirst',
+      // NETWORK: Allow mutations even when offline (for optimistic updates)
+      networkMode: 'always',
     },
   },
 });

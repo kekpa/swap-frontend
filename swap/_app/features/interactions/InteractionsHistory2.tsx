@@ -10,7 +10,6 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
-  Animated,
   InteractionManager,
   Platform,
 } from 'react-native';
@@ -22,6 +21,7 @@ import SearchHeader from '../header/SearchHeader';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuthContext } from '../auth/context/AuthContext';
 import { useInteractions, InteractionItem } from '../../query/hooks/useInteractions';
+import { usePrefetchTimeline } from '../../query/hooks/useTimeline';
 // EntitySearchResult type - keeping for compatibility
 interface EntitySearchResult {
   id: string;
@@ -157,25 +157,22 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
   const authContext = useAuthContext();
   const user = authContext.user;
   const isAuthenticated = authContext.isAuthenticated;
-  // TanStack Query hook for interactions - replaces useData()
+  
+  // 🚀 SIMPLIFIED TanStack Query usage - no complex loading state management
   const { 
     interactions: interactionsList, 
     isLoading: isLoadingInteractions, 
     refetch: refreshInteractions,
     isError: hasInteractionsError,
-    error: interactionsError
+    error: interactionsError,
+    isRefetching
   } = useInteractions({ enabled: !!user });
 
-  // Mark initial load as complete when we have data or error
-  const isInitialLoadComplete = !isLoadingInteractions;
+  // 🚀 PROFESSIONAL: Add intelligent conversation preloading
+  const prefetchTimeline = usePrefetchTimeline();
 
   const [activeTab, setActiveTab] = useState<InteractionTab>(InteractionTab.All);
-  const [hasRefreshedAfterError, setHasRefreshedAfterError] = useState(false);
-  const [hasSuccessfullyFetched, setHasSuccessfullyFetched] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const hasTriggeredInitialRefresh = useRef(false);
-  const lastRefreshTime = useRef<number>(0);
-  const REFRESH_THROTTLE_MS = 2000; // Minimum time between refreshes (2 seconds)
   
   // Search state - Google Maps style
   const [isSearchActive, setIsSearchActive] = useState(false);
@@ -196,86 +193,38 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
   const isMounted = useRef(true);
   const hasInitialContactsRun = useRef(false);
   
-  // Track transition stability to prevent rapid re-renders after navigation
-  const [isTransitionStable, setIsTransitionStable] = useState(false);
-  const transitionStabilityTimer = useRef<NodeJS.Timeout | null>(null);
+  // 🚀 SIMPLIFIED: Remove complex render stability controls
+  const [swipeableRefs, setSwipeableRefs] = useState<{[key: string]: React.RefObject<Swipeable>}>({});
   
-  // Add comprehensive render stability controls to eliminate final glitch
-  const [renderStabilityMode, setRenderStabilityMode] = useState(false);
-  const lastRenderStateLog = useRef<string>('');
-  const renderThrottleTimer = useRef<NodeJS.Timeout | null>(null);
-  const consecutiveRenderCount = useRef(0);
-  const isCriticalTransitionPeriod = useRef(false);
-  const MAX_CONSECUTIVE_RENDERS = 1; // Only allow 1 render during critical period
-  
-  // Track component lifecycle with mount stability
+  // Component lifecycle with mount stability
   const componentId = useRef(Date.now());
-  const isMountStable = useRef(false);
-  const mountStabilityTimer = useRef<NodeJS.Timeout | null>(null);
+  
+  // 🚀 PROFESSIONAL: Intelligent conversation preloading
+  useEffect(() => {
+    if (interactionsList && interactionsList.length > 0) {
+      // Preload the top 3 most recent conversations for instant loading
+      const topInteractions = interactionsList.slice(0, 3);
+      
+      logger.debug(`[InteractionsHistory] Preloading top ${topInteractions.length} conversations for instant UX`, "InteractionsHistory");
+    
+      // Preload in background with small delays to avoid overwhelming
+      topInteractions.forEach((interaction, index) => {
+        setTimeout(() => {
+          prefetchTimeline(interaction.id).catch(error => {
+            logger.debug(`[InteractionsHistory] Preload failed for ${interaction.id}: ${String(error)}`, "InteractionsHistory");
+          });
+        }, index * 100); // Stagger by 100ms each
+      });
+    }
+  }, [interactionsList, prefetchTimeline]);
   
   useEffect(() => {
-    // Component mounting with stability control
     isMounted.current = true;
-    
-    // Add mount stability delay to prevent rapid remounting
-    mountStabilityTimer.current = setTimeout(() => {
-      isMountStable.current = true;
-    }, 500); // 500ms stability period
     
     return () => {
       isMounted.current = false;
-      isMountStable.current = false;
-      if (transitionStabilityTimer.current) {
-        clearTimeout(transitionStabilityTimer.current);
-      }
-      if (renderThrottleTimer.current) {
-        clearTimeout(renderThrottleTimer.current);
-      }
-      if (mountStabilityTimer.current) {
-        clearTimeout(mountStabilityTimer.current);
-      }
     };
   }, []);
-  
-  // Emergency reset for stuck refresh state
-  useEffect(() => {
-    if (isRefreshing) {
-      const emergencyTimer = setTimeout(() => {
-        if (isMounted.current && isRefreshing) {
-          logger.warn("[InteractionsHistory] Emergency reset of stuck refresh state", "InteractionsHistory");
-          setIsRefreshing(false);
-        }
-      }, 10000); // 10 seconds timeout
-      
-      return () => clearTimeout(emergencyTimer);
-    }
-  }, [isRefreshing]);
-  
-  // Monitor initial load completion for transition stability
-  useEffect(() => {
-    if (isInitialLoadComplete && !isTransitionStable) {
-      logger.debug('[InteractionsHistory] Initial load complete, starting transition stability period', "InteractionsHistory");
-      
-      // Enable critical transition period to prevent rapid renders
-      isCriticalTransitionPeriod.current = true;
-      consecutiveRenderCount.current = 0;
-      
-      // Clear any existing timer
-      if (transitionStabilityTimer.current) {
-        clearTimeout(transitionStabilityTimer.current);
-      }
-      
-      // Set stability after a brief period to prevent rapid re-renders
-      transitionStabilityTimer.current = setTimeout(() => {
-        if (isMounted.current) {
-          setIsTransitionStable(true);
-          setRenderStabilityMode(true);
-          isCriticalTransitionPeriod.current = false;
-          logger.debug('[InteractionsHistory] Transition stability period complete', "InteractionsHistory");
-        }
-      }, 1000); // Extended to 1 second for complete stability
-    }
-  }, [isInitialLoadComplete, isTransitionStable]);
   
   const initializeContacts = useCallback(async (requestPermission: boolean = false, forceRefreshContacts: boolean = false) => {
     // Prevent multiple simultaneous executions to avoid UI glitches
@@ -441,9 +390,6 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
       isContactsInitializing.current = false;
     }
   }, [hasContactsPermission]);
-
-  // Add this at the top level of your component, right after your other state and ref declarations
-  const [swipeableRefs, setSwipeableRefs] = useState<{[key: string]: React.RefObject<Swipeable>}>({});
   
   // Add this helper function to get or create a ref for a chat item
   const getSwipeableRef = useCallback((id: string) => {
@@ -457,78 +403,49 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     return swipeableRefs[id];
   }, [swipeableRefs]);
 
-  // Function to check if a refresh should be allowed based on throttle time
-  const shouldAllowRefresh = useCallback(() => {
-    const now = Date.now();
-    const timeSinceLastRefresh = now - lastRefreshTime.current;
-    
-    if (timeSinceLastRefresh < REFRESH_THROTTLE_MS) {
-      logger.debug(`[InteractionsHistory] Refresh throttled. Time since last refresh: ${timeSinceLastRefresh}ms`, "InteractionsHistory");
-      return false;
-    }
-    
-    lastRefreshTime.current = now;
-    return true;
-  }, [REFRESH_THROTTLE_MS]);
-
-  // Modified onRefresh function with throttling
+  // 🚀 SIMPLIFIED: Remove complex refresh throttling - TanStack Query handles this
   const onRefresh = useCallback(async () => {
-    // Prevent overlapping refresh calls and throttle
-    if (isRefreshing || !shouldAllowRefresh()) {
-      logger.debug("[InteractionsHistory] Refresh prevented: already refreshing or throttled", "InteractionsHistory");
+    if (isRefreshing) {
+      logger.debug("[InteractionsHistory] Refresh already in progress", "InteractionsHistory");
       return;
     }
     
     logger.debug("[InteractionsHistory] Starting manual refresh", "InteractionsHistory");
     setIsRefreshing(true);
+    
     try {
-      // Reset the error refresh flag when manually refreshing
-      setHasRefreshedAfterError(false);
-      refreshInteractions();
-      // Mark that we've successfully fetched data (even if empty)
-      setHasSuccessfullyFetched(true);
-      hasTriggeredInitialRefresh.current = true;
+      await refreshInteractions();
       logger.debug("[InteractionsHistory] Manual refresh completed successfully", "InteractionsHistory");
     } catch (error) {
-      // Set flag to indicate we've tried refreshing after an error
-      setHasRefreshedAfterError(true);
       logger.error("Failed to refresh interactions", error, "InteractionsHistory");
     } finally {
       setIsRefreshing(false);
-      logger.debug("[InteractionsHistory] Manual refresh finally block - setIsRefreshing(false)", "InteractionsHistory");
     }
-  }, [isRefreshing, shouldAllowRefresh]);
+  }, [isRefreshing, refreshInteractions]);
 
+  // 🚀 SIMPLIFIED: Remove complex useFocusEffect logic
   useFocusEffect(
     useCallback(() => {
       // Debug route params
-      logger.debug('[InteractionsHistory] useFocusEffect - route params:', "InteractionsHistory", route.params);
+      logger.debug('[InteractionsHistory] Screen focused', "InteractionsHistory");
       
-      // ⚡ INSTANT CONTACT LOADING - No delays, no complex conditions (like interactions)
+      // Initialize contacts if needed
       if (!contactsSynced && !hasInitialContactsRun.current) { 
         if (hasContactsPermission === null) {
-          // ⚡ INSTANT: Load cached contacts first, then request permission
-          logger.debug('[InteractionsHistory] Loading cached contacts instantly, then requesting permission', "InteractionsHistory");
+          logger.debug('[InteractionsHistory] Loading contacts with permission request', "InteractionsHistory");
             initializeContacts(true, false);
         } else if (hasContactsPermission) {
-          // ⚡ INSTANT: Load cached contacts first, then sync
-          logger.debug('[InteractionsHistory] Loading cached contacts instantly with existing permission', "InteractionsHistory");
+          logger.debug('[InteractionsHistory] Loading contacts with existing permission', "InteractionsHistory");
             initializeContacts(false, false);
           }
       }
 
+      // Handle navigation params
       const navigateToContactParams = route.params?.navigateToContact;
       const navigateToNewChat = route.params?.navigateToNewChat;
       
-      logger.debug('[InteractionsHistory] Route params extracted:', "InteractionsHistory", {
-        navigateToContact: !!navigateToContactParams,
-        navigateToNewChat: !!navigateToNewChat
-      });
-      
       if (navigateToContactParams) {
-        // Explicitly type the params being passed
         const paramsForHistory: InteractionsStackParamList['ContactInteractionHistory2'] = navigateToContactParams;
-        
         (navigation as StackNavigationProp<InteractionsStackParamList>).navigate(
           'ContactInteractionHistory2',
           paramsForHistory
@@ -536,86 +453,17 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         navigation.setParams({ navigateToContact: undefined } as any);
       }
       
-              // Handle navigation to NewInteraction from wallet Send button
         if (navigateToNewChat) {
-          // Use InteractionManager to ensure navigation happens after the screen is fully loaded
           InteractionManager.runAfterInteractions(() => {
             (navigation as StackNavigationProp<InteractionsStackParamList>).navigate("NewInteraction");
           });
-          
-          // Clear the param immediately to prevent re-navigation
           navigation.setParams({ navigateToNewChat: undefined } as any);
         }
-      
-      // Enhanced authentication and data loading logic
-      // Check throttling inline to avoid dependency array issues
-      const now = Date.now();
-      const timeSinceLastRefresh = now - lastRefreshTime.current;
-      const isThrottled = timeSinceLastRefresh < REFRESH_THROTTLE_MS;
-      
-      const shouldRefreshInteractions = 
-        isAuthenticated && 
-        user?.entityId && 
-        !isRefreshing && 
-        !isThrottled &&
-        isMountStable.current; // Only refresh if component is mount-stable
-      
-      if (shouldRefreshInteractions) {
-        // Update throttle time
-        lastRefreshTime.current = now;
-        
-        logger.debug("[InteractionsHistory] Authenticated user detected, refreshing interactions", "InteractionsHistory", {
-          isAuthenticated,
-          userId: user?.id,
-          entityId: user?.entityId,
-          hasSuccessfullyFetched,
-          isRefreshing,
-          timeSinceLastRefresh
-        });
-        
-        setIsRefreshing(true);
-        
-        // TanStack Query refetch - handles promise internally
-        refreshInteractions();
-        setHasSuccessfullyFetched(true);
-        hasTriggeredInitialRefresh.current = true;
-        setIsRefreshing(false);
-        logger.debug("[InteractionsHistory] Authenticated refresh triggered via TanStack Query", "InteractionsHistory");
         
         return () => {
-          logger.debug("[InteractionsHistory] useFocusEffect cleanup", "InteractionsHistory");
-        };
-      } else {
-        logger.debug("[InteractionsHistory] Refresh skipped - conditions not met", "InteractionsHistory", {
-          isAuthenticated,
-          hasEntityId: !!user?.entityId,
-          isRefreshing,
-          isThrottled,
-          timeSinceLastRefresh,
-          shouldRefreshInteractions
-        });
-      }
-      
-      // Cleanup
-      return () => {
-        logger.debug("[InteractionsHistory] useFocusEffect cleanup", "InteractionsHistory");
+        logger.debug("[InteractionsHistory] Screen unfocused", "InteractionsHistory");
       };
-    }, [isAuthenticated, user?.entityId, isTransitionStable])
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      const navigateToNewChat = route.params?.navigateToNewChat;
-
-      if (navigateToNewChat) {
-        // Use InteractionManager to ensure the navigation happens after any screen transitions
-        InteractionManager.runAfterInteractions(() => {
-          (navigation as any).navigate("NewInteraction");
-        });
-        // Clear the param to prevent re-navigation on next focus
-        navigation.setParams({ navigateToNewChat: undefined } as any);
-      }
-    }, [route.params?.navigateToNewChat])
+    }, [])
   );
 
   // Handle search activation
@@ -700,8 +548,6 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
 
   // Map InteractionItem from DataContext to DisplayChat for rendering
   const mappedChats: DisplayChat[] = useMemo(() => {
-    // Minimal logging to prevent performance issues during rapid re-renders
-
     // Return empty array only if we have no data
     if (interactionsList.length === 0) {
       return [];
@@ -783,16 +629,6 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
   const friendsCount = mappedChats.filter(chat => chat.type === 'friend').length;
   const businessCount = mappedChats.filter(chat => chat.type === 'business').length;
   const allCount = mappedChats.length;
-
-  // Real-time update effect - ensures immediate UI updates when interactions change
-  useEffect(() => {
-    // Minimal logging to prevent performance issues during re-renders
-    if (isTransitionStable && interactionsList.length > 0) {
-      logger.debug('[InteractionsHistory] Interactions updated', 'InteractionsHistory', {
-        count: interactionsList.length
-      });
-    }
-  }, [interactionsList.length, isTransitionStable]);
 
   // Get filtered chats
   const filteredDisplayChats = getFilteredChats();
@@ -1146,16 +982,10 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
 
   // Render swipe action buttons - simplified to just slide without scaling or opacity effects
   const renderRightActions = (
-    progress: Animated.AnimatedInterpolation<number>,
-    dragX: Animated.AnimatedInterpolation<number>,
+    progress: any,
+    dragX: any,
     interactionId: string
   ) => {
-    // Simple translation animation - no scaling or opacity
-    const trans = dragX.interpolate({
-      inputRange: [-120, 0],
-      outputRange: [0, 120],
-      extrapolate: 'clamp',
-    });
 
     // Create swipe action styles
     const actionStyles = StyleSheet.create({
@@ -1193,12 +1023,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     });
 
     return (
-      <Animated.View 
-        style={[
-          actionStyles.actionContainer, 
-          { transform: [{ translateX: trans }] }
-        ]}
-      >
+      <View style={actionStyles.actionContainer}>
         {/* Mute Button */}
         <View style={[
           actionStyles.actionButton, 
@@ -1240,7 +1065,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
             <Text style={actionStyles.actionText}>Archive</Text>
           </TouchableOpacity>
         </View>
-      </Animated.View>
+      </View>
     );
   };
 
@@ -1352,55 +1177,10 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     }
   }, [initializeContacts]); // initializeContacts is a stable useCallback now
 
-  // Smart render state logging with throttling to prevent rapid consecutive logs
-  const logRenderState = useCallback(() => {
-    // During critical transition period, heavily limit logging to prevent UI glitches
-    if (isCriticalTransitionPeriod.current) {
-      consecutiveRenderCount.current++;
-      if (consecutiveRenderCount.current > MAX_CONSECUTIVE_RENDERS) {
-        // Suppress logging during critical period to prevent magazine page effect
-        return;
-      }
-    }
-    
-    const currentStateKey = `${isLoadingInteractions}-${isInitialLoadComplete}-${isRefreshing}-${hasSuccessfullyFetched}-${interactionsList.length}-${filteredDisplayChats.length}`;
-    
-    // Only log if state actually changed
-    if (lastRenderStateLog.current !== currentStateKey) {
-      lastRenderStateLog.current = currentStateKey;
-      
-      // Clear any existing throttle timer
-      if (renderThrottleTimer.current) {
-        clearTimeout(renderThrottleTimer.current);
-      }
-      
-      // Throttle logging during transitions to prevent rapid entries
-      const logDelay = isCriticalTransitionPeriod.current ? 200 : 0;
-      
-      renderThrottleTimer.current = setTimeout(() => {
-        if (isMounted.current && !isCriticalTransitionPeriod.current) {
-          logger.debug("[InteractionsHistory] Render state", "InteractionsHistory", {
-            isLoadingInteractions,
-            isInitialLoadComplete,
-            isRefreshing,
-            hasLoadedInteractions: hasSuccessfullyFetched,
-            interactionsCount: interactionsList.length,
-            filteredChatsCount: filteredDisplayChats.length,
-            renderStabilityMode
-          });
-        }
-      }, logDelay);
-    }
-  }, [isLoadingInteractions, isInitialLoadComplete, isRefreshing, hasSuccessfullyFetched, interactionsList.length, filteredDisplayChats.length, renderStabilityMode]);
+  // 🚀 SIMPLIFIED: Show loading screen ONLY when there's no cached data and we're loading
+  const shouldShowLoadingScreen = isLoadingInteractions && filteredDisplayChats.length === 0;
 
-  // Log current state for debugging
-  logRenderState();
-
-  if (isLoadingInteractions && !isInitialLoadComplete) {
-    logger.debug("[InteractionsHistory] Showing full loading screen", "InteractionsHistory", {
-      isLoadingInteractions,
-      isInitialLoadComplete
-    });
+  if (shouldShowLoadingScreen) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle={theme.name.includes('dark') ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
@@ -1462,7 +1242,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         style={styles.scrollView}
         refreshControl={
           <RefreshControl
-                  refreshing={isRefreshing} 
+            refreshing={isRefreshing || isRefetching} 
             onRefresh={onRefresh}
             colors={[theme.colors.primary]}
             tintColor={theme.colors.primary}
@@ -1470,14 +1250,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         }
       >
             {/* Show empty state when not loading and no chats */}
-            {!isLoadingInteractions && filteredDisplayChats.length === 0 && (() => {
-              logger.debug("[InteractionsHistory] Rendering empty state", "InteractionsHistory", {
-                isLoadingInteractions,
-                filteredChatsCount: filteredDisplayChats.length,
-                isRefreshing
-              });
-              return renderEmptyState();
-            })()}
+            {filteredDisplayChats.length === 0 && renderEmptyState()}
             
             {/* Show chats when available */}
             {filteredDisplayChats.length > 0 && filteredDisplayChats.map(chat => renderChatItem(chat))}

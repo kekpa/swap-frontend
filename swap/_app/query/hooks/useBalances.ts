@@ -1,31 +1,53 @@
 /**
  * useBalances Hook
  * 
- * TanStack Query hook for wallet balances with local-first architecture.
- * Uses direct API calls and SQLite repositories for optimal caching.
+ * TanStack Query hook for wallet balances with WhatsApp-style local-first architecture.
+ * Shows cached data instantly, syncs in background like ContactInteractionHistory2.
  */
 
-import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import { logger } from '../../utils/logger';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../queryKeys';
-import { balanceApi } from '../../_api/balanceApi';
+import balanceApi from '../../_api/balanceApi';
+import { logger } from '../../utils/logger';
 import { currencyWalletsRepository, CurrencyWallet } from '../../localdb/CurrencyWalletsRepository';
 import { WalletBalance } from '../../types/wallet.types';
-import { networkService } from '../../services/NetworkService';
-import apiClient from '../../_api/apiClient';
+
+interface UseBalancesOptions {
+  enabled?: boolean;
+}
 
 /**
- * Fetch balances with local-first pattern
+ * useBalances Hook - WhatsApp-Style Local-First
+ * 
+ * Provides wallet balances with instant cached data display.
+ * Same pattern as useTimeline in ContactInteractionHistory2.
  */
-const fetchBalancesLocalFirst = async (entityId: string): Promise<WalletBalance[]> => {
-  logger.debug(`[${entityId}] [useBalances] Starting local-first balance fetch for entity:`);
+export const useBalances = (entityId: string, options: UseBalancesOptions = {}) => {
+  const { enabled = true } = options;
+  const queryClient = useQueryClient();
+
+  // CRITICAL FIX: Validate entityId to prevent 400 errors during app initialization
+  const isValidEntityId = entityId && entityId.trim().length > 0 && entityId !== 'undefined' && entityId !== 'null';
   
-  try {
-    // Step 1: Load from local cache immediately
-    const cachedBalances = await currencyWalletsRepository.getAllCurrencyWallets();
-    logger.debug(`[useBalances] ✅ INSTANT: Loaded ${cachedBalances.length} balances from cache`);
+  if (!isValidEntityId) {
+    logger.debug(`[useBalances] ⏸️ SKIPPING: Invalid entityId "${entityId}" - waiting for user data to load`);
+  }
+
+  // WhatsApp-style fetchBalances function
+  const fetchBalances = async (): Promise<WalletBalance[]> => {
+    // CRITICAL: Double-check entityId before making API calls
+    if (!isValidEntityId) {
+      logger.debug(`[useBalances] ❌ ABORT: Cannot fetch balances with invalid entityId "${entityId}"`);
+      return [];
+    }
     
-    // Step 2: Convert cached data to WalletBalance format
+    logger.debug(`[useBalances] 🚀 WHATSAPP-STYLE: Starting balance fetch for entity: ${entityId}`);
+    
+    // STEP 1: ALWAYS load from local cache first (INSTANT display like WhatsApp)
+    const cachedBalances = await currencyWalletsRepository.getAllCurrencyWallets();
+    logger.debug(`[useBalances] ✅ INSTANT: Loaded ${cachedBalances.length} balances from SQLite cache`);
+    
+    // Convert cached data to WalletBalance format
     const cachedWalletBalances: WalletBalance[] = cachedBalances.map((wallet: CurrencyWallet) => ({
       wallet_id: wallet.id,
       account_id: wallet.account_id,
@@ -42,190 +64,189 @@ const fetchBalancesLocalFirst = async (entityId: string): Promise<WalletBalance[
       isPrimary: wallet.is_primary,
     }));
     
-    // Step 3: Always fetch from API to ensure data consistency
-    logger.debug(`[useBalances] 🔄 Fetching fresh data from API for consistency check`);
-    
-    if (await networkService.isOnline()) {
-      try {
-        const apiBalances = await balanceApi.fetchBalances(entityId);
-        logger.debug(`[useBalances] ✅ API: Loaded ${apiBalances.length} balances from server`);
-        
-        // Debug: Compare primary wallet between cache and API
-        const cachedPrimary = cachedWalletBalances.find(w => w.isPrimary);
-        const apiPrimary = apiBalances.find(w => w.isPrimary);
-        
-        if (cachedPrimary?.wallet_id !== apiPrimary?.wallet_id) {
-          logger.warn(`[useBalances] 🔄 PRIMARY WALLET MISMATCH DETECTED:`);
-          logger.warn(`[useBalances] 🔄 Cache primary: ${cachedPrimary?.currency_code} (${cachedPrimary?.wallet_id})`);
-          logger.warn(`[useBalances] 🔄 API primary: ${apiPrimary?.currency_code} (${apiPrimary?.wallet_id})`);
-          logger.warn(`[useBalances] 🔄 Using API data as source of truth`);
+    // STEP 2: Return cached data IMMEDIATELY if we have it (WhatsApp behavior)
+    if (cachedWalletBalances.length > 0) {
+      logger.debug(`[useBalances] ⚡ INSTANT: Returning ${cachedWalletBalances.length} cached balances immediately`);
+      
+      // STEP 3: Background sync (non-blocking, like WhatsApp)
+      setTimeout(async () => {
+        try {
+          // CRITICAL: Check if ANY wallet mutation is active RIGHT BEFORE syncing
+          const mutations = queryClient.getMutationCache().getAll();
+          const isWalletMutationActive = mutations.some(mutation => {
+            const mutationKey = mutation.options.mutationKey;
+            const isWalletMutation = mutationKey && mutationKey.includes('set_primary_wallet');
+            const isPending = mutation.state.status === 'pending';
+            
+            if (isWalletMutation) {
+              logger.debug(`[useBalances] 🔍 Found wallet mutation: ${mutationKey}, status: ${mutation.state.status}`);
+            }
+            
+            return isWalletMutation && isPending;
+          });
+          
+          if (isWalletMutationActive) {
+            logger.debug(`[useBalances] ⏸️ SKIPPING background sync - wallet mutation in progress`);
+            return;
+          }
+
+          logger.debug(`[useBalances] 🔄 BACKGROUND SYNC: Fetching fresh data from API`);
+          const response = await balanceApi.fetchBalances(entityId);
+          
+          if (response && response.length > 0) {
+            logger.debug(`[useBalances] ✅ BACKGROUND SYNC: Loaded ${response.length} balances from server`);
+            
+            // Transform API response to CurrencyWallet format for repository
+            const repositoryBalances: CurrencyWallet[] = response.map((balance: WalletBalance) => ({
+              id: balance.wallet_id,
+              account_id: balance.account_id,
+              currency_id: balance.currency_id,
+              currency_code: balance.currency_code,
+              currency_symbol: balance.currency_symbol,
+              currency_name: balance.currency_name,
+              balance: balance.balance,
+              reserved_balance: balance.reserved_balance || 0,
+              available_balance: balance.available_balance || balance.balance,
+              balance_last_updated: balance.balance_last_updated || undefined,
+              is_active: balance.is_active ?? true,
+              is_primary: balance.isPrimary ?? false,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              is_synced: true,
+            }));
+            
+            // Save to local SQLite
+            await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances);
+            
+            // Update TanStack Query cache with WalletBalance format
+            queryClient.setQueryData(queryKeys.balancesByEntity(entityId), response);
+            logger.debug(`[useBalances] ✅ BACKGROUND SYNC: Updated ${response.length} balances in cache`);
+          }
+        } catch (error) {
+          logger.debug(`[useBalances] ⚠️ Background sync failed (non-critical): ${error instanceof Error ? error.message : String(error)}`);
+          // Fail silently to not disrupt user experience
         }
-        
-        // Convert API format to repository format and save to local cache
-        const repositoryBalances: CurrencyWallet[] = apiBalances.map(balance => ({
-          id: balance.wallet_id,
-          account_id: balance.account_id,
-          currency_id: balance.currency_id,
-          currency_code: balance.currency_code,
-          currency_symbol: balance.currency_symbol,
-          currency_name: balance.currency_name,
-          balance: balance.balance,
-          reserved_balance: balance.reserved_balance,
-          available_balance: balance.available_balance,
-          balance_last_updated: balance.balance_last_updated || undefined,
-          is_active: balance.is_active,
-          is_primary: balance.isPrimary ?? false,
-        }));
-        
-        // Save to local cache
-        await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances);
-        logger.debug(`[useBalances] ✅ SYNC: Saved ${repositoryBalances.length} balances to local cache`);
-        
-        // Return API data as source of truth
-        return apiBalances;
-        
-      } catch (apiError) {
-        logger.warn(`[useBalances] ⚠️ API fetch failed, using cached data:`, apiError instanceof Error ? apiError.message : String(apiError));
-        return cachedWalletBalances;
-      }
-    } else {
-      logger.debug(`[useBalances] 📱 OFFLINE: Using cached data`);
+      }, 3000); // INCREASED: 3 second delay to ensure API calls complete first
+      
       return cachedWalletBalances;
     }
     
-  } catch (error) {
-    logger.error(`[useBalances] ❌ Error in local-first fetch:`, error instanceof Error ? error.message : String(error));
-    throw error;
-  }
-};
+    // STEP 4: No cache - fetch from API (first time only)
+    logger.debug(`[useBalances] 📡 FIRST TIME: No cache found, fetching from API`);
+    const apiBalances = await balanceApi.fetchBalances(entityId);
+    logger.debug(`[useBalances] ✅ FIRST TIME: Loaded ${apiBalances.length} balances from server`);
+    
+    // Save to cache for next time
+    const repositoryBalances: CurrencyWallet[] = apiBalances.map((balance: WalletBalance) => ({
+      id: balance.wallet_id,
+      account_id: balance.account_id,
+      currency_id: balance.currency_id,
+      currency_code: balance.currency_code,
+      currency_symbol: balance.currency_symbol,
+      currency_name: balance.currency_name,
+      balance: balance.balance,
+      reserved_balance: balance.reserved_balance || 0,
+      available_balance: balance.available_balance || balance.balance,
+      balance_last_updated: balance.balance_last_updated || undefined,
+      is_active: balance.is_active ?? true,
+      is_primary: balance.isPrimary ?? false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      is_synced: true,
+    }));
+    
+    await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances);
+    logger.debug(`[useBalances] ✅ FIRST TIME: Saved ${repositoryBalances.length} balances to cache`);
+    
+    return apiBalances;
+  };
 
-/**
- * useBalances Hook
- * 
- * Provides wallet balances with local-first loading pattern.
- * Shows cached data immediately, refreshes in background.
- */
-export const useBalances = (entityId: string) => {
   return useQuery({
     queryKey: queryKeys.balancesByEntity(entityId),
-    queryFn: () => fetchBalancesLocalFirst(entityId),
-    
-    // Only run query if entityId is provided
-    enabled: !!entityId && entityId.length > 0,
-    
-    // True local-first configuration
-    staleTime: 5 * 60 * 1000, // 5 minutes - balance data can be slightly stale
-    gcTime: 24 * 60 * 60 * 1000, // 24 hours - keep in memory longer for offline use
-    
-    // Network behavior optimized for local-first
-    networkMode: 'offlineFirst', // Always show cached data first
-    refetchOnWindowFocus: false, // Don't refetch on focus (mobile optimization)
-    refetchOnReconnect: true,    // Refetch when network reconnects
-    refetchOnMount: true,        // Check for updates on mount, but don't block
-    
-    // Background updates without blocking UI
-    refetchInterval: 10 * 60 * 1000, // Background refresh every 10 minutes when active
-    refetchIntervalInBackground: false, // Don't refetch when app is backgrounded
-    
-    // Error handling optimized for offline scenarios
-    retry: (failureCount, error: any) => {
-      // Don't retry if no entityId
-      if (!entityId || entityId.length === 0) {
-        logger.debug('[useBalances] Skipping retry - no entityId provided');
-        return false;
+    queryFn: fetchBalances,
+    enabled: Boolean(enabled && isValidEntityId), // CRITICAL FIX: Only enable when entityId is valid
+    staleTime: Infinity, // Never show loading for cached data
+    gcTime: 1000 * 60 * 30, // 30 minutes
+    networkMode: 'always',
+    // Return cached data immediately if available
+    initialData: () => {
+      if (!isValidEntityId) {
+        return []; // Return empty array for invalid entityId
       }
       
-      // Don't retry if offline
-      if (!networkService.isOnline) {
-        return false;
+      const cached = queryClient.getQueryData<WalletBalance[]>(queryKeys.balancesByEntity(entityId));
+      if (cached && cached.length > 0) {
+        logger.debug(`[useBalances] ⚡ INITIAL: Using ${cached.length} cached balances`);
+        return cached;
       }
-      
-      // Don't retry on client errors (4xx)
-      if (error?.status >= 400 && error?.status < 500) {
-        logger.error(`[useBalances] Client error ${error.status}, not retrying`);
-        return false;
-      }
-      
-      // Conservative retry for financial data
-      return failureCount < 1;
+      return undefined;
     },
-    
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
-    
-    // Advanced local-first options
-    structuralSharing: true, // Optimize re-renders by sharing unchanged data
   });
 };
 
 /**
- * useRefreshBalances Hook
- * 
- * Provides a function to manually refresh balances
- */
-export const useRefreshBalances = (entityId: string) => {
-  const queryClient = useQueryClient();
-  
-  const refreshBalances = async () => {
-    logger.debug('[useRefreshBalances] 🔄 Manual refresh triggered');
-    
-    try {
-      // Force refetch by invalidating cache and triggering immediate refetch
-      await queryClient.invalidateQueries({
-        queryKey: queryKeys.balancesByEntity(entityId),
-        refetchType: 'active', // Immediately refetch active queries
-      });
-      
-      logger.debug('[useRefreshBalances] ✅ Manual refresh completed');
-    } catch (error) {
-      logger.error('[useRefreshBalances] ❌ Manual refresh failed:', error);
-      throw error;
-    }
-  };
-  
-  return { refreshBalances };
-};
-
-/**
- * Utility function to update balances cache optimistically
- */
-export const updateBalancesCache = (
-  queryClient: ReturnType<typeof useQueryClient>,
-  entityId: string,
-  updater: (oldData: WalletBalance[] | undefined) => WalletBalance[]
-) => {
-  queryClient.setQueryData(
-    queryKeys.balancesByEntity(entityId),
-    updater
-  );
-};
-
-export default useBalances; 
-
-/**
- * Mutation to set a wallet as primary
+ * Hook for setting primary wallet with optimistic updates
  */
 export const useSetPrimaryWallet = () => {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
+    mutationKey: ['set_primary_wallet'],
     mutationFn: async ({ walletId, entityId }: { walletId: string; entityId: string }) => {
-      logger.debug(`[useSetPrimaryWallet] Setting wallet ${walletId} as primary for entity ${entityId}`);
-      
-      // Use the correct API endpoint that exists in the backend
-      const response = await apiClient.patch(`/wallets/${walletId}/primary`);
-      
-      logger.info(`[useSetPrimaryWallet] Successfully set wallet ${walletId} as primary`);
-      
-      return response.data;
+      logger.debug(`[useSetPrimaryWallet] 🔄 Setting primary wallet: ${walletId}`);
+      const response = await balanceApi.setPrimaryWallet(walletId);
+      logger.debug(`[useSetPrimaryWallet] ✅ Primary wallet set successfully`);
+      return response;
     },
-    onSuccess: (data, variables) => {
-      // Invalidate balance queries to refetch updated data
-      queryClient.invalidateQueries({ queryKey: queryKeys.balancesByEntity(variables.entityId) });
-      
-      logger.info(`[useSetPrimaryWallet] Invalidated balance queries for entity ${variables.entityId}`);
+    onMutate: async ({ walletId, entityId }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: queryKeys.balancesByEntity(entityId) });
+
+      // Snapshot the previous value
+      const previousBalances = queryClient.getQueryData<WalletBalance[]>(queryKeys.balancesByEntity(entityId));
+
+      // Optimistically update to the new value
+      if (previousBalances) {
+        const optimisticBalances = previousBalances.map(balance => ({
+          ...balance,
+          isPrimary: balance.wallet_id === walletId,
+        }));
+        
+        queryClient.setQueryData(queryKeys.balancesByEntity(entityId), optimisticBalances);
+        logger.debug(`[useSetPrimaryWallet] ⚡ OPTIMISTIC: Updated primary wallet to ${walletId}`);
+      }
+
+      // Return a context object with the snapshotted value
+      return { previousBalances };
     },
-    onError: (error) => {
-      logger.error('[useSetPrimaryWallet] Failed to set primary wallet:', error);
+    onError: (err, { entityId }, context) => {
+      // If the mutation fails, use the context returned from onMutate to roll back
+      if (context?.previousBalances) {
+        queryClient.setQueryData(queryKeys.balancesByEntity(entityId), context.previousBalances);
+        logger.debug(`[useSetPrimaryWallet] ⚠️ ROLLBACK: Restored previous balances due to error`);
+      }
+    },
+    onSuccess: (data, { entityId }) => {
+      // Update the cache with the actual server response
+      if (data) {
+        const currentBalances = queryClient.getQueryData<WalletBalance[]>(queryKeys.balancesByEntity(entityId));
+        if (currentBalances) {
+          const updatedBalances = currentBalances.map(balance => ({
+            ...balance,
+            isPrimary: balance.wallet_id === data.wallet_id,
+          }));
+          
+          queryClient.setQueryData(queryKeys.balancesByEntity(entityId), updatedBalances);
+          logger.debug(`[useSetPrimaryWallet] ✅ SUCCESS: Updated cache with server response`);
+        }
+      }
+    },
+    onSettled: (data, error, { entityId }) => {
+      // Only invalidate on error, not on success (to avoid unnecessary refetches)
+      if (error) {
+        logger.debug(`[useSetPrimaryWallet] ⚠️ ERROR: Invalidating cache due to mutation error`);
+        queryClient.invalidateQueries({ queryKey: queryKeys.balancesByEntity(entityId) });
+      }
     },
   });
 }; 

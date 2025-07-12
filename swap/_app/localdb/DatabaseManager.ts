@@ -1,4 +1,5 @@
 // Created: Centralized database manager to prevent race conditions and ensure proper initialization - 2025-05-29
+// Updated: Added all Supabase-matching schemas for proper local-first sync - 2025-01-10
 import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
 import logger from '../utils/logger';
@@ -9,9 +10,12 @@ import {
   initializeTransactionSchema,
   initializeTimelineSchema,
   initializeSearchHistorySchema,
-  initializeLocationSchema
+  initializeLocationSchema,
+  initializeCurrencyWalletsSchema,
+  initializeCurrencySchema,
+  initializeNotificationsSchema,
+  initializeUserContactsSchema
 } from './schema';
-import { initializeCurrencyWalletsSchema } from './schema/currency-wallets-schema';
 
 // Database configuration
 const DATABASE_NAME = 'swap_cache_v3.db';
@@ -180,12 +184,31 @@ class DatabaseManager {
     }
 
     // Schema initialization order (respecting foreign key dependencies)
+    // Optimized for local-first banking experience
+    // 1. Core reference tables first (no dependencies)
+    // 2. Entity-related tables
+    // 3. Wallet tables (read-only cache)
+    // 4. Interaction and message tables
+    // 5. Transaction and timeline tables
+    // 6. Additional feature tables
     const schemaInitializers = [
+      // Core reference tables (performance cache)
+      { name: 'Currencies', init: () => this.initializeCurrenciesSchema() },
+      
+      // User tables (profile & contacts)
       { name: 'Users', init: () => this.initializeUsersSchema() },
+      { name: 'UserContacts', init: () => this.initializeUserContactsSchema() },
+      
+      // Wallet tables (read-only cache)
+      { name: 'CurrencyWallets', init: () => this.initializeCurrencyWalletsSchema() },
+      
+      // Interaction and messaging tables (WhatsApp-like experience)
       { name: 'Interactions', init: () => this.initializeInteractionsSchema() },
       { name: 'Messages', init: () => this.initializeMessagesSchema() },
       { name: 'Transactions', init: () => this.initializeTransactionsSchema() },
-      { name: 'CurrencyWallets', init: () => this.initializeCurrencyWalletsSchema() },
+      { name: 'Notifications', init: () => this.initializeNotificationsSchema() },
+      
+      // Utility tables (UX enhancement)
       { name: 'SearchHistory', init: () => this.initializeSearchHistorySchema() },
       { name: 'Locations', init: () => this.initializeLocationSchema() },
       { name: 'Timeline', init: () => this.initializeTimelineSchema() },
@@ -304,6 +327,42 @@ class DatabaseManager {
   private async initializeTimelineSchema(): Promise<SchemaResult> {
     try {
       await initializeTimelineSchema(this.database!);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  /**
+   * Initialize currencies schema
+   */
+  private async initializeCurrenciesSchema(): Promise<SchemaResult> {
+    try {
+      await initializeCurrencySchema(this.database!);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  /**
+   * Initialize notifications schema
+   */
+  private async initializeNotificationsSchema(): Promise<SchemaResult> {
+    try {
+      await initializeNotificationsSchema(this.database!);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  /**
+   * Initialize user contacts schema
+   */
+  private async initializeUserContactsSchema(): Promise<SchemaResult> {
+    try {
+      await initializeUserContactsSchema(this.database!);
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };
