@@ -42,7 +42,7 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
     }
     
     logger.debug(`[useBalances] 🚀 WHATSAPP-STYLE: Starting balance fetch for entity: ${entityId}`);
-    
+  
     // STEP 1: ALWAYS load from local cache first (INSTANT display like WhatsApp)
     const cachedBalances = await currencyWalletsRepository.getAllCurrencyWallets();
     logger.debug(`[useBalances] ✅ INSTANT: Loaded ${cachedBalances.length} balances from SQLite cache`);
@@ -67,7 +67,7 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
     // STEP 2: Return cached data IMMEDIATELY if we have it (WhatsApp behavior)
     if (cachedWalletBalances.length > 0) {
       logger.debug(`[useBalances] ⚡ INSTANT: Returning ${cachedWalletBalances.length} cached balances immediately`);
-      
+        
       // STEP 3: Background sync (non-blocking, like WhatsApp)
       setTimeout(async () => {
         try {
@@ -98,25 +98,25 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
             
             // Transform API response to CurrencyWallet format for repository
             const repositoryBalances: CurrencyWallet[] = response.map((balance: WalletBalance) => ({
-              id: balance.wallet_id,
-              account_id: balance.account_id,
-              currency_id: balance.currency_id,
-              currency_code: balance.currency_code,
-              currency_symbol: balance.currency_symbol,
-              currency_name: balance.currency_name,
-              balance: balance.balance,
+          id: balance.wallet_id,
+          account_id: balance.account_id,
+          currency_id: balance.currency_id,
+          currency_code: balance.currency_code,
+          currency_symbol: balance.currency_symbol,
+          currency_name: balance.currency_name,
+          balance: balance.balance,
               reserved_balance: balance.reserved_balance || 0,
               available_balance: balance.available_balance || balance.balance,
-              balance_last_updated: balance.balance_last_updated || undefined,
+          balance_last_updated: balance.balance_last_updated || undefined,
               is_active: balance.is_active ?? true,
-              is_primary: balance.isPrimary ?? false,
+          is_primary: balance.isPrimary ?? false,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
               is_synced: true,
-            }));
-            
+        }));
+        
             // Save to local SQLite
-            await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances);
+        await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances);
             
             // Update TanStack Query cache with WalletBalance format
             queryClient.setQueryData(queryKeys.balancesByEntity(entityId), response);
@@ -189,7 +189,7 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
  */
 export const useSetPrimaryWallet = () => {
   const queryClient = useQueryClient();
-
+  
   return useMutation({
     mutationKey: ['set_primary_wallet'],
     mutationFn: async ({ walletId, entityId }: { walletId: string; entityId: string }) => {

@@ -455,7 +455,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
       
         if (navigateToNewChat) {
           InteractionManager.runAfterInteractions(() => {
-            (navigation as StackNavigationProp<InteractionsStackParamList>).navigate("NewInteraction");
+            (navigation as StackNavigationProp<RootStackParamList>).navigate("NewInteraction");
           });
           navigation.setParams({ navigateToNewChat: undefined } as any);
         }
@@ -463,7 +463,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         return () => {
         logger.debug("[InteractionsHistory] Screen unfocused", "InteractionsHistory");
       };
-    }, [])
+    }, [route.params?.navigateToContact, route.params?.navigateToNewChat, contactsSynced, hasContactsPermission, initializeContacts, navigation])
   );
 
   // Handle search activation
@@ -515,7 +515,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
       const handleNewChat = () => {
       // Use InteractionManager to ensure smooth navigation
       InteractionManager.runAfterInteractions(() => {
-        (navigation as StackNavigationProp<InteractionsStackParamList>).navigate("NewInteraction");
+        (navigation as StackNavigationProp<RootStackParamList>).navigate("NewInteraction");
       });
     };
 
