@@ -474,13 +474,9 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Add response interceptor to handle mock mode for non-GET requests
+// Add response interceptor for caching and error handling
 apiClient.interceptors.response.use(
   async (response) => {
-    // Return immediately for mock adapter responses
-    if (response.statusText?.includes('Mock')) {
-      return response;
-    }
     
     
     // Cache successful GET responses that are cacheable
@@ -796,13 +792,13 @@ const post = async (url: string, data?: any, config?: AxiosRequestConfig) => {
   }
 };
 
-// Override the get method to handle mock mode
+// Override the get method
 const get = async (url: string, config?: AxiosRequestConfig) => {
   
   return apiClient.get(url, config);
 };
 
-// Override the put method to handle mock mode
+// Override the put method
 const put = async (url: string, data?: any, config?: AxiosRequestConfig) => {
   // If in mock mode, return success without making actual API call
   

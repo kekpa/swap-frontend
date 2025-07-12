@@ -10,4 +10,7 @@ export * from './message.types';
 export * from './transaction.types';
 export * from './payment-request.types';
 export * from './external-payment.types'; 
-export * from './entity.types'; 
+export * from './entity.types';
+export * from './wallet.types';
+export * from './timeline.types';
+export * from './map'; 

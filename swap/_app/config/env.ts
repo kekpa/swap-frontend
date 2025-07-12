@@ -9,7 +9,6 @@ interface Environment {
   MAP_API_URL: string;
   REALTIME_URL: string;
   ENABLE_DEV_TOOLS: boolean;
-  MOCK_DATA_WHEN_NO_AUTH: boolean;
   IS_DEVELOPMENT: boolean;
   IS_PRODUCTION: boolean;
 }
@@ -35,8 +34,6 @@ const getEnvVars = (): Environment => {
       process.env.EXPO_PUBLIC_REALTIME_URL || expoConstants.REALTIME_URL || "",
     ENABLE_DEV_TOOLS:
       process.env.EXPO_PUBLIC_ENABLE_DEV_TOOLS === "true" || false,
-    MOCK_DATA_WHEN_NO_AUTH:
-      process.env.EXPO_PUBLIC_MOCK_DATA_WHEN_NO_AUTH === "true" || false,
     IS_DEVELOPMENT:
       (process.env.EXPO_PUBLIC_ENV || "development") === "development",
     IS_PRODUCTION:
