@@ -800,21 +800,18 @@ const get = async (url: string, config?: AxiosRequestConfig) => {
 
 // Override the put method
 const put = async (url: string, data?: any, config?: AxiosRequestConfig) => {
-  // If in mock mode, return success without making actual API call
   
   return apiClient.put(url, data, config);
 };
 
 // Override the delete method to handle mock mode
 const del = async (url: string, config?: AxiosRequestConfig) => {
-  // If in mock mode, return success without making actual API call
   
   return apiClient.delete(url, config);
 };
 
 // Override the patch method to handle mock mode
 const patch = async (url: string, data?: any, config?: AxiosRequestConfig) => {
-  // If in mock mode, return success without making actual API call
   
   return apiClient.patch(url, data, config);
 };
