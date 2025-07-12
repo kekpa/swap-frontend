@@ -932,7 +932,7 @@ const WalletDashboard: React.FC = () => {
   }, [navigation]);
 
   const handleNewInteraction = useCallback(() => {
-    navigation.navigate('NewInteraction2');
+    navigation.navigate('NewInteraction');
   }, [navigation]);
 
   const toggleBalanceVisibility = useCallback(() => {
