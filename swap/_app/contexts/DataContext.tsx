@@ -2158,17 +2158,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     hasLoadedUserData,
     hasLoadedRecentConversations,
 
-    // Actions
-    refreshBalances: refreshBalancesCb,
-    refreshInteractions: refreshInteractionsCb,
-    refreshRecentConversations: refreshRecentConversationsCb,
-    refreshUserData: refreshUserDataCb,
+    // Actions - REDUCED: Removed functions replaced by TanStack Query
+    // refreshBalances: REMOVED - replaced by useBalances hook
+    // refreshInteractions: REMOVED - replaced by useInteractions hook  
+    // refreshRecentConversations: REMOVED - replaced by useRecentConversations hook
+    // refreshUserData: REMOVED - replaced by useUserProfile hook
     refreshAll: refreshAllCb,
-    searchAll: searchAll,
-    getOrCreateDirectInteraction: getOrCreateDirectInteraction,
-    sendMessage,
+    // searchAll: REMOVED - replaced by useSearchEntities hook
+    // getOrCreateDirectInteraction: REMOVED - replaced by useCreateInteraction hook
+    // sendMessage: REMOVED - replaced by useSendMessage mutation
     sendDirectTransaction,
-    fetchInteractionTimeline,
+    // fetchInteractionTimeline: REMOVED - replaced by useTimeline hook
     addMessageToTimeline: addMessageToTimeline,
     addTransactionToTimeline: addTransactionToTimeline,
     updateInteractionPreviewFromTimeline: updateInteractionPreviewFromTimelineHelper,

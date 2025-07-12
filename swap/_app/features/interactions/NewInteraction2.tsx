@@ -19,7 +19,17 @@ import { CommonActions, StackActions } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { InteractionsStackParamList } from '../../navigation/interactions/interactionsNavigator';
 import { useSearchEntities } from '../../query/hooks/useSearchEntities';
-import { EntitySearchResult } from '../../contexts/DataContext';
+// EntitySearchResult type moved to query hooks
+interface EntitySearchResult {
+  id: string;
+  type: 'user' | 'business';
+  name: string;
+  username?: string;
+  email?: string;
+  phoneNumber?: string;
+  profilePictureUrl?: string;
+  lastActiveAt?: string;
+}
 import logger from '../../utils/logger';
 import { RootStackParamList } from '../../navigation/rootNavigator';
 import contactsService, { ContactMatch, DeviceContact, NormalizedContact } from '../../services/ContactsService';

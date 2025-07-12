@@ -14,7 +14,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useTheme } from '../../theme/ThemeContext';
-import { useData, EntitySearchResult } from '../../contexts/DataContext';
+// Temporarily disabled - search functionality will be implemented with useSearchEntities
+// import { useData, EntitySearchResult } from '../../contexts/DataContext';
+
+// EntitySearchResult type definition
+interface EntitySearchResult {
+  id: string;
+  entity_type: string;
+  reference_id: string;
+  display_name: string;
+  avatar_url?: string;
+  is_active: boolean;
+  metadata?: any;
+}
 import { useAuthContext } from '../auth/context/AuthContext';
 import { InteractionsStackParamList } from '../../navigation/interactions/interactionsNavigator';
 import SearchResultsList from '../../components2/SearchResultsList';
@@ -45,7 +57,16 @@ const SearchOverlay: React.FC<SearchOverlayProps> = React.memo(({
 }) => {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  const { searchAll, entitySearchResults, isLoadingEntitySearch, recentConversations, isLoadingRecentConversations, refreshRecentConversations } = useData();
+  // TODO: Replace with TanStack Query hooks when search is implemented
+  // const { searchAll, entitySearchResults, isLoadingEntitySearch, recentConversations, isLoadingRecentConversations, refreshRecentConversations } = useData();
+  
+  // Placeholder data until search hooks are implemented
+  const searchAll = async () => {};
+  const entitySearchResults: EntitySearchResult[] = [];
+  const isLoadingEntitySearch = false;
+  const recentConversations: any[] = [];
+  const isLoadingRecentConversations = false;
+  const refreshRecentConversations = () => {};
   const { user } = useAuthContext();
 
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);

@@ -33,7 +33,9 @@ import { websocketService } from '../../services/websocketService';
 import { useTheme } from '../../theme/ThemeContext';
 import { Theme } from '../../theme/theme';
 import { useTimeline } from '../../query/hooks/useTimeline';
-import { useData } from '../../contexts/DataContext';
+// DataContext replaced with TanStack Query hooks
+import { useSendMessage } from '../../query/mutations/useSendMessage';
+import { useGetOrCreateDirectInteraction } from '../../query/mutations/useCreateInteraction';
 import { SendMessageRequest, MessageType, Message as ApiMessage, MessageStatus } from '../../types/message.types';
 import { TimelineItem, TimelineItemType as ImportedTimelineItemType, MessageTimelineItem, TransactionTimelineItem, DateSeparatorTimelineItem } from '../../types/timeline.types';
 import TransferCompletedScreen from './sendMoney2/TransferCompletedScreen';
@@ -245,10 +247,9 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
   const { theme } = useTheme();
   const authContext = useAuthContext();
   const { user: currentUser } = authContext;
-  const {
-    getOrCreateDirectInteraction,
-    sendMessage,
-  } = useData();
+  // TanStack Query hooks for message operations
+  const sendMessageMutation = useSendMessage();
+  const { getOrCreateDirectInteraction } = useGetOrCreateDirectInteraction();
   
   const { 
     contactId, 
@@ -688,7 +689,14 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
         },
       };
 
-      const sentMessage = await sendMessage(messageDto);
+      const sentMessage = await sendMessageMutation.mutateAsync({
+        interactionId: currentInteractionId,
+        recipientEntityId: contactId,
+        content: text,
+        messageType: 'text',
+        metadata: messageDto.metadata
+      });
+      
       if (!sentMessage) {
         throw new Error('Failed to send message');
       }

@@ -184,7 +184,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const authContext = useAuthContext(); // Use this for user data and context logout
   const { theme } = useTheme(); // Get current theme for styling ProfileScreen itself
   const { verificationStatus, isBiometricAvailable, refreshStatus, isLoading: isKycLoading } = useKycStatus();
-  const { data: userProfile, isLoading: isLoadingUserProfile, refetch: refetchProfile } = useUserProfile(authContext.user?.entityId);
+  const { data: userProfile, isLoading: isLoadingUserProfile, refetch: refetchProfile } = useUserProfile();
   
   // Determine if initial load is complete based on both KYC and profile data
   const isInitialLoadComplete = !isKycLoading && !isLoadingUserProfile;

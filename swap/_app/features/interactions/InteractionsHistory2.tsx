@@ -22,7 +22,17 @@ import SearchHeader from '../header/SearchHeader';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuthContext } from '../auth/context/AuthContext';
 import { useInteractions, InteractionItem } from '../../query/hooks/useInteractions';
-import { EntitySearchResult } from '../../contexts/DataContext';
+// EntitySearchResult type - keeping for compatibility
+interface EntitySearchResult {
+  id: string;
+  type: 'user' | 'business';
+  name: string;
+  username?: string;
+  email?: string;
+  phoneNumber?: string;
+  profilePictureUrl?: string;
+  lastActiveAt?: string;
+}
 import logger from '../../utils/logger';
 import { MaterialIcons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/rootNavigator';
