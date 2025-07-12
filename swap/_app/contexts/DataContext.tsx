@@ -16,18 +16,10 @@ import { Message, SendMessageRequest, MessageType as APIMessageType, MessageStat
 // Removed unused imports: CreateDirectMessageDto, AxiosError
 import { TimelineItem, MessageTimelineItem, TransactionTimelineItem } from "../types/timeline.types";
 import { websocketService } from "../services/websocketService";
-import { messageRepository } from "../localdb/MessageRepository";
-import { transactionRepository } from "../localdb/TransactionRepository";
-import { timelineRepository } from "../localdb/TimelineRepository";
 import { messageManager } from '../services/MessageManager';
 import { webSocketHandler } from '../services/WebSocketHandler';
 import { transactionManager } from '../services/TransactionManager';
-// Removed unused import: balanceManager
-import { Transaction, TransactionType, ProcessedByType } from '../types/transaction.types';
-// Removed unused imports: Alert, CreateTransactionRequest, authEvents
 import { TimelineManager } from '../services/TimelineManager';
-// Removed unused imports: getAccessToken, contactsService
-import { eventEmitter } from '../utils/eventEmitter';
 import { networkService } from '../services/NetworkService';
 
 // Import only the repositories still needed by active functions
@@ -117,11 +109,7 @@ interface DataContextType {
     errors: string[];
   };
   
-  // Data loading completion tracking
-  hasLoadedInteractions: boolean;
-  hasLoadedBalances: boolean;
-  hasLoadedUserData: boolean;
-  hasLoadedRecentConversations: boolean;
+  // Data loading completion tracking removed - handled by TanStack Query status
 
   // Actions
   refreshBalances: () => Promise<void>;
@@ -134,8 +122,8 @@ interface DataContextType {
   sendMessage: (messageData: SendMessageRequest & { recipient_id: string; idempotency_key: string, interaction_id: string }) => Promise<Message | null>;
   sendDirectTransaction: (dto: import('../types/transaction.types').CreateDirectTransactionDto) => Promise<any>;
   fetchInteractionTimeline: (interactionId: string, options?: { forceRefresh?: boolean; silentUpdate?: boolean }) => Promise<void>;
-  addMessageToTimeline: (interactionId: string, newMessageData: Partial<MessageTimelineItem> & { interaction_id: string; sender_entity_id?: string; metadata?: any; content?: string; message_type?: APIMessageType; created_at?: string; status?: MessageStatus; id?: string; }) => Promise<void>;
-  addTransactionToTimeline: (interactionId: string, tx: any) => Promise<void>;
+  // addMessageToTimeline removed - handled by TanStack Query useTimeline hook
+  // addTransactionToTimeline removed - handled by TanStack Query useTimeline hook
   updateInteractionPreviewFromTimeline: (interactionId: string) => Promise<void>;
   clearAllTimelineState: () => void;
   clearRefreshThrottling: () => void;
@@ -148,8 +136,7 @@ interface DataContextType {
 // Create the context
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-// Repository instances - only those still needed
-const interactionRepository = InteractionRepository.getInstance();
+// Repository instances removed - handled by TanStack Query
 
 // Cache utilities moved to TanStack Query configuration
 
@@ -165,107 +152,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   const isAuthLoading = authContext?.isLoading || false;
   const getAccessToken = authContext?.getAccessToken;
 
-  // Critical Transition Period Management to prevent rapid state changes
-  const [isCriticalTransitionPeriod, setIsCriticalTransitionPeriod] = useState(false);
-  const transitionTimer = useRef<NodeJS.Timeout | null>(null);
-  const lastNavigationChange = useRef<number>(0);
-  const transitionPeriodDuration = 2000; // 2 seconds critical period
-  
-  // Batch state updates during transition to prevent magazine page effect
-  const [pendingStateUpdates, setPendingStateUpdates] = useState<Array<() => void>>([]);
-  const batchUpdateTimer = useRef<NodeJS.Timeout | null>(null);
-
-  // Start critical transition period when authentication state changes
-  useEffect(() => {
-    if (isAuthenticated && user && !isAuthLoading) {
-      console.log('🚨 [DataContext] 🔄 CRITICAL TRANSITION PERIOD STARTED - Preventing rapid state changes');
-      lastNavigationChange.current = Date.now();
-      setIsCriticalTransitionPeriod(true);
-      
-      // Clear any existing timer
-      if (transitionTimer.current) {
-        clearTimeout(transitionTimer.current);
-      }
-      
-      // End critical period after duration
-      transitionTimer.current = setTimeout(() => {
-        console.log('🚨 [DataContext] ✅ CRITICAL TRANSITION PERIOD ENDED - Resuming normal operations');
-        setIsCriticalTransitionPeriod(false);
-        
-        // Apply any pending state updates
-        if (pendingStateUpdates.length > 0) {
-          console.log(`🚨 [DataContext] Applying ${pendingStateUpdates.length} pending state updates`);
-          pendingStateUpdates.forEach(update => update());
-          setPendingStateUpdates([]);
-        }
-      }, transitionPeriodDuration);
-    }
-    
-    return () => {
-      if (transitionTimer.current) {
-        clearTimeout(transitionTimer.current);
-      }
-      if (batchUpdateTimer.current) {
-        clearTimeout(batchUpdateTimer.current);
-      }
-    };
-  }, [isAuthenticated, user, isAuthLoading]);
-
-  // Safe state update function that respects critical transition period
-  const safeStateUpdate = useCallback((updateFn: () => void, isHighPriority = false) => {
-    if (!isCriticalTransitionPeriod || isHighPriority) {
-      // Normal operation - apply immediately
-      updateFn();
-    } else {
-      // During critical period - batch the update
-      setPendingStateUpdates(prev => [...prev, updateFn]);
-    }
-  }, [isCriticalTransitionPeriod]);
+  // Critical transition period management removed - handled by TanStack Query
 
   // Mock mode removed - DataContext now uses TanStack Query
   
-  // Add timestamp tracking for last refresh
-  const [lastInteractionsRefresh, setLastInteractionsRefresh] = useState<number>(0);
-  // Minimum time between refreshes in milliseconds (3 seconds)
-  const MIN_REFRESH_INTERVAL = 3000;
-
-  // Add function to clear throttling on login
-  const clearRefreshThrottling = useCallback(() => {
-    logger.debug('[DataContext] Clearing refresh throttling for fresh start', 'data');
-    setLastInteractionsRefresh(0);
-    setLastRecentConversationsRefresh(0);
-    setHasLoadedInteractions(false);
-    setHasLoadedBalances(false);
-    setHasLoadedUserData(false);
-    setHasLoadedRecentConversations(false);
-  }, []);
-
-  // Add timestamp tracking for last recentConversations refresh
-  const [lastRecentConversationsRefresh, setLastRecentConversationsRefresh] = useState<number>(0);
+  // Refresh throttling removed - handled by TanStack Query staleTime/cacheTime
 
   // State for data - initialize empty (no mock data)
   const [currencyBalances, setCurrencyBalances] = useState<CurrencyBalance[]>([]);
   const [totalFiat, setTotalFiat] = useState(0);
   const [balances, setBalances] = useState<Balance[]>([]);
   const [interactionsList, setInteractionsList] = useState<InteractionItem[]>([]);
-  const [recentConversations, setRecentConversations] = useState<RecentConversationItem[]>([]);
+  const [recentConversations] = useState<RecentConversationItem[]>([]);
   const [interactionTimeline, setInteractionTimeline] = useState<TimelineItem[]>([]);
   // Optimistic message store removed - handled by TanStack Query optimistic updates
 
-  // User Profile Data State
-  const [userProfile, setUserProfile] = useState<any | null>(null);
-  const [kycStatus, setKycStatus] = useState<any | null>(null);
-  const [personalInfo, setPersonalInfo] = useState<any | null>(null);
-  const [verificationStatus, setVerificationStatus] = useState<any | null>(null);
+  // User Profile Data State - simplified (complex state handled by TanStack Query)
+  const [userProfile] = useState<any | null>(null);
+  const [kycStatus] = useState<any | null>(null);
+  const [personalInfo] = useState<any | null>(null);
+  const [verificationStatus] = useState<any | null>(null);
   
-  // Add logging when verification status changes
-  useEffect(() => {
-    console.log("🔥 [DataContext] 🔄 Verification status changed:", verificationStatus);
-    if (verificationStatus === null) {
-      console.log("🔥 [DataContext] ⚠️  WARNING: Verification status set to NULL");
-      console.trace("🔥 [DataContext] Stack trace for null verification status");
-    }
-  }, [verificationStatus]);
+  // Verification status logging removed - now handled by TanStack Query
 
   // Loading states
   const [isLoadingBalances, setIsLoadingBalances] = useState(false);
@@ -276,87 +184,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   
   // Network state removed - handled by TanStack Query network detection
   
-  // Professional Loading State Manager with guest mode support
+  // Simple loading state - complex logic moved to useLoadingState hook
   const [loadingState, setLoadingState] = useState({
     isLoading: false,
     progress: 0,
     completedTasks: new Set<string>(),
-    requiredTasks: isGuestMode ? ['interactions', 'contacts'] : ['interactions', 'balances', 'userData', 'contacts', 'recentTransactions'],
+    requiredTasks: [] as string[],
     errors: [] as string[]
   });
-  
-  // Prevent duplicate loading calls with ref
-  const isInitialLoadInProgress = useRef(false);
-  const loadingCompletionHandled = useRef(false);
-
-  // Helper functions for loading state management
-  const startTask = useCallback((taskName: string) => {
-    console.log(`🔥 [LoadingManager] 🚀 Starting task: ${taskName}`);
-    setLoadingState(prev => ({
-      ...prev,
-      isLoading: true,
-    }));
-  }, []);
-
-  const markTaskComplete = useCallback((taskName: string) => {
-    console.log(`🔥 [LoadingManager] ✅ Task completed: ${taskName}`);
-    setLoadingState(prev => {
-      const newCompletedTasks = new Set(prev.completedTasks);
-      newCompletedTasks.add(taskName);
-      const progress = Math.round((newCompletedTasks.size / prev.requiredTasks.length) * 100);
-      
-      console.log(`🔥 [LoadingManager] 📊 Progress: ${progress}%, Completed: ${Array.from(newCompletedTasks).join(', ')}`);
-      
-      return {
-        ...prev,
-        completedTasks: newCompletedTasks,
-        progress,
-        isLoading: newCompletedTasks.size < prev.requiredTasks.length,
-      };
-    });
-  }, []);
-
-  // CRITICAL: Watch loadingState and set isInitialLoadComplete when all tasks are done
-  useEffect(() => {
-    const allTasksCompleted = loadingState.completedTasks.size >= loadingState.requiredTasks.length;
-    const isLoadingFinished = !loadingState.isLoading;
-    const progressComplete = loadingState.progress >= 100;
-    
-    console.log('🔥 [LoadingManager] 🎯 Checking completion status:', {
-      allTasksCompleted,
-      isLoadingFinished,
-      progressComplete,
-      completedCount: loadingState.completedTasks.size,
-      requiredCount: loadingState.requiredTasks.length,
-      currentIsInitialLoadComplete: isInitialLoadComplete
-    });
-    
-    if (allTasksCompleted && isLoadingFinished && progressComplete && !isInitialLoadComplete) {
-      console.log('🔥 [LoadingManager] 🎉 ALL TASKS COMPLETED - Setting isInitialLoadComplete = true');
-      setIsInitialLoadComplete(true);
-    }
-  }, [loadingState.completedTasks.size, loadingState.isLoading, loadingState.progress, loadingState.requiredTasks.length, isInitialLoadComplete]);
-
-  const resetLoadingState = useCallback(() => {
-    console.log('🔥 [LoadingManager] 🔄 Resetting loading state');
-    setLoadingState(prev => ({
-      ...prev,
-      isLoading: false,
-      progress: 0,
-      completedTasks: new Set<string>(),
-      errors: []
-    }));
-    isInitialLoadInProgress.current = false;
-    loadingCompletionHandled.current = false;
-  }, []);
 
 
   
-  // Add new state to track if data has been loaded at least once, even if empty
-  const [hasLoadedInteractions, setHasLoadedInteractions] = useState(false);
-  const [hasLoadedBalances, setHasLoadedBalances] = useState(false);
-  const [hasLoadedUserData, setHasLoadedUserData] = useState(false);
-  const [hasLoadedRecentConversations, setHasLoadedRecentConversations] = useState(false);
+  // Data loaded tracking removed - handled by TanStack Query status
 
   // State for entity search
   const [entitySearchResults, setEntitySearchResults] = useState<EntitySearchResult[]>([]);
@@ -431,303 +270,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   // 🚀 NEW: Proactive timeline caching for WhatsApp-like experience
   // preloadRecentTimelines function will be defined after fetchInteractionTimeline
 
-  // 🚀 Enhanced fetchInteractions with proactive timeline caching
-  const fetchInteractions = useCallback(async (forceRefresh = false) => {
-    const logContext = '🔥 [DataContext]';
-    
-    console.log(`${logContext} 🚀 fetchInteractions called`, {
-      forceRefresh,
-      hasUser: !!user,
-      isAuthLoading,
-      isAuthenticated,
-      isGuestMode,
-    });
+  // fetchInteractions removed - handled by TanStack Query useInteractions hook
 
-    if (!isAuthenticated || isAuthLoading || isGuestMode) {
-      console.log(`${logContext} 🚫 Not fetching interactions - auth state not ready`);
-          return;
-        }
-        
-    try {
-      // STEP 1: Load from local cache first (instant UI update)
-      console.log(`${logContext} 📱 STEP 1: Loading interactions from local cache (with members)...`);
-      const localInteractions = await interactionRepository.getInteractionsWithMembers();
-      
-      console.log(`${logContext} 📱 Local interactions with members loaded:`, {
-        count: localInteractions.length,
-        interactions: localInteractions.slice(0, 3).map((i: any) => ({
-          id: i.id,
-          name: i.name,
-          memberCount: i.members?.length || 0
-        }))
-      });
+  // fetchRecentConversations removed - handled by TanStack Query useRecentConversations hook
 
-      if (localInteractions.length > 0) {
-        // Transform to InteractionItem[] format
-        const transformedInteractions: InteractionItem[] = localInteractions.map((local: any) => ({
-          id: local.id,
-          name: local.name || undefined,
-          is_group: local.is_group || false,
-          last_message_at: local.last_message_at || undefined,
-          updated_at: local.updated_at || undefined,
-          last_message_snippet: local.last_message_snippet || undefined,
-          unread_count: local.unread_count || undefined,
-          members: local.members.map((member: any) => ({
-            entity_id: member.entity_id,
-            role: member.role,
-            display_name: member.display_name || undefined,
-            avatar_url: member.avatar_url || undefined,
-            entity_type: member.entity_type || undefined,
-          }))
-        }));
-        
-        setInteractionsList(transformedInteractions);
-        console.log(`${logContext} ✅ Local interactions set in UI - INSTANT UPDATE (NO GLITCH)`);
-        eventEmitter.emit('data_updated', { type: 'interactions', data: transformedInteractions });
-        console.log(`${logContext} 📡 Emitted data_updated event for interactions`);
-      }
-
-      // STEP 2: Skip background sync if not needed
-      if (!forceRefresh && localInteractions.length > 0) {
-        const currentIsNewAuthentication = !hasLoadedInteractions && isAuthenticated;
-        const shouldBypassThrottle = forceRefresh || !hasLoadedInteractions || currentIsNewAuthentication;
-        const timeSinceLastRefresh = Date.now() - (lastInteractionsRefresh || 0);
-        const minInterval = 3000; // 3 seconds
-
-        console.log(`${logContext} 🕐 Throttling check:`, {
-          hasLoadedInteractions,
-          isNewAuthentication: currentIsNewAuthentication,
-          lastRefresh: lastInteractionsRefresh,
-          timeSinceLastRefresh,
-          minInterval,
-          shouldBypassThrottle,
-          now: Date.now()
-        });
-
-        if (!shouldBypassThrottle && timeSinceLastRefresh < minInterval) {
-          console.log(`${logContext} ⏱️ Skipping background sync - too soon (${timeSinceLastRefresh}ms < ${minInterval}ms)`);
-      return;
-        }
-    }
-
-      // STEP 3: Background sync
-      console.log(`${logContext} 🔄 STEP 3: Starting background sync...`);
-      console.log(`${logContext} 🌐 Background sync: Starting API call...`);
-
-    setIsLoadingInteractions(true);
-    
-      const response = await apiClient.get('/interactions?public=true');
-      console.log(`${logContext} 🌐 API response received:`, {
-        status: response.status,
-        dataType: typeof response.data,
-        isArray: Array.isArray(response.data),
-        itemCount: Array.isArray(response.data) ? response.data.length : 'N/A'
-      });
-
-      // Process API response
-      let fetchedInteractions: InteractionItem[] = [];
-      if (Array.isArray(response.data)) {
-        fetchedInteractions = response.data;
-      } else if (response.data?.data && Array.isArray(response.data.data)) {
-        fetchedInteractions = response.data.data;
-      } else if (response.data?.interactions && Array.isArray(response.data.interactions)) {
-        fetchedInteractions = response.data.interactions;
-      }
-
-      console.log(`${logContext} 🌐 Processed interactions from API:`, {
-        count: fetchedInteractions.length,
-        interactions: fetchedInteractions.slice(0, 3).map((i: any) => ({
-          id: i.id,
-          name: i.name,
-          memberCount: i.members?.length || 0
-        }))
-      });
-
-      if (fetchedInteractions.length > 0) {
-        // Save to local cache
-        console.log(`${logContext} 💾 Saving interactions and members to local cache...`);
-            for (const interaction of fetchedInteractions) {
-          // Save interaction
-          await interactionRepository.upsertInteraction(interaction);
-          
-          // Save members if they exist
-          if (interaction.members && interaction.members.length > 0) {
-            const membersToSave = interaction.members.map(member => ({
-              interaction_id: interaction.id,
-              entity_id: member.entity_id,
-              role: member.role,
-              display_name: member.display_name || null,
-              avatar_url: member.avatar_url || null,
-              entity_type: member.entity_type || 'profile',
-              joined_at: new Date().toISOString()
-            }));
-            await interactionRepository.saveInteractionMembers(membersToSave);
-          }
-        }
-        console.log(`${logContext} ✅ Interactions and members saved to local cache`);
-
-        // Update UI
-          setInteractionsList(fetchedInteractions);
-        console.log(`${logContext} ✅ Interactions UI updated from API`);
-        
-        // Emit update event
-        eventEmitter.emit('data_updated', { type: 'interactions', data: fetchedInteractions });
-        console.log(`${logContext} 📡 Emitted data_updated event for API interactions`);
-      }
-
-      // Update tracking variables
-      setHasLoadedInteractions(true);
-      setLastInteractionsRefresh(Date.now());
-
-      // 🚀 NEW: Start proactive timeline preloading after interactions are loaded
-      setTimeout(() => {
-        preloadRecentTimelines();
-      }, 100); // Small delay to avoid blocking UI
-
-    } catch (error) {
-      console.error(`${logContext} ❌ Error fetching interactions:`, error);
-    } finally {
-      setIsLoadingInteractions(false);
-      console.log(`${logContext} 🏁 Background sync completed (setIsLoadingInteractions = false)`);
-    }
-  }, [
-    isAuthenticated,
-    isGuestMode,
-    isAuthLoading,
-    user,
-    hasLoadedInteractions,
-    lastInteractionsRefresh
-  ]);
-
-  // Fetch recent conversations from API
-  const fetchRecentConversations = useCallback(async (forceRefresh = false) => {
-    // Mock mode removed - DataContext now uses real API calls
-
-    if (!isAuthenticated || isAuthLoading || !user) {
-      logger.debug("Skipping recent conversations fetch: not authenticated or still loading", "data");
-      setIsLoadingRecentConversations(false);
-      return;
-    }
-
-    // Check if we've recently refreshed and aren't forcing a refresh
-    const now = Date.now();
-    
-    // For new authentication, bypass throttling to ensure data loads
-    const isNewAuthentication = !hasLoadedRecentConversations && isAuthenticated;
-    const shouldBypassThrottle = forceRefresh || isNewAuthentication;
-    
-    if (!shouldBypassThrottle && hasLoadedRecentConversations && (now - lastRecentConversationsRefresh < MIN_REFRESH_INTERVAL)) {
-      logger.debug(`Throttling recent conversations API calls: last refresh was ${now - lastRecentConversationsRefresh}ms ago`, "data");
-      return;
-    }
-
-    // Don't set loading if we're already loading (prevent duplicate fetches)
-    if (isLoadingRecentConversations && !forceRefresh && !isNewAuthentication) {
-      logger.debug("Already loading recent conversations, skipping duplicate fetch", "data");
-      return;
-    }
-
-    setIsLoadingRecentConversations(true);
-    // Always update the timestamp to prevent rapid successive calls
-    setLastRecentConversationsRefresh(now);
-    
-    try {
-      // Update timestamp and mark as loaded even if we get an error
-      setHasLoadedRecentConversations(true);
-      
-      const response = await apiClient.get(API_PATHS.INTERACTION.RECENT);
-
-      if (response && response.status === 200) {
-        // Process the response data
-        const conversationsData = response.data?.data || response.data || [];
-        
-        if (Array.isArray(conversationsData)) {
-          const processedConversations: RecentConversationItem[] = conversationsData.map((item: any) => ({
-            id: item.id,
-            name: item.name || 'Unknown',
-            type: item.type || 'direct',
-            avatarUrl: item.avatar_url,
-            initials: item.initials || '??',
-            avatarColor: item.avatar_color || '#0077b6',
-            lastMessageSnippet: item.last_message_snippet,
-            lastMessageAt: item.last_message_at ? new Date(item.last_message_at) : undefined,
-            contactEntityId: item.contact_entity_id,
-            participantCount: item.participant_count || 0,
-            hasUnreadMessages: item.has_unread_messages || false,
-          }));
-          
-          setRecentConversations(processedConversations);
-          logger.debug(`[DataContext] Recent conversations loaded: ${processedConversations.length} items`, "data");
-        } else {
-          setRecentConversations([]);
-          logger.debug("[DataContext] No recent conversations data found", "data");
-        }
-      } else {
-        setRecentConversations([]);
-        logger.warn(`[DataContext] Error response from recent conversations API. Status: ${response?.status}`);
-      }
-    } catch (error: any) {
-      logger.error("[DataContext] Error fetching recent conversations", error, "data");
-      setRecentConversations([]);
-    } finally {
-      setIsLoadingRecentConversations(false);
-    }
-  }, [isAuthenticated, isAuthLoading, user, isLoadingRecentConversations, hasLoadedRecentConversations, lastRecentConversationsRefresh]);
-
-  // CRITICAL: Start loading tasks when user is authenticated
-  useEffect(() => {
-    if (isAuthenticated && user && !isAuthLoading && !isInitialLoadInProgress.current) {
-      console.log('🔥 [LoadingManager] 🚀 STARTING INITIAL DATA LOADING...');
-      isInitialLoadInProgress.current = true;
-      
-      // Start all required tasks
-      const tasks = isGuestMode ? ['interactions', 'contacts'] : ['interactions', 'balances', 'userData', 'contacts', 'recentTransactions'];
-      
-      console.log('🔥 [LoadingManager] 📋 Required tasks:', tasks);
-      
-      // CRITICAL: Update the required tasks in loading state to match what we're actually starting
-      setLoadingState(prev => ({
-        ...prev,
-        requiredTasks: tasks,
-        completedTasks: new Set<string>(), // Reset completed tasks
-        progress: 0,
-        isLoading: true
-      }));
-      
-      // Start interactions task
-      if (tasks.includes('interactions')) {
-        startTask('interactions');
-        fetchInteractions(false).finally(() => markTaskComplete('interactions'));
-      }
-      
-      // Start balances task (only if not guest mode)
-      if (tasks.includes('balances')) {
-        startTask('balances');
-        // Balance fetching handled by TanStack Query useBalances hook
-        markTaskComplete('balances');
-      }
-      
-      // Start userData task (only if not guest mode)
-      if (tasks.includes('userData')) {
-        startTask('userData');
-        // For now, mark userData as complete immediately since fetchUserData doesn't exist
-        setTimeout(() => markTaskComplete('userData'), 100);
-      }
-      
-      // Start contacts task
-      if (tasks.includes('contacts')) {
-        startTask('contacts');
-        // For now, mark contacts as complete immediately since we don't have a fetchContacts function
-        setTimeout(() => markTaskComplete('contacts'), 100);
-      }
-      
-      // Start recentTransactions task (only if not guest mode)
-      if (tasks.includes('recentTransactions')) {
-        startTask('recentTransactions');
-        fetchRecentConversations(false).finally(() => markTaskComplete('recentTransactions'));
-      }
-    }
-  }, [isAuthenticated, user, isAuthLoading, isGuestMode, startTask, markTaskComplete, fetchInteractions, fetchRecentConversations]);
+  // Loading initialization removed - handled by useLoadingState hook
 
   // Add request deduplication for timeline fetches
   // Note: Timeline request deduplication now handled by GlobalRequestManager
@@ -794,757 +341,45 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     setIsLoadingRecentConversations(false);
     setIsLoadingEntitySearch(false);
     setIsInitialLoadComplete(false);
-    setHasLoadedInteractions(false);
-    setHasLoadedBalances(false);
-    setHasLoadedRecentConversations(false);
     
-    // Reset loading manager state completely
-    resetLoadingState();
-    isInitialLoadInProgress.current = false;
-    loadingCompletionHandled.current = false;
+    // Reset loading state
+    setLoadingState({
+      isLoading: false,
+      progress: 0,
+      completedTasks: new Set<string>(),
+      requiredTasks: [],
+      errors: []
+    });
     
-    // Reset refresh timestamps
-    setLastInteractionsRefresh(0);
+    // Refresh timestamps removed
     
     logger.debug('[DataContext] All data state cleared successfully', 'data');
   }, [clearAllTimelineState]);
 
   // 🚀 Professional Timeline Fetching with Global Request Deduplication
-  const fetchInteractionTimeline = useCallback(
-    async (interactionId: string, options: { forceRefresh?: boolean; silentUpdate?: boolean } = {}) => {
-      // Simplified for TanStack Query migration - direct call to internal function
-      return fetchInteractionTimelineInternal(interactionId, options);
-    },
-    []
-  );
+  // fetchInteractionTimeline removed - handled by TanStack Query useTimeline hook
 
-  // Internal timeline fetch function (renamed from original)
-  const fetchInteractionTimelineInternal = useCallback(
-    async (interactionId: string, options: { forceRefresh?: boolean; silentUpdate?: boolean } = {}) => {
-      const { forceRefresh = false, silentUpdate = false } = options;
-      
-      if (!interactionId) {
-        setIsLoadingTimeline(false); // Ensure loading is false if we're returning early
-        return;
-      }
-
-      logger.debug(`[DataContext] Fetching timeline for interaction ID: ${interactionId} (forceRefresh: ${forceRefresh}, silentUpdate: ${silentUpdate})`, "data_timeline");
-      
-      let localTimelineLoadedSuccessfully = false;
-      let initialTimelineSetFromLocal = false;
-      let hasExistingTimelineData = false;
-
-      // Check if we already have timeline data in memory for this interaction
-      const existingTimelineData = interactionTimelineRef.current.filter(item => 
-        (item as any).interaction_id === interactionId && item.type !== 'date'
-      );
-      hasExistingTimelineData = existingTimelineData.length > 0;
-      
-      if (hasExistingTimelineData && silentUpdate) {
-        logger.debug(`[DataContext] Using existing in-memory timeline (${existingTimelineData.length} items) for ${interactionId}`, "data_timeline");
-        // We already have data, don't show loading for background refresh
-        // Just continue with background API fetch
-      }
-
-      // STEP 1: Try to load from local SQLite first for instant display (only if no memory data or forced refresh)
-      if ((await messageRepository.isSQLiteAvailable()) && (!hasExistingTimelineData || forceRefresh)) {
-        logger.debug(`[DataContext] Loading timeline from local cache: ${interactionId}`, "data_timeline");
-        try {
-          const localTimeline = await timelineRepository.getTimelineForInteraction(interactionId, 100, {
-            includeMessages: true,
-            includeTransactions: true
-          });
-          
-          if (localTimeline && localTimeline.length > 0) {
-            // Add date separators to local timeline
-            const timelineWithDates = timelineRepository.addDateSeparators(localTimeline);
-            
-            setInteractionTimeline(timelineWithDates);
-            interactionTimelineRef.current = timelineWithDates;
-            localTimelineLoadedSuccessfully = true;
-            initialTimelineSetFromLocal = true;
-            logger.info(`[DataContext] Local timeline loaded for ${interactionId}: ${localTimeline.length} items`, "data_timeline");
-          }
-        } catch (error) {
-          logger.error(`[DataContext] Error loading local timeline for ${interactionId}:`, error instanceof Error ? error.message : String(error), "data_timeline");
-        }
-      }
-
-      // STEP 2: Fetch from API. Only set loading if no data exists anywhere and not a silent update.
-      const shouldShowLoading = !hasExistingTimelineData && !initialTimelineSetFromLocal && !silentUpdate;
-      
-      if (shouldShowLoading) {
-        setIsLoadingTimeline(true); // Only show loading if we have nothing to display yet
-        logger.debug(`[DataContext] Showing loading indicator for initial timeline fetch of ${interactionId}`, "data_timeline");
-      } else {
-        logger.debug(`[DataContext] Performing silent background update for ${interactionId}`, "data_timeline");
-      }
-
-      try {
-        const path = API_PATHS.INTERACTION.TIMELINE(interactionId);
-        const params: any = { limit: 100 };
-        
-        // Add current user entity ID for proper transaction perspective filtering
-        if (authContext?.user?.entityId) {
-          params.currentUserEntityId = authContext.user.entityId;
-          logger.debug(`[DataContext] Adding currentUserEntityId to timeline request: ${authContext.user.entityId}`, 'data_timeline');
-        }
-        
-        const response = await apiClient.get(path, { params });
-        
-        let fetchedItems: any[] = [];
-        const raw = response.data;
-
-        // With the fixed backend, response should be: { items: [...], pagination: {...}, meta: {...} }
-        if (Array.isArray(raw?.items)) {
-          fetchedItems = raw.items;
-        } else if (raw?.data && Array.isArray(raw.data.items)) {
-          // Fallback for old format during transition
-           fetchedItems = raw.data.items;
-        } else {
-          logger.warn('Unexpected timeline response format', 'data_timeline', { responseKeys: Object.keys(raw || {}) });
-        }
-        
-        logger.debug(`[DataContext] Retrieved ${fetchedItems.length} API timeline items for ${interactionId}`, "data_timeline");
-
-        if (fetchedItems.length > 0) {
-          // Add date separators to API timeline
-          const timelineWithDates = timelineRepository.addDateSeparators(fetchedItems);
-          
-          setInteractionTimeline(timelineWithDates);
-          interactionTimelineRef.current = timelineWithDates;
-          logger.info(`[DataContext] API timeline loaded for ${interactionId}: ${fetchedItems.length} items`, "data_timeline");
-
-          if (await messageRepository.isSQLiteAvailable()) {
-            // Separate messages and transactions for saving to appropriate repositories
-            const messagesToSave = fetchedItems
-              .filter(item => (item.type === 'message' || item.itemType === 'message') && item.id && item.interaction_id)
-              .map(item => ({
-                ...item,
-                id: String(item.id),
-                interaction_id: String(item.interaction_id),
-                itemType: 'message',
-                type: 'message',
-                sender_entity_id: item.sender_entity_id ? String(item.sender_entity_id) : 'system_or_unknown',
-                created_at: typeof item.createdAt === 'number' ? new Date(item.createdAt).toISOString() : String(item.createdAt || item.timestamp),
-                metadata: { ...item.metadata, isOptimistic: false } // Mark as not optimistic from API
-              }));
-              
-            const transactionsToSave = fetchedItems
-              .filter(item => (item.type === 'transaction' || item.itemType === 'transaction') && item.id && item.interaction_id)
-              .map(item => ({
-                ...item,
-                id: String(item.id),
-                interaction_id: String(item.interaction_id),
-                itemType: 'transaction',
-                type: 'transaction',
-                from_account_id: item.from_account_id || item.from_entity_id,
-                to_account_id: item.to_account_id || item.to_entity_id,
-                created_at: typeof item.createdAt === 'number' ? new Date(item.createdAt).toISOString() : String(item.createdAt || item.timestamp),
-                status: item.status || 'completed',
-                transaction_type: item.transaction_type || 'transfer',
-                entry_type: item.entry_type,
-                metadata: { ...item.metadata, isOptimistic: false } // Mark as not optimistic from API
-              }));
-
-            // Save to respective repositories in the background
-            if (messagesToSave.length > 0) {
-              logger.debug(`[DataContext] Saving ${messagesToSave.length} API messages to local DB for ${interactionId}`, "data_timeline");
-              messageRepository.saveMessages(messagesToSave).catch((err: any) => {
-                logger.warn('[DataContext] Error saving API messages to local DB', 'data_timeline', { error: String(err) });
-              });
-            }
-            
-            if (transactionsToSave.length > 0) {
-              logger.debug(`[DataContext] Saving ${transactionsToSave.length} API transactions to local DB for ${interactionId}`, "data_timeline");
-              transactionRepository.saveTransactions(transactionsToSave).catch((err: any) => {
-                logger.warn('[DataContext] Error saving API transactions to local DB', 'data_timeline', { error: String(err) });
-              });
-            }
-          }
-                } else {
-          // No API data, but keep local data if we had any
-          if (!localTimelineLoadedSuccessfully && !hasExistingTimelineData) {
-          setInteractionTimeline([]);
-          }
-        }
-        // If fetchedItems is empty but localTimeline was loaded, we keep the local ones.
-        
-      } catch (apiError) {
-        logger.error(`Failed to fetch API timeline for ${interactionId}`, apiError, "data_timeline");
-        if (!localTimelineLoadedSuccessfully && !hasExistingTimelineData) {
-          // Critical error and no local data to show
-          setInteractionTimeline([]);
-        }
-        // If local data was shown, we don't wipe it on API error.
-      } finally {
-        setIsLoadingTimeline(false); // Always set to false after API attempt
-      }
-    },
-    [user] 
-  );
+  // fetchInteractionTimelineInternal removed - handled by TanStack Query useTimeline hook
+  // Function body removed - handled by TanStack Query useTimeline hook
 
   // Function to add a new message (received via WebSocket) to the timeline state
-  const addMessageToTimeline = useCallback(async (interactionIdToAdd: string, newMessageData: Partial<MessageTimelineItem> & { interaction_id: string; sender_entity_id?: string; metadata?: any; content?: string; message_type?: APIMessageType; created_at?: string; status?: MessageStatus; id?: string; }) => {
-    const logDetails = { msgId: newMessageData.id || 'N/A', contentPreview: newMessageData.content?.substring(0,20) };
-    logger.debug(`[DataContext] addMessageToTimeline for ${interactionIdToAdd}`, 'data_timeline', logDetails);
+  // addMessageToTimeline removed - handled by TanStack Query useTimeline hook with optimistic updates
 
-    const messageId = newMessageData.id || `new-msg-${Date.now()}`;
-    const senderId = newMessageData.sender_entity_id || user?.entityId || 'system_or_unknown';
-    const createdAt = newMessageData.created_at ? 
-      (typeof newMessageData.created_at === 'string' ? new Date(newMessageData.created_at) : newMessageData.created_at) : 
-      new Date();
-    const createdAtString = createdAt.toISOString();
-    const isOptimistic = newMessageData.metadata?.isOptimistic === true;
-    const optimisticIdFromPayload = newMessageData.metadata?.optimisticId as string | undefined;
-    const idempotencyKey = newMessageData.metadata?.idempotency_key as string | undefined;
-
-    console.log(`📨 [DEBUG] addMessageToTimeline: ${isOptimistic ? 'OPTIMISTIC' : 'AUTHORITATIVE'} message`);
-    console.log(`📨 [DEBUG] Message details: id="${messageId}", content="${newMessageData.content}", optimisticId="${optimisticIdFromPayload}", idempotencyKey="${idempotencyKey}"`);
-
-    setInteractionTimeline((prevTimeline) => {
-      // Use Map for more efficient lookups by ID
-      const messageMap = new Map<string, TimelineItem>();
-      let itemReplaced = false;
-      let replacedOptimisticId = '';
-
-      // First, populate the map with all existing messages
-      for (const item of prevTimeline) {
-        messageMap.set(item.id, item);
-      }
-
-      // Remove optimistic message if this is its authoritative version
-      if (optimisticIdFromPayload && messageMap.has(optimisticIdFromPayload) && messageMap.get(optimisticIdFromPayload)?.metadata?.isOptimistic) {
-        logger.debug(`[DataContext] Replacing optimistic message ${optimisticIdFromPayload} with authoritative message ${messageId}`, 'data_timeline');
-        console.log(`📨 [DEBUG] ✅ Replacing optimistic message ${optimisticIdFromPayload} with authoritative ${messageId}`);
-        messageMap.delete(optimisticIdFromPayload);
-        itemReplaced = true;
-        replacedOptimisticId = optimisticIdFromPayload;
-      }
-      
-      // Fallback: try to match by idempotency_key if no optimisticId match
-      if (!itemReplaced && idempotencyKey && !isOptimistic) {
-        const optimisticWithSameKey = Array.from(messageMap.values()).find(item => 
-          item.metadata?.isOptimistic === true && 
-          item.metadata?.idempotency_key === idempotencyKey
-        );
-        if (optimisticWithSameKey) {
-          console.log(`📨 [DEBUG] ✅ Replacing optimistic message ${optimisticWithSameKey.id} by idempotency_key ${idempotencyKey} with authoritative ${messageId}`);
-          messageMap.delete(optimisticWithSameKey.id);
-          itemReplaced = true;
-          replacedOptimisticId = optimisticWithSameKey.id;
-        }
-      }
-      
-      // Fallback: try to match by content and timestamp if no other match
-      if (!itemReplaced && !isOptimistic && newMessageData.content) {
-        const matchingOptimistic = Array.from(messageMap.values()).find(item => {
-          if (item.itemType !== 'message' || !item.metadata?.isOptimistic) return false;
-          const msgItem = item as MessageTimelineItem;
-          // Match by content and sender, within 30 seconds
-          const timeDiff = Math.abs(new Date(msgItem.createdAt || 0).getTime() - new Date(createdAtString).getTime());
-          return msgItem.content === newMessageData.content && 
-                 msgItem.sender_entity_id === senderId &&
-                 timeDiff < 30000; // 30 seconds tolerance
-        });
-        if (matchingOptimistic) {
-          console.log(`📨 [DEBUG] ✅ Replacing optimistic message ${matchingOptimistic.id} by content match with authoritative ${messageId}`);
-          messageMap.delete(matchingOptimistic.id);
-          itemReplaced = true;
-          replacedOptimisticId = matchingOptimistic.id;
-        }
-      }
-      
-      // If the message with this ID already exists and it's not optimistic, check whether to update
-      if (messageMap.has(messageId)) {
-        const existingMsg = messageMap.get(messageId) as MessageTimelineItem;
-        
-        // If the existing message is not optimistic but our new one is, keep the existing one
-        if (!existingMsg.metadata?.isOptimistic && isOptimistic) {
-          logger.debug(`[DataContext] Keeping existing authoritative message ${messageId} instead of optimistic update`, 'data_timeline');
-          console.log(`📨 [DEBUG] ⚠️ Keeping existing authoritative message ${messageId}, ignoring optimistic update`);
-          return prevTimeline; // No change needed
-        }
-        
-        // If both are authoritative or both are optimistic, use the newer one based on createdAt
-        if ((existingMsg.metadata?.isOptimistic === isOptimistic) && 
-            (new Date(existingMsg.createdAt || 0) > new Date(createdAtString))) {
-          logger.debug(`[DataContext] Keeping more recent existing message ${messageId}`, 'data_timeline');
-          console.log(`📨 [DEBUG] ⚠️ Keeping more recent existing message ${messageId}`);
-          return prevTimeline; // No change needed
-        }
-        
-        // Otherwise, we're replacing the existing message with this one
-        logger.debug(`[DataContext] Updating existing message ${messageId}`, 'data_timeline');
-        console.log(`📨 [DEBUG] 🔄 Updating existing message ${messageId}`);
-        itemReplaced = true;
-      }
-      
-      // Construct the new/updated item
-      const effectiveStatus = (newMessageData.status || 
-        (isOptimistic ? 'sending' : 'sent')) as MessageTimelineItem['status'];
-      
-      const newItem: MessageTimelineItem = {
-        id: messageId,
-        interaction_id: newMessageData.interaction_id || interactionIdToAdd,
-        type: 'message',
-        itemType: 'message',
-        createdAt: createdAtString,
-        timestamp: createdAtString,
-        content: newMessageData.content || '',
-        sender_entity_id: senderId,
-        message_type: newMessageData.message_type || APIMessageType.TEXT,
-        metadata: { 
-          ...newMessageData.metadata, 
-          isOptimistic: isOptimistic && !itemReplaced,
-          // Preserve the original optimistic ID for better tracking
-          originalOptimisticId: replacedOptimisticId || newMessageData.metadata?.originalOptimisticId
-        },
-        status: effectiveStatus,
-      };
-      
-      console.log(`📨 [DEBUG] Adding/updating message: id="${newItem.id}", isOptimistic=${newItem.metadata?.isOptimistic}, content="${newItem.content}"`);
-      
-      // Add our updated/new message to the map
-      messageMap.set(messageId, newItem);
-      
-      // Convert back to array and sort by timestamp
-      const newTimeline = Array.from(messageMap.values()).sort((a, b) => 
-        new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime()
-      );
-      
-      // Log current optimistic messages for debugging
-      const currentOptimistic = newTimeline.filter(item => item.metadata?.isOptimistic === true);
-      if (currentOptimistic.length > 0) {
-        console.log(`📨 [DEBUG] Current optimistic messages: ${currentOptimistic.length}`);
-        currentOptimistic.forEach(item => {
-          console.log(`📨 [DEBUG] - Optimistic: ${item.id}, content: "${(item as any).content}"`);
-        });
-      }
-      
-      return newTimeline;
-    });
-
-    // Only save non-optimistic or successful messages to SQLite
-    if ((await messageRepository.isSQLiteAvailable()) && (!isOptimistic || newMessageData.status === 'sent')) {
-      const dbRec = {
-        id: messageId,
-        interaction_id: newMessageData.interaction_id || interactionIdToAdd,
-        sender_entity_id: senderId,
-        content: newMessageData.content || '',
-        message_type: String(newMessageData.message_type || APIMessageType.TEXT) as any,
-        created_at: createdAtString,
-        metadata: { 
-          ...newMessageData.metadata, 
-          isOptimistic: newMessageData.metadata?.isOptimistic && !optimisticIdFromPayload, 
-          status: newMessageData.status,
-        },
-      };
-      
-      logger.debug("[DataContext] Saving to SQLite in addMsgTimeline", 'data_timeline', 
-        { msgId: dbRec.id, optimistic: dbRec.metadata.isOptimistic });
-      
-      // Use messageRepository to save the message instead of old insertMessageDb
-      messageRepository.saveMessages([{
-        ...dbRec,
-        itemType: 'message' as any,
-        type: 'message' as any,
-        timestamp: dbRec.created_at,
-        createdAt: dbRec.created_at
-      } as any]).catch((err: any) => 
-        logger.warn('[DataContext] Failed save/update SQLite in addMsgTimeline', 'data_timeline', 
-          { error: String(err), msgId: messageId })
-      );
-    }
-  }, [user]);
-
-  const addTransactionToTimeline = useCallback(async (interactionId: string, tx: any) => {
-    console.log(`💰 [DEBUG] addTransactionToTimeline called for interaction ${interactionId}`);
-    console.log(`💰 [DEBUG] Transaction data:`, {
-      id: tx.id,
-      amount: tx.amount,
-      description: tx.description,
-      created_at: tx.created_at,
-      timestamp: tx.timestamp,
-      status: tx.status
-    });
-    
-    logger.debug(`Adding transaction to timeline for ${interactionId}: ${tx.id}`); 
-    const createdAtDate = tx.created_at instanceof Date ? tx.created_at : new Date(tx.created_at || Date.now());
-    const newTransactionItem: TransactionTimelineItem = {
-      id: tx.id, type: 'transaction', itemType: 'transaction', interaction_id: interactionId, 
-      createdAt: createdAtDate.toISOString(), timestamp: createdAtDate.toISOString(), 
-      amount: parseFloat(tx.amount), 
-      currency_code: tx.currency_code || tx.currency_id || tx.currency, // Prioritize currency_code, then currency_id, then currency
-      status: tx.status || 'pending', description: tx.description,
-      from_entity_id: tx.from_entity_id || tx.from_account_id, // Prefer from_entity_id for alignment logic
-      to_entity_id: tx.to_entity_id || tx.to_account_id, // Prefer to_entity_id for alignment logic
-      transaction_type: tx.transaction_type,
-      metadata: {
-        ...tx.metadata,
-        entry_type: tx.entry_type // Include entry_type in metadata for filtering
-      }
-    };
-    
-    console.log(`💰 [DEBUG] Created TransactionTimelineItem:`, newTransactionItem);
-    
-    setInteractionTimeline(prev => {
-      console.log(`💰 [DEBUG] Current timeline has ${prev.length} items before adding transaction`);
-      const map = new Map<string, TimelineItem>(); 
-      prev.forEach(i=>map.set(i.id,i)); 
-      map.set(newTransactionItem.id,newTransactionItem); 
-      const newTimeline = Array.from(map.values()).sort((a,b)=>new Date(a.createdAt||0).getTime()-new Date(b.createdAt||0).getTime());
-      console.log(`💰 [DEBUG] New timeline has ${newTimeline.length} items after adding transaction`);
-      
-      // Log the most recent few items for debugging
-      const recent = newTimeline.slice(-3);
-      console.log(`💰 [DEBUG] Most recent 3 timeline items:`);
-      recent.forEach((item, idx) => {
-        console.log(`💰 [DEBUG]   ${idx}: type=${item.itemType}, id=${item.id}, time=${item.timestamp || item.createdAt}`);
-      });
-      
-      return newTimeline;
-    });
-
-    // Save the transaction to SQLite if available
-    if (await messageRepository.isSQLiteAvailable()) {
-      // Create a properly typed transaction object for SQLite storage
-      const dbRec: Transaction = {
-        id: tx.id,
-        interaction_id: interactionId,
-        from_account_id: tx.from_account_id || tx.from_entity_id || 'unknown',
-        to_account_id: tx.to_account_id || tx.to_entity_id,
-        amount: parseFloat(tx.amount),
-        currency_id: tx.currency_code || tx.currency_id || tx.currency,
-        status: tx.status || 'pending',
-        created_at: createdAtDate.toISOString(),
-        transaction_type: tx.transaction_type || TransactionType.TRANSFER,
-        description: tx.description,
-        metadata: tx.metadata || {},
-        processed_by_type: ProcessedByType.SYSTEM,
-        entry_type: tx.entry_type // Include entry_type for SQLite storage
-      } as any; // Cast to any since Transaction type might not have entry_type
-      
-      logger.debug("[DataContext] Saving transaction to SQLite", 'data_timeline', { txId: dbRec.id });
-      
-      // Use the TransactionRepository to save the transaction
-      transactionRepository.saveTransactions([dbRec]).catch((err: any) => 
-        logger.warn('[DataContext] Failed to save transaction to SQLite', 'data_timeline', 
-          { error: String(err), txId: tx.id })
-      );
-    }
-  }, []);
+  // addTransactionToTimeline removed - handled by TanStack Query useTimeline hook with optimistic updates
 
   // Search function removed - handled by TanStack Query useSearchEntities hook
 
   // Get or create interaction function removed - handled by TanStack Query useCreateInteraction hook
 
-  // Public methods for refreshing data - moved after fetchUserData declaration
-  const refreshBalancesCb = useCallback(async () => {
-    // Balance refresh handled by TanStack Query useBalances hook
-    logger.debug('[DataContext] refreshBalances - delegated to TanStack Query');
-  }, []);
-  
-  const refreshInteractionsCb = useCallback(async () => {
-    await fetchInteractions(true);
-  }, [fetchInteractions]);
-
-  const refreshRecentConversationsCb = useCallback(async () => {
-    await fetchRecentConversations(true);
-  }, [fetchRecentConversations]);
-
-  const refreshUserDataCb = useCallback(async () => {
-    // Simple implementation - just clear and reload basic data
-    // Use safe state updates to prevent rapid changes during transition
-    safeStateUpdate(() => setKycStatus(null), false);
-    safeStateUpdate(() => setPersonalInfo(null), false);
-    safeStateUpdate(() => setVerificationStatus(null), false);
-    safeStateUpdate(() => setUserProfile(null), false);
-  }, []);
-
-  const refreshAllCb = useCallback(async () => {
-    try {
-      await Promise.all([
-        // Balance refresh handled by TanStack Query
-        fetchInteractions(true),
-        refreshRecentConversationsCb()
-      ]);
-      await refreshUserDataCb();
-    } finally {}
-  }, [fetchInteractions, refreshRecentConversationsCb, refreshUserDataCb]);
+  // Refresh functions removed - handled by TanStack Query hook refetch methods
 
   // Send message function removed - handled by TanStack Query useSendMessage mutation hook
 
-  const sendDirectTransaction = useCallback(async (dto: import('../types/transaction.types').CreateDirectTransactionDto) => {
-    if (!isAuthenticated || isAuthLoading || !user) return null;
-    try {
-      // Create a properly formed transaction request with the current user's entity ID
-      const transactionToSend = {
-        ...dto,
-        sender_entity_id: user.entityId,
-        metadata: {
-          ...(dto.metadata || {}),
-          // TransactionManager will handle generating idempotency key if not provided
-        }
-      };
-      
-      // Use the TransactionManager to send the transaction
-      const result = await transactionManager.createTransaction(transactionToSend);
-      
-      // No need to manually add to timeline - TransactionManager emits events that are handled in the useEffect
-      
-      // After successfully sending a transaction, refresh interactions and balances
-      if (result) {
-        refreshInteractionsCb().catch(err => 
-          logger.warn("[DataContext] Error refreshing interactions after sending transaction", String(err))
-        );
-        
-        // Also refresh balances after a short delay
-        setTimeout(() => {
-          refreshBalancesCb().catch(err => 
-            logger.warn("[DataContext] Error refreshing balances after sending transaction", String(err))
-          );
-        }, 1000);
-      }
-      
-      return result;
-    } catch (e) {
-      logger.error('Error sending direct transaction', e, 'data');
-      // TransactionManager already handles failed transactions and their status updates
-      return null;
-    }
-  }, [isAuthenticated, isAuthLoading, user, refreshInteractionsCb, refreshBalancesCb]);
+  // sendDirectTransaction removed - handled by TanStack Query useTransferMoney mutation
 
-  // 🚀 Professional Timeline Preloading with Request Deduplication and Throttling
-  const [lastPreloadTime, setLastPreloadTime] = useState(0);
-  const [isPreloading, setIsPreloading] = useState(false);
-  
-  const preloadRecentTimelines = useCallback(async () => {
-    try {
-      if (!isAuthenticated || !user?.entityId) {
-        console.log('🔄 [DataContext] 🚫 Skipping timeline preload - not authenticated');
-        return;
-      }
+  // Timeline preloading removed - handled by TanStack Query useTimeline hook with prefetching
 
-      // Professional throttling to prevent duplicate preload calls
-      const now = Date.now();
-      const timeSinceLastPreload = now - lastPreloadTime;
-      const PRELOAD_THROTTLE_MS = 10000; // 10 seconds minimum between preloads
-
-      if (isPreloading) {
-        console.log('🔄 [DataContext] ⏱️ Preload already in progress, skipping');
-        return;
-      }
-
-      if (timeSinceLastPreload < PRELOAD_THROTTLE_MS) {
-        console.log(`🔄 [DataContext] ⏱️ Preload throttled (${timeSinceLastPreload}ms < ${PRELOAD_THROTTLE_MS}ms)`);
-        return;
-      }
-
-      setIsPreloading(true);
-      setLastPreloadTime(now);
-      console.log('🔄 [DataContext] 🚀 Starting proactive timeline preload...');
-      
-      // Get recent interactions from local cache
-      const recentInteractions = await interactionRepository.getInteractions(5); // Top 5 recent
-      
-      console.log(`🔄 [DataContext] 📱 Found ${recentInteractions.length} recent interactions to preload`);
-      
-      // Preload timeline for each recent interaction
-      for (const interaction of recentInteractions) {
-        try {
-          // Check if timeline already cached locally
-          const cachedTimeline = await timelineRepository.getTimelineForInteraction(interaction.id, 20);
-          
-          if (cachedTimeline.length === 0) {
-            console.log(`🔄 [DataContext] 📡 Preloading timeline for interaction: ${interaction.id}`);
-            
-            // Use the existing deduplicated fetchInteractionTimeline function for professional request management
-            try {
-              await fetchInteractionTimeline(interaction.id, { 
-                silentUpdate: true,  // Don't show loading indicators during preload
-                forceRefresh: false  // Use cache if available
-              });
-              console.log(`🔄 [DataContext] ✅ Timeline preload completed for: ${interaction.id}`);
-            } catch (preloadError) {
-              console.log(`🔄 [DataContext] ⚠️ Timeline preload failed for ${interaction.id}:`, preloadError);
-            }
-          } else {
-            console.log(`🔄 [DataContext] ✅ Timeline already cached for: ${interaction.id} (${cachedTimeline.length} items)`);
-          }
-        } catch (error) {
-          console.log(`🔄 [DataContext] ⚠️ Failed to preload timeline for ${interaction.id}:`, error);
-          // Continue with other interactions
-        }
-      }
-      
-      console.log('🔄 [DataContext] ✅ Proactive timeline preload completed');
-    } catch (error) {
-      console.log('🔄 [DataContext] ❌ Timeline preload failed:', error);
-    } finally {
-      setIsPreloading(false);
-    }
-  }, [isAuthenticated, user?.entityId, fetchInteractionTimeline, lastPreloadTime, isPreloading]);
-
-  // Helper function to update interaction preview from timeline (can be called from anywhere)
-  const updateInteractionPreviewFromTimelineHelper = useCallback(async (interactionId: string) => {
-    try {
-      console.log(`🔍 [DEBUG] Starting updateInteractionPreviewFromTimelineHelper for interaction: ${interactionId}`);
-      
-      // Check both in-memory timeline state AND database for the most recent item
-      let lastTimelineItem: TimelineItem | null = null;
-      
-      // First, check the current in-memory timeline for this interaction
-      // Apply user perspective filtering to in-memory items as well
-      const currentUserEntityId = user?.entityId;
-      const memoryTimelineItems = interactionTimelineRef.current.filter(item => {
-        if ((item as any).interaction_id !== interactionId || item.type === 'date') {
-          return false;
-        }
-        
-        // Apply user perspective filtering for transactions in memory
-        if (item.itemType === 'transaction' && currentUserEntityId) {
-          const txItem = item as TransactionTimelineItem;
-          const metadata = txItem.metadata || {};
-          const entryType = metadata.entry_type;
-          
-          // For double-entry transactions, show both CREDIT and DEBIT entries:
-          // - CREDIT entries represent outgoing transactions (sender's view)
-          // - DEBIT entries represent incoming transactions (receiver's view)
-          // Both are relevant for interaction previews
-          if (!entryType || entryType === '') {
-            return true; // Show all if no entry_type (backward compatibility)
-          }
-          return entryType === 'CREDIT' || entryType === 'DEBIT'; // Show both entry types for previews
-        }
-        
-        return true; // Show all messages and other timeline items
-      });
-      
-      console.log(`🔍 [DEBUG] Found ${memoryTimelineItems.length} items in memory for interaction ${interactionId} (after user filtering)`);
-      if (memoryTimelineItems.length > 0) {
-        memoryTimelineItems.forEach((item, index) => {
-          console.log(`🔍 [DEBUG] Memory item ${index}: type=${item.itemType}, id=${item.id}, time=${item.timestamp || item.createdAt}`);
-          if (item.itemType === 'transaction') {
-            const txItem = item as TransactionTimelineItem;
-            console.log(`🔍 [DEBUG] Transaction details: amount=${txItem.amount}, description=${txItem.description}, entryType=${txItem.metadata?.entry_type}`);
-          } else if (item.itemType === 'message') {
-            const msgItem = item as MessageTimelineItem;
-            console.log(`🔍 [DEBUG] Message details: content="${msgItem.content}"`);
-          }
-        });
-      }
-      
-      // Get the most recent item from memory
-      const mostRecentFromMemory = memoryTimelineItems.length > 0 
-        ? memoryTimelineItems.sort((a, b) => 
-            new Date(b.timestamp || b.createdAt || 0).getTime() - 
-            new Date(a.timestamp || a.createdAt || 0).getTime()
-          )[0]
-        : null;
-      
-      if (mostRecentFromMemory) {
-        console.log(`🔍 [DEBUG] Most recent from memory: type=${mostRecentFromMemory.itemType}, id=${mostRecentFromMemory.id}, time=${mostRecentFromMemory.timestamp || mostRecentFromMemory.createdAt}`);
-      } else {
-        console.log(`🔍 [DEBUG] No recent item found in memory`);
-      }
-      
-      // Also check the database with user perspective filtering
-      console.log(`🔍 [DEBUG] Checking database for interaction ${interactionId} with user filtering for: ${currentUserEntityId || 'none'}...`);
-      const mostRecentFromDatabase = await timelineRepository.getLastTimelineItemForInteraction(interactionId, currentUserEntityId);
-      
-      if (mostRecentFromDatabase) {
-        console.log(`🔍 [DEBUG] Most recent from DB: type=${mostRecentFromDatabase.itemType}, id=${mostRecentFromDatabase.id}, time=${mostRecentFromDatabase.timestamp || mostRecentFromDatabase.createdAt}`);
-        if (mostRecentFromDatabase.itemType === 'transaction') {
-          const txItem = mostRecentFromDatabase as TransactionTimelineItem;
-          console.log(`🔍 [DEBUG] DB Transaction details: amount=${txItem.amount}, description=${txItem.description}, entryType=${txItem.metadata?.entry_type}`);
-        } else if (mostRecentFromDatabase.itemType === 'message') {
-          const msgItem = mostRecentFromDatabase as MessageTimelineItem;
-          console.log(`🔍 [DEBUG] DB Message details: content="${msgItem.content}"`);
-        }
-      } else {
-        console.log(`🔍 [DEBUG] No recent item found in database`);
-      }
-      
-      // Compare timestamps and use the most recent
-      if (mostRecentFromMemory && mostRecentFromDatabase) {
-        const memoryTime = new Date(mostRecentFromMemory.timestamp || mostRecentFromMemory.createdAt || 0).getTime();
-        const dbTime = new Date(mostRecentFromDatabase.timestamp || mostRecentFromDatabase.createdAt || 0).getTime();
-        lastTimelineItem = memoryTime > dbTime ? mostRecentFromMemory : mostRecentFromDatabase;
-        console.log(`🔍 [DEBUG] Using most recent item from ${memoryTime > dbTime ? 'MEMORY' : 'DATABASE'}`);
-        console.log(`🔍 [DEBUG] Memory time: ${new Date(memoryTime).toISOString()}, DB time: ${new Date(dbTime).toISOString()}`);
-      } else if (mostRecentFromMemory) {
-        lastTimelineItem = mostRecentFromMemory;
-        console.log(`🔍 [DEBUG] Using item from MEMORY only`);
-      } else if (mostRecentFromDatabase) {
-        lastTimelineItem = mostRecentFromDatabase;
-        console.log(`🔍 [DEBUG] Using item from DATABASE only`);
-      }
-      
-      if (!lastTimelineItem) {
-        console.log(`🔍 [DEBUG] ❌ NO timeline items found for interaction ${interactionId}`);
-        return;
-      }
-
-      console.log(`🔍 [DEBUG] Selected last timeline item: type=${lastTimelineItem.itemType}, id=${lastTimelineItem.id}`);
-
-      let snippet: string;
-      let senderId: string;
-      let timestamp: string;
-
-      if (lastTimelineItem.itemType === 'message') {
-        // Handle message timeline items
-        const messageItem = lastTimelineItem as MessageTimelineItem;
-        snippet = messageItem.content || 'New message';
-        senderId = messageItem.sender_entity_id;
-        timestamp = messageItem.createdAt || messageItem.timestamp || new Date().toISOString();
-        console.log(`🔍 [DEBUG] 📧 MESSAGE preview: "${snippet}"`);
-      } else if (lastTimelineItem.itemType === 'transaction') {
-        // Handle transaction timeline items
-        const transactionItem = lastTimelineItem as TransactionTimelineItem;
-        snippet = `💰 $${transactionItem.amount || '0'} ${transactionItem.description || 'transaction'}`.trim();
-        senderId = transactionItem.from_entity_id || user?.entityId || 'unknown';
-        timestamp = transactionItem.createdAt || transactionItem.timestamp || new Date().toISOString();
-        console.log(`🔍 [DEBUG] 💰 TRANSACTION preview: "${snippet}"`);
-      } else {
-        console.log(`🔍 [DEBUG] ❌ Unknown timeline item type: ${lastTimelineItem.itemType}`);
-        return;
-      }
-
-      console.log(`🔍 [DEBUG] Final preview data: snippet="${snippet}", senderId="${senderId}", timestamp="${timestamp}"`);
-
-      // Update the interactions list with the correct preview
-      console.log(`🔍 [DEBUG] Updating interactions list...`);
-      setInteractionsList((prevList) => {
-        console.log(`🔍 [DEBUG] Current interactions list has ${prevList.length} items`);
-        const interactionIndex = prevList.findIndex((it) => it.id === interactionId);
-        
-        if (interactionIndex === -1) {
-          console.log(`🔍 [DEBUG] ❌ Interaction ${interactionId} NOT FOUND in list`);
-          prevList.forEach((item, idx) => {
-            console.log(`🔍 [DEBUG] List item ${idx}: id=${item.id}, snippet="${item.last_message_snippet}"`);
-          });
-          return prevList;
-        }
-
-        console.log(`🔍 [DEBUG] ✅ Found interaction at index ${interactionIndex}, updating preview`);
-        const updatedList = [...prevList];
-        updatedList[interactionIndex] = {
-          ...updatedList[interactionIndex],
-          last_message_snippet: snippet,
-          last_message_sender_id: senderId,
-          last_message_at: timestamp,
-          updated_at: timestamp
-        };
-        
-        console.log(`🔍 [DEBUG] ✅ Updated interaction preview: "${snippet}"`);
-        return updatedList;
-      });
-
-    } catch (error) {
-      console.log(`🔍 [DEBUG] ❌ Error updating interaction preview: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }, [user]);
+  // updateInteractionPreviewFromTimelineHelper removed - handled by TanStack Query useTimeline hook
 
   // CRITICAL: Reset DataContext state when user logs out
   useEffect(() => {
@@ -1641,11 +476,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     // Professional loading state
     loadingState,
     
-    // Data loading completion tracking
-    hasLoadedInteractions,
-    hasLoadedBalances,
-    hasLoadedUserData,
-    hasLoadedRecentConversations,
+    // Data loading completion tracking removed - handled by TanStack Query status
 
     // Actions - STUB IMPLEMENTATIONS: These are disabled in favor of TanStack Query
     refreshBalances: async () => {
@@ -1660,18 +491,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     refreshUserData: async () => {
       logger.debug('[DataContext] refreshUserData called - DISABLED: Use TanStack Query useUserProfile hook instead');
     },
-    refreshAll: refreshAllCb,
+    refreshAll: async () => { logger.debug('[DataContext] DISABLED - Use TanStack Query refetch methods'); },
     // DISABLED FUNCTIONS - Use TanStack Query hooks instead
     searchAll: async () => { logger.debug('[DataContext] DISABLED - Use useSearchEntities hook'); return []; },
     getOrCreateDirectInteraction: async () => { logger.debug('[DataContext] DISABLED - Use useCreateInteraction hook'); return null; },
     sendMessage: async () => { logger.debug('[DataContext] DISABLED - Use useSendMessage mutation'); return null; },
-    sendDirectTransaction,
+    sendDirectTransaction: async () => { logger.debug('[DataContext] DISABLED - Use useTransferMoney mutation'); return null; },
     fetchInteractionTimeline: async () => { logger.debug('[DataContext] DISABLED - Use useTimeline hook'); },
-    addMessageToTimeline: addMessageToTimeline,
-    addTransactionToTimeline: addTransactionToTimeline,
-    updateInteractionPreviewFromTimeline: updateInteractionPreviewFromTimelineHelper,
+    // Timeline manipulation functions removed - handled by TanStack Query useTimeline hook
+    updateInteractionPreviewFromTimeline: async () => { logger.debug('[DataContext] DISABLED - Use useTimeline hook'); },
     clearAllTimelineState: clearAllTimelineState,
-    clearRefreshThrottling,
+    clearRefreshThrottling: () => { logger.debug('[DataContext] DISABLED - Use TanStack Query'); },
     
     // Local-first utilities
     hasLocalData: async () => false, // TODO: Implement hasLocalData function
