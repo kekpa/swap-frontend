@@ -1,5 +1,5 @@
-// Enhanced recent transactions with local-first architecture - 2025-01-10
-// TanStack Query integration for transaction loading
+// Enhanced transaction hooks with purpose-built architecture - 2025-01-11
+// Each hook serves a specific use case with clear responsibilities
 
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../queryKeys';
@@ -8,16 +8,7 @@ import { Transaction } from '../../types/transaction.types';
 import logger from '../../utils/logger';
 import { networkService } from '../../services/NetworkService';
 
-interface UseRecentTransactionsOptions {
-  entityId?: string;
-  walletId?: string;
-  accountId?: string; // NEW: Account-specific filtering
-  limit?: number;
-  enabled?: boolean;
-  forceRefresh?: boolean;
-}
-
-interface UseRecentTransactionsResult {
+interface BaseTransactionResult {
   transactions: Transaction[];
   isLoading: boolean;
   isError: boolean;
@@ -27,37 +18,15 @@ interface UseRecentTransactionsResult {
 }
 
 /**
- * Hook for loading recent transactions with local-first pattern
+ * Hook for wallet dashboard - Shows 4 recent transactions for selected account
  * 
- * Features:
- * - Local-first loading with cache priority
- * - Automatic request deduplication via TanStack Query
- * - Offline-aware transaction loading
- * - Real-time transaction updates
- * - Intelligent caching with stale-while-revalidate
- * - Backend filtering for account-specific transactions (PROFESSIONAL)
- * 
- * @param options Transaction loading options
- * @returns Recent transactions and loading state
+ * Purpose: Wallet dashboard preview (4 transactions max)
+ * Endpoint: GET /api/v1/transactions/account/{accountId}?limit=4
+ * Backend Filtering: ✅ Account-specific
+ * Frontend Filtering: ❌ None needed
  */
-export const useRecentTransactions = ({
-  entityId,
-  walletId,
-  accountId,
-  limit = 20,
-  enabled = true,
-  forceRefresh = false
-}: UseRecentTransactionsOptions = {}): UseRecentTransactionsResult => {
+export const useWalletTransactions = (accountId: string, enabled: boolean = true): BaseTransactionResult => {
   const isOffline = !networkService.isOnline();
-  
-  // Create appropriate query key based on parameters
-  const queryKey = accountId 
-    ? queryKeys.transactionsByAccount(accountId, limit) // NEW: Account-specific key
-    : walletId 
-    ? queryKeys.transactionsByWallet(walletId)
-    : entityId 
-    ? queryKeys.recentTransactions(entityId, limit)
-    : queryKeys.transactions;
   
   const {
     data: transactions = [],
@@ -66,66 +35,37 @@ export const useRecentTransactions = ({
     error,
     refetch,
   } = useQuery({
-    queryKey,
+    queryKey: queryKeys.transactionsByAccount(accountId, 4),
     queryFn: async (): Promise<Transaction[]> => {
-      // BACKEND FILTERING: Use account-specific endpoint when accountId is provided
-      if (accountId) {
-        logger.debug(`[useRecentTransactions] 🚀 BACKEND FILTERING: Loading transactions for account: ${accountId} (limit: ${limit})`);
-        
-        try {
-          const result = await transactionManager.getTransactionsForAccount(accountId, limit, 0);
-          const accountTransactions = result?.data || [];
-          
-          logger.debug(`[useRecentTransactions] ✅ BACKEND FILTERING: Loaded ${accountTransactions.length} account transactions`);
-          return accountTransactions;
-        } catch (error) {
-          logger.error(`[useRecentTransactions] ❌ BACKEND FILTERING: Failed to load account transactions: ${error}`);
-          
-          // In offline mode, return empty array gracefully
-          if (isOffline) {
-            logger.debug('[useRecentTransactions] Returning empty transactions for offline mode');
-            return [];
-          }
-          
-          throw error;
-        }
+      if (!accountId) {
+        logger.debug('[useWalletTransactions] No accountId provided');
+        return [];
       }
-      
-      // GENERAL TRANSACTIONS: Use existing method for general transaction loading
-      logger.debug(`[useRecentTransactions] Loading recent transactions (limit: ${limit})`);
+
+      logger.debug(`[useWalletTransactions] 🎯 WALLET: Loading 4 transactions for account: ${accountId}`);
       
       try {
-        // Use existing transactionManager singleton for data fetching
-        const recentTransactions = await transactionManager.getRecentTransactions(limit);
+        const result = await transactionManager.getTransactionsForAccount(accountId, 4, 0);
+        const accountTransactions = result?.data || [];
         
-        logger.debug(`[useRecentTransactions] Loaded ${recentTransactions.length} recent transactions`);
-        
-        return recentTransactions;
+        logger.debug(`[useWalletTransactions] ✅ WALLET: Loaded ${accountTransactions.length} transactions`);
+        return accountTransactions;
       } catch (error) {
-        logger.error('[useRecentTransactions] Failed to load recent transactions:', error);
+        logger.error(`[useWalletTransactions] ❌ WALLET: Failed to load transactions: ${error}`);
         
-        // In offline mode, return empty array gracefully
         if (isOffline) {
-          logger.debug('[useRecentTransactions] Returning empty transactions for offline mode');
           return [];
         }
         
         throw error;
       }
     },
-    enabled,
-    staleTime: forceRefresh ? 0 : 30 * 1000, // 30 seconds, or 0 if force refresh
-    gcTime: 10 * 60 * 1000, // 10 minutes - keep transactions in cache
-    retry: (failureCount, error) => {
-      // Don't retry if offline
-      if (isOffline) return false;
-      
-      // Retry up to 2 times for network errors
-      return failureCount < 2;
-    },
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-    refetchOnWindowFocus: false, // Don't refetch on window focus
-    refetchOnReconnect: true, // Refetch when coming back online
+    enabled: enabled && !!accountId,
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    retry: (failureCount) => !isOffline && failureCount < 2,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
     networkMode: isOffline ? 'offlineFirst' : 'online',
   });
   
@@ -140,73 +80,146 @@ export const useRecentTransactions = ({
 };
 
 /**
- * Hook for loading transactions by account ID (PROFESSIONAL BACKEND FILTERING)
+ * Hook for transaction list page - Shows 50 transactions with pagination
+ * 
+ * Purpose: Full transaction list with pagination
+ * Endpoint: GET /api/v1/transactions/account/{accountId}?limit=50&offset={offset}
+ * Backend Filtering: ✅ Account-specific with pagination
+ * Frontend Filtering: ❌ None needed
  */
-export const useTransactionsByAccount = (accountId: string, options?: Omit<UseRecentTransactionsOptions, 'accountId'>) => {
-  return useRecentTransactions({
-    ...options,
-    accountId,
-  });
-};
-
-/**
- * Hook for loading transactions by wallet ID
- */
-export const useTransactionsByWallet = (walletId: string, options?: Omit<UseRecentTransactionsOptions, 'walletId'>) => {
-  return useRecentTransactions({
-    ...options,
-    walletId,
-  });
-};
-
-/**
- * Hook for loading transactions by entity ID
- */
-export const useTransactionsByEntity = (entityId: string, options?: Omit<UseRecentTransactionsOptions, 'entityId'>) => {
-  return useRecentTransactions({
-    ...options,
-    entityId,
-  });
-};
-
-/**
- * Hook for loading transaction details by ID
- */
-export const useTransactionDetails = (transactionId: string) => {
+export const useTransactionList = (
+  accountId: string, 
+  limit: number = 50, 
+  offset: number = 0,
+  enabled: boolean = true
+): BaseTransactionResult & { hasMore: boolean; loadMore: () => void } => {
   const isOffline = !networkService.isOnline();
   
-  return useQuery({
-    queryKey: queryKeys.transactionDetails(transactionId),
-    queryFn: async (): Promise<Transaction | null> => {
-      logger.debug(`[useTransactionDetails] Loading transaction details: ${transactionId}`);
+  const {
+    data: result,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+         queryKey: [...queryKeys.transactionsByAccount(accountId, limit), 'offset', offset] as const,
+    queryFn: async (): Promise<{ data: Transaction[]; hasMore: boolean }> => {
+      if (!accountId) {
+        logger.debug('[useTransactionList] No accountId provided');
+        return { data: [], hasMore: false };
+      }
+
+      logger.debug(`[useTransactionList] 📋 LIST: Loading ${limit} transactions for account: ${accountId} (offset: ${offset})`);
       
       try {
-        // Use existing transactionManager singleton
-        // This would need to be implemented in TransactionManager
-        // For now, return null as placeholder
-        logger.debug(`[useTransactionDetails] Transaction details not yet implemented for: ${transactionId}`);
-        return null;
+        const result = await transactionManager.getTransactionsForAccount(accountId, limit, offset);
+        const transactions = result?.data || [];
+        const pagination = result?.pagination;
+        
+        const hasMore = pagination ? pagination.hasMore : transactions.length === limit;
+        
+        logger.debug(`[useTransactionList] ✅ LIST: Loaded ${transactions.length} transactions (hasMore: ${hasMore})`);
+        return { data: transactions, hasMore };
       } catch (error) {
-        logger.error(`[useTransactionDetails] Failed to load transaction ${transactionId}:`, error);
+        logger.error(`[useTransactionList] ❌ LIST: Failed to load transactions: ${error}`);
         
         if (isOffline) {
-          return null;
+          return { data: [], hasMore: false };
         }
         
         throw error;
       }
     },
-    enabled: !!transactionId,
-    staleTime: 5 * 60 * 1000, // 5 minutes - transaction details change rarely
+    enabled: enabled && !!accountId,
+    staleTime: 60 * 1000, // 1 minute
     gcTime: 30 * 60 * 1000, // 30 minutes
-    retry: (failureCount, error) => {
-      if (isOffline) return false;
-      return failureCount < 2;
-    },
+    retry: (failureCount) => !isOffline && failureCount < 2,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
     networkMode: isOffline ? 'offlineFirst' : 'online',
   });
+  
+  const loadMore = () => {
+    // TODO: Implement pagination logic
+    logger.debug('[useTransactionList] Load more requested');
+  };
+  
+  return {
+    transactions: result?.data || [],
+    hasMore: result?.hasMore || false,
+    isLoading,
+    isError,
+    error: error as Error | null,
+    isOffline,
+    refetch,
+    loadMore,
+  };
+};
+
+/**
+ * Hook for general recent transactions (fallback/legacy support)
+ * 
+ * Purpose: General recent transactions (not account-specific)
+ * Endpoint: GET /api/v1/transactions?limit={limit}
+ * Backend Filtering: ❌ General transactions
+ * Frontend Filtering: ⚠️ May be needed for specific use cases
+ */
+export const useRecentTransactions = (
+  entityId: string,
+  limit: number = 20,
+  enabled: boolean = true
+): BaseTransactionResult => {
+  const isOffline = !networkService.isOnline();
+  
+  const {
+    data: transactions = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.recentTransactions(entityId, limit),
+    queryFn: async (): Promise<Transaction[]> => {
+      logger.debug(`[useRecentTransactions] 📊 GENERAL: Loading ${limit} recent transactions`);
+      
+      try {
+        const recentTransactions = await transactionManager.getRecentTransactions(limit);
+        
+        logger.debug(`[useRecentTransactions] ✅ GENERAL: Loaded ${recentTransactions.length} transactions`);
+        return recentTransactions;
+      } catch (error) {
+        logger.error('[useRecentTransactions] ❌ GENERAL: Failed to load transactions:', error);
+        
+        if (isOffline) {
+          return [];
+        }
+        
+        throw error;
+      }
+    },
+    enabled: enabled && !!entityId,
+    staleTime: 30 * 1000,
+    gcTime: 10 * 60 * 1000,
+    retry: (failureCount) => !isOffline && failureCount < 2,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    networkMode: isOffline ? 'offlineFirst' : 'online',
+  });
+  
+  return {
+    transactions,
+    isLoading,
+    isError,
+    error: error as Error | null,
+    isOffline,
+    refetch,
+  };
+};
+
+// DEPRECATED: Legacy hooks for backward compatibility
+export const useTransactionsByAccount = (accountId: string, options?: { limit?: number; enabled?: boolean }) => {
+  logger.warn('[useTransactionsByAccount] DEPRECATED: Use useWalletTransactions or useTransactionList instead');
+  return useWalletTransactions(accountId, options?.enabled);
 };
 
 export default useRecentTransactions; 

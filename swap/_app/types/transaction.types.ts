@@ -55,6 +55,11 @@ export interface Transaction {
   created_at: string;
   updated_at?: string;
   
+  // Additional fields for wallet2.tsx compatibility
+  to_entity_id?: string;
+  from_entity_id?: string;
+  currency_symbol?: string;
+  
   // Frontend-specific fields
   from_account?: {
     id: string;

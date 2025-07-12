@@ -100,8 +100,8 @@ class TransactionManager {
             hasMore: false
           }
         };
-  }
-  
+      }
+      
       // Call the dedicated backend endpoint
       const response = await apiClient.get(`${API_PATHS.TRANSACTION.LIST}/account/${accountId}`, {
         params: {
@@ -111,11 +111,88 @@ class TransactionManager {
       });
       
       if (response.status === 200) {
-        const result = response.data.data || response.data;
+        let result = response.data.data || response.data;
         
-        logger.info(`[TransactionManager] Retrieved ${result.data?.length || 0} transactions for account ${accountId}`);
+        // Handle complex nested JSON structure from backend
+        // The backend returns: {"data":"{\"data\":\"{\\\"0\\\":\\\"{...}\\\",\\\"1\\\":\\\"{...}\\\"}\",\"pagination\":\"{...}\"}"}
+        let parseAttempts = 0;
+        while (typeof result === 'string' && parseAttempts < 3) {
+          try {
+            logger.debug(`[TransactionManager] Parsing JSON string response (attempt ${parseAttempts + 1})`);
+            result = JSON.parse(result);
+            parseAttempts++;
+          } catch (parseError) {
+            logger.error(`[TransactionManager] Failed to parse JSON string response (attempt ${parseAttempts + 1}):`, parseError);
+            return {
+              data: [],
+              pagination: { total: 0, limit, offset, hasMore: false }
+            };
+          }
+        }
         
-        return result;
+        // Navigate through nested data structure
+        if (result && result.data) {
+          result = result.data;
+        }
+        
+        // Handle indexed object structure (e.g., {"0": "{...}", "1": "{...}"})
+        if (result && typeof result === 'object' && !Array.isArray(result)) {
+          const transactions = [];
+          
+          // Extract transactions from indexed object
+          for (const key in result) {
+            if (result.hasOwnProperty(key) && !isNaN(parseInt(key))) {
+              let transactionData = result[key];
+              
+              // Parse nested JSON strings
+              if (typeof transactionData === 'string') {
+                try {
+                  transactionData = JSON.parse(transactionData);
+                } catch (parseError) {
+                  logger.warn(`[TransactionManager] Failed to parse transaction ${key}:`, parseError);
+                  continue;
+                }
+              }
+              
+              if (transactionData && typeof transactionData === 'object') {
+                transactions.push(transactionData);
+              }
+            }
+          }
+          
+          logger.info(`[TransactionManager] Retrieved ${transactions.length} transactions for account ${accountId}`);
+          
+          return {
+            data: transactions,
+            pagination: {
+              total: transactions.length,
+              limit,
+              offset,
+              hasMore: transactions.length === limit
+            }
+          };
+        }
+        
+        // Handle direct array response
+        if (Array.isArray(result)) {
+          logger.info(`[TransactionManager] Retrieved ${result.length} transactions for account ${accountId}`);
+          return {
+            data: result,
+            pagination: {
+              total: result.length,
+              limit,
+              offset,
+              hasMore: result.length === limit
+            }
+          };
+        }
+        
+        logger.warn('[TransactionManager] Unexpected response structure:', typeof result);
+        return {
+          data: [],
+          pagination: { total: 0, limit, offset, hasMore: false }
+        };
+        
       } else {
         throw new Error(`Unexpected response status: ${response.status}`);
       }

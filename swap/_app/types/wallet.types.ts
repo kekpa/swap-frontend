@@ -32,6 +32,7 @@ export interface WalletDisplay {
   balance: number;
   currency_code: string;
   currency_symbol: string;
+  currency_id: string; // Add currency_id for filtering
   account_id: string;
   isPrimary: boolean;
   status: 'active' | 'inactive';

@@ -117,21 +117,55 @@ class BalanceManager {
         }
       }
 
-      if (!response?.data || !Array.isArray(response.data)) {
+      // Handle the double-stringified response structure from backend
+      let walletsData: any[] = [];
+      
+      if (response?.data?.data && typeof response.data.data === 'object') {
+        // Backend returns: { data: { "0": "{...}", "1": "{...}" } }
+        const dataObj = response.data.data;
+        walletsData = Object.values(dataObj).map((item: any) => {
+          if (typeof item === 'string') {
+            try {
+              return JSON.parse(item);
+            } catch (e) {
+              logger.warn('[BalanceManager] Failed to parse wallet data:', item);
+              return null;
+            }
+          }
+          return item;
+        }).filter(Boolean);
+      } else if (response?.data && Array.isArray(response.data)) {
+        // Standard array response
+        walletsData = response.data;
+      } else {
         logger.warn('[BalanceManager] Invalid wallet data from API');
+        logger.debug('[BalanceManager] Response structure:', JSON.stringify({
+          hasData: !!response?.data,
+          dataType: typeof response?.data,
+          hasNestedData: !!(response?.data?.data),
+          nestedDataType: typeof response?.data?.data
+        }, null, 2));
         return [];
       }
 
-      const wallets: WalletDisplay[] = response.data.map((wallet: WalletApiResponse) => ({
-        id: wallet.id,
-        balance: wallet.balance || 0,
-        currency_code: wallet.currency?.code || 'USD',
-        currency_symbol: wallet.currency?.symbol || '$',
-        account_id: wallet.account_id,
-        isPrimary: wallet.is_primary || false,
-        status: wallet.status === 'active' ? 'active' : 'inactive',
-        last_updated: wallet.updated_at || new Date().toISOString()
-      }));
+      const wallets: WalletDisplay[] = walletsData.map((wallet: any): WalletDisplay => {
+        logger.debug('[BalanceManager] 🔍 Processing wallet:', JSON.stringify(wallet, null, 2));
+        
+        const walletDisplay: WalletDisplay = {
+          id: wallet.wallet_id || wallet.id, // Handle both formats
+          balance: wallet.balance || 0,
+          currency_code: wallet.currency_code || wallet.currency?.code || 'USD',
+          currency_symbol: wallet.currency_symbol || wallet.currency?.symbol || '$',
+          currency_id: wallet.currency_id || wallet.currency?.id || '', // CRITICAL: Extract currency_id
+          account_id: wallet.account_id || '',
+          isPrimary: wallet.is_primary || false,
+          status: wallet.is_active || wallet.status === 'active' ? 'active' : 'inactive',
+          last_updated: wallet.balance_last_updated || wallet.updated_at || new Date().toISOString()
+        };
+        
+        logger.debug('[BalanceManager] 🔍 Transformed wallet:', JSON.stringify(walletDisplay, null, 2));
+        return walletDisplay;
+      });
 
       this.lastFetchTime = Date.now();
       logger.debug(`[BalanceManager] Successfully fetched ${wallets.length} wallets from API`);
@@ -148,7 +182,7 @@ class BalanceManager {
   }
 
   /**
-   * Set a wallet as primary
+   * Set a wallet as primary - Professional implementation with proper database update
    */
   async setPrimaryWallet(walletId: string): Promise<boolean> {
     try {
@@ -161,31 +195,41 @@ class BalanceManager {
         return false;
       }
 
+      // Store previous state for rollback
+      const previousState = this.cachedWallets.map(w => ({ ...w }));
+
       // Optimistic update
       this.updatePrimaryWalletLocally(walletId);
 
       try {
-        // Make API call
+        // Use the correct API endpoint that updates the database (PATCH method)
         const response = await apiClient.patch(`/wallets/${walletId}/primary`);
         
-        if (response.status === 200) {
-          logger.debug(`[BalanceManager] Successfully set wallet ${walletId} as primary`);
+        if (response.status === 200 || response.status === 204) {
+          logger.info(`[BalanceManager] ✅ Successfully set wallet ${walletId} as primary in database`);
           
           // Save to cache
           await this.saveWalletsToCache(this.cachedWallets);
           
-          // Emit update event
+          // Emit update event for UI consistency
           eventEmitter.emit('primary_wallet_updated', { walletId });
           
           return true;
         } else {
           // Revert optimistic update
-          this.revertPrimaryWalletUpdate();
+          this.revertPrimaryWalletUpdate(previousState);
+          logger.error(`[BalanceManager] ❌ Backend returned ${response.status} for primary wallet update`);
           return false;
         }
-      } catch (apiError) {
-        logger.error('[BalanceManager] API call failed, reverting optimistic update:', apiError);
-        this.revertPrimaryWalletUpdate();
+      } catch (apiError: any) {
+        logger.error('[BalanceManager] ❌ API call failed, reverting optimistic update:', apiError);
+        this.revertPrimaryWalletUpdate(previousState);
+        
+        // Log specific error details for debugging
+        if (apiError.response) {
+          logger.error(`[BalanceManager] API Error Response: ${apiError.response.status} - ${apiError.response.data?.message || 'Unknown error'}`);
+        }
+        
         return false;
       }
 
@@ -208,9 +252,55 @@ class BalanceManager {
   /**
    * Revert primary wallet update (if API call fails)
    */
-  private revertPrimaryWalletUpdate(): void {
-    // This would require storing the previous state, for now just log
-    logger.debug('[BalanceManager] Would revert primary wallet update');
+  private revertPrimaryWalletUpdate(previousState?: WalletDisplay[]): void {
+    if (previousState) {
+      this.cachedWallets = previousState;
+      logger.debug('[BalanceManager] ✅ Reverted primary wallet update to previous state');
+    } else {
+      logger.debug('[BalanceManager] ⚠️ No previous state available for revert');
+    }
+  }
+
+  /**
+   * Update primary wallet in backend and local database
+   * This ensures the backend database is updated when user switches primary wallet
+   */
+  async updatePrimaryWallet(walletId: string, entityId: string): Promise<void> {
+    try {
+      logger.info(`[BalanceManager] Updating primary wallet to: ${walletId}`);
+      
+      // Update backend via API (PATCH method)
+      const response = await apiClient.patch(`/wallets/${walletId}/primary`, {
+        entity_id: entityId
+      });
+      
+      if (response.status === 200) {
+        logger.info(`[BalanceManager] Successfully updated primary wallet in backend`);
+        
+        // TODO: Update local database when repository methods are implemented
+        // await this.updateLocalPrimaryWallet(walletId, entityId);
+        
+        // Refresh wallets to get updated data
+        await this.fetchWalletsFromApi(entityId);
+        
+      } else {
+        logger.error(`[BalanceManager] Failed to update primary wallet in backend: ${response.status}`);
+        throw new Error(`Failed to update primary wallet: ${response.status}`);
+      }
+      
+    } catch (error) {
+      logger.error(`[BalanceManager] Error updating primary wallet:`, error);
+      throw error;
+    }
+  }
+  
+  /**
+   * Update primary wallet in local database
+   * TODO: Implement repository methods for primary wallet updates
+   */
+  private async updateLocalPrimaryWallet(walletId: string, entityId: string): Promise<void> {
+    // TODO: Implement when repository methods are available
+    logger.info(`[BalanceManager] Local primary wallet update not implemented yet`);
   }
 
   /**
@@ -235,6 +325,7 @@ class BalanceManager {
            balance: wallet.balance || 0,
            currency_code: wallet.currency_code || 'USD',
            currency_symbol: wallet.currency_symbol || '$',
+           currency_id: wallet.currency_id || '', // Add currency_id for filtering
            account_id: wallet.account_id || '',
            isPrimary: wallet.is_primary || false,
            status: wallet.is_active ? 'active' : 'inactive',
@@ -268,7 +359,7 @@ class BalanceManager {
        const currencyWallets = wallets.map(wallet => ({
          id: wallet.id,
         account_id: wallet.account_id,
-         currency_id: '', // We don't have this in WalletDisplay
+         currency_id: wallet.currency_id || '', // Use currency_id from wallet
          balance: wallet.balance,
          reserved_balance: 0, // Default value
          available_balance: wallet.balance, // Same as balance for now

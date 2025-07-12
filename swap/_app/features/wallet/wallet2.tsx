@@ -3,6 +3,7 @@
 // Updated: Added wallet security gate with PIN/biometric verification for neobank security - 2025-07-02
 // Updated: Fixed multiple PIN requests with race condition protection and debouncing - 2025-07-03
 // Updated: Fixed infinite authentication loop with circuit breaker and Alert queue protection - 2025-07-07
+// Updated: Migrated from DataContext to TanStack Query hooks - 2025-01-11
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
@@ -36,7 +37,7 @@ import { networkService } from '../../services/NetworkService';
 import { WalletStackCard } from './components';
 import logger from '../../utils/logger';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { useRecentTransactions, useTransactionsByAccount } from '../../query/hooks/useRecentTransactions';
+import { useWalletTransactions } from '../../query/hooks/useRecentTransactions';
 
 interface WalletTransaction {
   id: string;
@@ -68,16 +69,73 @@ const WalletDashboard: React.FC = () => {
   const { theme } = useTheme();
   const authContext = useAuthContext();
   const user = authContext.user;
-  const { currencyBalances, totalFiat, isLoadingBalances, refreshBalances, interactionsList } = useData();
+  
+  // TanStack Query hooks replacing useData()
+  const { 
+    data: currencyBalances = [], 
+    isLoading: isLoadingBalances, 
+    refetch: refreshBalances 
+  } = useBalances(user?.entityId || '');
+  
+  const { 
+    interactions: interactionsList = [] 
+  } = useInteractions({ enabled: !!user });
 
+  // State declarations
   const [isBalanceVisible, setIsBalanceVisible] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [walletBalances, setWalletBalances] = useState<WalletBalance[]>([]);
   const [isLoadingRealBalances, setIsLoadingRealBalances] = useState(true);
-  const [recentTransactions, setRecentTransactions] = useState<WalletTransaction[]>([]);
-  const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
   const [selectedWallet, setSelectedWallet] = useState<WalletBalance | null>(null);
+
+  // Professional wallet-specific transaction loading
+  const { 
+    transactions: allAccountTransactions = [], 
+    isLoading: isLoadingWalletTransactions, 
+    refetch: refetchWalletTransactions 
+  } = useWalletTransactions(
+    selectedWallet?.account_id || '', 
+    !!selectedWallet?.account_id
+  );
+
+  // Filter transactions by selected wallet currency
+  const walletTransactions = useMemo(() => {
+    if (!selectedWallet || !allAccountTransactions.length) {
+      logger.debug(`[WalletDashboard] 🎯 CURRENCY FILTER: No wallet selected or no transactions. Wallet: ${!!selectedWallet}, Transactions: ${allAccountTransactions.length}`);
+      return [];
+    }
+
+    // Debug: Log the first transaction and wallet currency IDs for comparison
+    if (allAccountTransactions.length > 0) {
+      const firstTx = allAccountTransactions[0];
+      logger.debug(`[WalletDashboard] 🔍 DEBUG CURRENCY FILTER:`);
+      logger.debug(`[WalletDashboard] 🔍 Selected Wallet Currency ID: ${selectedWallet.currency_id}`);
+      logger.debug(`[WalletDashboard] 🔍 Selected Wallet Currency Code: ${selectedWallet.currency_code}`);
+      logger.debug(`[WalletDashboard] 🔍 First Transaction Currency ID: ${firstTx.currency_id}`);
+      logger.debug(`[WalletDashboard] 🔍 First Transaction Currency Symbol: ${firstTx.currency_symbol}`);
+      logger.debug(`[WalletDashboard] 🔍 Transaction Structure:`, JSON.stringify(firstTx, null, 2));
+      logger.debug(`[WalletDashboard] 🔍 Wallet Structure:`, JSON.stringify(selectedWallet, null, 2));
+    }
+
+    // Filter transactions to only show those matching the selected wallet's currency
+    const filteredTransactions = allAccountTransactions.filter(tx => {
+      const matches = tx.currency_id === selectedWallet.currency_id;
+      if (!matches) {
+        logger.debug(`[WalletDashboard] 🔍 Transaction ${tx.id} currency_id '${tx.currency_id}' does NOT match wallet currency_id '${selectedWallet.currency_id}'`);
+      }
+      return matches;
+    });
+
+    logger.debug(`[WalletDashboard] 🎯 CURRENCY FILTER: Showing ${filteredTransactions.length} of ${allAccountTransactions.length} transactions for ${selectedWallet.currency_code} wallet`);
+    
+    return filteredTransactions;
+  }, [allAccountTransactions, selectedWallet]);
+  
+  // Calculate totalFiat from currencyBalances
+  const totalFiat = useMemo(() => {
+    return currencyBalances.reduce((total, balance) => total + (balance.balance || 0), 0);
+  }, [currencyBalances]);
   const [isWalletUnlocked, setIsWalletUnlocked] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const authenticationRef = useRef(false); // Immediate race condition protection
@@ -306,7 +364,6 @@ const WalletDashboard: React.FC = () => {
       // Clear data when wallet is locked
       setWalletBalances([]);
       setSelectedWallet(null);
-      setRecentTransactions([]);
       return;
     }
 
@@ -340,7 +397,7 @@ const WalletDashboard: React.FC = () => {
             last_updated: wallet.last_updated,
             // Add required fields for compatibility
             entity_id: entityId,
-            currency_id: '', // Not available in WalletDisplay
+            currency_id: wallet.currency_id, // Use the currency_id from WalletDisplay
             currency_name: wallet.currency_code,
             reserved_balance: 0,
             available_balance: wallet.balance,
@@ -358,8 +415,7 @@ const WalletDashboard: React.FC = () => {
           
           logger.debug(`[WalletDashboard] 🎯 INSTANT: Selected wallet ${primaryWallet.currency_code}`);
           
-          // Load transactions for the selected wallet
-          await fetchRecentTransactions();
+          // Transactions will be automatically loaded by TanStack Query hook
         } else {
           logger.debug('[WalletDashboard] 📭 No wallets found');
           setWalletBalances([]);
@@ -407,11 +463,11 @@ const WalletDashboard: React.FC = () => {
   }, [interactionsList]);
 
   // Helper function to format transaction date and time
-  const formatTransactionDateTime = useCallback((isoString: string): string => {
+  const formatTransactionDateTime = useCallback((isoString: string | null | undefined): string => {
     // Validate input
-    if (!isoString || typeof isoString !== 'string') {
-      logger.debug(`[WalletDashboard] Invalid date string: ${isoString}`);
-      return 'Invalid date';
+    if (!isoString || typeof isoString !== 'string' || isoString.trim() === '') {
+      logger.debug(`[WalletDashboard] Invalid or missing date string: ${isoString}`);
+      return 'Recent';
     }
     
     const date = new Date(isoString);
@@ -419,7 +475,7 @@ const WalletDashboard: React.FC = () => {
     // Check if date is valid
     if (isNaN(date.getTime())) {
       logger.debug(`[WalletDashboard] Invalid date created from: ${isoString}`);
-      return 'Invalid date';
+      return 'Recent';
     }
     
     const now = new Date();
@@ -501,180 +557,40 @@ const WalletDashboard: React.FC = () => {
     return '?'; // Unknown currency
   }, [walletBalances]);
 
-  // TANSTACK QUERY: Use TanStack Query for recent transactions (general)
-  const { 
-    transactions: queryRecentTransactions, 
-    isLoading: isLoadingQueryTransactions,
-    refetch: refetchRecentTransactions 
-  } = useRecentTransactions({
-    entityId: user?.entityId,
-    limit: 5,
-    enabled: !!user && isWalletUnlocked
-  });
-
-  // TANSTACK QUERY: Use TanStack Query for account-specific transactions (PROFESSIONAL BACKEND FILTERING)
-  const { 
-    transactions: accountTransactions, 
-    isLoading: isLoadingAccountTransactions,
-    refetch: refetchAccountTransactions 
-  } = useTransactionsByAccount(
-    selectedWallet?.account_id || '', 
-    {
-      limit: 20,
-      enabled: !!selectedWallet?.account_id && isWalletUnlocked
-    }
-  );
-
-  // LOCAL-FIRST: Fetch recent transactions with cache-first loading
-  const fetchRecentTransactions = useCallback(async () => {
-    if (!user) {
-      setRecentTransactions([]);
-      setIsLoadingTransactions(false);
-      return;
+  // Professional transaction transformation using TanStack Query data
+  const displayTransactions = useMemo(() => {
+    if (!walletTransactions || walletTransactions.length === 0) {
+      return [];
     }
 
-    try {
-      logger.debug('[WalletDashboard] 📊 LOCAL-FIRST: Loading transactions...');
+    logger.debug(`[WalletDashboard] 🎯 PROFESSIONAL: Transforming ${walletTransactions.length} wallet transactions`);
 
-      // Use TanStack Query data directly instead of calling transactionManager
-      const transactions = queryRecentTransactions || [];
+    const transformedTransactions: WalletTransaction[] = walletTransactions.map((tx: any) => {
+      const isReceived = tx.to_entity_id === user?.entityId;
+      const amount = parseFloat(tx.amount?.toString() || '0');
       
-      if (transactions && transactions.length > 0) {
-        logger.debug(`[WalletDashboard] ✅ INSTANT: Loaded ${transactions.length} transactions from TanStack Query`);
-        
-        // Transform transactions to wallet format
-        const walletTransactions: WalletTransaction[] = transactions.map((tx: any) => {
-          const isReceived = tx.to_entity_id === user.entityId;
-          const amount = parseFloat(tx.amount?.toString() || '0');
-          
-          // Get currency symbol using dynamic mapping
-          const currency_symbol = getCurrencySymbolFromWallets(tx.currency_id);
+      // Use transaction's own currency symbol (from backend)
+      const currency_symbol = tx.currency_symbol || getCurrencySymbolFromWallets(tx.currency_id);
 
-          // Get the other party's entity ID and resolve their name
-          const otherEntityId = isReceived ? tx.from_entity_id : tx.to_entity_id;
-          const contactName = getEntityNameFromInteractions(otherEntityId);
+      // Get the other party's entity ID and resolve their name
+      const otherEntityId = isReceived ? tx.from_entity_id : tx.to_entity_id;
+      const contactName = getEntityNameFromInteractions(otherEntityId);
 
-          return {
-            id: tx.id,
-            name: contactName,
-            amount: amount.toFixed(2),
-            type: isReceived ? 'received' : 'sent',
-            category: isReceived ? 'Payment received' : 'Payment sent',
-            date: formatTransactionDateTime(tx.created_at),
-            currency_symbol,
-            entityId: otherEntityId,
-            currency_id: tx.currency_id,
-          };
-        });
-
-        setRecentTransactions(walletTransactions);
-        setIsLoadingTransactions(false);
-        logger.debug('[WalletDashboard] 🎯 INSTANT: Transaction UI updated from TanStack Query cache');
-      }
-    } catch (error) {
-      logger.error('[WalletDashboard] Error loading recent transactions:', error);
-      setRecentTransactions([]);
-      setIsLoadingTransactions(false);
-    }
-  }, [user, queryRecentTransactions, getCurrencySymbolFromWallets, getEntityNameFromInteractions]);
-
-  // Refetch transactions when wallet balances change (for currency symbol updates)
-  useEffect(() => {
-    if (walletBalances.length > 0 && user && isWalletUnlocked) {
-      // Only refetch if we actually have wallets loaded
-      // Use a simple async function to avoid dependency issues
-      const refetchTransactions = async () => {
-        try {
-          const transactions = await transactionManager.getRecentTransactions(5);
-          
-          if (transactions && transactions.length > 0) {
-            const walletTransactions: WalletTransaction[] = transactions.map((tx: any) => {
-              const isReceived = tx.to_entity_id === user.entityId;
-              const amount = parseFloat(tx.amount?.toString() || '0');
-              
-              // Get currency symbol using dynamic mapping
-              const currency_symbol = getCurrencySymbolFromWallets(tx.currency_id);
-
-              // Get the other party's entity ID and resolve their name
-              const otherEntityId = isReceived ? tx.from_entity_id : tx.to_entity_id;
-              const contactName = getEntityNameFromInteractions(otherEntityId);
-
-              return {
-                id: tx.id,
-                name: contactName,
-                amount: amount.toFixed(2),
-                type: isReceived ? 'received' : 'sent',
-                category: isReceived ? 'Payment received' : 'Payment sent',
-                date: formatTransactionDateTime(tx.created_at),
-                currency_symbol,
-                entityId: otherEntityId,
-                currency_id: tx.currency_id,
-              };
-            });
-
-            setRecentTransactions(walletTransactions);
-            setIsLoadingTransactions(false);
-          }
-        } catch (error) {
-          logger.debug('[WalletDashboard] Transaction refetch failed (non-critical):', error instanceof Error ? error.message : String(error));
-        }
+      return {
+        id: tx.id,
+        name: contactName,
+        amount: amount.toFixed(2),
+        type: isReceived ? 'received' : 'sent',
+        category: isReceived ? 'Payment received' : 'Payment sent',
+        date: formatTransactionDateTime(tx.created_at),
+        currency_symbol,
+        entityId: otherEntityId,
+        currency_id: tx.currency_id,
       };
-      
-      refetchTransactions();
-    }
-  }, [walletBalances.length, user?.entityId, isWalletUnlocked]); // Removed fetchRecentTransactions dependency
+    });
 
-  // INSTANT transaction reload when selected wallet changes
-  useEffect(() => {
-    if (selectedWallet && user && isWalletUnlocked) {
-      logger.debug(`[WalletDashboard] 🔄 INSTANT: Wallet changed to ${selectedWallet.currency_code}, reloading transactions...`);
-      
-      const reloadTransactionsForWallet = async () => {
-        try {
-          setIsLoadingTransactions(true);
-          
-          // Get transactions immediately from cache
-          const transactions = await transactionManager.getRecentTransactions(5);
-          
-          if (transactions && transactions.length > 0) {
-            const walletTransactions: WalletTransaction[] = transactions.map((tx: any) => {
-              const isReceived = tx.to_entity_id === user.entityId;
-              const amount = parseFloat(tx.amount?.toString() || '0');
-              
-              // Get currency symbol using dynamic mapping with updated wallet
-              const currency_symbol = getCurrencySymbolFromWallets(tx.currency_id);
-
-              // Get the other party's entity ID and resolve their name
-              const otherEntityId = isReceived ? tx.from_entity_id : tx.to_entity_id;
-              const contactName = getEntityNameFromInteractions(otherEntityId);
-
-              return {
-                id: tx.id,
-                name: contactName,
-                amount: amount.toFixed(2),
-                type: isReceived ? 'received' : 'sent',
-                category: isReceived ? 'Payment received' : 'Payment sent',
-                date: formatTransactionDateTime(tx.created_at),
-                currency_symbol,
-                entityId: otherEntityId,
-                currency_id: tx.currency_id,
-              };
-            });
-
-            setRecentTransactions(walletTransactions);
-            logger.debug(`[WalletDashboard] ✅ INSTANT: Updated ${walletTransactions.length} transactions for ${selectedWallet.currency_code} wallet`);
-          }
-          
-          setIsLoadingTransactions(false);
-        } catch (error) {
-          logger.debug('[WalletDashboard] Wallet transaction reload failed (non-critical):', error instanceof Error ? error.message : String(error));
-          setIsLoadingTransactions(false);
-        }
-      };
-      
-      reloadTransactionsForWallet();
-    }
-  }, [selectedWallet?.wallet_id, user?.entityId, isWalletUnlocked, getCurrencySymbolFromWallets, getEntityNameFromInteractions, formatTransactionDateTime]); // React to wallet changes
+    return transformedTransactions;
+  }, [walletTransactions, user?.entityId, getCurrencySymbolFromWallets, getEntityNameFromInteractions, formatTransactionDateTime]);
 
   // Helper function to get currency ID from currency code
   const getCurrencyIdFromCode = useCallback((currencyCode: string): string => {
@@ -698,72 +614,18 @@ const WalletDashboard: React.FC = () => {
 
     // Try to find a currency ID from existing transactions that match the currency symbol
     const selectedSymbol = selectedWallet?.currency_symbol;
-    if (selectedSymbol && recentTransactions.length > 0) {
-      const matchingTransaction = recentTransactions.find(tx => tx.currency_symbol === selectedSymbol);
+    if (selectedSymbol && displayTransactions.length > 0) {
+      const matchingTransaction = displayTransactions.find(tx => tx.currency_symbol === selectedSymbol);
       if (matchingTransaction) {
         return matchingTransaction.currency_id;
       }
     }
 
     return ''; // Unknown currency
-  }, [walletBalances, recentTransactions, selectedWallet]);
+  }, [walletBalances, displayTransactions, selectedWallet]);
 
-  // Transform account transactions from TanStack Query
-  const transformedAccountTransactions = useMemo(() => {
-    if (!accountTransactions || !user) return [];
-
-    logger.debug(`[WalletDashboard] 🎯 TANSTACK QUERY: Transforming ${accountTransactions.length} account transactions`);
-
-    return accountTransactions.map((tx: any) => {
-      const isReceived = tx.to_entity_id === user.entityId;
-      const amount = parseFloat(tx.amount?.toString() || '0');
-      
-      // Get currency symbol using dynamic mapping
-      const currency_symbol = getCurrencySymbolFromWallets(tx.currency_id);
-
-      // Get the other party's entity ID and resolve their name
-      const otherEntityId = isReceived ? tx.from_entity_id : tx.to_entity_id;
-      const contactName = getEntityNameFromInteractions(otherEntityId);
-
-      return {
-        id: tx.id,
-        name: contactName,
-        amount: amount.toFixed(2),
-        type: (isReceived ? 'received' : 'sent') as 'received' | 'sent',
-        category: isReceived ? 'Payment received' : 'Payment sent',
-        date: formatTransactionDateTime(tx.created_at),
-        currency_symbol,
-        entityId: otherEntityId,
-        currency_id: tx.currency_id,
-      };
-    });
-  }, [accountTransactions, user, getCurrencySymbolFromWallets, getEntityNameFromInteractions]);
-
-  // Use account-specific transactions when available, fallback to filtered general transactions
-  const filteredTransactions = useMemo(() => {
-    if (transformedAccountTransactions.length > 0) {
-      logger.debug(`[WalletDashboard] 🎯 BACKEND FILTERING: Using ${transformedAccountTransactions.length} account-specific transactions from TanStack Query`);
-      return transformedAccountTransactions;
-    }
-    
-    // Fallback: Filter general recent transactions by currency (for offline/error cases)
-    if (!selectedWallet) {
-      logger.debug(`[WalletDashboard] 🔍 FALLBACK: No selected wallet, showing all transactions: ${recentTransactions.length}`);
-      return recentTransactions;
-    }
-    
-    const filtered = recentTransactions.filter(tx => {
-      return tx.currency_id === selectedWallet.currency_id ||
-             tx.currency_symbol === selectedWallet.currency_symbol;
-    });
-    
-    logger.debug(
-      `[WalletDashboard] 🔄 FALLBACK: Frontend filtered ${filtered.length} transactions for wallet ${selectedWallet.currency_code} ` +
-      `(from ${recentTransactions.length} total transactions)`
-    );
-    
-    return filtered;
-  }, [transformedAccountTransactions, recentTransactions, selectedWallet]);
+  // NO FALLBACK: Clean, professional backend filtering only
+  const filteredTransactions = displayTransactions;
 
   const handleActualRefresh = async () => {
     setRefreshing(true);
@@ -776,7 +638,7 @@ const WalletDashboard: React.FC = () => {
       await Promise.all([
         refreshBalances().catch((error: any) => logger.warn('[WalletDashboard] Legacy balance refresh failed (non-critical):', error)),
         entityId ? balanceManager.forceRefresh(entityId).catch((error: any) => logger.warn('[WalletDashboard] Wallet refresh failed (non-critical):', error)) : Promise.resolve(),
-        fetchRecentTransactions().catch((error: any) => logger.warn('[WalletDashboard] Transaction refresh failed (non-critical):', error))
+        Promise.resolve(refetchWalletTransactions()).catch((error: any) => logger.warn('[WalletDashboard] Transaction refresh failed (non-critical):', error))
       ]);
       
       logger.info('[WalletDashboard] ✅ LOCAL-FIRST: Manual refresh completed');
@@ -1273,25 +1135,25 @@ const WalletDashboard: React.FC = () => {
                 </Text>
               )}
             </View>
-            <TouchableOpacity onPress={() => navigation.navigate('TransactionList' as any)}>
+            <TouchableOpacity onPress={() => navigation.navigate('TransactionList' as any, { selectedWallet })}>
               <Text style={styles.seeAllButton}>See All</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.transactionsList}>
-            {/* LOCAL-FIRST: Show cached data with contextual sync indicator */}
+            {/* PROFESSIONAL: Clean backend filtering with no fallback */}
             {filteredTransactions.length > 0 ? (
               <>
                 {/* Subtle sync indicator when refreshing background data */}
-                {isLoadingTransactions && (
+                {isLoadingWalletTransactions && (
                   <View style={styles.syncIndicator}>
                     <Ionicons name="sync" size={12} color={theme.colors.textSecondary} />
                     <Text style={styles.syncText}>Syncing latest transactions...</Text>
                   </View>
                 )}
-                {filteredTransactions.map(item => renderTransactionItem(item))}
+                {filteredTransactions.map((item: WalletTransaction) => renderTransactionItem(item))}
               </>
-            ) : isLoadingTransactions ? (
+            ) : isLoadingWalletTransactions ? (
               /* Only show full loading on first load with no cached data */
               <View style={styles.loadingContainer}>
                 <Text style={styles.loadingText}>Loading transactions...</Text>

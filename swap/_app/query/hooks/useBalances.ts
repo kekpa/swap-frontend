@@ -8,7 +8,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { logger } from '../../utils/logger';
 import { queryKeys } from '../queryKeys';
-import { balanceApi } from '../api/balanceApi';
+import { balanceApi } from '../../_api/balanceApi';
 import { currencyWalletsRepository, CurrencyWallet } from '../../localdb/CurrencyWalletsRepository';
 import { WalletBalance } from '../../types/wallet.types';
 import { networkService } from '../../services/NetworkService';
