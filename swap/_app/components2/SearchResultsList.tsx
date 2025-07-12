@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
-import { EntitySearchResult } from '../contexts/DataContext';
+import { EntitySearchResult } from '../types/entity.types';
 
 interface SearchResult {
   id: string;

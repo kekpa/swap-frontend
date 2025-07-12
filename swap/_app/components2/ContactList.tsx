@@ -6,7 +6,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import { ContactMatch, DeviceContact, NormalizedContact } from '../services/ContactsService';
-import { EntitySearchResult } from '../contexts/DataContext';
+import { EntitySearchResult } from '../types/entity.types';
 
 // Simplified interface for initially displayed phone contacts, or general display contact
 export interface DisplayableContact {

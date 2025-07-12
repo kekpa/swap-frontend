@@ -1,6 +1,6 @@
 // Created: InteractionsManager service for centralized interactions list business logic - 2025-01-24
 
-import { InteractionItem } from '../contexts/DataContext';
+import { InteractionListItem } from '../types/interaction.types';
 import logger from '../utils/logger';
 
 // Simple EventEmitter implementation for React Native
@@ -60,7 +60,7 @@ export interface DisplayChat {
 
 export class InteractionsManager extends SimpleEventEmitter {
   private static instance: InteractionsManager | null = null;
-  private interactions = new Map<string, InteractionItem>();
+  private interactions = new Map<string, InteractionListItem>();
   private displayChats: DisplayChat[] = [];
   private options: InteractionsManagerOptions;
   private currentUser: any = null;
@@ -96,7 +96,7 @@ export class InteractionsManager extends SimpleEventEmitter {
   /**
    * Set interactions from API or local storage
    */
-  setInteractions(interactions: InteractionItem[]): void {
+  setInteractions(interactions: InteractionListItem[]): void {
     logger.debug(`[InteractionsManager] Setting ${interactions.length} interactions`, 'interactions_manager');
     
     // Clear existing interactions
@@ -119,7 +119,7 @@ export class InteractionsManager extends SimpleEventEmitter {
   /**
    * Add or update a single interaction
    */
-  updateInteraction(interaction: InteractionItem): void {
+  updateInteraction(interaction: InteractionListItem): void {
     logger.debug(`[InteractionsManager] Updating interaction ${interaction.id}`, 'interactions_manager');
     
     this.interactions.set(interaction.id, interaction);
@@ -137,7 +137,7 @@ export class InteractionsManager extends SimpleEventEmitter {
 
     logger.debug(`[InteractionsManager] Updating preview for ${interactionId}`, 'interactions_manager');
     
-    const updatedInteraction: InteractionItem = {
+    const updatedInteraction: InteractionListItem = {
       ...interaction,
       last_message_snippet: snippet,
       last_message_sender_id: senderEntityId,

@@ -68,4 +68,18 @@ export interface EntityResponse {
  */
 export interface EntitiesBatchResponse {
   entities: Entity[];
+}
+
+/**
+ * Entity search result interface
+ * Used for search functionality across the application
+ */
+export interface EntitySearchResult {
+  id: string;
+  entity_type: string;
+  reference_id: string;
+  display_name: string;
+  avatar_url?: string;
+  is_active: boolean;
+  metadata?: any;
 } 
