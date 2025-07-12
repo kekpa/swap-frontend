@@ -44,6 +44,25 @@ if (__DEV__) {
   setLogLevel(LogLevel.WARN);
 }
 
+// Component to handle AppLifecycleManager initialization
+const AppLifecycleHandler: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const authContext = useAuthContext();
+  
+  useEffect(() => {
+    if (authContext.isAuthenticated && authContext.user && !authContext.isLoading) {
+      // Initialize services when user is authenticated
+      appLifecycleManager.initialize(authContext).catch(error => {
+        logger.error('[AppLifecycleHandler] Failed to initialize services:', error);
+      });
+    } else if (!authContext.isAuthenticated && !authContext.isLoading) {
+      // Cleanup services when user logs out
+      appLifecycleManager.cleanup();
+    }
+  }, [authContext.isAuthenticated, authContext.user, authContext.isLoading]);
+
+  return <>{children}</>;
+};
+
 const App: React.FC = () => {
   const [isDatabaseReady, setIsDatabaseReady] = useState(false);
   const [databaseError, setDatabaseError] = useState<string | null>(null);
@@ -111,13 +130,13 @@ const App: React.FC = () => {
         <QueryProvider>
         <AuthProvider>
           <RefreshProvider>
-            <DataProvider>
+            <AppLifecycleHandler>
               <NavigationContainer>
                 <RootNavigator />
                 <ToastContainer />
                 <StatusBar style="auto" />
               </NavigationContainer>
-            </DataProvider>
+            </AppLifecycleHandler>
           </RefreshProvider>
         </AuthProvider>
         </QueryProvider>
