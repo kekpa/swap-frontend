@@ -13,18 +13,18 @@
 // limitations under the License.
 
 import { useState } from "react";
-import apiClient from "../../../_api/apiClient";
+import apiClient from "../_api/apiClient";
 import { Alert } from "react-native";
 import {
   saveAccessToken,
   clearTokens,
   getAccessToken,
   saveRefreshToken,
-} from "../../../utils/tokenStorage";
-import logger from "../../../utils/logger";
-import { handleAuthError, getUserErrorMessage } from '../../../utils/errorHandler';
-import { UserData as SharedUserData } from "../../../types/auth.types"; // Import shared type
-import { AUTH_PATHS, USER_PATHS } from "../../../_api/apiPaths"; // Import AUTH_PATHS and USER_PATHS
+} from "../utils/tokenStorage";
+import logger from "../utils/logger";
+import { handleAuthError, getUserErrorMessage } from '../utils/errorHandler';
+import { UserData as SharedUserData } from "../types/auth.types"; // Import shared type
+import { AUTH_PATHS, USER_PATHS } from "../_api/apiPaths"; // Import AUTH_PATHS and USER_PATHS
 
 interface LoginCredentials {
   identifier: string;

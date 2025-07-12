@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { PersonalInfoData } from '../personal-info/PersonalInfoFlow';
-import apiClient from '../../../../_api/apiClient';
+import { PersonalInfoData } from '../features/profile/kyc/personal-info/PersonalInfoFlow';
+import apiClient from '../_api/apiClient';
 
 export interface SavePersonalInfoRequest {
   firstName: string;

@@ -1,6 +1,6 @@
 // Created: Added hook to fetch saved personal information for KYC pre-population - 2025-06-07
 import { useState, useEffect } from 'react';
-import apiClient from '../../../../_api/apiClient';
+import apiClient from '../_api/apiClient';
 
 export interface PersonalInfo {
   firstName: string;
