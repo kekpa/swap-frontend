@@ -13,8 +13,7 @@ import logger from "../utils/logger";
 import { CurrencyBalance, Balance } from "../types/account.types";
 import API_PATHS from "../_api/apiPaths";
 import { Message, SendMessageRequest, MessageType as APIMessageType, MessageStatus } from "../types/message.types";
-import { CreateDirectMessageDto } from "../../../../backend/infra/dto/message.dto";
-import { AxiosError } from "axios";
+// Removed unused imports: CreateDirectMessageDto, AxiosError
 import { TimelineItem, MessageTimelineItem, TransactionTimelineItem } from "../types/timeline.types";
 import { websocketService } from "../services/websocketService";
 import { messageRepository } from "../localdb/MessageRepository";
@@ -23,23 +22,16 @@ import { timelineRepository } from "../localdb/TimelineRepository";
 import { messageManager } from '../services/MessageManager';
 import { webSocketHandler } from '../services/WebSocketHandler';
 import { transactionManager } from '../services/TransactionManager';
-import { balanceManager } from '../services/BalanceManager';
+// Removed unused import: balanceManager
 import { Transaction, TransactionType, ProcessedByType } from '../types/transaction.types';
-import { Alert } from "react-native";
-import { CreateTransactionRequest } from '../types/transaction.types';
-import { authEvents, AUTH_EVENT_TYPES } from '../utils/authManager';
+// Removed unused imports: Alert, CreateTransactionRequest, authEvents
 import { TimelineManager } from '../services/TimelineManager';
-import { getAccessToken } from '../utils/tokenStorage';
-import contactsService from '../services/ContactsService';
+// Removed unused imports: getAccessToken, contactsService
 import { eventEmitter } from '../utils/eventEmitter';
 import { networkService } from '../services/NetworkService';
 
-// Local-first imports - Add all repository imports for instant data loading
-import { UserRepository } from '../localdb/UserRepository';
-// AccountBalanceRepository removed - using CurrencyWalletsRepository
+// Import only the repositories still needed by active functions
 import { InteractionRepository } from '../localdb/InteractionRepository';
-import { LocationRepository } from '../localdb/LocationRepository';
-import { SearchHistoryRepository } from '../localdb/SearchHistoryRepository';
 
 // Define interface for entity search results
 export interface EntitySearchResult {
@@ -87,44 +79,7 @@ export interface RecentConversationItem {
   hasUnreadMessages: boolean;
 }
 
-// Mock data for development
-const MOCK_DATA = {
-  currencyBalances: [
-    { code: "HTG", symbol: "G", balance: 10000 },
-    { code: "USD", symbol: "$", balance: 150 }
-  ],
-  totalFiat: 10150,
-  balances: [],
-  interactions: [
-    {
-      id: 'mock-1',
-      name: 'Mock Swap Chat',
-      is_group: false,
-      last_message_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      members: [
-        {
-          entity_id: 'user-profile-id-current', // Placeholder for current user's entity ID
-          role: 'MEMBER',
-          display_name: 'Current User',
-          avatar_url: undefined,
-          entity_type: 'profile'
-        },
-        {
-          entity_id: 'contact-profile-id-other', // Placeholder for other user's entity ID
-          role: 'MEMBER',
-          display_name: 'Mock Contact',
-          avatar_url: undefined,
-          entity_type: 'profile'
-        }
-      ],
-      last_message_snippet: 'Mock: Welcome!',
-      last_message_sender_id: 'contact-profile-id-other',
-      unread_count: 1,
-    }
-  ] as InteractionItem[], // Ensure mock data conforms to InteractionItem[]
-  timeline: [],
-};
+// Mock data removed - DataContext now uses TanStack Query for all data
 
 // Define the DataContext interface
 interface DataContextType {
@@ -150,7 +105,7 @@ interface DataContextType {
   isLoadingRecentConversations: boolean;
   isLoadingEntitySearch: boolean;
   isLoadingTimeline: boolean;
-  isLoadingUserData: boolean;
+  // isLoadingUserData removed - handled by TanStack Query
   isInitialLoadComplete: boolean;
   
   // Professional loading state for UI components
@@ -193,77 +148,12 @@ interface DataContextType {
 // Create the context
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-// Local-first repository instances
-const userRepository = UserRepository.getInstance();
-// const accountBalanceRepository = AccountBalanceRepository.getInstance();
+// Repository instances - only those still needed
 const interactionRepository = InteractionRepository.getInstance();
-const locationRepository = LocationRepository.getInstance();
-const searchHistoryRepository = SearchHistoryRepository.getInstance();
 
-// Cache configuration for professional data management
-const CACHE_KEYS = {
-  USER_PROFILE: 'cache_user_profile',
-  KYC_STATUS: 'cache_kyc_status',
-  PERSONAL_INFO: 'cache_personal_info',
-  VERIFICATION_STATUS: 'cache_verification_status',
-  INTERACTIONS: 'cache_interactions',
-  BALANCES: 'cache_balances',
-} as const;
+// Cache utilities moved to TanStack Query configuration
 
-const CACHE_TTL = {
-  USER_PROFILE: 30 * 60 * 1000, // 30 minutes
-  KYC_STATUS: 15 * 60 * 1000,   // 15 minutes
-  INTERACTIONS: 5 * 60 * 1000,  // 5 minutes
-  BALANCES: 2 * 60 * 1000,      // 2 minutes
-} as const;
-
-// Cache utility functions
-const setCacheItem = async (key: string, data: any, ttl: number): Promise<void> => {
-  try {
-    const cacheData = {
-      data,
-      timestamp: Date.now(),
-      ttl,
-    };
-    await AsyncStorage.setItem(key, JSON.stringify(cacheData));
-    logger.debug(`[Cache] Saved ${key} with TTL ${ttl}ms`, 'cache');
-  } catch (error) {
-    logger.warn(`[Cache] Failed to save ${key}`, 'cache', { error: String(error) });
-  }
-};
-
-const getCacheItem = async (key: string): Promise<any | null> => {
-  try {
-    const cached = await AsyncStorage.getItem(key);
-    if (!cached) return null;
-
-    const cacheData = JSON.parse(cached);
-    const age = Date.now() - cacheData.timestamp;
-
-    if (age > cacheData.ttl) {
-      // Cache expired, remove it
-      await AsyncStorage.removeItem(key);
-      logger.debug(`[Cache] Expired and removed ${key} (age: ${age}ms)`, 'cache');
-      return null;
-    }
-
-    logger.debug(`[Cache] Hit for ${key} (age: ${age}ms)`, 'cache');
-    return cacheData.data;
-  } catch (error) {
-    logger.warn(`[Cache] Failed to read ${key}`, 'cache', { error: String(error) });
-    return null;
-  }
-};
-
-const clearCache = async (keys?: string[]): Promise<void> => {
-  try {
-    const keysToRemove = keys || Object.values(CACHE_KEYS);
-    await AsyncStorage.multiRemove(keysToRemove);
-    logger.debug(`[Cache] Cleared ${keysToRemove.length} cache keys`, 'cache');
-  } catch (error) {
-    logger.warn('[Cache] Failed to clear cache', 'cache', { error: String(error) });
-  }
-};
+// Cache functions removed - handled by TanStack Query
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -332,12 +222,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [isCriticalTransitionPeriod]);
 
-  // Check if we're in mock mode - needs to match the setting in AuthContext
-  const MOCK_USER_ENABLED = false;
+  // Mock mode removed - DataContext now uses TanStack Query
   
   // Add timestamp tracking for last refresh
   const [lastInteractionsRefresh, setLastInteractionsRefresh] = useState<number>(0);
-  const [lastBalancesRefresh, setLastBalancesRefresh] = useState<number>(0);
   // Minimum time between refreshes in milliseconds (3 seconds)
   const MIN_REFRESH_INTERVAL = 3000;
 
@@ -345,9 +233,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   const clearRefreshThrottling = useCallback(() => {
     logger.debug('[DataContext] Clearing refresh throttling for fresh start', 'data');
     setLastInteractionsRefresh(0);
-    setLastBalancesRefresh(0);
     setLastRecentConversationsRefresh(0);
-    setLastUserDataRefresh(0);
     setHasLoadedInteractions(false);
     setHasLoadedBalances(false);
     setHasLoadedUserData(false);
@@ -356,22 +242,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Add timestamp tracking for last recentConversations refresh
   const [lastRecentConversationsRefresh, setLastRecentConversationsRefresh] = useState<number>(0);
-  const [lastUserDataRefresh, setLastUserDataRefresh] = useState<number>(0);
 
-  // State for data - initialize with mock data for development
-  const [currencyBalances, setCurrencyBalances] = useState<CurrencyBalance[]>(
-    MOCK_USER_ENABLED ? MOCK_DATA.currencyBalances : []
-  );
-  const [totalFiat, setTotalFiat] = useState(
-    MOCK_USER_ENABLED ? MOCK_DATA.totalFiat : 0
-  );
+  // State for data - initialize empty (no mock data)
+  const [currencyBalances, setCurrencyBalances] = useState<CurrencyBalance[]>([]);
+  const [totalFiat, setTotalFiat] = useState(0);
   const [balances, setBalances] = useState<Balance[]>([]);
-  const [interactionsList, setInteractionsList] = useState<InteractionItem[]>(
-    MOCK_USER_ENABLED ? MOCK_DATA.interactions : []
-  );
+  const [interactionsList, setInteractionsList] = useState<InteractionItem[]>([]);
   const [recentConversations, setRecentConversations] = useState<RecentConversationItem[]>([]);
   const [interactionTimeline, setInteractionTimeline] = useState<TimelineItem[]>([]);
-  const [optimisticMessageStore, setOptimisticMessageStore] = useState<Record<string, string>>({}); // Maps optimisticId to authoritativeId
+  // Optimistic message store removed - handled by TanStack Query optimistic updates
 
   // User Profile Data State
   const [userProfile, setUserProfile] = useState<any | null>(null);
@@ -393,17 +272,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isLoadingInteractions, setIsLoadingInteractions] = useState(false);
   const [isLoadingRecentConversations, setIsLoadingRecentConversations] = useState(false);
   const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
-  const [isLoadingUserData, setIsLoadingUserData] = useState(false);
   const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
   
-  // Network and offline state
-  const [isOfflineMode, setIsOfflineMode] = useState(false);
-  const [networkState, setNetworkState] = useState({
-    isConnected: true,
-    isInternetReachable: true,
-    type: 'unknown',
-    isOfflineMode: false,
-  });
+  // Network state removed - handled by TanStack Query network detection
   
   // Professional Loading State Manager with guest mode support
   const [loadingState, setLoadingState] = useState({
@@ -482,10 +353,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 
   
   // Add new state to track if data has been loaded at least once, even if empty
-  const [hasLoadedInteractions, setHasLoadedInteractions] = useState(MOCK_USER_ENABLED);
-  const [hasLoadedBalances, setHasLoadedBalances] = useState(MOCK_USER_ENABLED);
-  const [hasLoadedUserData, setHasLoadedUserData] = useState(MOCK_USER_ENABLED);
-  const [hasLoadedRecentConversations, setHasLoadedRecentConversations] = useState(MOCK_USER_ENABLED);
+  const [hasLoadedInteractions, setHasLoadedInteractions] = useState(false);
+  const [hasLoadedBalances, setHasLoadedBalances] = useState(false);
+  const [hasLoadedUserData, setHasLoadedUserData] = useState(false);
+  const [hasLoadedRecentConversations, setHasLoadedRecentConversations] = useState(false);
 
   // State for entity search
   const [entitySearchResults, setEntitySearchResults] = useState<EntitySearchResult[]>([]);
@@ -508,7 +379,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 
   /* ---------- Initialize WebSocketHandler when user is authenticated ---------- */
   useEffect(() => {
-    if (isAuthenticated && user && !MOCK_USER_ENABLED) {
+    if (isAuthenticated && user) {
       // Initialize WebSocketHandler for real-time message handling
       // This ensures WebSocket is connected and authenticated before setting up handlers
       logger.debug('[DataContext] User authenticated, initializing WebSocketHandler', 'data');
@@ -555,25 +426,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [isAuthenticated, user]);
 
-  // BALANCE FETCHING - DISABLED: Now handled by TanStack Query hooks
-  const fetchBalances = async (forceRefresh: boolean = false) => {
-    logger.debug(`[DataContext] fetchBalances called (forceRefresh: ${forceRefresh}) - DISABLED: Using TanStack Query instead`);
-    
-    // DataContext balance fetching is now disabled
-    // Balance management has been migrated to TanStack Query hooks:
-    // - useBalances() for fetching wallet balances
-    // - useSetPrimaryWallet() for setting primary wallet
-    // - These hooks use the correct /wallets/entity/{entityId} endpoint
-    
-    // Set empty state to avoid conflicts with TanStack Query
-    setCurrencyBalances([]);
-    setTotalFiat(0);
-    setIsLoadingBalances(false);
-    setHasLoadedBalances(true);
-    
-    logger.debug('[DataContext] Balance fetching disabled - TanStack Query handles wallet data');
-    return;
-  };
+  // Balance fetching removed - handled by useBalances hook
 
   // 🚀 NEW: Proactive timeline caching for WhatsApp-like experience
   // preloadRecentTimelines function will be defined after fetchInteractionTimeline
@@ -748,12 +601,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Fetch recent conversations from API
   const fetchRecentConversations = useCallback(async (forceRefresh = false) => {
-    if (MOCK_USER_ENABLED) {
-      logger.debug("Using mock recent conversations data instead of API calls", "data");
-      setRecentConversations([]);
-      setHasLoadedRecentConversations(true);
-      return;
-    }
+    // Mock mode removed - DataContext now uses real API calls
 
     if (!isAuthenticated || isAuthLoading || !user) {
       logger.debug("Skipping recent conversations fetch: not authenticated or still loading", "data");
@@ -855,7 +703,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
       // Start balances task (only if not guest mode)
       if (tasks.includes('balances')) {
         startTask('balances');
-        fetchBalances(false).finally(() => markTaskComplete('balances'));
+        // Balance fetching handled by TanStack Query useBalances hook
+        markTaskComplete('balances');
       }
       
       // Start userData task (only if not guest mode)
@@ -878,7 +727,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
         fetchRecentConversations(false).finally(() => markTaskComplete('recentTransactions'));
       }
     }
-  }, [isAuthenticated, user, isAuthLoading, isGuestMode, startTask, markTaskComplete, fetchInteractions, fetchBalances, fetchRecentConversations]);
+  }, [isAuthenticated, user, isAuthLoading, isGuestMode, startTask, markTaskComplete, fetchInteractions, fetchRecentConversations]);
 
   // Add request deduplication for timeline fetches
   // Note: Timeline request deduplication now handled by GlobalRequestManager
@@ -937,7 +786,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     setTotalFiat(0);
     setBalances([]);
     setEntitySearchResults([]);
-    setOptimisticMessageStore({});
+    // Optimistic message store removed
     
     // Reset loading states
     setIsLoadingBalances(false);
@@ -956,7 +805,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     
     // Reset refresh timestamps
     setLastInteractionsRefresh(0);
-    setLastBalancesRefresh(0);
     
     logger.debug('[DataContext] All data state cleared successfully', 'data');
   }, [clearAllTimelineState]);
@@ -975,7 +823,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     async (interactionId: string, options: { forceRefresh?: boolean; silentUpdate?: boolean } = {}) => {
       const { forceRefresh = false, silentUpdate = false } = options;
       
-      if (MOCK_USER_ENABLED || !interactionId) {
+      if (!interactionId) {
         setIsLoadingTimeline(false); // Ensure loading is false if we're returning early
         return;
       }
@@ -1133,7 +981,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
         setIsLoadingTimeline(false); // Always set to false after API attempt
       }
     },
-    [MOCK_USER_ENABLED, user] 
+    [user] 
   );
 
   // Function to add a new message (received via WebSocket) to the timeline state
@@ -1387,113 +1235,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
-  // Search entities by query string using the new unified backend search
-  const searchAll = useCallback(async (
-    query: string, 
-  ): Promise<EntitySearchResult[]> => {
-    if (!query || query.trim().length < 2) {
-      setEntitySearchResults([]);
-      return [];
-    }
-    if (!isAuthenticated || isAuthLoading || !user?.entityId) {
-      logger.debug("Skipping entity search: not authenticated, still loading, or no entity ID", "data");
-      return [];
-    }
+  // Search function removed - handled by TanStack Query useSearchEntities hook
 
-    // Immediate loading feedback for better UX
-    setIsLoadingEntitySearch(true);
-    setEntitySearchResults([]); // Clear previous results immediately
-    
-    try {
-      logger.debug(`Fast unified search with query: ${query}`, "data");
-      // Pass the current user's entity ID to exclude them from results
-      // Use optimized query parameters for faster response
-      const response = await apiClient.get(`${API_PATHS.SEARCH.ALL}?query=${encodeURIComponent(query.trim())}&currentUserEntityId=${user.entityId}&limit=15`);
-        
-      if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        const backendResults: Array<{ id: string; name: string; type: string; avatarUrl?: string; secondaryText?: string }> = response.data.data;
-
-        const mappedEntities: EntitySearchResult[] = backendResults.map((item) => ({
-          id: item.id, 
-          entity_type: item.type, 
-          reference_id: item.id, 
-          display_name: item.name,
-          avatar_url: item.avatarUrl,
-                is_active: true,
-          metadata: { secondaryText: item.secondaryText }, 
-        }));
-            
-              setEntitySearchResults(mappedEntities);
-        logger.debug(`Fast unified search found ${mappedEntities.length} items for query "${query}"`, "data");
-              return mappedEntities;
-            } else {
-        logger.debug(`Unified search response didn't contain usable data array for query "${query}"`, "data", response.data);
-          setEntitySearchResults([]);
-          return [];
-      }
-    } catch (error) {
-      logger.error(`Error searching all types for query "${query}"`, error, "data");
-      setEntitySearchResults([]);
-      return [];
-    } finally {
-      setIsLoadingEntitySearch(false);
-    }
-  }, [isAuthenticated, isAuthLoading, user?.entityId]);
-
-  // Get or create a direct interaction ID
-  const getOrCreateDirectInteraction = useCallback(async (contactProfileId: string): Promise<string | null> => {
-    if (!isAuthenticated || isAuthLoading) {
-      logger.debug("Skipping interaction fetch: not authenticated or loading", "data");
-      return null;
-    }
-    
-    logger.debug(`Getting/creating direct interaction with contact: ${contactProfileId}`, "data");
-    try {
-      const response = await apiClient.get(API_PATHS.INTERACTION.DIRECT(contactProfileId));
-      
-      // Check if we got interaction data and an ID
-      if (response.data?.data?.id) {
-        const interactionId = response.data.data.id;
-        logger.debug(`Found/Created direct interaction ID: ${interactionId}`, "data");
-        return interactionId;
-      } else {
-        // Log unexpected response structure
-        logger.warn(`Unexpected response structure from direct interaction endpoint for contact ${contactProfileId}`, "data", response.data);
-        return null;
-      }
-    } catch (error: any) {
-      // Handle 404 specifically (no interaction exists, maybe create implicitly? Backend handles this)
-      if (error.response?.status === 404) {
-         logger.debug(`No direct interaction found for contact ${contactProfileId}. Backend might create one on first message.`, "data");
-      } else {
-        logger.error(`Error fetching/creating direct interaction with ${contactProfileId}`, error, "data");
-      }
-      return null;
-    }
-  }, [isAuthenticated, isAuthLoading]);
+  // Get or create interaction function removed - handled by TanStack Query useCreateInteraction hook
 
   // Public methods for refreshing data - moved after fetchUserData declaration
   const refreshBalancesCb = useCallback(async () => {
-    if (MOCK_USER_ENABLED) { /* ... */ return; }
-    await fetchBalances(true);
-  }, [fetchBalances]);
+    // Balance refresh handled by TanStack Query useBalances hook
+    logger.debug('[DataContext] refreshBalances - delegated to TanStack Query');
+  }, []);
   
   const refreshInteractionsCb = useCallback(async () => {
-    if (MOCK_USER_ENABLED) { /* ... */ return; }
     await fetchInteractions(true);
   }, [fetchInteractions]);
 
   const refreshRecentConversationsCb = useCallback(async () => {
-    if (MOCK_USER_ENABLED) { 
-      return; 
-    }
     await fetchRecentConversations(true);
   }, [fetchRecentConversations]);
 
   const refreshUserDataCb = useCallback(async () => {
-    if (MOCK_USER_ENABLED) { 
-      return; 
-    }
     // Simple implementation - just clear and reload basic data
     // Use safe state updates to prevent rapid changes during transition
     safeStateUpdate(() => setKycStatus(null), false);
@@ -1503,61 +1263,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const refreshAllCb = useCallback(async () => {
-    if (MOCK_USER_ENABLED) { /* ... */ return; }
     try {
       await Promise.all([
-        fetchBalances(true),
+        // Balance refresh handled by TanStack Query
         fetchInteractions(true),
         refreshRecentConversationsCb()
       ]);
       await refreshUserDataCb();
     } finally {}
-  }, [fetchBalances, fetchInteractions, refreshRecentConversationsCb, refreshUserDataCb]);
+  }, [fetchInteractions, refreshRecentConversationsCb, refreshUserDataCb]);
 
-  // Send a message
-  const sendMessage = useCallback(async (messageData: SendMessageRequest & { recipient_id: string; idempotency_key: string, interaction_id: string }) => {
-    const optimisticId = messageData.metadata?.optimisticId;
-    logger.debug('[DataContext] sendMessageCb', 'data_timeline', { optimisticId: optimisticId, contentPreview: messageData.content?.substring(0,20)});
-    
-    if (!isAuthenticated || isAuthLoading || !user) {
-      logger.warn("[DataContext] sendMessageCb: Not authenticated or loading.");
-      return null;
-    }
-
-    try {
-      // Use the MessageManager to send the message instead of directly calling the API
-      // Since the MessageManager requires sender_entity_id but it's not in our type,
-      // we'll create a new object with all the properties we need
-      const messageToSend = {
-        ...messageData,
-        // Add any missing properties that MessageManager needs but aren't in our type
-        sender_entity_id: user.entityId,
-        metadata: {
-          ...messageData.metadata,
-          optimisticId: optimisticId || `opt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
-        },
-      };
-      
-      // Cast to any to avoid type issues with the extra properties needed by MessageManager
-      const result = await messageManager.sendMessage(messageToSend as any);
-      
-      // The MessageManager handles optimistic updates internally and emits events
-      // No need to manually add message to timeline here
-      
-      // After successfully sending a message, refresh the interactions list to update the last message snippet
-      if (result) {
-        refreshInteractionsCb().catch(err => 
-          logger.warn("[DataContext] Error refreshing interactions after sending message", String(err))
-        );
-      }
-      
-      return result;
-    } catch (error) {
-      logger.error("[DataContext] sendMessageCb: Error sending message via MessageManager", String(error), 'data_timeline');
-      // MessageManager already handles failed messages and their status updates
-      throw error; 
-    }
-  }, [isAuthenticated, isAuthLoading, user, refreshInteractionsCb]);
+  // Send message function removed - handled by TanStack Query useSendMessage mutation hook
 
   const sendDirectTransaction = useCallback(async (dto: import('../types/transaction.types').CreateDirectTransactionDto) => {
     if (!isAuthenticated || isAuthLoading || !user) return null;
@@ -1861,8 +1577,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
             
             // Only sync if we have authenticated user
             if (isAuthenticated && user) {
-              // Background sync without blocking UI
-              fetchBalances(false).catch((err: any) => logger.warn('[DataContext] Background balance sync failed:', err));
+              // Background balance sync handled by TanStack Query
             }
           }
         });
@@ -1890,7 +1605,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
         networkCleanup();
       }
     };
-  }, [isAuthenticated, user, fetchBalances]);
+  }, [isAuthenticated, user]);
 
 
 
@@ -1920,7 +1635,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     isLoadingRecentConversations,
     isLoadingEntitySearch,
     isLoadingTimeline,
-    isLoadingUserData,
+    // isLoadingUserData removed - handled by TanStack Query
     isInitialLoadComplete,
     
     // Professional loading state
@@ -1946,22 +1661,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
       logger.debug('[DataContext] refreshUserData called - DISABLED: Use TanStack Query useUserProfile hook instead');
     },
     refreshAll: refreshAllCb,
-    searchAll: async (query: string) => {
-      logger.debug('[DataContext] searchAll called - DISABLED: Use TanStack Query useSearchEntities hook instead');
-      return [];
-    },
-    getOrCreateDirectInteraction: async (contactProfileId: string) => {
-      logger.debug('[DataContext] getOrCreateDirectInteraction called - DISABLED: Use TanStack Query useCreateInteraction hook instead');
-      return null;
-    },
-    sendMessage: async (messageData: any) => {
-      logger.debug('[DataContext] sendMessage called - DISABLED: Use TanStack Query useSendMessage mutation instead');
-      return null;
-    },
+    // DISABLED FUNCTIONS - Use TanStack Query hooks instead
+    searchAll: async () => { logger.debug('[DataContext] DISABLED - Use useSearchEntities hook'); return []; },
+    getOrCreateDirectInteraction: async () => { logger.debug('[DataContext] DISABLED - Use useCreateInteraction hook'); return null; },
+    sendMessage: async () => { logger.debug('[DataContext] DISABLED - Use useSendMessage mutation'); return null; },
     sendDirectTransaction,
-    fetchInteractionTimeline: async (interactionId: string, options: any = {}) => {
-      logger.debug('[DataContext] fetchInteractionTimeline called - DISABLED: Use TanStack Query useTimeline hook instead');
-    },
+    fetchInteractionTimeline: async () => { logger.debug('[DataContext] DISABLED - Use useTimeline hook'); },
     addMessageToTimeline: addMessageToTimeline,
     addTransactionToTimeline: addTransactionToTimeline,
     updateInteractionPreviewFromTimeline: updateInteractionPreviewFromTimelineHelper,
