@@ -48,11 +48,11 @@ import { networkService } from '../../services/NetworkService';
 // Define navigation type more precisely for nested context
 // InteractionsHistory is a screen in InteractionsStack, which is inside a Tab in RootStack's App screen.
 type AppScreenProps = BottomTabScreenProps<any>; // Replace 'any' with your Tab ParamList if defined
-type InteractionsNavigationProp = StackNavigationProp<RootStackParamList>;
+type InteractionsNavigationProp = StackNavigationProp<RootStackParamList, 'App'>;
 
 // Define the type for the route prop specifically for InteractionsHistory
 // This now includes the optional navigateToContact parameter
-type InteractionsHistoryRouteProp = RouteProp<InteractionsStackParamList, 'InteractionsHistory'>;
+type InteractionsHistoryRouteProp = RouteProp<RootStackParamList, 'App'>;
 
 // Interface for displayed chat items - can be mapped from InteractionItem
 interface DisplayChat {
@@ -445,8 +445,8 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
       const navigateToNewChat = route.params?.navigateToNewChat;
       
       if (navigateToContactParams) {
-        const paramsForHistory: InteractionsStackParamList['ContactInteractionHistory2'] = navigateToContactParams;
-        (navigation as StackNavigationProp<InteractionsStackParamList>).navigate(
+        const paramsForHistory: RootStackParamList['ContactInteractionHistory2'] = navigateToContactParams;
+        navigation.navigate(
           'ContactInteractionHistory2',
           paramsForHistory
         );
@@ -495,7 +495,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     setSearchQuery("");
     
     // Navigate to the selected item
-    const navParams: InteractionsStackParamList['ContactInteractionHistory2'] = {
+    const navParams: RootStackParamList['ContactInteractionHistory2'] = {
       contactId: item.id,
       contactName: item.name,
       contactInitials: item.initials,
@@ -505,7 +505,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
       timestamp: new Date().getTime(),
     };
 
-    (navigation as StackNavigationProp<InteractionsStackParamList>).navigate('ContactInteractionHistory2', navParams);
+    navigation.navigate('ContactInteractionHistory2', navParams);
   };
 
   const handleCloseSearchModal = () => {
@@ -871,7 +871,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
       actualInteractionId = fullInteractionItem.id;
     }
 
-    const chatPressParams: InteractionsStackParamList['ContactInteractionHistory2'] = {
+    const chatPressParams: RootStackParamList['ContactInteractionHistory2'] = {
       interactionId: actualInteractionId,
       contactId: actualContactEntityId || '', 
       contactName: resolvedContactName,
@@ -881,7 +881,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
       forceRefresh: true,
       timestamp: new Date().getTime()
     };
-    (navigation as StackNavigationProp<InteractionsStackParamList>).navigate("ContactInteractionHistory2", chatPressParams);
+    navigation.navigate("ContactInteractionHistory2", chatPressParams);
   };
   
   // Handles press on a contact from the ContactList component
@@ -894,7 +894,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
       const entityId = contactMatch.matchedUser?.entityId;
       
       if (entityId) {
-        (navigation as StackNavigationProp<InteractionsStackParamList>).navigate("ContactInteractionHistory2", {
+        navigation.navigate("ContactInteractionHistory2", {
           contactId: entityId,
           contactName: contact.name,
           contactInitials: contact.initials,

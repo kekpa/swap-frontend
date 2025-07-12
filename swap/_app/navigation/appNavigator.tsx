@@ -14,44 +14,13 @@ import { useTheme } from "../theme/ThemeContext";
 
 const Tab = createBottomTabNavigator();
 
-// List of screens where tab bar should be hidden
-const hideOnScreens = [
-  'ContactInteractionHistory2',
-  'SendMoney',
-  'ReviewTransfer',
-  'TransferCompleted',
-  'SendTransfer',
-  'TransactionDetails',
-];
-
 // Function to determine if tab bar should be hidden based on the route
 const getTabBarVisibility = (route: RouteProp<any, any>, theme: ReturnType<typeof useTheme>['theme']): ViewStyle | undefined => {
   const routeName = getFocusedRouteNameFromRoute(route);
   
-  // PRIMARY CHECK: Use the original simple logic that was working
-  if (routeName && hideOnScreens.includes(routeName)) {
-    return { display: 'none' };
-  }
+  // This function is no longer needed with the new navigation structure.
+  // We will apply the style directly.
 
-  // FALLBACK: Only use nested detection if getFocusedRouteNameFromRoute failed
-  if (!routeName) {
-    const routeAsAny = route as any;
-    if (routeAsAny.state?.routes) {
-      const activeRoute = routeAsAny.state.routes[routeAsAny.state.index];
-      if (activeRoute?.name && hideOnScreens.includes(activeRoute.name)) {
-        return { display: 'none' };
-      }
-      
-      // Check for deeply nested routes (3 levels deep) for cases like NewInteraction -> NewInteractionHome
-      if (activeRoute?.state?.routes) {
-        const deepActiveRoute = activeRoute.state.routes[activeRoute.state.index];
-        if (deepActiveRoute?.name && hideOnScreens.includes(deepActiveRoute.name)) {
-          return { display: 'none' };
-        }
-      }
-    }
-  }
-  
   const bottomPadding = Platform.OS === 'ios' ? 25 : 10;
   
   return {
@@ -70,7 +39,6 @@ export default function AppNavigator() {
     <AuthGuard>
       <Tab.Navigator
         screenOptions={({ route }) => {
-          const tabBarStyle = getTabBarVisibility(route, theme);
           
           return {
           tabBarIcon: ({ focused, color, size }) => {
@@ -92,7 +60,13 @@ export default function AppNavigator() {
           },
             tabBarActiveTintColor: theme.colors.primary,
             tabBarInactiveTintColor: theme.colors.textSecondary,
-            tabBarStyle: tabBarStyle,
+            tabBarStyle: {
+              backgroundColor: theme.colors.card,
+              borderTopColor: theme.colors.border,
+              height: 72,
+              paddingBottom: Platform.OS === 'ios' ? 25 : 10,
+              paddingTop: 2,
+            },
             tabBarLabelStyle: {
               fontWeight: "500",
               fontSize: theme.typography.fontSize.xs - 2, // Further reduced font size
@@ -109,26 +83,10 @@ export default function AppNavigator() {
         <Tab.Screen 
           name="Wallet" 
           component={WalletNavigator}
-          listeners={({ navigation, route }) => ({
-            tabPress: e => {
-              const routeName = getFocusedRouteNameFromRoute(route);
-              if (routeName && hideOnScreens.includes(routeName)) {
-                navigation.reset({ index: 0, routes: [{ name: route.name }] });
-              }
-            },
-          })}
         />
         <Tab.Screen 
           name="Contacts" 
           component={InteractionsNavigator}
-          listeners={({ navigation, route }) => ({
-            tabPress: e => {
-              const routeName = getFocusedRouteNameFromRoute(route);
-              if (routeName && hideOnScreens.includes(routeName)) {
-                navigation.reset({ index: 0, routes: [{ name: route.name }] });
-              }
-            },
-          })}
         />
         {/* <Tab.Screen 
           name="Map" 

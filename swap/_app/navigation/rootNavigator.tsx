@@ -7,9 +7,13 @@ import AppNavigator from "./appNavigator";
 import ProfileNavigator from "./profileNavigator";
 import LoadingScreen from "../features/auth/login/LoadingScreen";
 import logger from "../utils/logger";
-import { CardStyleInterpolators } from "@react-navigation/stack";
+import { CardStyleInterpolators, TransitionPresets } from "@react-navigation/stack";
 import NewInteractionScreen from "../features/interactions/NewInteraction2";
 import TransactionDetailsScreen from "../features/wallet/TransactionDetailsScreen";
+import ContactInteractionHistoryScreen2 from "../features/interactions/ContactInteractionHistory2";
+import SendMoneyScreen from "../features/interactions/sendMoney2/SendMoneyScreen";
+import ReviewTransferScreen from "../features/interactions/sendMoney2/ReviewTransferScreen";
+import TransferCompletedScreen from "../features/interactions/sendMoney2/TransferCompletedScreen";
 
 // Development bypass settings - rely on AuthContext now
 const DEV_ALWAYS_AUTHENTICATED = false;
@@ -19,9 +23,23 @@ const Stack = createStackNavigator<RootStackParamList>();
 
 // Define ParamList for the Root Stack
 export type RootStackParamList = {
-  App: { // Allow params for nested navigation
-    screen?: string; // e.g., 'Contacts'
-    params?: any;    // e.g., { screen: 'ContactInteractionHistory2', params: { ... } }
+  App: { 
+    screen?: string;
+    params?: {
+      screen?: string;
+      params?: {
+        navigateToContact?: {
+          contactId: string;
+          contactName: string;
+          contactInitials: string;
+          contactAvatarColor: string;
+          forceRefresh?: boolean;
+          timestamp?: number;
+          isGroup?: boolean;
+        };
+        navigateToNewChat?: boolean;
+      };
+    };
   } | undefined;
   Auth: undefined;
   LoadingScreen: undefined;
@@ -34,6 +52,44 @@ export type RootStackParamList = {
     contactName?: string;
     contactInitials?: string;
     contactAvatarColor?: string;
+  };
+  ContactInteractionHistory2: {
+    contactId: string;
+    contactName: string;
+    contactInitials: string;
+    contactAvatarColor: string;
+    silentErrorMode?: boolean;
+    interactionId?: string;
+    forceRefresh?: boolean;
+    timestamp?: number;
+    isGroup?: boolean;
+    showTransferCompletedModal?: boolean;
+    transferDetails?: any; // Consider creating a specific type for this
+  };
+  SendMoney: {
+    recipientId?: string;
+    recipientName?: string;
+    recipientInitial?: string;
+    recipientColor?: string;
+  };
+  ReviewTransfer: {
+    amount: string | number;
+    recipientId: string;
+    recipientName: string;
+    recipientInitial: string;
+    recipientColor: string;
+    message?: string;
+    reference?: string;
+  };
+  TransferCompleted: {
+    amount: number;
+    recipientName: string;
+    recipientInitial: string;
+    recipientColor: string;
+    message: string;
+    transactionId: string;
+    status?: string;
+    createdAt?: string;
   };
 };
 
@@ -149,6 +205,42 @@ export default function RootNavigator() {
               cardStyleInterpolator: CardStyleInterpolators.forModalPresentationIOS,
               gestureEnabled: true,
               gestureDirection: 'vertical',
+            }}
+          />
+          <Stack.Screen
+            name="ContactInteractionHistory2"
+            component={ContactInteractionHistoryScreen2}
+            options={{
+              ...TransitionPresets.SlideFromRightIOS,
+              gestureEnabled: true,
+              gestureDirection: 'horizontal',
+            }}
+          />
+          <Stack.Screen
+            name="SendMoney"
+            component={SendMoneyScreen}
+            options={{
+              ...TransitionPresets.SlideFromRightIOS,
+              gestureEnabled: true,
+              gestureDirection: 'horizontal',
+            }}
+          />
+          <Stack.Screen
+            name="ReviewTransfer"
+            component={ReviewTransferScreen as any}
+            options={{
+              ...TransitionPresets.SlideFromRightIOS,
+              gestureEnabled: true,
+              gestureDirection: 'horizontal',
+            }}
+          />
+          <Stack.Screen
+            name="TransferCompleted"
+            component={TransferCompletedScreen}
+            options={{
+              presentation: 'modal',
+              ...TransitionPresets.ModalPresentationIOS,
+              gestureEnabled: false, // Typically don't want to dismiss a completion screen
             }}
           />
         </>
