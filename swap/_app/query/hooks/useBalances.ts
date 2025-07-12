@@ -7,7 +7,8 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../queryKeys';
-import balanceApi from '../../_api/balanceApi';
+import apiClient from '../../_api/apiClient';
+import { API_PATHS } from '../../_api/apiPaths';
 import { logger } from '../../utils/logger';
 import { currencyWalletsRepository, CurrencyWallet } from '../../localdb/CurrencyWalletsRepository';
 import { WalletBalance } from '../../types/wallet.types';
@@ -15,6 +16,98 @@ import { WalletBalance } from '../../types/wallet.types';
 interface UseBalancesOptions {
   enabled?: boolean;
 }
+
+// API Response interfaces matching actual backend response
+interface WalletApiResponse {
+  wallet_id: string;
+  account_id: string;
+  entity_id: string;
+  currency_id: string;
+  currency_code: string;
+  currency_symbol: string;
+  currency_name: string;
+  balance: number;
+  reserved_balance: number;
+  available_balance: number;
+  balance_last_updated: string | null;
+  is_active: boolean;
+  is_primary: boolean;
+}
+
+/**
+ * Helper function to parse complex nested JSON structure from backend
+ */
+const parseComplexBackendResponse = (data: any): WalletApiResponse[] => {
+  logger.debug('[useBalances] 🔍 Parsing complex backend response:', typeof data === 'string' ? data.substring(0, 200) + '...' : JSON.stringify(data).substring(0, 200) + '...');
+  
+  let result = data;
+  
+  // Handle multiple levels of JSON string parsing
+  let parseAttempts = 0;
+  while (typeof result === 'string' && parseAttempts < 5) {
+    try {
+      logger.debug(`[useBalances] 🔄 Parsing JSON string (attempt ${parseAttempts + 1})`);
+      result = JSON.parse(result);
+      parseAttempts++;
+    } catch (parseError) {
+      logger.error(`[useBalances] ❌ Failed to parse JSON string (attempt ${parseAttempts + 1}):`, parseError instanceof Error ? parseError : new Error(String(parseError)));
+      break;
+    }
+  }
+  
+  // Handle different response structures
+  if (Array.isArray(result)) {
+    logger.debug('[useBalances] ✅ Found direct array response');
+    return result;
+  }
+  
+  if (result && typeof result === 'object') {
+    // Check for nested data structures
+    const keys = Object.keys(result);
+    logger.debug(`[useBalances] 🔍 Object keys: ${keys.join(', ')}`);
+    
+    // Look for array-like structure (numbered keys)
+    const numberedKeys = keys.filter(key => /^\d+$/.test(key)).sort((a, b) => parseInt(a) - parseInt(b));
+    if (numberedKeys.length > 0) {
+      logger.debug(`[useBalances] ✅ Found numbered keys structure with ${numberedKeys.length.toString()} items`);
+      return numberedKeys.map(key => {
+        const item = result[key];
+        return typeof item === 'string' ? JSON.parse(item) : item;
+      });
+    }
+    
+    // Check for data property
+    if (result.data) {
+      logger.debug('[useBalances] ✅ Found data property, recursing');
+      return parseComplexBackendResponse(result.data);
+    }
+  }
+  
+  logger.warn(`[useBalances] ⚠️ Unexpected response structure, returning empty array`);
+  return [];
+};
+
+/**
+ * Transform API response to WalletBalance format
+ */
+const transformToWalletBalance = (apiWallet: WalletApiResponse): WalletBalance => {
+  return {
+    wallet_id: apiWallet.wallet_id,
+    account_id: apiWallet.account_id,
+    entity_id: apiWallet.entity_id,
+    currency_id: apiWallet.currency_id,
+    currency_code: apiWallet.currency_code,
+    currency_symbol: apiWallet.currency_symbol,
+    currency_name: apiWallet.currency_name,
+    balance: apiWallet.balance,
+    available_balance: apiWallet.available_balance,
+    reserved_balance: apiWallet.reserved_balance,
+    balance_last_updated: apiWallet.balance_last_updated,
+    is_active: apiWallet.is_active,
+    isPrimary: apiWallet.is_primary,
+    last_updated: apiWallet.balance_last_updated || new Date().toISOString(),
+  };
+};
 
 /**
  * useBalances Hook - WhatsApp-Style Local-First
@@ -91,13 +184,15 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
           }
 
           logger.debug(`[useBalances] 🔄 BACKGROUND SYNC: Fetching fresh data from API`);
-          const response = await balanceApi.fetchBalances(entityId);
+          const response = await apiClient.get(API_PATHS.WALLET.BY_ENTITY(entityId));
+          const parsedWallets = parseComplexBackendResponse(response.data);
+          const transformedBalances = parsedWallets.map(transformToWalletBalance);
           
-          if (response && response.length > 0) {
-            logger.debug(`[useBalances] ✅ BACKGROUND SYNC: Loaded ${response.length} balances from server`);
+          if (transformedBalances && transformedBalances.length > 0) {
+            logger.debug(`[useBalances] ✅ BACKGROUND SYNC: Loaded ${transformedBalances.length} balances from server`);
             
             // Transform API response to CurrencyWallet format for repository
-            const repositoryBalances: CurrencyWallet[] = response.map((balance: WalletBalance) => ({
+            const repositoryBalances: CurrencyWallet[] = transformedBalances.map((balance: WalletBalance) => ({
           id: balance.wallet_id,
           account_id: balance.account_id,
           currency_id: balance.currency_id,
@@ -119,8 +214,8 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
         await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances);
             
             // Update TanStack Query cache with WalletBalance format
-            queryClient.setQueryData(queryKeys.balancesByEntity(entityId), response);
-            logger.debug(`[useBalances] ✅ BACKGROUND SYNC: Updated ${response.length} balances in cache`);
+            queryClient.setQueryData(queryKeys.balancesByEntity(entityId), transformedBalances);
+            logger.debug(`[useBalances] ✅ BACKGROUND SYNC: Updated ${transformedBalances.length} balances in cache`);
           }
         } catch (error) {
           logger.debug(`[useBalances] ⚠️ Background sync failed (non-critical): ${error instanceof Error ? error.message : String(error)}`);
@@ -133,7 +228,9 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
     
     // STEP 4: No cache - fetch from API (first time only)
     logger.debug(`[useBalances] 📡 FIRST TIME: No cache found, fetching from API`);
-    const apiBalances = await balanceApi.fetchBalances(entityId);
+    const response = await apiClient.get(API_PATHS.WALLET.BY_ENTITY(entityId));
+    const parsedWallets = parseComplexBackendResponse(response.data);
+    const apiBalances = parsedWallets.map(transformToWalletBalance);
     logger.debug(`[useBalances] ✅ FIRST TIME: Loaded ${apiBalances.length} balances from server`);
     
     // Save to cache for next time
@@ -194,9 +291,38 @@ export const useSetPrimaryWallet = () => {
     mutationKey: ['set_primary_wallet'],
     mutationFn: async ({ walletId, entityId }: { walletId: string; entityId: string }) => {
       logger.debug(`[useSetPrimaryWallet] 🔄 Setting primary wallet: ${walletId}`);
-      const response = await balanceApi.setPrimaryWallet(walletId);
+      const response = await apiClient.patch(`/wallets/${walletId}/primary`);
       logger.debug(`[useSetPrimaryWallet] ✅ Primary wallet set successfully`);
-      return response;
+      
+      // Handle the response data - it's a single wallet object, not an array
+      let walletData = response.data;
+      
+      // If response has a 'data' property, extract it
+      if (walletData && typeof walletData === 'object' && walletData.data) {
+        walletData = walletData.data;
+      }
+      
+      // If the data is a JSON string, parse it
+      if (typeof walletData === 'string') {
+        try {
+          walletData = JSON.parse(walletData);
+        } catch (parseError) {
+          logger.error('[useSetPrimaryWallet] ❌ Failed to parse wallet data JSON:', parseError);
+          throw new Error('Invalid JSON response from setPrimaryWallet');
+        }
+      }
+      
+      // Validate that we have a wallet object with required fields
+      if (!walletData || typeof walletData !== 'object' || !walletData.wallet_id) {
+        logger.error('[useSetPrimaryWallet] ❌ Invalid wallet data structure:', walletData);
+        throw new Error('Invalid wallet data structure from setPrimaryWallet');
+      }
+      
+      // Transform to WalletBalance format
+      const transformedWallet = transformToWalletBalance(walletData);
+      logger.debug(`[useSetPrimaryWallet] ✅ Successfully transformed primary wallet: ${transformedWallet.currency_code}`);
+      
+      return transformedWallet;
     },
     onMutate: async ({ walletId, entityId }) => {
       // Cancel any outgoing refetches
