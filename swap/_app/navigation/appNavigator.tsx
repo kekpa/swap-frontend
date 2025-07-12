@@ -17,8 +17,6 @@ const Tab = createBottomTabNavigator();
 // List of screens where tab bar should be hidden
 const hideOnScreens = [
   'ContactInteractionHistory2',
-  'NewInteractionHome',
-  'NewInteraction2',
   'SendMoney',
   'ReviewTransfer',
   'TransferCompleted',

@@ -11,39 +11,26 @@ import { queryKeys } from '../queryKeys';
 import apiClient from '../../_api/apiClient';
 import { getStaleTimeForQuery } from '../config/staleTimeConfig';
 
-// User profile interface
+// User profile interface matching PersonalUserProfileDto from backend
 export interface UserProfile {
+  type: 'personal';
   id: string;
-  entityId: string;
-  firstName?: string;
-  lastName?: string;
+  user_id: string;
+  entity_id: string;
   email?: string;
-  phoneNumber?: string;
-  dateOfBirth?: string;
-  nationality?: string;
-  address?: {
-    street?: string;
-    city?: string;
-    state?: string;
-    country?: string;
-    postalCode?: string;
-  };
-  profilePictureUrl?: string;
-  isEmailVerified: boolean;
-  isPhoneVerified: boolean;
-  createdAt: string;
-  updatedAt: string;
-  lastActiveAt?: string;
-  preferences?: {
-    language?: string;
-    timezone?: string;
-    currency?: string;
-    notifications?: {
-      email: boolean;
-      push: boolean;
-      sms: boolean;
-    };
-  };
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  national_id?: string;
+  avatar_url?: string;
+  kyc_status: 'not_started' | 'pending' | 'approved' | 'rejected';
+  status: 'active' | 'inactive' | 'suspended';
+  country_code?: string;
+  p2p_display_preferences?: Record<string, any>;
+  discovery_settings?: Record<string, any>;
+  created_at: string;
+  updated_at: string;
 }
 
 /**
@@ -53,7 +40,8 @@ const fetchUserProfile = async (entityId: string): Promise<UserProfile> => {
   logger.debug('[useUserProfile] Fetching profile for entity:', entityId);
   
   try {
-    const response = await apiClient.get(`/profile/${entityId}`);
+    // Use the correct backend endpoint
+    const response = await apiClient.get('/auth/me');
     
     if (response.data) {
       logger.debug('[useUserProfile] ✅ Profile fetched successfully');
@@ -98,20 +86,20 @@ export const useProfileDisplayName = (entityId?: string) => {
   
   if (!profile) return null;
   
-  if (profile.firstName && profile.lastName) {
-    return `${profile.firstName} ${profile.lastName}`;
+  if (profile.first_name && profile.last_name) {
+    return `${profile.first_name} ${profile.last_name}`;
   }
   
-  if (profile.firstName) {
-    return profile.firstName;
+  if (profile.first_name) {
+    return profile.first_name;
   }
   
   if (profile.email) {
     return profile.email.split('@')[0];
   }
   
-  if (profile.phoneNumber) {
-    return profile.phoneNumber;
+  if (profile.phone) {
+    return profile.phone;
   }
   
   return 'Unknown User';
@@ -126,29 +114,18 @@ export const useProfileCompletion = (entityId?: string) => {
   if (!profile) return { percentage: 0, missingFields: [] };
   
   const requiredFields = [
-    'firstName',
-    'lastName', 
+    'first_name',
+    'last_name', 
     'email',
-    'phoneNumber',
-    'dateOfBirth',
-    'address.street',
-    'address.city',
-    'address.country',
+    'phone',
+    'country_code',
   ];
   
   const completedFields = requiredFields.filter(field => {
-    if (field.includes('.')) {
-      const [parent, child] = field.split('.');
-      return profile[parent as keyof UserProfile]?.[child as any];
-    }
     return profile[field as keyof UserProfile];
   });
   
   const missingFields = requiredFields.filter(field => {
-    if (field.includes('.')) {
-      const [parent, child] = field.split('.');
-      return !profile[parent as keyof UserProfile]?.[child as any];
-    }
     return !profile[field as keyof UserProfile];
   });
   
@@ -167,10 +144,11 @@ export const useVerificationStatus = (entityId?: string) => {
   
   if (!profile) return { isEmailVerified: false, isPhoneVerified: false };
   
+  // For now, assume verified if email/phone exist (backend doesn't provide verification flags)
   return {
-    isEmailVerified: profile.isEmailVerified,
-    isPhoneVerified: profile.isPhoneVerified,
-    isFullyVerified: profile.isEmailVerified && profile.isPhoneVerified,
+    isEmailVerified: !!profile.email,
+    isPhoneVerified: !!profile.phone,
+    isFullyVerified: !!profile.email && !!profile.phone,
   };
 };
 

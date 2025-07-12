@@ -15,7 +15,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { ProfileStackParamList } from '../../../navigation/profileNavigator';
 import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
-import { useKycStatus } from './hooks/useKycStatus';
+import { useKycStatus } from '../../../query/hooks/useKycStatus';
 import { useAuthContext } from '../../auth/context/AuthContext';
 import * as LocalAuthentication from 'expo-local-authentication';
 
@@ -154,7 +154,26 @@ const VerifyYourIdentityScreen: React.FC = () => {
   const route = useRoute<RouteProp<ProfileStackParamList, 'VerifyYourIdentity'>>();
   const { theme } = useTheme();
   const { user } = useAuthContext();
-  const { kycStatus, verificationStatus, isLoading, error, refreshStatus, isBiometricAvailable } = useKycStatus();
+  const { data: kycStatus, isLoading, error, refetch: refreshStatus } = useKycStatus(user?.entityId);
+  
+  // For compatibility with the existing component logic, create verificationStatus from kycStatus
+  const verificationStatus = useMemo(() => {
+    if (!kycStatus?.steps) return null;
+    
+    const steps = kycStatus.steps;
+    return {
+      personalInfo: { isCompleted: steps.personalInfo?.completed || false, isActive: false },
+      verifyId: { isCompleted: steps.documentUpload?.completed || false, isActive: false },
+      takeSelfie: { isCompleted: steps.identityVerification?.completed || false, isActive: false },
+      setupSecurity: { isCompleted: steps.backgroundCheck?.completed || false, isActive: false },
+      biometricSetup: { isCompleted: false, isActive: false }, // Not implemented in TanStack Query version yet
+      confirmPhone: { isCompleted: false, isActive: false }, // Not implemented in TanStack Query version yet
+      confirmEmail: { isCompleted: false, isActive: false }, // Not implemented in TanStack Query version yet
+    };
+  }, [kycStatus]);
+  
+  // Biometric availability check
+  const isBiometricAvailable = true; // Simplified for now
   const [activeStep, setActiveStep] = useState<VerificationStep>(VerificationStep.PERSONAL_INFO);
   
   // Determine profile type
@@ -172,31 +191,31 @@ const VerifyYourIdentityScreen: React.FC = () => {
 
   const sourceRoute = route.params?.sourceRoute;
   
-  // Enhanced logging for mount/focus
+  // TEMPORARILY DISABLED: Enhanced logging for mount/focus
+  // This useEffect was causing infinite refresh loops - needs refactoring for TanStack Query
   useEffect(() => {
     console.log(`[VerifyYourIdentityScreen] FOCUS/MOUNT. Received sourceRoute: ${sourceRoute}, route.key: ${route.key}, route.name: ${route.name}`);
     if(route.params) console.log(`[VerifyYourIdentityScreen] route.params on mount/focus: ${JSON.stringify(route.params)}`);
     
-    // Check if we need to refresh verification status
-    if (!verificationStatus && !isLoading) {
-      console.log('[VerifyYourIdentityScreen] No verification status available, triggering refresh');
-      refreshStatus();
-    } else if (verificationStatus) {
-      console.log('[VerifyYourIdentityScreen] ✅ Verification status available from cache');
-    }
+    // DISABLED: Check if we need to refresh verification status
+    // The TanStack Query hook handles data fetching automatically
+    // if (!verificationStatus && !isLoading) {
+    //   console.log('[VerifyYourIdentityScreen] No verification status available, triggering refresh');
+    //   refreshStatus();
+    // } else if (verificationStatus) {
+    //   console.log('[VerifyYourIdentityScreen] ✅ Verification status available from cache');
+    // }
     
     // Log KYC status for debugging
     if (kycStatus) {
       console.log(`[VerifyYourIdentityScreen] KYC Status:`, {
-        overall_status: kycStatus.process?.overall_status,
+        currentLevel: kycStatus.currentLevel,
+        isVerificationInProgress: kycStatus.isVerificationInProgress,
         steps: kycStatus.steps,
-        personal_info_completed: kycStatus.personal_info_completed,
-        document_verification_completed: kycStatus.document_verification_completed,
-        selfie_completed: kycStatus.selfie_completed,
-        security_setup_completed: kycStatus.security_setup_completed,
+        completedAt: kycStatus.completedAt,
       });
     }
-  }, [route.params, sourceRoute, route.key, route.name, kycStatus, verificationStatus, isLoading, refreshStatus]);
+  }, [route.params, sourceRoute, route.key, route.name, kycStatus]);
 
   // Update active step based on verification status
   useEffect(() => {

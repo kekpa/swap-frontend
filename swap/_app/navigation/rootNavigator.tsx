@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { createStackNavigator } from "@react-navigation/stack";
 import { useAuthContext } from "../features/auth/context/AuthContext";
-import { useData } from "../contexts/DataContext";
+import { useLoadingState } from "../query/hooks/useLoadingState";
 import AuthNavigator from "./authNavigator";
 import AppNavigator from "./appNavigator";
 import ProfileNavigator from "./profileNavigator";
@@ -26,7 +26,7 @@ export type RootStackParamList = {
   Auth: undefined;
   LoadingScreen: undefined;
   ProfileModal: { sourceRoute?: string };
-  NewInteraction2: undefined; // Add NewInteraction2 here (can add params if needed later)
+  NewInteraction: undefined; // Add NewInteraction here (can add params if needed later)
   TransactionDetails: {
     transactionId: string;
     transaction?: any;
@@ -39,7 +39,7 @@ export type RootStackParamList = {
 
 export default function RootNavigator() {
   const authContext = useAuthContext();
-  const { isInitialLoadComplete } = useData();
+  const { isInitialLoadComplete } = useLoadingState();
   const isAuthenticated = authContext?.isAuthenticated || false;
   const isLoading = authContext?.isLoading || false;
   const needsLogin = authContext?.needsLogin || false;
@@ -132,7 +132,7 @@ export default function RootNavigator() {
             }}
           />
           <Stack.Screen
-            name="NewInteraction2"
+            name="NewInteraction"
             component={NewInteractionScreen}
             options={{
               presentation: 'modal',

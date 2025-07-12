@@ -125,15 +125,7 @@ export const calculateStaleTime = (
     Math.min(STALE_TIME_BOUNDS.max, calculatedTime)
   );
 
-  logger.debug('[staleTimeConfig] Calculated stale time:', {
-    dataType,
-    baseTime,
-    behavior,
-    multiplier: multiplier.toFixed(2),
-    calculatedTime,
-    boundedTime,
-    humanReadable: `${Math.round(boundedTime / 1000)}s`,
-  });
+  logger.debug(`[staleTimeConfig] Calculated stale time: dataType=${dataType}, baseTime=${baseTime}, behavior=${behavior}, multiplier=${multiplier.toFixed(2)}, calculatedTime=${calculatedTime}, boundedTime=${boundedTime}, humanReadable=${Math.round(boundedTime / 1000)}s`);
 
   return boundedTime;
 };
@@ -247,10 +239,7 @@ export class DynamicStaleTimeManager {
     this.currentBehavior = { ...this.currentBehavior, ...newBehavior };
     this.lastUpdateTime = Date.now();
     
-    logger.debug('[DynamicStaleTimeManager] Behavior updated:', {
-      newBehavior: this.currentBehavior,
-      timestamp: this.lastUpdateTime,
-    });
+    logger.debug(`[DynamicStaleTimeManager] Behavior updated: newBehavior=${this.currentBehavior}, timestamp=${this.lastUpdateTime}`);
   }
 
   getStaleTime(dataType: DataType): number {

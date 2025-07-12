@@ -13,7 +13,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../../theme/ThemeContext';
-import { useData } from '../../../contexts/DataContext';
+import { useLoadingState } from '../../../query/hooks/useLoadingState';
 import { useAuthContext } from '../context/AuthContext';
 import logger from '../../../utils/logger';
 import { RootStackParamList } from '../../../navigation/rootNavigator';
@@ -27,29 +27,24 @@ const LoadingScreen: React.FC = () => {
   const { theme } = useTheme();
   const authContext = useAuthContext();
   const { user } = authContext;
-  const { 
+    const {
     isInitialLoadComplete,
-    interactionsList,
-    currencyBalances,
-    userProfile,
-    kycStatus,
+    loadingState,
     isLoadingInteractions,
     isLoadingBalances,
     isLoadingUserData,
-    loadingState,
     hasLocalData,
     hasEssentialLocalData
-  } = useData();
+  } = useLoadingState();
   
   console.log("🔥 [LoadingScreen] Current state:", {
     isInitialLoadComplete,
     isLoadingInteractions,
     isLoadingBalances,
     isLoadingUserData,
-    interactionsList: interactionsList.length,
-    currencyBalances: currencyBalances.length,
-    hasUserProfile: !!userProfile,
-    hasKycStatus: !!kycStatus
+    progress: loadingState.progress,
+    completedTasks: Array.from(loadingState.completedTasks),
+    errors: loadingState.errors
   });
 
   const [currentMessage, setCurrentMessage] = useState('Initializing your account...');

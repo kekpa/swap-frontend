@@ -43,6 +43,7 @@ import contactsService, { ContactMatch, DeviceContact, NormalizedContact } from 
 import ContactList, { DisplayableContact } from '../../components2/ContactList';
 import SearchOverlay from '../header/SearchOverlay';
 import { inviteContactViaSMS } from '../../utils/inviteUtils';
+import { networkService } from '../../services/NetworkService';
 
 // Define navigation type more precisely for nested context
 // InteractionsHistory is a screen in InteractionsStack, which is inside a Tab in RootStack's App screen.
@@ -500,6 +501,9 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
 
   useFocusEffect(
     useCallback(() => {
+      // Debug route params
+      logger.debug('[InteractionsHistory] useFocusEffect - route params:', "InteractionsHistory", route.params);
+      
       // ⚡ INSTANT CONTACT LOADING - No delays, no complex conditions (like interactions)
       if (!contactsSynced && !hasInitialContactsRun.current) { 
         if (hasContactsPermission === null) {
@@ -516,6 +520,11 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
       const navigateToContactParams = route.params?.navigateToContact;
       const navigateToNewChat = route.params?.navigateToNewChat;
       
+      logger.debug('[InteractionsHistory] Route params extracted:', "InteractionsHistory", {
+        navigateToContact: !!navigateToContactParams,
+        navigateToNewChat: !!navigateToNewChat
+      });
+      
       if (navigateToContactParams) {
         // Explicitly type the params being passed
         const paramsForHistory: InteractionsStackParamList['ContactInteractionHistory2'] = navigateToContactParams;
@@ -527,12 +536,16 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         navigation.setParams({ navigateToContact: undefined } as any);
       }
       
-      // Handle navigation to NewInteraction2 from wallet Send button
-      if (navigateToNewChat) {
-        logger.debug('[InteractionsHistory] Received navigateToNewChat param, navigating to NewInteraction2', "InteractionsHistory");
-        navigation.navigate("NewInteraction2");
-        navigation.setParams({ navigateToNewChat: undefined } as any);
-      }
+              // Handle navigation to NewInteraction from wallet Send button
+        if (navigateToNewChat) {
+          // Use InteractionManager to ensure navigation happens after the screen is fully loaded
+          InteractionManager.runAfterInteractions(() => {
+            (navigation as StackNavigationProp<InteractionsStackParamList>).navigate("NewInteraction");
+          });
+          
+          // Clear the param immediately to prevent re-navigation
+          navigation.setParams({ navigateToNewChat: undefined } as any);
+        }
       
       // Enhanced authentication and data loading logic
       // Check throttling inline to avoid dependency array issues
@@ -590,6 +603,21 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     }, [isAuthenticated, user?.entityId, isTransitionStable])
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      const navigateToNewChat = route.params?.navigateToNewChat;
+
+      if (navigateToNewChat) {
+        // Use InteractionManager to ensure the navigation happens after any screen transitions
+        InteractionManager.runAfterInteractions(() => {
+          (navigation as any).navigate("NewInteraction");
+        });
+        // Clear the param to prevent re-navigation on next focus
+        navigation.setParams({ navigateToNewChat: undefined } as any);
+      }
+    }, [route.params?.navigateToNewChat])
+  );
+
   // Handle search activation
   const handleSearchPress = useCallback(() => {
     InteractionManager.runAfterInteractions(() => {
@@ -636,10 +664,12 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     setIsSearchActive(false);
   };
   
-  const handleNewChat = () => {
-    logger.debug("New chat pressed", "InteractionsHistory");
-    navigation.navigate("NewInteraction2"); // This is in RootStackParamList
-  };
+      const handleNewChat = () => {
+      // Use InteractionManager to ensure smooth navigation
+      InteractionManager.runAfterInteractions(() => {
+        (navigation as StackNavigationProp<InteractionsStackParamList>).navigate("NewInteraction");
+      });
+    };
 
   const handleProfilePress = () => {
     const source = 'Interactions'; 

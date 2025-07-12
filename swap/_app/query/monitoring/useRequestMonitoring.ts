@@ -5,9 +5,9 @@
  * Automatically tracks query execution and provides deduplication insights.
  */
 
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { logger } from '../../utils/logger';
+import logger from '../../utils/logger';
 import {
   trackRequestStart,
   trackRequestEnd,
@@ -61,11 +61,7 @@ export const useRequestMonitoring = (options: UseRequestMonitoringOptions = {}) 
         const requestId = trackRequestStart(queryKey, observersCount);
         requestTrackingRef.current.set(serializedKey, requestId);
         
-        logger.debug('[useRequestMonitoring] Observer added for query:', {
-          queryKey: serializedKey,
-          observersCount,
-          requestId,
-        });
+        logger.debug(`[useRequestMonitoring] Observer added for query: ${serializedKey}, observers: ${observersCount}, requestId: ${requestId}`);
         
       } else if (event.type === 'updated') {
         const { query } = event;
@@ -79,12 +75,7 @@ export const useRequestMonitoring = (options: UseRequestMonitoringOptions = {}) 
           trackRequestEnd(requestId, status);
           requestTrackingRef.current.delete(serializedKey);
           
-          logger.debug('[useRequestMonitoring] Query updated:', {
-            queryKey: serializedKey,
-            status,
-            requestId,
-            dataUpdatedAt: query.state.dataUpdatedAt,
-          });
+          logger.debug(`[useRequestMonitoring] Query updated: ${serializedKey}, status: ${status}, requestId: ${requestId}, dataUpdatedAt: ${query.state.dataUpdatedAt}`);
         }
       }
     });
@@ -113,7 +104,7 @@ export const useRequestMonitoring = (options: UseRequestMonitoringOptions = {}) 
     const interval = setInterval(() => {
       const issues = detectDeduplicationIssues();
       if (issues.length > 0) {
-        logger.warn('[useRequestMonitoring] Detected deduplication issues:', issues);
+        logger.warn(`[useRequestMonitoring] Detected deduplication issues: ${JSON.stringify(issues)}`);
         onIssueDetected?.(issues);
       }
     }, 30000); // Check every 30 seconds
@@ -146,7 +137,7 @@ export const withRequestMonitoring = <P extends object>(
 ) => {
   return (props: P) => {
     useRequestMonitoring(monitoringOptions);
-    return <Component {...props} />;
+    return React.createElement(Component, props);
   };
 };
 

@@ -1,14 +1,13 @@
 /**
  * Request Deduplication Monitoring
  * 
- * Monitors and verifies TanStack Query's request deduplication behavior.
- * Provides insights into duplicate request patterns and performance metrics.
+ * Tracks TanStack Query request patterns to identify deduplication opportunities
+ * and potential performance issues.
  */
 
 import { QueryKey } from '@tanstack/react-query';
-import { logger } from '../../utils/logger';
+import logger from '../../utils/logger';
 
-// Request tracking interface
 export interface RequestInfo {
   queryKey: QueryKey;
   timestamp: number;
@@ -19,7 +18,6 @@ export interface RequestInfo {
   observers: number; // Number of components observing this query
 }
 
-// Deduplication metrics
 export interface DeduplicationMetrics {
   totalRequests: number;
   deduplicatedRequests: number;
@@ -30,29 +28,28 @@ export interface DeduplicationMetrics {
   mostRequestedQueries: Array<{ queryKey: string; count: number; deduplicationRate: number }>;
 }
 
-// Active request tracking
+// In-memory tracking
 const activeRequests = new Map<string, RequestInfo>();
 const completedRequests: RequestInfo[] = [];
-const maxHistorySize = 1000; // Keep last 1000 completed requests
+const maxHistorySize = 1000;
 
-// Generate unique request ID
+// Utility functions
 const generateRequestId = () => `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-// Serialize query key for consistent comparison
 const serializeQueryKey = (queryKey: QueryKey): string => {
   return JSON.stringify(queryKey);
 };
 
 /**
- * Track a new request start
+ * Track request start and detect deduplication
  */
 export const trackRequestStart = (queryKey: QueryKey, observers: number = 1): string => {
-  const requestId = generateRequestId();
   const serializedKey = serializeQueryKey(queryKey);
+  const requestId = generateRequestId();
   
-  // Check if there's already a pending request for this query
+  // Check if there's already an active request for this query
   const existingRequest = Array.from(activeRequests.values()).find(
-    req => serializeQueryKey(req.queryKey) === serializedKey && req.status === 'pending'
+    req => serializeQueryKey(req.queryKey) === serializedKey
   );
   
   const wasDeduplicated = !!existingRequest;
@@ -69,18 +66,9 @@ export const trackRequestStart = (queryKey: QueryKey, observers: number = 1): st
   activeRequests.set(requestId, requestInfo);
   
   if (wasDeduplicated) {
-    logger.debug('[RequestDeduplication] 🔄 Request deduplicated:', {
-      queryKey: serializedKey,
-      requestId,
-      existingRequestId: existingRequest?.requestId,
-      observers,
-    });
+    logger.debug(`[RequestDeduplication] 🔄 Request deduplicated: ${serializedKey}, requestId: ${requestId}, existingRequestId: ${existingRequest?.requestId}, observers: ${observers}`);
   } else {
-    logger.debug('[RequestDeduplication] 🚀 New request started:', {
-      queryKey: serializedKey,
-      requestId,
-      observers,
-    });
+    logger.debug(`[RequestDeduplication] 🚀 New request started: ${serializedKey}, requestId: ${requestId}, observers: ${observers}`);
   }
   
   return requestId;
@@ -95,7 +83,7 @@ export const trackRequestEnd = (
 ): void => {
   const request = activeRequests.get(requestId);
   if (!request) {
-    logger.warn('[RequestDeduplication] Request not found for completion:', requestId);
+    logger.warn(`[RequestDeduplication] Request not found for completion: ${requestId}`);
     return;
   }
   
@@ -115,13 +103,7 @@ export const trackRequestEnd = (
     completedRequests.splice(0, completedRequests.length - maxHistorySize);
   }
   
-  logger.debug('[RequestDeduplication] ✅ Request completed:', {
-    queryKey: serializeQueryKey(request.queryKey),
-    requestId,
-    status,
-    duration: `${duration}ms`,
-    wasDeduplicated: request.wasDeduplicated,
-  });
+  logger.debug(`[RequestDeduplication] ✅ Request completed: ${serializeQueryKey(request.queryKey)}, requestId: ${requestId}, status: ${status}, duration: ${duration}ms, wasDeduplicated: ${request.wasDeduplicated}`);
 };
 
 /**
@@ -215,18 +197,13 @@ export const clearTrackingData = (): void => {
  */
 export const logDeduplicationSummary = (): void => {
   const metrics = getDeduplicationMetrics();
+  const topQueries = metrics.mostRequestedQueries.slice(0, 3).map(q => ({
+    query: q.queryKey.substring(0, 50) + (q.queryKey.length > 50 ? '...' : ''),
+    count: q.count,
+    dedupRate: `${q.deduplicationRate.toFixed(1)}%`,
+  }));
   
-  logger.info('[RequestDeduplication] 📊 Deduplication Summary:', {
-    totalRequests: metrics.totalRequests,
-    deduplicationRate: `${metrics.deduplicationRate.toFixed(1)}%`,
-    avgDuration: `${metrics.avgRequestDuration.toFixed(0)}ms`,
-    activeRequests: activeRequests.size,
-    topQueries: metrics.mostRequestedQueries.slice(0, 3).map(q => ({
-      query: q.queryKey.substring(0, 50) + (q.queryKey.length > 50 ? '...' : ''),
-      count: q.count,
-      dedupRate: `${q.deduplicationRate.toFixed(1)}%`,
-    })),
-  });
+  logger.info(`[RequestDeduplication] 📊 Deduplication Summary: totalRequests: ${metrics.totalRequests}, deduplicationRate: ${metrics.deduplicationRate.toFixed(1)}%, avgDuration: ${metrics.avgRequestDuration.toFixed(0)}ms, activeRequests: ${activeRequests.size}, topQueries: ${JSON.stringify(topQueries)}`);
 };
 
 /**
@@ -267,64 +244,58 @@ export const detectDeduplicationIssues = (): Array<{
     if (count > 3) {
       issues.push({
         issue: 'Multiple Concurrent Requests',
-        description: `${count} concurrent requests for the same query. Deduplication might not be working properly.`,
+        description: `${count} concurrent requests detected for the same query. This might indicate a component re-rendering issue or missing request deduplication.`,
         queryKey,
         severity: 'high',
       });
     }
   });
   
-  // Long-running requests that might be blocking others
-  const longRunningRequests = Array.from(activeRequests.values()).filter(
-    req => Date.now() - req.timestamp > 10000 // 10 seconds
-  );
-  
-  if (longRunningRequests.length > 0) {
-    longRunningRequests.forEach(req => {
-      issues.push({
-        issue: 'Long-Running Request',
-        description: `Request has been pending for ${Math.round((Date.now() - req.timestamp) / 1000)}s. This might block deduplication for other requests.`,
-        queryKey: serializeQueryKey(req.queryKey),
-        severity: 'medium',
-      });
+  // Very slow requests
+  const slowRequests = completedRequests.filter(req => (req.duration || 0) > 5000); // 5 seconds
+  if (slowRequests.length > 0) {
+    const slowestQuery = slowRequests.reduce((prev, current) => 
+      (prev.duration || 0) > (current.duration || 0) ? prev : current
+    );
+    
+    issues.push({
+      issue: 'Slow Request Detected',
+      description: `Request took ${slowestQuery.duration}ms to complete. Consider optimizing the query or adding loading states.`,
+      queryKey: serializeQueryKey(slowestQuery.queryKey),
+      severity: 'medium',
     });
+  }
+  
+  // Log issues if any found
+  if (issues.length > 0) {
+    logger.warn(`[RequestDeduplication] ⚠️ Detected potential issues: ${JSON.stringify(issues)}`);
   }
   
   return issues;
 };
 
 /**
- * Periodic monitoring function to log stats and detect issues
+ * Start periodic monitoring
  */
 export const startPeriodicMonitoring = (intervalMs: number = 60000): (() => void) => {
   const interval = setInterval(() => {
-    if (__DEV__) {
-      logDeduplicationSummary();
-      
-      const issues = detectDeduplicationIssues();
-      if (issues.length > 0) {
-        logger.warn('[RequestDeduplication] ⚠️ Detected potential issues:', issues);
-      }
-    }
+    logDeduplicationSummary();
+    detectDeduplicationIssues();
   }, intervalMs);
   
-  logger.info('[RequestDeduplication] Started periodic monitoring');
+  logger.info(`[RequestDeduplication] Started periodic monitoring (interval: ${intervalMs}ms)`);
   
-  // Return cleanup function
   return () => {
     clearInterval(interval);
     logger.info('[RequestDeduplication] Stopped periodic monitoring');
   };
 };
 
-export default {
-  trackRequestStart,
-  trackRequestEnd,
-  getDeduplicationMetrics,
-  getActiveRequests,
-  getRequestHistory,
-  clearTrackingData,
-  logDeduplicationSummary,
-  detectDeduplicationIssues,
-  startPeriodicMonitoring,
-};
+/**
+ * Export for debugging
+ */
+export const getDebugInfo = () => ({
+  activeRequests: Array.from(activeRequests.entries()),
+  completedRequests: completedRequests.slice(-10), // Last 10
+  metrics: getDeduplicationMetrics(),
+});

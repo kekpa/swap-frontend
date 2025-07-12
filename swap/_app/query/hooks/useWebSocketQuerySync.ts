@@ -7,7 +7,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { logger } from '../../utils/logger';
+import logger from '../../utils/logger';
 import { queryKeys } from '../queryKeys';
 import { websocketService } from '../../services/websocketService';
 import { Message } from '../../types/message.types';
@@ -18,8 +18,13 @@ interface WebSocketMessage {
   data: any;
 }
 
-interface MessageData extends Message {
-  // Additional WebSocket specific fields
+interface MessageData {
+  id: string;
+  interaction_id: string;
+  sender_entity_id: string;
+  content?: string;
+  timestamp: string;
+  // Additional WebSocket specific fields if needed
 }
 
 interface TransactionUpdateData {
@@ -90,11 +95,7 @@ export const useWebSocketQuerySync = (entityId: string) => {
 
     const messageCleanup = websocketService.onMessage((data: MessageData) => {
       try {
-        logger.debug('[useWebSocketQuerySync] 📨 Received new message via WebSocket:', {
-          messageId: data.id,
-          interactionId: data.interaction_id,
-          senderEntityId: data.sender_entity_id,
-        });
+        logger.debug('[useWebSocketQuerySync] 📨 Received new message via WebSocket:', `messageId: ${data.id}, interactionId: ${data.interaction_id}, senderEntityId: ${data.sender_entity_id}`);
 
         // Prevent duplicate processing
         if (processedMessageIds.current.has(data.id)) {
@@ -127,11 +128,7 @@ export const useWebSocketQuerySync = (entityId: string) => {
 
     const transactionCleanup = websocketService.onTransactionUpdate((data: TransactionUpdateData) => {
       try {
-        logger.debug('[useWebSocketQuerySync] 💰 Received transaction update via WebSocket:', {
-          transactionId: data.transaction_id,
-          status: data.status,
-          timestamp: data.timestamp,
-        });
+        logger.debug('[useWebSocketQuerySync] 💰 Received transaction update via WebSocket:', `transactionId: ${data.transaction_id}, status: ${data.status}, timestamp: ${data.timestamp}`);
 
         // Update transaction cache optimistically
         handleTransactionUpdateOptimistically(data);
@@ -213,8 +210,8 @@ export const useWebSocketQuerySync = (entityId: string) => {
         if (interaction.id === data.interaction_id) {
           return {
             ...interaction,
-            last_message: data.content,
-            last_message_timestamp: data.timestamp,
+            last_message_snippet: data.content || '',
+            last_message_at: data.timestamp,
             unread_count: data.sender_entity_id !== entityId 
               ? (interaction.unread_count || 0) + 1 
               : interaction.unread_count,
@@ -270,7 +267,7 @@ export const useWebSocketQuerySync = (entityId: string) => {
 
     // Invalidate search results if this might affect them
     queryClient.invalidateQueries({
-      queryKey: queryKeys.search,
+      queryKey: ['search'],
       refetchType: 'none',
     });
 
@@ -287,50 +284,44 @@ export const useWebSocketQuerySync = (entityId: string) => {
       refetchType: 'active',
     });
 
-    // Invalidate all transaction queries
+    // Invalidate balance queries as transactions affect balances
     queryClient.invalidateQueries({
-      queryKey: queryKeys.transactions,
+      queryKey: queryKeys.balancesByEntity(entityId),
       refetchType: 'active',
     });
 
-    // If transaction completed, also invalidate balances
-    if (data.status === 'completed' || data.status === 'failed') {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.balancesByEntity(entityId),
-        refetchType: 'active',
-      });
-    }
+    // Invalidate transactions
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.recentTransactions(entityId, 50),
+      refetchType: 'active',
+    });
 
     logger.debug('[useWebSocketQuerySync] ✅ Transaction queries invalidated');
   };
 
-  // Cleanup processed message IDs periodically to prevent memory leaks
+  // Cleanup old processed message IDs periodically
   useEffect(() => {
-    const cleanup = setInterval(() => {
-      const maxSize = 1000;
-      if (processedMessageIds.current.size > maxSize) {
-        const idsArray = Array.from(processedMessageIds.current);
-        const idsToRemove = idsArray.slice(0, idsArray.length - maxSize + 100);
-        
-        idsToRemove.forEach(id => processedMessageIds.current.delete(id));
-        
+    const cleanupInterval = setInterval(() => {
+      const currentTime = Date.now();
+      const oldIds = Array.from(processedMessageIds.current).filter(id => {
+        // Remove IDs older than 5 minutes (adjust as needed)
+        return currentTime - parseInt(id.slice(-10), 36) > 5 * 60 * 1000;
+      });
+      
+      oldIds.forEach(id => processedMessageIds.current.delete(id));
+      
+      if (oldIds.length > 0) {
         logger.debug('[useWebSocketQuerySync] Cleaned up old processed message IDs');
       }
-    }, 5 * 60 * 1000); // Every 5 minutes
+    }, 60000); // Run every minute
 
-    return () => clearInterval(cleanup);
+    return () => clearInterval(cleanupInterval);
   }, []);
-
-  return {
-    // Return any utility functions or status if needed
-    isConnected: websocketService.isSocketConnected(),
-    isAuthenticated: websocketService.isSocketAuthenticated(),
-  };
 };
 
 /**
- * Hook for manually triggering query invalidation from WebSocket events
- * Useful for one-off invalidations or when you need more control
+ * Utility hook for manual query invalidation
+ * Useful for components that need to trigger cache updates
  */
 export const useWebSocketQueryInvalidation = () => {
   const queryClient = useQueryClient();
@@ -338,28 +329,24 @@ export const useWebSocketQueryInvalidation = () => {
   const invalidateBalances = (entityId: string) => {
     queryClient.invalidateQueries({
       queryKey: queryKeys.balancesByEntity(entityId),
-      refetchType: 'active',
     });
   };
 
   const invalidateTransactions = (entityId: string) => {
     queryClient.invalidateQueries({
       queryKey: queryKeys.recentTransactions(entityId, 20),
-      refetchType: 'active',
     });
   };
 
   const invalidateInteractions = (entityId: string) => {
     queryClient.invalidateQueries({
       queryKey: queryKeys.interactionsByEntity(entityId),
-      refetchType: 'active',
     });
   };
 
   const invalidateTimeline = (interactionId: string) => {
     queryClient.invalidateQueries({
       queryKey: queryKeys.timeline(interactionId),
-      refetchType: 'active',
     });
   };
 

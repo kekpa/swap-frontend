@@ -120,7 +120,6 @@ export type InteractionsStackParamList = {
 const Stack = createStackNavigator<InteractionsStackParamList>();
 
 export default function InteractionsNavigator() {
-  console.log("Rendering InteractionsNavigator");
   const { theme } = useTheme();
 
   return (
@@ -135,20 +134,10 @@ export default function InteractionsNavigator() {
       >
         <Stack.Screen name="InteractionsHistory" component={InteractionsHistoryScreen} />
         <Stack.Screen
-          name="NewInteraction"
-          component={NewInteractionNavigator}
-          options={{
-            presentation: "modal",
-            cardStyleInterpolator: CardStyleInterpolators.forVerticalIOS,
-            cardStyle: { backgroundColor: "transparent" },
-          }}
-        />
-        <Stack.Screen
           name="ContactInteractionHistory2"
           component={ContactInteractionHistoryScreen2}
           options={{
             ...TransitionPresets.SlideFromRightIOS, // Use built-in transition preset
-            cardStyle: { backgroundColor: "white" },
             gestureEnabled: true,
             gestureDirection: "horizontal",
           }}

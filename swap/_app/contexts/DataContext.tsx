@@ -555,252 +555,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [isAuthenticated, user]);
 
-  // Local-first balance fetching - Load from local first, then sync in background
-  const fetchBalances = useCallback(
-    async (forceRefresh = false) => {
-      logger.debug(`[DataContext] fetchBalances called (forceRefresh: ${forceRefresh})`);
-      
-      // Skip if using mock data
-      if (MOCK_USER_ENABLED) {
-        logger.debug("Using mock balance data instead of API calls", "data");
-        setHasLoadedBalances(true);
-        return;
-      }
+  // BALANCE FETCHING - DISABLED: Now handled by TanStack Query hooks
+  const fetchBalances = async (forceRefresh: boolean = false) => {
+    logger.debug(`[DataContext] fetchBalances called (forceRefresh: ${forceRefresh}) - DISABLED: Using TanStack Query instead`);
     
-      // 1. ALWAYS load from local first (instant UI)
-      try {
-        // Legacy account balances no longer supported - using CurrencyWalletsRepository
-        const localBalances: any[] = []; // await accountBalanceRepository.getAccountBalances();
-        if (localBalances.length > 0) {
-          logger.debug(`[DataContext] Loaded ${localBalances.length} balances from local cache`);
-          
-          // Transform to UI format and update state immediately
-          const currencyData = localBalances.map((balance: any) => ({
-            code: balance.currency_code,
-            symbol: balance.currency_symbol,
-            balance: balance.balance
-          }));
-          
-          setCurrencyBalances(currencyData);
-          setTotalFiat(currencyData.reduce((sum: number, curr: any) => sum + curr.balance, 0));
-          setHasLoadedBalances(true);
-          setIsLoadingBalances(false);
-          
-          logger.debug('[DataContext] ✅ Balances loaded from local cache - UI updated instantly');
-        }
-      } catch (error) {
-        logger.debug('[DataContext] Error loading balances from local cache:', String(error));
-      }
+    // DataContext balance fetching is now disabled
+    // Balance management has been migrated to TanStack Query hooks:
+    // - useBalances() for fetching wallet balances
+    // - useSetPrimaryWallet() for setting primary wallet
+    // - These hooks use the correct /wallets/entity/{entityId} endpoint
+    
+    // Set empty state to avoid conflicts with TanStack Query
+    setCurrencyBalances([]);
+    setTotalFiat(0);
+    setIsLoadingBalances(false);
+    setHasLoadedBalances(true);
+    
+    logger.debug('[DataContext] Balance fetching disabled - TanStack Query handles wallet data');
+    return;
+  };
 
-      // 2. Skip background sync if in guest mode or not authenticated
-      if (isGuestMode || !isAuthenticated || isAuthLoading || !user) {
-        logger.debug("Skipping balance background sync: guest mode or not authenticated", "data");
-        setIsLoadingBalances(false);
-        setHasLoadedBalances(true);
-        return;
-      }
-
-      // 3. Background sync - fetch from remote and update local cache
-      logger.debug('[DataContext] 🔄 Starting background sync for balances');
-      
-      // Check if we've recently refreshed and aren't forcing a refresh
-      const now = Date.now();
-      if (!forceRefresh && hasLoadedBalances && (now - lastBalancesRefresh < MIN_REFRESH_INTERVAL)) {
-        logger.debug(`Throttling balances API calls: last refresh was ${now - lastBalancesRefresh}ms ago`, "data");
-        return;
-      }
-
-      // Don't sync if we're already syncing
-      if (isLoadingBalances && !forceRefresh) {
-        logger.debug("Already syncing balances, skipping duplicate fetch", "data");
-        return;
-      }
-
-      // CRITICAL: Ensure we have a valid token before making the request to prevent 401 cascade
-      try {
-        const token = await getAccessToken();
-        if (!token) {
-          console.warn("🔒 [DataContext] No access token available for balance sync - stopping to prevent 401 errors");
-          return;
-        }
-        
-        // Test if token is valid by making a lightweight request first
-        try {
-          await apiClient.get('/auth/verify-token');
-          console.log("✅ [DataContext] Token validation successful, proceeding with balance sync");
-        } catch (tokenValidationError: any) {
-          if (tokenValidationError.response?.status === 401) {
-            console.warn("🔒 [DataContext] Token invalid (401), stopping balance sync to prevent cascade failure");
-            return;
-          }
-          // If it's not a 401, continue anyway (might be network issue)
-          console.warn("⚠️ [DataContext] Token validation failed but not 401, continuing with balance sync");
-        }
-      } catch (error) {
-        logger.warn("[DataContext] Failed to get access token for balance sync", "data");
-        return;
-      }
-
-      // Set syncing state (but don't block UI)
-      setIsLoadingBalances(true);
-
-      try {
-        // Update timestamp even if we get an error
-        setLastBalancesRefresh(now);
-        setHasLoadedBalances(true);
-
-        // Get the profile ID from the user object
-        const profileId = user.profileId;
-
-        if (!profileId) {
-          logger.error("User has no profile ID", { userId: user.id });
-          // Use the user ID as a fallback for the profile ID
-          const fallbackProfileId = user.id;
-          logger.debug(`Using user ID as fallback profile ID: ${fallbackProfileId}`, "data");
-          
-          // Fetch balances using the fallback ID - using the correct API path
-          const response = await apiClient.get(
-            API_PATHS.ACCOUNT.LIST
-          );
-          
-          if (!response.data) {
-            throw new Error("Invalid balance data received");
-          }
-          
-          // Continue processing as normal with the fallback ID
-          logger.debug(`Balance API response with fallback ID: ${JSON.stringify(response.data)}`, "data");
-          
-          // Check if we have balance data and it's in the expected format
-          if (response.data && response.data.length > 0) {
-            const currencyData = response.data[0];
-            // Make sure we're accessing the right property (balance vs balances)
-            const balanceAmount = parseFloat(currencyData.balance) || 0;
-            
-            const balances: CurrencyBalance[] = [
-              { 
-                code: currencyData.code, 
-                symbol: currencyData.symbol, 
-                balance: balanceAmount 
-              }
-            ];
-            
-            setCurrencyBalances(balances);
-            setTotalFiat(balanceAmount);
-            
-            // Save to local cache for next time - use insertAccountBalance with proper type
-            const balanceToSave = {
-              id: `${fallbackProfileId}_${currencyData.code}`,
-              balance: balanceAmount,
-              currency_code: currencyData.code,
-              currency_symbol: currencyData.symbol,
-              account_type: 'primary',
-              status: 'active',
-              last_updated: new Date().toISOString()
-            };
-            
-            // await accountBalanceRepository.insertAccountBalance(balanceToSave as any);
-            logger.debug(`Balances synced and cached: ${balanceAmount} ${currencyData.code}`, "data");
-          } else {
-            // If no data, set empty balance with 0
-            setCurrencyBalances([]);
-            setTotalFiat(0);
-            logger.debug("No balance data found, setting empty balance", "data");
-          }
-        } else {
-          logger.debug(`Fetching real balances for profile: ${profileId}`, "data");
-
-          // Define multiple endpoints to try for balance information
-          const endpoints = [
-            API_PATHS.ACCOUNT.LIST,  // Only use the working endpoint
-          ];
-          
-          let response = null;
-          let successEndpoint = '';
-          
-          // Try each endpoint until one works
-          for (const endpoint of endpoints) {
-            try {
-              logger.debug(`Trying to fetch balances from: ${endpoint}`, "data");
-              response = await apiClient.get(endpoint);
-              
-              if (response && response.data) {
-                successEndpoint = endpoint;
-                logger.debug(`Successfully fetched data from: ${endpoint}`, "data");
-                break; // Break the loop as we found working endpoint
-              }
-            } catch (endpointError) {
-              logger.debug(`Endpoint ${endpoint} failed: ${endpointError}`, "data");
-              // Continue to next endpoint
-            }
-          }
-          
-          // If standard endpoint failed, there's no fallback anymore
-          if (!response || !response.data) {
-            logger.debug("Balance endpoint failed, setting empty balance", "data");
-            setCurrencyBalances([]);
-            setTotalFiat(0);
-            return;
-          }
-
-          // Process the response data from accounts endpoint
-          logger.debug(`Balance API response from ${successEndpoint}: ${JSON.stringify(response.data)}`, "data");
-
-          let balanceData: CurrencyBalance[] = [];
-          
-          // Access the actual array of accounts – backend may return array directly or nested under data
-          const accountsArrayRaw = Array.isArray(response.data?.data) ? response.data.data : response.data;
-          const accountsArray = Array.isArray(accountsArrayRaw) ? accountsArrayRaw : [];
-          
-          // Process data from accounts endpoint
-          if (Array.isArray(accountsArray) && accountsArray.length > 0) {
-            // For each account, extract currency information
-            for (const account of accountsArray) {
-              const balance = parseFloat(account.balance) || 0;
-              
-              // Get currency details from joined currencies data
-              const currencyCode = account.currencies?.code || "HTG";
-              const currencySymbol = account.currencies?.symbol || "G";
-              
-              balanceData.push({
-                code: currencyCode,
-                symbol: currencySymbol,
-                balance: balance
-              });
-            }
-          }
-          
-          // If we have balance data, update state
-          if (balanceData.length > 0) {
-            setCurrencyBalances(balanceData);
-            
-            // Sum all balances for total fiat
-            const totalBalance = balanceData.reduce((sum, curr) => sum + curr.balance, 0);
-            setTotalFiat(totalBalance);
-            
-            logger.debug(`Real balances loaded: ${totalBalance} from ${balanceData.length} accounts`, "data");
-          } else {
-            // No balance data available, use empty/zero
-            setCurrencyBalances([]);
-            setTotalFiat(0);
-            logger.debug("No balance data found in the response, setting empty balance", "data");
-          }
-        }
-          } catch (error: any) {
-      logger.error("Error fetching balances", error, "data");
-      
-      // On error, set empty values instead of fallback
-      setCurrencyBalances([]);
-      setTotalFiat(0);
-      
-      logger.debug("Error fetching balances, setting empty values", "data");
-    } finally {
-      setIsLoadingBalances(false);
-      // Removed setIsInitialLoadComplete(true) - let LoadingManager handle this
-    }
-    },
-    [isAuthenticated, isAuthLoading, user, isLoadingBalances, hasLoadedBalances, lastBalancesRefresh, isGuestMode]
-  );
-  
   // 🚀 NEW: Proactive timeline caching for WhatsApp-like experience
   // preloadRecentTimelines function will be defined after fetchInteractionTimeline
 
@@ -2158,17 +1932,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({
     hasLoadedUserData,
     hasLoadedRecentConversations,
 
-    // Actions - REDUCED: Removed functions replaced by TanStack Query
-    // refreshBalances: REMOVED - replaced by useBalances hook
-    // refreshInteractions: REMOVED - replaced by useInteractions hook  
-    // refreshRecentConversations: REMOVED - replaced by useRecentConversations hook
-    // refreshUserData: REMOVED - replaced by useUserProfile hook
+    // Actions - STUB IMPLEMENTATIONS: These are disabled in favor of TanStack Query
+    refreshBalances: async () => {
+      logger.debug('[DataContext] refreshBalances called - DISABLED: Use TanStack Query useBalances hook instead');
+    },
+    refreshInteractions: async () => {
+      logger.debug('[DataContext] refreshInteractions called - DISABLED: Use TanStack Query useInteractions hook instead');
+    },
+    refreshRecentConversations: async () => {
+      logger.debug('[DataContext] refreshRecentConversations called - DISABLED: Use TanStack Query useRecentConversations hook instead');
+    },
+    refreshUserData: async () => {
+      logger.debug('[DataContext] refreshUserData called - DISABLED: Use TanStack Query useUserProfile hook instead');
+    },
     refreshAll: refreshAllCb,
-    // searchAll: REMOVED - replaced by useSearchEntities hook
-    // getOrCreateDirectInteraction: REMOVED - replaced by useCreateInteraction hook
-    // sendMessage: REMOVED - replaced by useSendMessage mutation
+    searchAll: async (query: string) => {
+      logger.debug('[DataContext] searchAll called - DISABLED: Use TanStack Query useSearchEntities hook instead');
+      return [];
+    },
+    getOrCreateDirectInteraction: async (contactProfileId: string) => {
+      logger.debug('[DataContext] getOrCreateDirectInteraction called - DISABLED: Use TanStack Query useCreateInteraction hook instead');
+      return null;
+    },
+    sendMessage: async (messageData: any) => {
+      logger.debug('[DataContext] sendMessage called - DISABLED: Use TanStack Query useSendMessage mutation instead');
+      return null;
+    },
     sendDirectTransaction,
-    // fetchInteractionTimeline: REMOVED - replaced by useTimeline hook
+    fetchInteractionTimeline: async (interactionId: string, options: any = {}) => {
+      logger.debug('[DataContext] fetchInteractionTimeline called - DISABLED: Use TanStack Query useTimeline hook instead');
+    },
     addMessageToTimeline: addMessageToTimeline,
     addTransactionToTimeline: addTransactionToTimeline,
     updateInteractionPreviewFromTimeline: updateInteractionPreviewFromTimelineHelper,

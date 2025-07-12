@@ -1,5 +1,5 @@
 // Created: SearchOverlay component for Google Maps-style in-place search experience - 2025-05-29
-// Updated: Use centralized avatar utilities and filter out current user - 2025-05-29
+// Updated: Complete TanStack Query migration with proper hooks - 2025-01-10
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   View,
@@ -14,24 +14,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useTheme } from '../../theme/ThemeContext';
-// Temporarily disabled - search functionality will be implemented with useSearchEntities
-// import { useData, EntitySearchResult } from '../../contexts/DataContext';
-
-// EntitySearchResult type definition
-interface EntitySearchResult {
-  id: string;
-  entity_type: string;
-  reference_id: string;
-  display_name: string;
-  avatar_url?: string;
-  is_active: boolean;
-  metadata?: any;
-}
 import { useAuthContext } from '../auth/context/AuthContext';
 import { InteractionsStackParamList } from '../../navigation/interactions/interactionsNavigator';
 import SearchResultsList from '../../components2/SearchResultsList';
 import { getAvatarProps } from '../../utils/avatarUtils';
 import logger from '../../utils/logger';
+import { useSearchEntities } from '../../query/hooks/useSearchEntities';
+import { useInteractions, InteractionItem } from '../../query/hooks/useInteractions';
 
 type NavigationProp = StackNavigationProp<InteractionsStackParamList>;
 
@@ -57,150 +46,144 @@ const SearchOverlay: React.FC<SearchOverlayProps> = React.memo(({
 }) => {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  // TODO: Replace with TanStack Query hooks when search is implemented
-  // const { searchAll, entitySearchResults, isLoadingEntitySearch, recentConversations, isLoadingRecentConversations, refreshRecentConversations } = useData();
-  
-  // Placeholder data until search hooks are implemented
-  const searchAll = async () => {};
-  const entitySearchResults: EntitySearchResult[] = [];
-  const isLoadingEntitySearch = false;
-  const recentConversations: any[] = [];
-  const isLoadingRecentConversations = false;
-  const refreshRecentConversations = () => {};
   const { user } = useAuthContext();
 
-  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
-  const [hasSearched, setHasSearched] = useState(false);
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
-  const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
+  // TanStack Query hooks
+  const {
+    results: searchResults,
+    isLoading: isLoadingEntitySearch,
+    isError: isSearchError,
+    error: searchError,
+  } = useSearchEntities({
+    query: searchQuery,
+    enabled: searchQuery.length >= 2,
+  });
 
-  // To prevent infinite loops with refreshRecentConversations in dependency array
-  const initialLoadRef = useRef(false);
+  const {
+    interactions,
+    isLoading: isLoadingInteractions,
+    isError: isInteractionsError,
+    error: interactionsError,
+  } = useInteractions({
+    enabled: true,
+  });
+
+  const [hasSearched, setHasSearched] = useState(false);
+  const [mappedSearchResults, setMappedSearchResults] = useState<SearchResult[]>([]);
+  const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
   
-  // Memoize the suggestions to avoid unnecessary re-renders
+  // Convert interactions to suggestions format
   const memoizedSuggestions = useMemo(() => {
-    console.log('🔍 [SearchOverlay] Recalculating suggestions from recentConversations:', 
-              recentConversations?.length);
+    logger.debug(`[SearchOverlay] Recalculating suggestions from interactions: ${interactions?.length || 0}`);
     
-    if (!recentConversations || recentConversations.length === 0) {
+    if (!interactions || interactions.length === 0) {
       return [];
     }
     
-    // Convert recent conversations to search results format
-    return recentConversations.slice(0, 6).map(conversation => ({
-      id: conversation.contactEntityId || conversation.id,
-      name: conversation.name,
-      type: 'interaction' as const,
-      avatarUrl: conversation.avatarUrl,
-      initials: conversation.initials,
-      avatarColor: conversation.avatarColor,
-      secondaryText: conversation.type === 'group' ? 'Group Chat' : 'Direct Message',
-      originalData: conversation,
-    }));
-  }, [recentConversations]);
+    // Convert interactions to search results format
+    return interactions.slice(0, 6).map((interaction: InteractionItem) => {
+      // Get the other member (not the current user) for direct conversations
+      const otherMember = interaction.members?.find(
+        member => member.entity_id !== user?.entityId
+      );
+      
+      const displayName = interaction.name || otherMember?.display_name || 'Unknown';
+      const avatarProps = getAvatarProps(
+        otherMember?.entity_id || interaction.id,
+        displayName
+      );
+      
+      return {
+        id: interaction.id,
+        name: displayName,
+        type: 'interaction' as const,
+        avatarUrl: otherMember?.avatar_url,
+        initials: avatarProps.initials,
+        avatarColor: avatarProps.color,
+        secondaryText: interaction.is_group ? 'Group Chat' : 'Direct Message',
+        originalData: {
+          ...interaction,
+          contactEntityId: otherMember?.entity_id,
+          type: interaction.is_group ? 'group' : 'direct',
+        },
+      };
+    });
+  }, [interactions, user?.entityId]);
 
-  // Load suggestions when component mounts
+  // Load suggestions when component mounts or interactions change
   useEffect(() => {
-    console.log('🔍 [SearchOverlay] Mount effect - loading suggestions. recentConversations length:', recentConversations?.length);
+    logger.debug(`[SearchOverlay] Mount effect - loading suggestions. Interactions length: ${interactions?.length || 0}`);
     
-    // Only refresh conversations on initial mount
-    if (!initialLoadRef.current) {
-      initialLoadRef.current = true;
-        
-      // Only refresh if we don't have data
-      if (!recentConversations || recentConversations.length === 0) {
-        refreshRecentConversations().catch(err => 
-          console.warn('🔍 [SearchOverlay] Error refreshing recent conversations:', err)
-        );
-          }
-        }
-
     // Set suggestions from memoized value
     setSuggestions(memoizedSuggestions);
     
     // Log what we're displaying
     if (memoizedSuggestions.length > 0) {
-      console.log('🔍 [SearchOverlay] Found recent conversations:', memoizedSuggestions.length);
+      logger.debug(`[SearchOverlay] Found recent conversations: ${memoizedSuggestions.length}`);
       memoizedSuggestions.forEach((conv, idx) => {
-        console.log(`🔍 [SearchOverlay] Recent suggestion ${idx}: ${conv.name}, type=${conv.type}, id=${conv.id}`);
+        logger.debug(`[SearchOverlay] Recent suggestion ${idx}: ${conv.name}, type=${conv.type}, id=${conv.id}`);
       });
     } else {
-      console.log('🔍 [SearchOverlay] No suggestions available');
+      logger.debug('[SearchOverlay] No suggestions available');
     }
-  }, [memoizedSuggestions]); // Only re-run when memoized suggestions change
+  }, [memoizedSuggestions, interactions]);
 
-  // Handle search with debouncing
+  // Handle search state changes
   useEffect(() => {
-    // Clear previous timeout
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
-    }
-
     // If query is empty, show suggestions
     if (!searchQuery || searchQuery.trim().length === 0) {
       setHasSearched(false);
-      setSearchResults([]);
+      setMappedSearchResults([]);
       return;
     }
 
-    // Search with 150ms debounce
+    // Mark as searched for queries >= 2 characters
     if (searchQuery.trim().length >= 2) {
-      const timeout = setTimeout(async () => {
-        logger.debug(`Fast search with query: ${searchQuery}`, "SearchOverlay");
-        try {
-          await searchAll(searchQuery);
-          setHasSearched(true);
-        } catch (error) {
-          logger.error("Error searching", error, "SearchOverlay");
-          setHasSearched(true);
-        }
-      }, 150);
-      
-      setSearchTimeout(timeout);
+      setHasSearched(true);
     }
-  }, [searchQuery, searchAll]);
+  }, [searchQuery]);
 
   // Convert entity search results to SearchResult format
   useEffect(() => {
-    if (entitySearchResults && entitySearchResults.length > 0) {
-      logger.debug(`[SearchOverlay] Processing ${entitySearchResults.length} search results. Current user entityId: ${user?.entityId}`, "SearchOverlay");
+    if (searchResults?.entities && searchResults.entities.length > 0) {
+      logger.debug(`[SearchOverlay] Processing ${searchResults.entities.length} search results. Current user entityId: ${user?.entityId}`);
       
       // Filter out current user's entity to prevent self-chat
-      const filteredResults = entitySearchResults.filter(entity => {
+      const filteredResults = searchResults.entities.filter(entity => {
         const shouldKeep = entity.id !== user?.entityId;
         if (!shouldKeep) {
-          logger.debug(`[SearchOverlay] Filtering out current user's entity: ${entity.id} (display_name: ${entity.display_name})`, "SearchOverlay");
+          logger.debug(`[SearchOverlay] Filtering out current user's entity: ${entity.id} (displayName: ${entity.displayName})`);
         }
         return shouldKeep;
       });
       
-      logger.debug(`[SearchOverlay] After filtering: ${filteredResults.length} results (removed ${entitySearchResults.length - filteredResults.length} self-results)`, "SearchOverlay");
+      logger.debug(`[SearchOverlay] After filtering: ${filteredResults.length} results (removed ${searchResults.entities.length - filteredResults.length} self-results)`);
       
       const mappedResults = filteredResults.map(entity => {
-        const avatarProps = getAvatarProps(entity.id, entity.display_name);
+        const avatarProps = getAvatarProps(entity.id, entity.displayName);
         
         return {
           id: entity.id,
-          name: entity.display_name,
+          name: entity.displayName,
           type: 'entity' as const,
-          avatarUrl: entity.avatar_url,
+          avatarUrl: entity.avatarUrl,
           initials: avatarProps.initials,
           avatarColor: avatarProps.color,
-          secondaryText: entity.entity_type === 'profile' ? 'Profile' : 
-                        entity.entity_type === 'business' ? 'Business' : 'Account',
+          secondaryText: entity.entityType === 'profile' ? 'Profile' : 
+                        entity.entityType === 'business' ? 'Business' : 'Account',
           originalData: entity,
         };
       });
       
-      setSearchResults(mappedResults);
+      setMappedSearchResults(mappedResults);
     } else if (hasSearched) {
-      setSearchResults([]);
+      setMappedSearchResults([]);
     }
-  }, [entitySearchResults, hasSearched, user?.entityId]);
+  }, [searchResults, hasSearched, user?.entityId]);
 
   // Handle item selection
   const handleItemPress = useCallback((item: SearchResult) => {
-    logger.debug(`Search item selected: ${item.name} (${item.type})`, "SearchOverlay");
+    logger.debug(`Search item selected: ${item.name} (${item.type})`);
     
     if (onItemSelect) {
       onItemSelect(item);
@@ -275,6 +258,15 @@ const SearchOverlay: React.FC<SearchOverlayProps> = React.memo(({
     searchResultsContainer: {
       flex: 1,
     },
+    errorContainer: {
+      padding: 20,
+      alignItems: 'center',
+    },
+    errorText: {
+      color: theme.colors.error,
+      textAlign: 'center',
+      marginTop: 8,
+    },
   }), [theme]);
 
   // Render search result item
@@ -321,10 +313,18 @@ const SearchOverlay: React.FC<SearchOverlayProps> = React.memo(({
     </TouchableOpacity>
   ), [handleItemPress, theme]);
 
+  // Handle errors
+  if (isSearchError || isInteractionsError) {
+    logger.error('[SearchOverlay] Error in search or interactions:', {
+      searchError: searchError?.message,
+      interactionsError: interactionsError?.message,
+    });
+  }
+
   return (
     <View style={styles.container}>
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Quick Actions (when no query) - MOVED TO TOP */}
+        {/* Quick Actions (when no query) */}
         {!searchQuery && (
           <>
             <View style={styles.sectionHeader}>
@@ -339,33 +339,44 @@ const SearchOverlay: React.FC<SearchOverlayProps> = React.memo(({
           </>
         )}
 
-        {/* Suggestions (when not searching) - NOW BELOW QUICK ACTIONS */}
+        {/* Recent Conversations (when not searching) */}
         {!searchQuery && (
           <>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Recent Conversations</Text>
             </View>
             
-            {isLoadingRecentConversations && suggestions.length === 0 ? (
+            {isLoadingInteractions && suggestions.length === 0 ? (
               <View style={{ padding: 20, alignItems: 'center' }}>
                 <ActivityIndicator size="small" color={theme.colors.primary} />
-                <Text style={{ marginTop: 8, color: theme.colors.textSecondary }}>Loading recent conversations...</Text>
+                <Text style={{ marginTop: 8, color: theme.colors.textSecondary }}>
+                  Loading recent conversations...
+                </Text>
+              </View>
+            ) : isInteractionsError ? (
+              <View style={styles.errorContainer}>
+                <Ionicons name="warning-outline" size={24} color={theme.colors.error} />
+                <Text style={styles.errorText}>
+                  Failed to load recent conversations
+                </Text>
               </View>
             ) : suggestions.length > 0 ? (
               suggestions.map(renderSearchItem)
             ) : (
               <View style={{ padding: 20, alignItems: 'center' }}>
-                <Text style={{ color: theme.colors.textSecondary }}>No recent conversations</Text>
+                <Text style={{ color: theme.colors.textSecondary }}>
+                  No recent conversations
+                </Text>
               </View>
             )}
           </>
         )}
 
-        {/* Search Results using shared component */}
+        {/* Search Results */}
         {searchQuery && (
           <View style={styles.searchResultsContainer}>
             <SearchResultsList
-              searchResults={searchResults}
+              searchResults={mappedSearchResults}
               isLoading={isLoadingEntitySearch}
               searchQuery={searchQuery}
               hasSearched={hasSearched}

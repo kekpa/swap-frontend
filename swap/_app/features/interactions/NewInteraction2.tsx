@@ -73,6 +73,12 @@ interface SearchResult {
 const NewInteraction2: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
+  
+  // State declarations first
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
+  
   // TanStack Query hook for search - replaces useData() search functions
   const {
     results: { entities: entitySearchResults },
@@ -90,10 +96,6 @@ const NewInteraction2: React.FC = () => {
     }
     return 'UN';
   };
-  
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
-  const [hasSearched, setHasSearched] = useState(false);
   
   // Contact-related state - types changed to DisplayableContact[]
   const [allDeviceContacts, setAllDeviceContacts] = useState<ContactMatch[]>([]); // This might be less directly used now
@@ -225,7 +227,7 @@ const NewInteraction2: React.FC = () => {
     if (entitySearchResults && entitySearchResults.length > 0) {
       logger.debug(`Processing ${entitySearchResults.length} search results`, "NewInteraction");
       const mappedResults = entitySearchResults.map(entity => {
-        const displayName = entity.display_name || 'Unknown User';
+        const displayName = entity.displayName || 'Unknown User';
         const initials = getInitials(displayName);
         const avatarColor = getAvatarColor(displayName);
 
@@ -233,11 +235,11 @@ const NewInteraction2: React.FC = () => {
           id: entity.id,
           name: displayName,
           type: 'entity' as const,
-          avatarUrl: entity.avatar_url || undefined,
+          avatarUrl: entity.avatarUrl || undefined,
           initials: initials,
           avatarColor: avatarColor,
-          secondaryText: entity.entity_type === 'profile' ? 'Profile' : 
-                        entity.entity_type === 'business' ? 'Business' : 'Account',
+          secondaryText: entity.entityType === 'profile' ? 'Profile' : 
+                        entity.entityType === 'business' ? 'Business' : 'Account',
           originalData: entity,
         };
       });
@@ -276,7 +278,7 @@ const NewInteraction2: React.FC = () => {
     const timeout = setTimeout(async () => {
       logger.debug(`Searching all with query: ${text}`, "NewInteraction");
       try {
-        await searchAll(text);
+        await refetchSearch(); // Use refetchSearch from TanStack Query
         setHasSearched(true);
       } catch (error) {
         logger.error("Error searching all", error, "NewInteraction");

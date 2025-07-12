@@ -21,7 +21,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import SearchHeader from '../header/SearchHeader';
 import { useAuthContext } from '../auth/context/AuthContext';
-import { useBalances } from '../../query/hooks/useBalances';
+import { useBalances, useSetPrimaryWallet } from '../../query/hooks/useBalances';
 import { useInteractions } from '../../query/hooks/useInteractions';
 import { useTheme } from '../../theme/ThemeContext';
 import { RootStackParamList } from '../../navigation/rootNavigator';
@@ -66,12 +66,31 @@ const WalletDashboard: React.FC = () => {
   // TanStack Query hooks replacing useData()
   const { 
     data: currencyBalances = [], 
+    isLoading: isLoadingBalances,
+    error: balancesError,
     refetch: refreshBalances 
   } = useBalances(user?.entityId || '');
   
   const { 
     interactions: interactionsList = [] 
   } = useInteractions({ enabled: !!user });
+
+  // Debug logging for balance loading
+  useEffect(() => {
+    logger.debug(`[WalletDashboard] 🔍 BALANCE DEBUG: isLoading=${isLoadingBalances}, error=${!!balancesError}, dataLength=${currencyBalances.length}`);
+    if (currencyBalances.length > 0) {
+      const balanceData = currencyBalances.map(b => ({
+        id: b.wallet_id,
+        currency: b.currency_code,
+        balance: b.balance,
+        isPrimary: b.isPrimary
+      }));
+      logger.debug(`[WalletDashboard] 🔍 BALANCE DATA: ${JSON.stringify(balanceData)}`);
+    }
+    if (balancesError) {
+      logger.error(`[WalletDashboard] 🔍 BALANCE ERROR: ${balancesError instanceof Error ? balancesError.message : String(balancesError)}`);
+    }
+  }, [currencyBalances, isLoadingBalances, balancesError]);
 
   // State declarations
   const [isBalanceVisible, setIsBalanceVisible] = useState(true);
@@ -316,8 +335,8 @@ const WalletDashboard: React.FC = () => {
         if (isWalletUnlocked && user) {
           logger.debug('[WalletDashboard] 🔄 Back online - refreshing data');
           refreshBalances().catch((error: any) => {
-            logger.warn('[WalletDashboard] Background refresh failed after coming online:', error);
-          });
+              logger.warn('[WalletDashboard] Background refresh failed after coming online:', error);
+            });
         }
       }
     });
@@ -515,27 +534,27 @@ const WalletDashboard: React.FC = () => {
 
     const transformedTransactions: WalletTransaction[] = walletTransactions.map((tx: any) => {
       const isReceived = tx.to_entity_id === user?.entityId;
-      const amount = parseFloat(tx.amount?.toString() || '0');
-      
+          const amount = parseFloat(tx.amount?.toString() || '0');
+          
       // Use transaction's own currency symbol (from backend)
       const currency_symbol = tx.currency_symbol || getCurrencySymbolFromWallets(tx.currency_id);
 
-      // Get the other party's entity ID and resolve their name
-      const otherEntityId = isReceived ? tx.from_entity_id : tx.to_entity_id;
-      const contactName = getEntityNameFromInteractions(otherEntityId);
+          // Get the other party's entity ID and resolve their name
+          const otherEntityId = isReceived ? tx.from_entity_id : tx.to_entity_id;
+          const contactName = getEntityNameFromInteractions(otherEntityId);
 
-      return {
-        id: tx.id,
-        name: contactName,
-        amount: amount.toFixed(2),
-        type: isReceived ? 'received' : 'sent',
-        category: isReceived ? 'Payment received' : 'Payment sent',
-        date: formatTransactionDateTime(tx.created_at),
-        currency_symbol,
-        entityId: otherEntityId,
-        currency_id: tx.currency_id,
-      };
-    });
+          return {
+            id: tx.id,
+            name: contactName,
+            amount: amount.toFixed(2),
+            type: isReceived ? 'received' : 'sent',
+            category: isReceived ? 'Payment received' : 'Payment sent',
+            date: formatTransactionDateTime(tx.created_at),
+            currency_symbol,
+            entityId: otherEntityId,
+            currency_id: tx.currency_id,
+          };
+        });
 
     return transformedTransactions;
   }, [walletTransactions, user?.entityId, getCurrencySymbolFromWallets, getEntityNameFromInteractions, formatTransactionDateTime]);
@@ -899,16 +918,24 @@ const WalletDashboard: React.FC = () => {
     setIsBalanceVisible(!isBalanceVisible);
   }, [isBalanceVisible]);
 
+  const setPrimaryWalletMutation = useSetPrimaryWallet();
+
   const handleWalletSelect = async (wallet: WalletBalance) => {
     try {
       logger.debug(`[WalletDashboard] 🔄 Setting wallet ${wallet.wallet_id} as primary: ${wallet.currency_code} - ${wallet.currency_symbol}${wallet.balance}`, "WalletDashboard");
       
-      // Update local selected wallet state immediately for UI consistency
-      setSelectedWallet(wallet);
+        // Update local selected wallet state immediately for UI consistency
+        setSelectedWallet(wallet);
       logger.info(`[WalletDashboard] ✅ Selected ${wallet.currency_code} wallet (TanStack Query migration)`, "WalletDashboard");
       
-      // TODO: Implement setPrimaryWallet mutation with TanStack Query
-      // For now, just update the local state
+      // Use the TanStack Query mutation to set primary wallet
+      if (authContext.user?.entityId) {
+        await setPrimaryWalletMutation.mutateAsync({
+          walletId: wallet.wallet_id,
+          entityId: authContext.user.entityId,
+        });
+        logger.info(`[WalletDashboard] ✅ Set ${wallet.currency_code} wallet as primary in database`, "WalletDashboard");
+      }
     } catch (error) {
       logger.error(`[WalletDashboard] ❌ Error setting primary wallet:`, error);
       throw error; // Re-throw so WalletStackCard can handle the error

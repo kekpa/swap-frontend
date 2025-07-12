@@ -173,7 +173,7 @@ export const useInteractions = (
           }
           logger.debug('[useInteractions] Interactions and members saved to local cache', 'interactions_query');
         } catch (saveError) {
-          logger.warn('[useInteractions] Error saving interactions to local cache:', saveError, 'interactions_query');
+          logger.warn(`[useInteractions] Error saving interactions to local cache: ${saveError}`);
         }
 
         // Emit update event for other components

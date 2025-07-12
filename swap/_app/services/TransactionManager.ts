@@ -100,8 +100,8 @@ class TransactionManager {
             hasMore: false
           }
         };
-      }
-      
+  }
+  
       // Call the dedicated backend endpoint
       const response = await apiClient.get(`${API_PATHS.TRANSACTION.LIST}/account/${accountId}`, {
         params: {

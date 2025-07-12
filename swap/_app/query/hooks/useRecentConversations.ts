@@ -8,7 +8,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { logger } from '../../utils/logger';
 import { queryKeys } from '../queryKeys';
-import { apiClient } from '../../services/ApiClient';
+import apiClient from '../../_api/apiClient';
 import { getStaleTimeForQuery } from '../config/staleTimeConfig';
 import { interactionRepository } from '../../repositories/InteractionRepository';
 
@@ -82,7 +82,7 @@ const fetchRecentConversations = async (
     
     // If we have cached data, return it immediately and fetch fresh data in background
     if (cachedConversations && cachedConversations.length > 0) {
-      logger.debug('[useRecentConversations] ✅ Using cached conversations:', cachedConversations.length);
+      logger.debug(`[useRecentConversations] ✅ Using cached conversations: ${cachedConversations.length}`);
       
       // Start background fetch (don't await)
       fetchAndCacheConversations(entityId, options).catch(error => {
@@ -149,7 +149,7 @@ const fetchAndCacheConversations = async (
     // Cache the fresh data
     await interactionRepository.saveRecentConversations(entityId, conversations);
     
-    logger.debug('[useRecentConversations] ✅ Fresh conversations fetched and cached:', conversations.length);
+    logger.debug(`[useRecentConversations] ✅ Fresh conversations fetched and cached: ${conversations.length}`);
     return conversations;
   } else {
     throw new Error('No conversation data received');

@@ -416,7 +416,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
       setIsSyncing(false);
       console.log('📱 [ContactInteractionHistory2] 🏁 Timeline loading completed');
     }
-  }, [currentInteractionId, currentUser?.entityId, timelineItems.length, networkService]);
+  }, [currentInteractionId, currentUser?.entityId]);
 
   // Monitor network state changes for offline mode handling
   useEffect(() => {
@@ -436,7 +436,35 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
         // When coming back online, refresh data if we have an interaction
         if (currentInteractionId) {
           logger.debug('[ContactInteractionHistory] 🔄 Back online - refreshing timeline');
-          loadTimelineData(true).catch(error => {
+          // Create a local function to avoid dependency issues
+          const refreshTimeline = async () => {
+            try {
+              console.log(`📱 [ContactInteractionHistory2] 🚀 Loading timeline for interaction: ${currentInteractionId}, user: ${currentUser?.entityId}, forceRefresh: true`);
+              
+              // STEP 1: Load from local cache INSTANTLY
+              const localTimeline = await timelineRepository.getTimelineForInteraction(currentInteractionId, 100);
+              setTimelineItems(localTimeline);
+              setIsLoading(false);
+              
+              // STEP 2: Background sync
+              if (!networkService.isOffline()) {
+                setIsSyncing(true);
+                const response = await apiClient.get(`/interactions/${currentInteractionId}/timeline?limit=100&entity_id=${currentUser?.entityId}`);
+                
+                if (response.data?.items && Array.isArray(response.data.items)) {
+                  const manager = timelineManager.current || getTimelineManager(currentInteractionId);
+                  manager.setTimelineItems(response.data.items);
+                  setTimelineItems(response.data.items);
+                }
+                setIsSyncing(false);
+              }
+            } catch (error) {
+              console.error('📱 [ContactInteractionHistory2] ❌ Error refreshing timeline:', error);
+              setIsSyncing(false);
+            }
+          };
+          
+          refreshTimeline().catch(error => {
             logger.warn('[ContactInteractionHistory] Background refresh failed after coming online:', error);
           });
         }
@@ -449,7 +477,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     setIsOfflineMode(initialState.isOfflineMode);
     
     return networkUnsubscribe;
-  }, [currentInteractionId, loadTimelineData]);
+      }, [currentInteractionId]);
 
   // Sync DataContext timeline data into TimelineManager
   useEffect(() => {
@@ -479,8 +507,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
         if (currentInteractionId !== passedInteractionId) {
           setCurrentInteractionId(passedInteractionId);
         }
-        // Load data immediately when interaction ID is set
-        await loadTimelineData(false);
+        setIsLoading(false);
       } else if (contactId) {
         logger.debug(
           `[ContactInteractionHistory] No interaction ID passed, attempting to get/create for contact (entityId): ${contactId}`,
@@ -490,8 +517,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
           const newInteractionId = await getOrCreateDirectInteraction(contactId);
           if (newInteractionId) {
             setCurrentInteractionId(newInteractionId);
-            // Load data immediately when interaction ID is created
-            await loadTimelineData(false);
+
             logger.debug(
               `[ContactInteractionHistory] Set currentInteractionId to: ${newInteractionId} for contact ${contactId}`,
               "ContactInteractionHistory",
@@ -523,7 +549,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     };
 
     initializeInteraction();
-  }, [passedInteractionId, contactId, getOrCreateDirectInteraction, loadTimelineData]);
+      }, [passedInteractionId, contactId]);
 
   // Fetch data with TanStack Query refetch
   const fetchData = useCallback(async () => {
@@ -692,7 +718,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
       const sentMessage = await sendMessageMutation.mutateAsync({
         interactionId: currentInteractionId,
         recipientEntityId: contactId,
-        content: text,
+        content: messageToSend,
         messageType: 'text',
         metadata: messageDto.metadata
       });

@@ -27,7 +27,7 @@ import { ProfileStackParamList } from '../../../navigation/profileNavigator';
 import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
 import { useDocumentUpload, DocumentType } from '../../../hooks/useDocumentUpload';
-import { useKycStatus } from './hooks/useKycStatus';
+import { useKycStatus } from '../../../query/hooks/useKycStatus';
 import CameraCapture from '../../../components2/CameraCapture';
 import logger from '../../../utils/logger';
 
