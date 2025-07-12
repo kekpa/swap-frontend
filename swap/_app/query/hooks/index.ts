@@ -22,6 +22,9 @@ export * from './useRecentConversations';
 export * from './useUserProfile';
 export * from './useKycStatus';
 
+// Reference data hooks
+export * from './useCountries';
+
 // Search hooks
 export * from './useSearchEntities';
 
