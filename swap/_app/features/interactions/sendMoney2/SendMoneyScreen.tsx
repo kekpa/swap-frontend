@@ -18,7 +18,6 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
-import { useData } from '../../../contexts/DataContext';
 import { CreateDirectTransactionDto } from '../../../types/transaction.types';
 import { useAuthContext } from '../../auth/context/AuthContext';
 import AccountSelectionModal from '../../../components/AccountSelectionModal';
@@ -62,7 +61,6 @@ interface SendMoneyScreenProps {
 const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
   const navigation = useNavigation<StackNavigationProp<any>>();
   const { theme } = useTheme();
-  const data = useData();
   const { user: currentUser } = useAuthContext();
 
   const [selectedAmount, setSelectedAmount] = useState<AmountOption | null>(null);

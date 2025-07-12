@@ -19,7 +19,6 @@ import { useNavigation, CommonActions, RouteProp, useRoute } from '@react-naviga
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
-import { useData } from '../../../contexts/DataContext';
 import { CreateDirectTransactionDto } from '../../../types/transaction.types';
 import { useAuthContext } from '../../auth/context/AuthContext';
 import logger from '../../../utils/logger';
@@ -49,7 +48,6 @@ interface ReviewTransferScreenProps {
 const ReviewTransferScreen: React.FC<ReviewTransferScreenProps> = ({ route }) => {
   const navigation = useNavigation<StackNavigationProp<any>>();
   const { theme } = useTheme();
-  const data = useData();
   const { user: currentUser } = useAuthContext();
   const [isSending, setIsSending] = React.useState(false);
   const [editingMessage, setEditingMessage] = React.useState(false);

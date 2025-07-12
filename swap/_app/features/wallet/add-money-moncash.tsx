@@ -15,7 +15,7 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useAuthContext } from "../auth/context/AuthContext";
-import { useData } from "../../contexts/DataContext";
+import { useBalances } from "../../query/hooks/useBalances";
 import apiClient from "../../_api/apiClient";
 import logger from "../../utils/logger";
 import { MonCashWebView } from "./components";
@@ -46,7 +46,11 @@ interface PaymentStatus {
 export default function AddMoneyScreen() {
   const navigation = useNavigation<NavigationProp>();
   const auth = useAuthContext();
-  const { currencyBalances, refreshBalances } = useData();
+  // TanStack Query hook for balances - replaces useData()
+  const { 
+    data: currencyBalances = [], 
+    refetch: refreshBalances 
+  } = useBalances(auth.user?.entityId || '');
   const refreshManager = useRefresh();
 
   if (!auth) {
