@@ -21,7 +21,8 @@ import { InteractionsStackParamList } from '../../navigation/interactions/intera
 import SearchHeader from '../header/SearchHeader';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuthContext } from '../auth/context/AuthContext';
-import { useData, InteractionItem, EntitySearchResult } from '../../contexts/DataContext';
+import { useInteractions, InteractionItem } from '../../query/hooks/useInteractions';
+import { EntitySearchResult } from '../../contexts/DataContext';
 import logger from '../../utils/logger';
 import { MaterialIcons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/rootNavigator';
@@ -145,13 +146,17 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
   const authContext = useAuthContext();
   const user = authContext.user;
   const isAuthenticated = authContext.isAuthenticated;
+  // TanStack Query hook for interactions - replaces useData()
   const { 
-    interactionsList, 
-    isLoadingInteractions, 
-    refreshInteractions, 
-    isInitialLoadComplete,
-    clearRefreshThrottling,
-  } = useData();
+    interactions: interactionsList, 
+    isLoading: isLoadingInteractions, 
+    refetch: refreshInteractions,
+    isError: hasInteractionsError,
+    error: interactionsError
+  } = useInteractions({ enabled: !!user });
+
+  // Mark initial load as complete when we have data or error
+  const isInitialLoadComplete = !isLoadingInteractions;
 
   const [activeTab, setActiveTab] = useState<InteractionTab>(InteractionTab.All);
   const [hasRefreshedAfterError, setHasRefreshedAfterError] = useState(false);
@@ -468,7 +473,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     try {
       // Reset the error refresh flag when manually refreshing
       setHasRefreshedAfterError(false);
-      await refreshInteractions();
+      refreshInteractions();
       // Mark that we've successfully fetched data (even if empty)
       setHasSuccessfullyFetched(true);
       hasTriggeredInitialRefresh.current = true;
@@ -481,7 +486,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
       setIsRefreshing(false);
       logger.debug("[InteractionsHistory] Manual refresh finally block - setIsRefreshing(false)", "InteractionsHistory");
     }
-  }, [refreshInteractions, isRefreshing, shouldAllowRefresh]);
+  }, [isRefreshing, shouldAllowRefresh]);
 
   useFocusEffect(
     useCallback(() => {
@@ -547,27 +552,12 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         
         setIsRefreshing(true);
         
-        // Remove delay to prevent overlapping calls
-          refreshInteractions()
-            .then(() => {
-              if (isMounted.current) {
-              setHasSuccessfullyFetched(true);
-              hasTriggeredInitialRefresh.current = true;
-                logger.debug("[InteractionsHistory] Authenticated refresh completed successfully", "InteractionsHistory");
-              }
-            })
-            .catch(error => {
-              if (isMounted.current) {
-              setHasRefreshedAfterError(true);
-              }
-              logger.error("Failed to refresh interactions for authenticated user", error, "InteractionsHistory");
-            })
-            .finally(() => {
-              if (isMounted.current) {
-              setIsRefreshing(false);
-                logger.debug("[InteractionsHistory] Authenticated refresh finally block - setIsRefreshing(false)", "InteractionsHistory");
-              }
-            });
+        // TanStack Query refetch - handles promise internally
+        refreshInteractions();
+        setHasSuccessfullyFetched(true);
+        hasTriggeredInitialRefresh.current = true;
+        setIsRefreshing(false);
+        logger.debug("[InteractionsHistory] Authenticated refresh triggered via TanStack Query", "InteractionsHistory");
         
         return () => {
           logger.debug("[InteractionsHistory] useFocusEffect cleanup", "InteractionsHistory");
