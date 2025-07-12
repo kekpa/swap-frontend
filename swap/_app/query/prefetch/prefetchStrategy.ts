@@ -297,7 +297,9 @@ export const createPrefetchStrategies = (queryClient: QueryClient, entityId?: st
 
       strategy.queue({
         queryKey: queryKeys.balancesByEntity(entityId),
-        queryFn: () => import('../api/balanceApi').then(api => api.default.getBalancesByEntity(entityId)),
+        queryFn: () => import('../../_api/apiClient').then(api => 
+          api.default.get(`/wallets/entity/${entityId}`).then(response => response.data)
+        ),
         config: DEFAULT_PREFETCH_CONFIGS.high,
         userFlow: 'app_launch',
         description: 'User balance on app launch',
@@ -305,7 +307,9 @@ export const createPrefetchStrategies = (queryClient: QueryClient, entityId?: st
 
       strategy.queue({
         queryKey: queryKeys.recentTransactions(entityId, 10),
-        queryFn: () => import('../api/balanceApi').then(api => api.default.getRecentTransactions(entityId, 10)),
+        queryFn: () => import('../../_api/apiClient').then(api => 
+          api.default.get(`/transactions/recent/${entityId}?limit=10`).then(response => response.data)
+        ),
         config: DEFAULT_PREFETCH_CONFIGS.medium,
         userFlow: 'app_launch',
         description: 'Recent transactions on app launch',
@@ -326,7 +330,9 @@ export const createPrefetchStrategies = (queryClient: QueryClient, entityId?: st
 
       strategy.queue({
         queryKey: queryKeys.recentTransactions(entityId, 20),
-        queryFn: () => import('../api/balanceApi').then(api => api.default.getRecentTransactions(entityId, 20)),
+        queryFn: () => import('../../_api/apiClient').then(api => 
+          api.default.get(`/transactions/recent/${entityId}?limit=20`).then(response => response.data)
+        ),
         config: DEFAULT_PREFETCH_CONFIGS.high,
         userFlow: 'balance_view',
         description: 'Extended transaction history after balance view',
@@ -339,7 +345,9 @@ export const createPrefetchStrategies = (queryClient: QueryClient, entityId?: st
 
       strategy.queue({
         queryKey: queryKeys.balancesByEntity(entityId),
-        queryFn: () => import('../api/balanceApi').then(api => api.default.getBalancesByEntity(entityId)),
+        queryFn: () => import('../../_api/apiClient').then(api => 
+          api.default.get(`/wallets/entity/${entityId}`).then(response => response.data)
+        ),
         config: DEFAULT_PREFETCH_CONFIGS.critical,
         userFlow: 'payment_flow',
         description: 'Fresh balance data for payment flow',
@@ -363,7 +371,9 @@ export const createPrefetchStrategies = (queryClient: QueryClient, entityId?: st
 
       strategy.queue({
         queryKey: queryKeys.balancesByEntity(entityId),
-        queryFn: () => import('../api/balanceApi').then(api => api.default.getBalancesByEntity(entityId)),
+        queryFn: () => import('../../_api/apiClient').then(api => 
+          api.default.get(`/wallets/entity/${entityId}`).then(response => response.data)
+        ),
         config: DEFAULT_PREFETCH_CONFIGS.medium,
         userFlow: 'background_refresh',
         description: 'Background balance refresh',

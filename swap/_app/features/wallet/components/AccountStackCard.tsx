@@ -14,7 +14,7 @@ import {
   Platform 
 } from 'react-native';
 import { useTheme } from '../../../theme/ThemeContext';
-import { AccountBalance } from '../../../services/BalanceManager';
+import { AccountBalance } from '../../../types/wallet.types';
 import AccountCard from './AccountCard';
 
 interface AccountStackCardProps {

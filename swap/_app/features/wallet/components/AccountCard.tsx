@@ -4,7 +4,7 @@ import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeContext';
-import { AccountBalance } from '../../../services/BalanceManager';
+import { AccountBalance } from '../../../types/wallet.types';
 
 interface AccountCardProps {
   account: AccountBalance;

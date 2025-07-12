@@ -89,7 +89,7 @@ class AppLifecycleManager {
       console.log('🔥 [AppLifecycleManager] 🧪 Initializing WebSocket event handlers...');
       webSocketHandler.initialize();
       
-      console.log('🔥 [AppLifecycleManager] 💰 BalanceManager ready for use (no initialization needed)');
+      console.log('🔥 [AppLifecycleManager] 💰 Balance data handled by TanStack Query hooks');
       
     } catch (error) {
       console.error('🔥 [AppLifecycleManager] ❌ WebSocket initialization failed:', error);
