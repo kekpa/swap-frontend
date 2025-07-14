@@ -78,6 +78,10 @@ import * as Haptics from 'expo-haptics';
 import debounce from 'lodash.debounce';
 import Geohash from 'latlon-geohash';
 
+// Import the unified marker component
+import LocationMarker from './components/LocationMarker';
+import { logMapCrash } from '../../utils/crashLogger';
+
 // Define navigation types for profile navigation
 type RootStackParamList = {
   App: {
@@ -127,7 +131,196 @@ const FIXED_TEST_POLYGON_COORDS = [
 ];
 */
 
+// Google Maps-style importance calculation
+const calculateLocationImportance = (location: Location): number => {
+  try {
+    if (!location) {
+      console.warn('calculateLocationImportance called with null/undefined location');
+      return 1;
+    }
+    
+    let importance = 1; // Base importance
+    
+    // Boost for named locations (vs "Unnamed Location")
+    if (location.name && typeof location.name === 'string' && !location.name.toLowerCase().includes('unnamed')) {
+      importance += 2;
+    }
+    
+    // Boost for locations with addresses
+    if (location.address && typeof location.address === 'string' && location.address.trim()) {
+      importance += 1;
+    }
+    
+    // Boost for locations with descriptions
+    if (location.description && typeof location.description === 'string' && location.description.trim()) {
+      importance += 1;
+    }
+    
+    // Category-based importance (similar to Google Maps)
+    const name = (location.name && typeof location.name === 'string') ? location.name.toLowerCase() : '';
+    if (name.includes('airport') || name.includes('hospital')) {
+      importance += 5; // Critical infrastructure
+    } else if (name.includes('school') || name.includes('university') || name.includes('college')) {
+      importance += 3; // Educational institutions
+    } else if (name.includes('bank') || name.includes('hotel') || name.includes('restaurant')) {
+      importance += 2; // Commercial establishments
+    } else if (name.includes('store') || name.includes('shop') || name.includes('boutique')) {
+      importance += 1; // Retail
+    }
+    
+    return Math.min(Math.max(importance, 1), 10); // Cap between 1 and 10
+  } catch (error) {
+    console.error('Error in calculateLocationImportance:', error);
+    return 1; // Safe default
+  }
+};
+
+// Determine minimum zoom level based on importance (Google Maps-style)
+const getMinZoomForImportance = (importance: number): number => {
+  try {
+    if (typeof importance !== 'number' || isNaN(importance)) {
+      console.warn('getMinZoomForImportance called with invalid importance:', importance);
+      return 16; // Safe default - only show when zoomed in
+    }
+    
+    if (importance >= 8) return 5;  // Very important - visible from far out
+    if (importance >= 6) return 8;  // Important - visible at city level
+    if (importance >= 4) return 11; // Moderately important - visible at neighborhood level
+    if (importance >= 3) return 14; // Regular businesses - visible at street level
+    return 16; // Low importance - only visible when zoomed in
+  } catch (error) {
+    console.error('Error in getMinZoomForImportance:', error);
+    return 16; // Safe default
+  }
+};
+
+// Get marker size based on importance and zoom level
+const getMarkerSizeForZoom = (importance: number, zoom: number): 'small' | 'medium' | 'large' => {
+  try {
+    if (typeof importance !== 'number' || isNaN(importance) || typeof zoom !== 'number' || isNaN(zoom)) {
+      console.warn('getMarkerSizeForZoom called with invalid parameters:', { importance, zoom });
+      return 'small'; // Safe default
+    }
+    
+    // Very important locations stay large at all zoom levels
+    if (importance >= 8) return 'large';
+    
+    // Important locations get medium size at higher zooms
+    if (importance >= 6) {
+      return zoom >= 12 ? 'large' : 'medium';
+    }
+    
+    // Regular locations get smaller at lower zooms
+    if (importance >= 4) {
+      return zoom >= 15 ? 'medium' : 'small';
+    }
+    
+    // Low importance locations are always small
+    return 'small';
+  } catch (error) {
+    console.error('Error in getMarkerSizeForZoom:', error);
+    return 'small'; // Safe default
+  }
+};
+
 const MapScreen = () => {
+  console.log('[MapScreen] 🗺️ Component initializing');
+  
+  // Memoized importance calculation to avoid recalculating for same location
+  const memoizedLocationImportance = useMemo(() => {
+    const cache = new Map<string, number>();
+    return (location: Location): number => {
+      if (!location?.id) return 1;
+      
+      if (cache.has(location.id)) {
+        return cache.get(location.id)!;
+      }
+      
+      const importance = calculateLocationImportance(location);
+      cache.set(location.id, importance);
+      return importance;
+    };
+  }, []);
+
+  // Memoized zoom-to-importance mapping
+  const memoizedMinZoomForImportance = useMemo(() => {
+    const cache = new Map<number, number>();
+    return (importance: number): number => {
+      if (cache.has(importance)) {
+        return cache.get(importance)!;
+      }
+      
+      const minZoom = getMinZoomForImportance(importance);
+      cache.set(importance, minZoom);
+      return minZoom;
+    };
+  }, []);
+
+  // Memoized marker size calculation
+  const memoizedMarkerSizeForZoom = useMemo(() => {
+    const cache = new Map<string, 'small' | 'medium' | 'large'>();
+    return (importance: number, zoom: number): 'small' | 'medium' | 'large' => {
+      const key = `${importance}-${Math.floor(zoom)}`;
+      if (cache.has(key)) {
+        return cache.get(key)!;
+      }
+      
+      const size = getMarkerSizeForZoom(importance, zoom);
+      cache.set(key, size);
+      return size;
+    };
+  }, []);
+  
+  // Add crash detection and error handling
+  const handleMapError = useCallback((error: Error, context: string) => {
+    console.error(`🚨 [MapScreen] Error in ${context}:`, {
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString(),
+      context,
+    });
+    
+    // Log to crash logger
+    logMapCrash(error, { context });
+  }, []);
+  
+  // Safe wrapper for importance calculations with memoization
+  const safeCalculateLocationImportance = useCallback((location: Location): number => {
+    try {
+      const importance = memoizedLocationImportance(location);
+      // Reduce logging frequency
+      if (Math.random() < 0.1) { // Only log 10% of calls
+        console.log(`[MapScreen] Location ${location?.id} importance: ${importance}`);
+      }
+      return importance;
+    } catch (error) {
+      handleMapError(error as Error, 'safeCalculateLocationImportance');
+      return 1; // Safe fallback
+    }
+  }, [handleMapError, memoizedLocationImportance]);
+  
+  // Safe wrapper for zoom calculations with memoization
+  const safeGetMinZoomForImportance = useCallback((importance: number): number => {
+    try {
+      const minZoom = memoizedMinZoomForImportance(importance);
+      return minZoom;
+    } catch (error) {
+      handleMapError(error as Error, 'safeGetMinZoomForImportance');
+      return 16; // Safe fallback
+    }
+  }, [handleMapError, memoizedMinZoomForImportance]);
+  
+  // Safe wrapper for marker size calculations with memoization
+  const safeGetMarkerSizeForZoom = useCallback((importance: number, zoom: number): 'small' | 'medium' | 'large' => {
+    try {
+      const size = memoizedMarkerSizeForZoom(importance, zoom);
+      return size;
+    } catch (error) {
+      handleMapError(error as Error, 'safeGetMarkerSizeForZoom');
+      return 'small'; // Safe fallback
+    }
+  }, [handleMapError, memoizedMarkerSizeForZoom]);
+  
   const mapRef = useRef<MapView>(null);
   // const webViewRef = useRef<WebView>(null); // REMOVE WebView ref
   
@@ -145,10 +338,12 @@ const MapScreen = () => {
     mapType, 
     showGrid, 
     zoomLevel,
+    isSearchFocused,
     setRegion, 
     setMapType, 
     toggleGrid, 
     setZoomLevel,
+    setSearchFocused,
     setIsLoading: setStoreLoading
   } = useMapStore();
   
@@ -159,6 +354,13 @@ const MapScreen = () => {
   
   // Add state for locations fetched from API
   const [locations, setLocations] = useState<Location[]>([]); // Restore locations state
+  
+  // Add debounced state for visible markers to prevent excessive re-renders
+  const [visibleMarkers, setVisibleMarkers] = useState<Location[]>([]);
+  const [lastFilterZoom, setLastFilterZoom] = useState<number>(0);
+  
+  // User location state for custom marker
+  const [userLocation, setUserLocation] = useState<{latitude: number, longitude: number} | null>(null);
   
   // Initialize selectedLocation state with the new type
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocationState>(() => {
@@ -173,9 +375,8 @@ const MapScreen = () => {
     };
   });
   
-  // Add new state for search - Updated to match SearchHeader interface
+  // Add new state for search - Updated to use mapStore
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [isSearchActive, setIsSearchActive] = useState<boolean>(false);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   
   // Mock data for demonstration
@@ -185,6 +386,37 @@ const MapScreen = () => {
   // Check screen size for mobile view
   const { width } = Dimensions.get('window');
   const isMobile = width < 768;
+  
+  // Debounced marker filtering to prevent excessive calculations during rapid zoom
+  const updateVisibleMarkers = useCallback(
+    debounce((currentLocations: Location[], currentZoom: number) => {
+      try {
+        const filtered = currentLocations.filter((location) => {
+          if (!location || !location.id) return false;
+          if (typeof location?.latitude !== 'number' || typeof location?.longitude !== 'number') return false;
+          if (typeof currentZoom !== 'number' || isNaN(currentZoom)) return true;
+          
+          const importance = memoizedLocationImportance(location);
+          const minZoomForLocation = memoizedMinZoomForImportance(importance);
+          
+          return currentZoom >= minZoomForLocation;
+        });
+        
+        setVisibleMarkers(filtered);
+        setLastFilterZoom(currentZoom);
+      } catch (error) {
+        console.error('🚨 [MapScreen] Error in updateVisibleMarkers:', error);
+      }
+    }, 150), // 150ms debounce
+    [memoizedLocationImportance, memoizedMinZoomForImportance]
+  );
+  
+  // Update visible markers when locations or zoom level changes
+  useEffect(() => {
+    if (locations.length > 0 && Math.abs(zoomLevel - lastFilterZoom) > 0.5) {
+      updateVisibleMarkers(locations, zoomLevel);
+    }
+  }, [locations, zoomLevel, updateVisibleMarkers, lastFilterZoom]);
   
   // Calculate if grid should be shown based on current region delta
   const storeShowGrid = useMapStore(state => state.showGrid);
@@ -198,6 +430,24 @@ const MapScreen = () => {
   const [selectedCoords, setSelectedCoords] = useState<Coordinate | null>(null); // State for selected coords
   const [selectedCellCoords, setSelectedCellCoords] = useState<Coordinate[] | null>(null); // Store coordinates for selected Polygon
   const [firstClickHandled, setFirstClickHandled] = useState(false);
+
+  // Clustering logic - use clustering when zoom level is low (DISABLED - clustering temporarily disabled)
+  // const shouldUseClustering = zoomLevel < 14; // Cluster below street level
+  // const currentRegionForClustering = currentRegion || region || INITIAL_REGION;
+  
+  // const {
+  //   clusters,
+  //   isCluster,
+  //   getClusterExpansionZoom,
+  // } = useMapClustering(
+  //   locations,
+  //   currentRegionForClustering,
+  //   {
+  //     radius: 60,
+  //     maxZoom: 14,
+  //     minPoints: 2,
+  //   }
+  // );
 
   // Helper function to get user initials for header
   const getHeaderInitials = () => {
@@ -249,11 +499,17 @@ const MapScreen = () => {
   
   // Update map state for WebView on region change
   const handleRegionChange = (newRegion: Region) => {
+    console.log('[MapScreen] 📍 Region changing:', {
+      latitude: newRegion.latitude.toFixed(6),
+      longitude: newRegion.longitude.toFixed(6),
+      latitudeDelta: newRegion.latitudeDelta.toFixed(6),
+      longitudeDelta: newRegion.longitudeDelta.toFixed(6),
+    });
+    
     // We might still want to update the raw region frequently for other potential uses
     // but we won't calculate zoom level here anymore.
     setCurrentRegion(newRegion);
     // setRegion(newRegion); // Consider if the global store needs frequent updates or only on complete
-    console.log('[MapScreen | onRegionChange] Region changing...');
   };
   
   // State to track significant viewport changes
@@ -285,7 +541,13 @@ const MapScreen = () => {
   
   // Calculate zoom and update global state ONLY when region change is complete
   const handleRegionChangeComplete = (newRegion: Region) => {
-    console.log('[MapScreen | onRegionChangeComplete] Change complete.');
+    console.log('[MapScreen] ✅ Region change complete:', {
+      latitude: newRegion.latitude.toFixed(6),
+      longitude: newRegion.longitude.toFixed(6),
+      latitudeDelta: newRegion.latitudeDelta.toFixed(6),
+      longitudeDelta: newRegion.longitudeDelta.toFixed(6),
+    });
+    
     // Update global region state here
     setRegion(newRegion); 
     setCurrentRegion(newRegion); // Also update local currentRegion if needed
@@ -295,38 +557,51 @@ const MapScreen = () => {
       // Approximate zoom level calculation
       const newZoomLevel = Math.log2(360 / newRegion.longitudeDelta);
       
+      console.log('[MapScreen] 🔍 Zoom calculation:', {
+        previousZoom: zoomLevel.toFixed(2),
+        newZoom: newZoomLevel.toFixed(2),
+        longitudeDelta: newRegion.longitudeDelta.toFixed(6),
+        zoomDifference: Math.abs(newZoomLevel - zoomLevel).toFixed(3),
+      });
+      
       // Check if this is a significant viewport change
       const isSignificant = isSignificantViewportChange(newRegion, lastLoadedRegion);
+      console.log('[MapScreen] 📊 Viewport change analysis:', {
+        isSignificant,
+        lastLoadedRegion: lastLoadedRegion ? 'exists' : 'null',
+      });
       
       // Only update if the zoom level actually changed significantly
       if (Math.abs(newZoomLevel - zoomLevel) > 0.01) { 
-           console.log(`[MapScreen | onRegionChangeComplete] Zoom level changed from ${zoomLevel} to ${newZoomLevel}`);
+           console.log(`[MapScreen] 🎯 Significant zoom change: ${zoomLevel.toFixed(2)} → ${newZoomLevel.toFixed(2)}`);
            setZoomLevel(newZoomLevel);
            
            if (isSignificant) {
              // Immediate load for significant changes
-             console.log('[MapScreen] Significant viewport change - immediate load');
+             console.log('[MapScreen] 🚀 Significant viewport change - immediate load');
              immediateLoadLocations(newRegion, newZoomLevel);
              setLastLoadedRegion(newRegion);
            } else {
              // Debounced load for minor changes
+             console.log('[MapScreen] ⏱️ Minor change - debounced load');
              debouncedLoadLocations(newRegion, newZoomLevel);
            }
       } else {
-           console.log(`[MapScreen | onRegionChangeComplete] Zoom level ${newZoomLevel} very close to previous ${zoomLevel}, not updating.`);
+           console.log(`[MapScreen] 🔄 Minor zoom change: ${newZoomLevel.toFixed(2)} (< 0.01 threshold)`);
            
            if (isSignificant) {
              // Immediate load for significant pan without zoom change
-             console.log('[MapScreen] Significant pan without zoom change - immediate load');
+             console.log('[MapScreen] 🚀 Significant pan without zoom change - immediate load');
              immediateLoadLocations(newRegion, zoomLevel);
              setLastLoadedRegion(newRegion);
            } else {
              // Debounced load for minor movements
+             console.log('[MapScreen] ⏱️ Minor movement - debounced load');
              debouncedLoadLocations(newRegion, zoomLevel);
            }
       }
     } else {
-       console.warn('[MapScreen | onRegionChangeComplete] longitudeDelta is missing, cannot calculate zoom.');
+       console.warn('[MapScreen] ⚠️ longitudeDelta is missing, cannot calculate zoom.');
     }
   };
   
@@ -365,24 +640,24 @@ const MapScreen = () => {
   
   // Handle search activation - Updated for SearchHeader
   const handleSearchPress = useCallback(() => {
-    setIsSearchActive(true);
-  }, []);
+    setSearchFocused(true);
+  }, [setSearchFocused]);
   
   // Handle search cancellation - Updated for SearchHeader
   const handleSearchCancel = useCallback(() => {
-    setIsSearchActive(false);
+    setSearchFocused(false);
     setSearchQuery("");
-  }, []);
+  }, [setSearchFocused]);
   
   // Handle search query changes - Updated for SearchHeader
   const handleSearchQueryChange = useCallback((text: string) => {
     setSearchQuery(text);
     handleSearch(text);
-  }, []);
+  }, [handleSearch]);
   
   // Handle search result selection
   const handleSearchResultPress = (result: SearchResult) => {
-    setIsSearchActive(false);
+    setSearchFocused(false);
     if (result.latitude && result.longitude) {
       const coordinates = { latitude: result.latitude, longitude: result.longitude };
       // Calculate geohash for the search result coordinates
@@ -427,6 +702,12 @@ const MapScreen = () => {
         console.warn('[MapScreen | handleSearchResultPress] Could not get bounds for search result geohash:', resultGeohash);
         setSelectedCellCoords(null); 
       }
+      
+      // Show selection pin for search results
+      setSelectionCoords(coordinates);
+      setSelectionPinVisible(true);
+      setPinSetManually(true); // Mark that pin was set by user action
+      console.log(`[MapScreen | handleSearchResultPress] Pin visibility set manually: true, zoom: ${zoomLevel}`);
     } else { 
       console.warn(`[MapScreen] Search result ${result.name} (ID: ${result.id}) missing coordinates.`);
       Alert.alert('Location Missing', 'Coordinates not available for this search result.');
@@ -436,7 +717,7 @@ const MapScreen = () => {
   // Move to user's current location
   const moveToCurrentLocation = async () => {
     try {
-      console.log('[MapScreen] Moving to current location...');
+      console.log('[MapScreen] 📍 Starting location detection...');
       setIsLoading(true);
       setStoreLoading(true);
       
@@ -444,8 +725,11 @@ const MapScreen = () => {
       const location = await getCurrentLocation();
       console.log('[MapScreen] Location retrieved:', location);
       
-      // Calculate geohash for the actual current location
+      // Store user location for custom marker
       const { latitude, longitude } = location.coordinate;
+      setUserLocation({ latitude, longitude });
+      
+      // Calculate geohash for the actual current location
       const currentGeohash = encodeGeohash(latitude, longitude, GRID.GEOHASH_PRECISION);
       console.log(`[MapScreen | moveToCurrent] User location geohash: ${currentGeohash}`);
 
@@ -477,6 +761,8 @@ const MapScreen = () => {
       console.log('[MapScreen | moveToCurrent] Hiding selection pin');
       setSelectionCoords(null); // Hide violet pin
       setSelectionPinVisible(false);
+      setPinSetManually(false); // Reset manual flag - allow automatic zoom-based visibility
+      console.log('[MapScreen | moveToCurrent] Reset pin to automatic zoom-based visibility');
       // if (!firstClickHandled) setFirstClickHandled(true); // Keep firstClickHandled update disabled here, it's handled in map press
       // --- END ADDED --- 
       
@@ -537,13 +823,19 @@ const MapScreen = () => {
   // Add state to track if selection pin should be visible
   const [selectionPinVisible, setSelectionPinVisible] = useState<boolean>(false);
   const [selectionCoords, setSelectionCoords] = useState<Coordinate | null>(null);
+  const [pinSetManually, setPinSetManually] = useState<boolean>(false); // Track if pin was set by user action
     
-  // Watch zoom level to determine if selection pin should be visible
+  // Watch zoom level to determine if selection pin should be visible (but respect manual overrides)
   useEffect(() => {
-    const showPin = zoomLevel < ZOOM_THRESHOLDS.PIN_VISIBILITY;
-    console.log(`[MapScreen | useEffect zoom] Zoom changed to ${zoomLevel}, PIN_VISIBILITY: ${ZOOM_THRESHOLDS.PIN_VISIBILITY}, Show pin: ${showPin}`);
-    setSelectionPinVisible(showPin);
-  }, [zoomLevel]); // Keep only zoomLevel as dependency for pin visibility
+    // Only apply automatic zoom-based visibility if pin wasn't set manually
+    if (!pinSetManually) {
+      const showPin = zoomLevel < ZOOM_THRESHOLDS.PIN_VISIBILITY;
+      console.log(`[MapScreen | useEffect zoom] Zoom changed to ${zoomLevel}, PIN_VISIBILITY: ${ZOOM_THRESHOLDS.PIN_VISIBILITY}, Show pin: ${showPin} (automatic)`);
+      setSelectionPinVisible(showPin);
+    } else {
+      console.log(`[MapScreen | useEffect zoom] Zoom changed to ${zoomLevel}, but pin was set manually - keeping current visibility`);
+    }
+  }, [zoomLevel, pinSetManually]); // Add pinSetManually as dependency
   
   // Handle map press
   const handleMapPress = (event: MapPressEvent) => {
@@ -591,6 +883,8 @@ const MapScreen = () => {
       });
       const showPin = zoomLevel < ZOOM_THRESHOLDS.PIN_VISIBILITY;
       setSelectionPinVisible(showPin);
+      setPinSetManually(true); // Mark that pin was set by user action
+      console.log(`[MapScreen | handleMapPress] Pin visibility set manually: ${showPin}, zoom: ${zoomLevel}`);
       if (!firstClickHandled) {
         setFirstClickHandled(true);
       }
@@ -682,11 +976,14 @@ const MapScreen = () => {
   
   // Function to load locations based on current viewport with smart caching
   const loadLocationsForViewport = async (viewportRegion?: Region, currentZoom?: number) => {
+    const startTime = Date.now();
+    console.log('[MapScreen] 🌍 Starting location load for viewport');
+    
     const regionToUse = viewportRegion || region || currentRegion;
     const zoomToUse = currentZoom || zoomLevel;
     
     if (!regionToUse) {
-      console.warn('[MapScreen] No region available for loading locations');
+      console.warn('[MapScreen] ⚠️ No region available for loading locations');
       return;
     }
 
@@ -701,15 +998,36 @@ const MapScreen = () => {
     // Create cache key for this viewport
     const cacheKey = `map-locations-${bounds}-z${Math.round(zoomToUse)}`;
     
-    console.log('[MapScreen] Loading locations for viewport:', regionToUse, 'zoom:', zoomToUse);
+    console.log('[MapScreen] 📊 Viewport parameters:', {
+      region: {
+        lat: regionToUse.latitude.toFixed(6),
+        lng: regionToUse.longitude.toFixed(6),
+        latDelta: regionToUse.latitudeDelta.toFixed(6),
+        lngDelta: regionToUse.longitudeDelta.toFixed(6),
+      },
+      zoom: zoomToUse.toFixed(2),
+      bounds,
+      cacheKey,
+    });
+    
     setIsLoading(true);
     
     try {
+      // Smart zoom-based limits following Google Maps best practices
+      const getIntelligentLimit = (zoom: number): number => {
+        if (zoom <= 8) return 50;       // Country/region level
+        if (zoom <= 10) return 100;     // State/province level  
+        if (zoom <= 13) return 300;     // City level
+        if (zoom <= 16) return 500;     // Neighborhood level
+        return 800;                     // Street level (max)
+      };
+      
+      const intelligentLimit = getIntelligentLimit(zoomToUse);
+      
       const params: LocationQueryParams = {
         bounds,
         zoom: zoomToUse,
-        // Add a buffer to limit for edge cases
-        limit: Math.min(2000, Math.max(100, Math.round(zoomToUse * 100)))
+        limit: intelligentLimit
       };
       
       // Use cache service with smart TTL based on zoom level
@@ -717,9 +1035,18 @@ const MapScreen = () => {
         ? DEFAULT_CACHE_TTL.MAP_LOCATIONS_HIGH_ZOOM  // 2.5 minutes for high zoom (more dynamic)
         : DEFAULT_CACHE_TTL.MAP_LOCATIONS_LOW_ZOOM;  // 10 minutes for low zoom (more stable)
       
-      console.log('[MapScreen] Fetching locations with viewport params:', params);
+      console.log('[MapScreen] 🎯 API request parameters:', {
+        params,
+        intelligentLimit,
+        cacheTTL: `${cacheTTL / 1000}s`,
+        zoomCategory: zoomToUse <= 8 ? 'Country' : 
+                     zoomToUse <= 10 ? 'State' :
+                     zoomToUse <= 13 ? 'City' :
+                     zoomToUse <= 16 ? 'Neighborhood' : 'Street'
+      });
       
       // Use fetchWithCache for intelligent caching and duplicate request prevention
+      console.log('[MapScreen] 🚀 Making API request...');
       const fetchedLocations = await fetchWithCache<Location[]>(
         cacheKey,
         () => fetchLocations(params),
@@ -728,10 +1055,22 @@ const MapScreen = () => {
         'map' // Feature name for cache management
       );
       
-      console.log(`[MapScreen] Successfully fetched ${fetchedLocations.length} locations for viewport`);
+      const duration = Date.now() - startTime;
+      console.log(`[MapScreen] ✅ Successfully fetched ${fetchedLocations.length} locations`, {
+        duration: `${duration}ms`,
+        locationsPerSecond: Math.round((fetchedLocations.length / duration) * 1000),
+        firstLocation: fetchedLocations[0] ? {
+          id: fetchedLocations[0].id,
+          name: fetchedLocations[0].name,
+          lat: fetchedLocations[0].latitude?.toFixed(6),
+          lng: fetchedLocations[0].longitude?.toFixed(6),
+        } : 'none'
+      });
+      
       setLocations(fetchedLocations);
     } catch (error) {
-      console.error('[MapScreen] Failed to fetch locations for viewport:', error);
+      const duration = Date.now() - startTime;
+      console.error(`[MapScreen] ❌ Failed to fetch locations after ${duration}ms:`, error);
       // Don't show alert for viewport updates, just log the error
     } finally {
       setIsLoading(false);
@@ -757,12 +1096,12 @@ const MapScreen = () => {
     loadLocationsForViewport(newRegion, newZoomLevel);
   }, [loadLocationsForViewport]);
 
-  // Fast debounced function for minor movements
+  // Intelligent debounced function with adaptive timing
   const debouncedLoadLocations = useCallback(
     debounce((newRegion: Region, newZoomLevel: number) => {
       console.log('[MapScreen] Debounced viewport load triggered');
       loadLocationsForViewport(newRegion, newZoomLevel);
-    }, 300), // Reduced to 300ms for faster response
+    }, 500), // Increased to 500ms to reduce excessive API calls
     [loadLocationsForViewport]
   );
   
@@ -777,10 +1116,36 @@ const MapScreen = () => {
   const tileUrlTemplate = `http://192.168.1.110:8080/tiles/grid/{z}/{x}/{y}.png?mapType=${mapType}`;
   console.log("[MapScreen] Using Tile URL Template:", tileUrlTemplate); // Log the URL
   
+  // Handle cluster press - zoom to expansion level (DISABLED - clustering temporarily disabled)
+  // const handleClusterPress = useCallback((cluster: ClusterPoint) => {
+  //   if (!mapRef.current) return;
+  //   
+  //   const [longitude, latitude] = cluster.geometry.coordinates;
+  //   const expansionZoom = getClusterExpansionZoom(cluster.properties.cluster_id!);
+  //   
+  //   // Calculate new region for expansion zoom
+  //   const newLatitudeDelta = 360 / Math.pow(2, expansionZoom + 1);
+  //   const newLongitudeDelta = 360 / Math.pow(2, expansionZoom + 1);
+  //   
+  //   mapRef.current.animateToRegion({
+  //     latitude,
+  //     longitude,
+  //     latitudeDelta: newLatitudeDelta,
+  //     longitudeDelta: newLongitudeDelta,
+  //   }, 500);
+  // }, [getClusterExpansionZoom]);
+  
   // Handle location marker press
   const handleLocationMarkerPress = (location: Location) => {
     try { 
       console.log('[MapScreen | handleLocationMarkerPress] Entering for:', location?.id);
+      console.log('[MapScreen | handleLocationMarkerPress] Location details:', {
+        id: location?.id,
+        name: location?.name,
+        address: location?.address,
+        description: location?.description,
+        coordinates: { lat: location?.latitude, lng: location?.longitude }
+      });
       
       if (!location || typeof location.latitude !== 'number' || typeof location.longitude !== 'number') {
         console.error('[MapScreen | handleLocationMarkerPress] Invalid location data passed', location);
@@ -796,6 +1161,7 @@ const MapScreen = () => {
 
       // Restore ALL state updates, including pin and visibility flags
       console.log('[MapScreen | handleLocationMarkerPress] --- Restoring ALL state updates ---');
+      console.log('[MapScreen | handleLocationMarkerPress] Setting selectedLocation with name:', location.name);
       setSelectedLocation({ // <-- Keep This Enabled
         name: location.name, 
         geohash: locationGeohash, 
@@ -833,12 +1199,12 @@ const MapScreen = () => {
       }
       */
 
-      // Hide the general violet selection pin/coords when clicking a blue marker
-      console.log('[MapScreen | handleLocationMarkerPress] Clearing selectionCoords and hiding pin');
-      setSelectionCoords(null); // Keep this null for marker press
-      setSelectionPinVisible(false); // <-- Restore visibility flag (set to false for marker press)
-      
-      // console.log('[MapScreen | handleLocationMarkerPress] Exiting successfully (All states updated)'); // Remove verbose log
+      // Show the selection pin at the marker location when clicking a marker
+      console.log('[MapScreen | handleLocationMarkerPress] Setting selectionCoords and showing pin');
+      setSelectionCoords({ latitude: location.latitude, longitude: location.longitude }); // Set to marker location
+      setSelectionPinVisible(true); // Show the pin when clicking a marker
+      setPinSetManually(true); // Mark that pin was set by user action
+      console.log(`[MapScreen | handleLocationMarkerPress] Pin visibility set manually: true, zoom: ${zoomLevel}`);
 
     } catch (error) {
       console.error('[MapScreen | handleLocationMarkerPress] CRITICAL ERROR:', error);
@@ -847,6 +1213,8 @@ const MapScreen = () => {
        }
     }
   };
+
+
 
   // Create themed styles
   const styles = useMemo(() => StyleSheet.create({
@@ -936,7 +1304,7 @@ const MapScreen = () => {
         onRegionChange={handleRegionChange}
         onRegionChangeComplete={handleRegionChangeComplete}
         onPress={handleMapPress}
-        showsUserLocation={true} // Enable native blue dot
+        showsUserLocation={false} // Disable native marker - using custom marker instead
         showsMyLocationButton={false}
         followsUserLocation={false} // Disable auto-centering on location to allow free panning
         showsCompass={false}
@@ -994,28 +1362,182 @@ const MapScreen = () => {
           />
         )}
         
-        {/* Render markers for fetched locations - RESTORE THIS */} 
-        {locations.map((location) => {
-          if (typeof location?.latitude !== 'number' || typeof location?.longitude !== 'number') {
-            console.warn(`Skipping rendering marker for location ID: ${location.id} due to invalid coordinates`);
-            return null;
-          }
+        {/* User location marker with blue dot and white border */}
+        {userLocation && (
+          <LocationMarker
+            key="user-location"
+            location={{
+              id: 'user-location',
+              name: 'Your Location',
+              latitude: userLocation.latitude,
+              longitude: userLocation.longitude,
+              baseCategory: 'other', // Not used for user location
+              statusModifiers: {} // Not used for user location
+            }}
+            onPress={() => console.log('[MapScreen] User location marker pressed')}
+            zoomLevel={zoomLevel}
+            isUserLocation={true}
+          />
+        )}
+        
+        {/* Render markers with new category-based design system */}
+        {visibleMarkers
+          ?.map((location) => {
+            try {
+              // Enhanced categorization system with base categories and status modifiers
+              const getLocationCategorization = (loc: Location): {
+                baseCategory: 'hospitals' | 'pharmacies' | 'clinics' | 'schools' | 'libraries' | 'shopping' | 'banks' | 'professional_services' | 'parks_recreation' | 'transportation' | 'government_public_services' | 'accommodation' | 'other';
+                statusModifiers: {
+                  isFavorite?: boolean;
+                  hasSwapIntegration?: boolean;
+                  isSearchResult?: boolean;
+                };
+              } => {
+                const name = loc.name?.toLowerCase() || '';
+                const address = loc.address?.toLowerCase() || '';
+                
+                // Determine base category from name/address patterns using new 13-category system
+                let baseCategory: any = 'other';
+                
+                // Hospitals
+                if (name.includes('hospital') || name.includes('hopital') || 
+                    name.includes('centre hospitalier') || name.includes('medical center') || 
+                    name.includes('sante') || name.includes('health center')) {
+                  baseCategory = 'hospitals';
+                }
+                // Pharmacies
+                else if (name.includes('pharmacy') || name.includes('pharmacie') ||
+                         name.includes('pharma') || name.includes('medicament')) {
+                  baseCategory = 'pharmacies';
+                }
+                // Clinics
+                else if (name.includes('clinique') || name.includes('clinic') || 
+                         name.includes('medical') || name.includes('dentist') ||
+                         name.includes('dentiste') || name.includes('specialist')) {
+                  baseCategory = 'clinics';
+                }
+                // Schools
+                else if (name.includes('school') || name.includes('ecole') || 
+                         name.includes('college') || name.includes('universite') ||
+                         name.includes('university') || name.includes('lycee') ||
+                         name.includes('institut')) {
+                  baseCategory = 'schools';
+                }
+                // Libraries
+                else if (name.includes('library') || name.includes('bibliotheque') ||
+                         name.includes('mediatheque') || name.includes('study center')) {
+                  baseCategory = 'libraries';
+                }
+                // Shopping
+                else if (name.includes('boutique') || name.includes('market') ||
+                         name.includes('magasin') || name.includes('shop') ||
+                         name.includes('store') || name.includes('supermarket') ||
+                         name.includes('mall') || name.includes('plaza') ||
+                         name.includes('restaurant') || name.includes('bar') ||
+                         name.includes('cafe') || name.includes('bistro') ||
+                         name.includes('brasserie') || name.includes('food') ||
+                         name.includes('pizzeria') || name.includes('bakery') ||
+                         name.includes('boulangerie')) {
+                  baseCategory = 'shopping';
+                }
+                // Banks
+                else if (name.includes('bank') || name.includes('banque') ||
+                         name.includes('credit') || name.includes('atm') ||
+                         name.includes('financial') || name.includes('finance')) {
+                  baseCategory = 'banks';
+                }
+                // Professional Services
+                else if (name.includes('office') || name.includes('bureau') ||
+                         name.includes('business') || name.includes('entreprise') ||
+                         name.includes('company') || name.includes('compagnie') ||
+                         name.includes('corporate') || name.includes('center') ||
+                         name.includes('centre') || name.includes('legal') ||
+                         name.includes('consulting') || name.includes('service')) {
+                  baseCategory = 'professional_services';
+                }
+                // Parks & Recreation
+                else if (name.includes('park') || name.includes('parc') ||
+                         name.includes('jardin') || name.includes('garden') ||
+                         name.includes('recreation') || name.includes('sport') ||
+                         name.includes('stade') || name.includes('stadium') ||
+                         name.includes('cinema') || name.includes('theater') ||
+                         name.includes('theatre') || name.includes('club') ||
+                         name.includes('lounge') || name.includes('disco') ||
+                         name.includes('entertainment') || name.includes('casino') ||
+                         name.includes('gym') || name.includes('fitness')) {
+                  baseCategory = 'parks_recreation';
+                }
+                // Transportation
+                else if (name.includes('airport') || name.includes('aeroport') ||
+                         name.includes('gare') || name.includes('station') ||
+                         name.includes('transport') || name.includes('bus') ||
+                         name.includes('taxi') || name.includes('metro') ||
+                         name.includes('gas') || name.includes('essence') ||
+                         name.includes('fuel') || name.includes('carburant') ||
+                         name.includes('station service') || name.includes('parking')) {
+                  baseCategory = 'transportation';
+                }
+                // Government & Public Services
+                else if (name.includes('mairie') || name.includes('police') ||
+                         name.includes('embassy') || name.includes('ambassade') ||
+                         name.includes('gouvernement') || name.includes('ministry') ||
+                         name.includes('ministere') || name.includes('prefecture') ||
+                         name.includes('municipal') || name.includes('public')) {
+                  baseCategory = 'government_public_services';
+                }
+                // Accommodation
+                else if (name.includes('hotel') || name.includes('auberge') ||
+                         name.includes('motel') || name.includes('lodge') ||
+                         name.includes('guest house') || name.includes('pension') ||
+                         name.includes('hostel') || name.includes('resort')) {
+                  baseCategory = 'accommodation';
+                }
+                
+                // Determine status modifiers
+                const statusModifiers: any = {};
+                
+                // Favorites: Important public services and landmarks
+                if (baseCategory === 'hospitals' || baseCategory === 'schools' || 
+                    baseCategory === 'government_public_services' || baseCategory === 'pharmacies' ||
+                    name.includes('airport') || name.includes('aeroport')) {
+                  statusModifiers.isFavorite = true;
+                }
+                
+                // Swap Integration: Businesses that would likely use payment systems
+                // For now, using business name patterns - later this will come from database
+                if (baseCategory === 'shopping' || baseCategory === 'accommodation' || 
+                    baseCategory === 'professional_services' || baseCategory === 'parks_recreation' ||
+                    name.includes('boutique') || name.includes('market') ||
+                    name.includes('brasserie') || name.includes('auberge') ||
+                    name.includes('restaurant') || name.includes('hotel')) {
+                  statusModifiers.hasSwapIntegration = true;
+                }
+                
+                return { baseCategory, statusModifiers };
+              };
+              
+              const categorization = getLocationCategorization(location);
           
           return (
-            <Marker
-              key={location.id}
-              coordinate={{ latitude: location.latitude, longitude: location.longitude }}
-              pinColor="blue"
-              tracksViewChanges={false} 
-              zIndex={4} 
-              onPress={(e) => {
-                // Prevent map press event when clicking marker
-                e.stopPropagation(); 
-                handleLocationMarkerPress(location);
-              }}
-            />
-          );
-        })}
+                <LocationMarker
+                  key={`location-${location.id}`}
+                  location={{
+                    ...location,
+                    baseCategory: categorization.baseCategory,
+                    statusModifiers: categorization.statusModifiers
+                  }}
+                  onPress={handleLocationMarkerPress}
+                  zoomLevel={zoomLevel}
+                  isUserLocation={false}
+                />
+              );
+            } catch (error) {
+              console.error(`🚨 [MapScreen] Error rendering marker for location ${location?.id}:`, error);
+              return null; // Skip this marker if rendering fails
+            }
+          })
+          ?.filter(Boolean) // Remove any null markers
+        }
       </MapView>
 
       {/* SearchHeader - positioned at top with proper spacing */}
@@ -1025,7 +1547,7 @@ const MapScreen = () => {
         onSearchCancel={handleSearchCancel}
         onProfilePress={handleProfilePress}
         placeholder="Search here"
-        isSearchActive={isSearchActive}
+        isSearchActive={isSearchFocused}
         searchQuery={searchQuery}
         showProfile={true}
         showSearch={true}
@@ -1069,7 +1591,7 @@ const MapScreen = () => {
       
       {/* Search Results */}
       <SearchResults
-        visible={isSearchActive}
+        visible={isSearchFocused}
         query={searchQuery}
         results={searchResults}
         recentSearches={recentSearches}

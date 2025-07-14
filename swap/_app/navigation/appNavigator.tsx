@@ -12,6 +12,11 @@ import { getFocusedRouteNameFromRoute, RouteProp } from '@react-navigation/nativ
 import { ViewStyle, Platform } from "react-native";
 import { useTheme } from "../theme/ThemeContext";
 import OffersNavigator from "./offersNavigator";
+import ErrorBoundary from '../components/ErrorBoundary';
+import { crashLogger } from '../utils/crashLogger'; // Initialize global crash logging
+
+// Initialize crash logger immediately when app starts
+crashLogger; // This triggers the singleton initialization and global error handlers
 
 const Tab = createBottomTabNavigator();
 
@@ -37,7 +42,7 @@ export default function AppNavigator() {
   const { theme } = useTheme();
 
   return (
-    <AuthGuard>
+    <ErrorBoundary>
       <Tab.Navigator
         screenOptions={({ route }) => {
           
@@ -93,15 +98,15 @@ export default function AppNavigator() {
           name="Map" 
           component={MapNavigator}
         />
-        <Tab.Screen 
+        {/* <Tab.Screen 
           name="Shop" 
           component={ShopNavigator}
-        />
+        /> */}
         {/* <Tab.Screen 
           name="Offers" 
           component={OffersNavigator}
         /> */}
       </Tab.Navigator>
-    </AuthGuard>
+    </ErrorBoundary>
   );
 }

@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Swap Map Markers - Design System (Final)</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+            line-height: 1.6;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            color: #333;
+            margin: 0 0 10px 0;
+            font-size: 2.5em;
+        }
+        
+        .header p {
+            color: #666;
+            margin: 5px 0;
+            font-size: 1.1em;
+        }
+        
+        .section {
+            background: white;
+            margin: 30px 0;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .section h2 {
+            color: #333;
+            margin: 0 0 25px 0;
+            font-size: 1.8em;
+            border-bottom: 3px solid #007AFF;
+            padding-bottom: 10px;
+        }
+        
+        .marker-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin: 25px 0;
+        }
+        
+        .marker-item {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            background: #fafafa;
+            transition: all 0.2s ease;
+        }
+        
+        .marker-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        
+        .marker-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 1.1em;
+        }
+        
+        .marker-subcategories {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 15px;
+            font-style: italic;
+        }
+        
+        .marker-examples {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin: 15px 0;
+        }
+        
+        .marker {
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 11px;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+            position: relative;
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        .marker-basic { width: 20px; height: 20px; }
+        .marker-medium { width: 24px; height: 24px; }
+        .marker-tiny { 
+            width: 8px; 
+            height: 8px; 
+            border: 1px solid white !important; /* Tiny white border for clustering */
+            box-shadow: 0 1px 2px rgba(0,0,0,0.4);
+        }
+        
+        .marker-border {
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        /* Medium markers have thicker inward border - smaller colored center */
+        .marker-medium.marker-border {
+            border: 3px solid white;
+        }
+        
+        .marker-no-border {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        
+        .hex-code {
+            font-family: monospace;
+            background: #f0f0f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            color: #555;
+            margin-top: 10px;
+        }
+        
+        .zoom-section {
+            margin: 30px 0;
+            padding: 25px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 10px;
+            border-left: 5px solid #007AFF;
+        }
+        
+        .zoom-title {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 15px;
+        }
+        
+        .zoom-description {
+            color: #666;
+            margin-bottom: 20px;
+            font-size: 1.05em;
+        }
+        
+        .status-modifiers {
+            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+            border-left: 5px solid #ffc107;
+        }
+        
+        .special-markers {
+            background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
+            border-left: 5px solid #17a2b8;
+        }
+        
+        .pin-section {
+            background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+            border-left: 5px solid #dc3545;
+        }
+        
+        /* Updated Colors */
+        .color-hospitals { background-color: #dc3545; }
+        .color-pharmacies { background-color: #28a745; }
+        .color-clinics { background-color: #20c997; } /* Swapped with professional services - now teal */
+        .color-schools { background-color: #6f42c1; }
+        .color-libraries { background-color: #8B4513; } /* Brown for libraries */
+        .color-shopping { background-color: #fd7e14; }
+        .color-banks { background-color: #007bff; }
+        .color-professional { background-color: #17a2b8; } /* Swapped with clinics - now light blue */
+        .color-parks { background-color: #198754; }
+        .color-entertainment { background-color: #ffc107; }
+        .color-sports { background-color: #198754; }
+        .color-transportation { background-color: #000000; } /* Black for transportation */
+        .color-government { background-color: #6c757d; } /* Slate blue for government */
+        .color-accommodation { background-color: #e83e8c; } /* Changed to pink */
+        .color-other { background-color: #adb5bd; } /* Light gray for default/other */
+        
+        .color-user-location { background-color: #007AFF; }
+        .color-favorite { background-color: #FFD60A; }
+        .color-swap-business { background-color: #8b14fd; } /* Actual Swap purple from theme.ts */
+        .color-search-result { background-color: #8b14fd; } /* Search results use Swap purple but no "S" icon */
+        
+        /* Custom Pin Styles */
+        .pin {
+            width: 30px;
+            height: 40px;
+            position: relative;
+            display: inline-block;
+        }
+        
+        .pin-body {
+            width: 30px;
+            height: 30px;
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            border: 3px solid white;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        
+        .pin-icon {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(45deg);
+            font-size: 12px;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        .implementation-note {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        
+        .implementation-note h3 {
+            color: #495057;
+            margin-top: 0;
+        }
+        
+        .implementation-note code {
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🗺️ Swap Map Markers Design System</h1>
+        <p><strong>Final Design with Flat White Icons & Custom Pins</strong></p>
+        <p>12 streamlined categories with clean white flat icons and custom selection pins</p>
+        <p>Status modifiers: User Location (blue) • Favorites (yellow) • Swap Business (purple)</p>
+    </div>
+
+    <!-- Base Categories -->
+    <div class="section">
+        <h2>📍 Base Categories (12 Streamlined Categories)</h2>
+        
+        <div class="marker-grid">
+            <!-- Health & Medical -->
+            <div class="marker-item">
+                <div class="marker-name">🏥 Hospitals</div>
+                <div class="marker-subcategories">Major medical facilities, emergency care</div>
+                <div class="marker-examples">
+                    <div class="marker marker-basic marker-border color-hospitals"></div>
+                    <div class="marker marker-medium marker-border color-hospitals"></div>
+                    <div class="marker marker-tiny marker-no-border color-hospitals"></div>
+                </div>
+                <div class="hex-code">#dc3545 (Bootstrap Red) - No Icon</div>
+            </div>
+            
+            <div class="marker-item">
+                <div class="marker-name">💊 Pharmacies</div>
+                <div class="marker-subcategories">Drug stores, medical supplies</div>
+                <div class="marker-examples">
+                    <div class="marker marker-basic marker-border color-pharmacies"></div>
+                    <div class="marker marker-medium marker-border color-pharmacies"></div>
+                    <div class="marker marker-tiny marker-no-border color-pharmacies"></div>
+                </div>
+                <div class="hex-code">#28a745 (Bootstrap Green) - No Icon</div>
+            </div>
+            
+            <div class="marker-item">
+                <div class="marker-name">🏥 Clinics</div>
+                <div class="marker-subcategories">Medical clinics, dentists, specialists</div>
+                <div class="marker-examples">
+                    <div class="marker marker-basic marker-border color-clinics"></div>
+                    <div class="marker marker-medium marker-border color-clinics"></div>
+                    <div class="marker marker-tiny marker-no-border color-clinics"></div>
+                </div>
+                <div class="hex-code">#20c997 (Teal) - No Icon</div>
+            </div>
+            
+            <!-- Education -->
+            <div class="marker-item">
+                <div class="marker-name">🎓 Schools</div>
+                <div class="marker-subcategories">Schools, universities, educational institutions</div>
+                <div class="marker-examples">
+                    <div class="marker marker-basic marker-border color-schools"></div>
+                    <div class="marker marker-medium marker-border color-schools"></div>
+                    <div class="marker marker-tiny marker-no-border color-schools"></div>
+                </div>
+                <div class="hex-code">#6f42c1 (Bootstrap Purple) - No Icon</div>
+            </div>
+            
+            <div class="marker-item">
+                <div class="marker-name">📚 Libraries</div>
+                <div class="marker-subcategories">Public libraries, study centers</div>
+                <div class="marker-examples">
+                    <div class="marker marker-basic marker-border color-libraries"></div>
+                    <div class="marker marker-medium marker-border color-libraries"></div>
+                    <div class="marker marker-tiny marker-no-border color-libraries"></div>
+                </div>
+                <div class="hex-code">#e83e8c (Bootstrap Pink) - No Icon</div>
+            </div>
+            
+            <!-- Shopping & Services -->
+            <div class="marker-item">
+                <div class="marker-name">🛍️ Shopping</div>
+                <div class="marker-subcategories">Shops, markets, malls, retail stores</div>
+                <div class="marker-examples">
+                    <div class="marker marker-basic marker-border color-shopping"></div>
+                    <div class="marker marker-medium marker-border color-shopping"></div>
+                    <div class="marker marker-tiny marker-no-border color-shopping"></div>
+                </div>
+                <div class="hex-code">#fd7e14 (Bootstrap Orange) - No Icon</div>
+            </div>
+            
+            <div class="marker-item">
+                <div class="marker-name">🏦 Banks</div>
+                <div class="marker-subcategories">Banks, ATMs, financial services</div>
+                <div class="marker-examples">
+                    <div class="marker marker-basic marker-border color-banks"></div>
+                    <div class="marker marker-medium marker-border color-banks"></div>
+                    <div class="marker marker-tiny marker-no-border color-banks"></div>
+                </div>
+                <div class="hex-code">#007bff (Bootstrap Primary) - No Icon</div>
+            </div>
+            
+            <div class="marker-item">
+                <div class="marker-name">💼 Professional Services</div>
+                <div class="marker-subcategories">Offices, legal, consulting, business services</div>
+                <div class="marker-examples">
+                    <div class="marker marker-basic marker-border color-professional"></div>
+                    <div class="marker marker-medium marker-border color-professional"></div>
+                    <div class="marker marker-tiny marker-no-border color-professional"></div>
+                </div>
+                <div class="hex-code">#17a2b8 (Light Blue) - No Icon</div>
+            </div>
+            
+            <!-- Recreation -->
+            <div class="marker-item">
+                <div class="marker-name">🌳 Parks & Recreation</div>
+                <div class="marker-subcategories">Parks, gardens, entertainment, sports, gyms</div>
+                <div class="marker-examples">
+                    <div class="marker marker-basic marker-border color-parks"></div>
+                    <div class="marker marker-medium marker-border color-parks"></div>
+                    <div class="marker marker-tiny marker-no-border color-parks"></div>
+                </div>
+                <div class="hex-code">#198754 (Bootstrap Success Dark) - No Icon</div>
+            </div>
+            
+            <!-- Transportation -->
+            <div class="marker-item">
+                <div class="marker-name">🚗 Transportation</div>
+                <div class="marker-subcategories">Gas stations, parking, auto parts, car services</div>
+                <div class="marker-examples">
+                    <div class="marker marker-basic marker-border color-transportation"></div>
+                    <div class="marker marker-medium marker-border color-transportation"></div>
+                    <div class="marker marker-tiny marker-no-border color-transportation"></div>
+                </div>
+                <div class="hex-code">#495057 (Dark Gray) - No Icon</div>
+            </div>
+            
+            <!-- Government & Public Services -->
+            <div class="marker-item">
+                <div class="marker-name">🏛️ Government & Public Services</div>
+                <div class="marker-subcategories">Government offices, public services, municipal buildings</div>
+                <div class="marker-examples">
+                    <div class="marker marker-basic marker-border color-government"></div>
+                    <div class="marker marker-medium marker-border color-government"></div>
+                    <div class="marker marker-tiny marker-no-border color-government"></div>
+                </div>
+                <div class="hex-code">#6c757d (Slate Blue) - No Icon</div>
+            </div>
+            
+            <!-- Accommodation -->
+            <div class="marker-item">
+                <div class="marker-name">🏨 Accommodation</div>
+                <div class="marker-subcategories">Hotels, motels, hostels, B&Bs</div>
+                <div class="marker-examples">
+                    <div class="marker marker-basic marker-border color-accommodation"></div>
+                    <div class="marker marker-medium marker-border color-accommodation"></div>
+                    <div class="marker marker-tiny marker-no-border color-accommodation"></div>
+                </div>
+                <div class="hex-code">#e83e8c (Pink) - No Icon</div>
+            </div>
+            
+            <!-- Other/Default -->
+            <div class="marker-item">
+                <div class="marker-name">📍 Other/Default</div>
+                <div class="marker-subcategories">Religious, residential, uncategorized, unknown</div>
+                <div class="marker-examples">
+                    <div class="marker marker-basic marker-border color-other"></div>
+                    <div class="marker marker-medium marker-border color-other"></div>
+                    <div class="marker marker-tiny marker-no-border color-other"></div>
+                </div>
+                <div class="hex-code">#adb5bd (Light Gray) - No Icon</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Modifiers -->
+    <div class="section status-modifiers">
+        <h2>⭐ Status Modifiers (Override Base Colors)</h2>
+        <p><strong>These statuses override the base category colors and have priority in the hierarchy</strong></p>
+        
+        <div class="marker-grid">
+            <div class="marker-item">
+                <div class="marker-name">💛 Favorite Locations</div>
+                <div class="marker-subcategories">User-marked favorites (hospitals, schools, important places)</div>
+                <div class="marker-examples">
+                    <div class="marker marker-basic marker-border color-favorite">★</div>
+                    <div class="marker marker-medium marker-border color-favorite">★</div>
+                    <div class="marker marker-tiny marker-no-border color-favorite"></div>
+                </div>
+                <div class="hex-code">#FFD60A (Golden Yellow) - White Star</div>
+            </div>
+            
+            <div class="marker-item">
+                <div class="marker-name">💜 Swap Business Profiles</div>
+                <div class="marker-subcategories">Businesses integrated with Swap Neobank</div>
+                <div class="marker-examples">
+                    <div class="marker marker-basic marker-border color-swap-business">S</div>
+                    <div class="marker marker-medium marker-border color-swap-business">S</div>
+                    <div class="marker marker-tiny marker-no-border color-swap-business"></div>
+                </div>
+                <div class="hex-code">#8b14fd (Swap Purple from theme.ts) - White "S" for Swap</div>
+            </div>
+            
+            <div class="marker-item">
+                <div class="marker-name">🔍 Search Results</div>
+                <div class="marker-subcategories">Any location found through search (uses Swap purple but no "S" icon)</div>
+                <div class="marker-examples">
+                    <div class="marker marker-basic marker-border color-search-result"></div>
+                    <div class="marker marker-medium marker-border color-search-result"></div>
+                    <div class="marker marker-tiny marker-no-border color-search-result"></div>
+                </div>
+                <div class="hex-code">#8b14fd (Swap Purple) - No Icon (makes users think of Swap)</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Special Markers -->
+    <div class="section special-markers">
+        <h2>📍 Special Markers</h2>
+        
+        <div class="marker-grid">
+            <div class="marker-item">
+                <div class="marker-name">📍 User Location</div>
+                <div class="marker-subcategories">Current user position (solid color, no icon, always same size)</div>
+                <div class="marker-examples">
+                    <div class="marker marker-basic marker-border color-user-location"></div>
+                    <div class="marker marker-basic marker-border color-user-location"></div>
+                    <div class="marker marker-basic marker-border color-user-location"></div>
+                </div>
+                <div class="hex-code">#007AFF (iOS Blue) - NO ICON, SOLID COLOR</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Pin for Selected Markers -->
+    <div class="section pin-section">
+        <h2>📌 Custom Selection Pin</h2>
+        <p><strong>When a user taps on a marker, it transforms into a custom pin (replaces default iOS/Android pins)</strong></p>
+        
+        <div class="marker-grid">
+            <div class="marker-item">
+                <div class="marker-name">📌 Hospital Selected</div>
+                <div class="marker-subcategories">Custom pin when hospital marker is tapped</div>
+                <div class="marker-examples">
+                    <div class="pin">
+                        <div class="pin-body color-hospitals">
+                            <div class="pin-icon">+</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="hex-code">Pin: 30x40px with teardrop shape + white plus</div>
+            </div>
+            
+            <div class="marker-item">
+                <div class="marker-name">📌 Favorite Selected</div>
+                <div class="marker-subcategories">Custom pin when favorite location is tapped</div>
+                <div class="marker-examples">
+                    <div class="pin">
+                        <div class="pin-body color-favorite">
+                            <div class="pin-icon">★</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="hex-code">Same icon as marker, but in pin format</div>
+            </div>
+            
+            <div class="marker-item">
+                <div class="marker-name">📌 Swap Business Selected</div>
+                <div class="marker-subcategories">Custom pin when Swap business is tapped</div>
+                <div class="marker-examples">
+                    <div class="pin">
+                        <div class="pin-body color-swap-business">
+                            <div class="pin-icon">S</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="hex-code">Swap purple pin with white "S"</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Zoom Behavior -->
+    <div class="section">
+        <h2>🔍 Zoom-Based Behavior (Updated)</h2>
+        
+        <div class="zoom-section">
+            <div class="zoom-title">🔍 High Zoom (>15) - Detailed View</div>
+            <div class="zoom-description">
+                <strong>All markers have borders and white flat icons are clearly visible</strong><br>
+                • Basic Size (20px): Default for all locations with category icons<br>
+                • Medium Popularity (24px): Important/popular places with borders<br>
+                • User location: Always basic size with solid blue color (no icon)
+            </div>
+        </div>
+        
+        <div class="zoom-section">
+            <div class="zoom-title">🗺️ Low Zoom (≤15) - Overview</div>
+            <div class="zoom-description">
+                <strong>Popular places maintain visibility, less popular become tiny dots with tiny borders</strong><br>
+                • Medium Popularity (24px): Same as high zoom - with borders and icons<br>
+                • Tiny Dots (8px): Less popular places with tiny white borders to prevent clustering<br>
+                • User location: Always basic size with blue color and white border
+            </div>
+        </div>
+    </div>
+
+    <!-- Implementation Notes -->
+    <div class="implementation-note">
+        <h3>🛠️ Icon Reference (Simplified)</h3>
+        <ul>
+            <li><strong>Most Categories:</strong> No icon - solid colored circles only</li>
+            <li><strong>Favorites:</strong> ★ (White star - overrides base category color)</li>
+            <li><strong>Swap Business:</strong> S (White letter S - overrides base category color)</li>
+            <li><strong>Search Results:</strong> No icon - Swap purple color only (creates brand association)</li>
+            <li><strong>User Location:</strong> No icon - solid blue circle only</li>
+        </ul>
+        
+        <h4>📋 Updated Category List (13 Categories)</h4>
+        <ul>
+            <li><strong>🏥 Hospitals:</strong> Red (#dc3545) - No icon</li>
+            <li><strong>💊 Pharmacies:</strong> Green (#28a745) - No icon</li>
+            <li><strong>🏥 Clinics:</strong> Teal (#20c997) - No icon</li>
+            <li><strong>🎓 Schools:</strong> Purple (#6f42c1) - No icon</li>
+                            <li><strong>📚 Libraries:</strong> Brown (#8B4513) - No icon</li>
+            <li><strong>🛍️ Shopping:</strong> Orange (#fd7e14) - No icon</li>
+            <li><strong>🏦 Banks:</strong> Blue (#007bff) - No icon</li>
+            <li><strong>💼 Professional Services:</strong> Light Blue (#17a2b8) - No icon</li>
+            <li><strong>🌳 Parks & Recreation:</strong> Dark Green (#198754) - No icon</li>
+                            <li><strong>🚗 Transportation:</strong> Black (#000000) - No icon</li>
+            <li><strong>🏛️ Government & Public Services:</strong> Slate Blue (#6c757d) - No icon</li>
+            <li><strong>🏨 Accommodation:</strong> Pink (#e83e8c) - No icon</li>
+            <li><strong>📍 Other/Default:</strong> Light Gray (#adb5bd) - No icon</li>
+        </ul>
+        
+        <h4>🔍 Special Search State</h4>
+        <ul>
+            <li><strong>🔍 Search Results:</strong> Swap Purple (#8b14fd) - No icon</li>
+            <li><em>When user searches for any category (restaurants, hotels, etc.), all results show in Swap purple to create brand association</em></li>
+        </ul>
+    </div>
+
+    <div class="implementation-note">
+        <h3>📱 React Native Implementation</h3>
+        <p>Use these exact specifications for your marker and pin components:</p>
+        <ul>
+            <li><code>markerSize: zoom > 15 ? (isPopular ? 24 : 20) : (isPopular ? 24 : 8)</code></li>
+            <li><code>showBorder: zoom > 15 || isPopular || (zoom <= 15 && !isPopular)</code></li>
+            <li><code>borderWidth: zoom <= 15 && !isPopular ? 1 : (isPopular ? 3 : 2)</code></li>
+            <li><code>iconColor: '#FFFFFF' (always white)</code></li>
+            <li><code>userLocationIcon: none (solid circle only)</code></li>
+            <li><code>pinSize: { width: 30, height: 40 }</code></li>
+            <li><code>pinShape: teardrop with 3px white border</code></li>
+            <li><em>Note: Medium/popular markers use 3px border (grows inward) for visual hierarchy</em></li>
+        </ul>
+    </div>
+
+    <div class="implementation-note">
+        <h3>📌 Pin Interaction Flow</h3>
+        <ol>
+            <li>User sees circular markers with white flat icons on map</li>
+            <li>User taps on a marker</li>
+            <li>Marker disappears and custom pin appears at same location</li>
+            <li>Pin shows same color and white flat icon as the original marker</li>
+            <li>Tapping elsewhere or another marker removes the pin</li>
+            <li>Only one pin visible at a time</li>
+        </ol>
+    </div>
+</body>
+</html> 
