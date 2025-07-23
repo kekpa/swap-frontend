@@ -243,13 +243,17 @@ const VerificationCodeScreen = () => {
       // Navigate back to the timeline, which will refetch the status
       navigation.navigate('VerifyYourIdentity', { sourceRoute });
     } else {
-      // Original Signup phone verification - continue with auth flow
-      const response = await apiClient.post(API_PATHS.AUTH.VERIFY_PHONE, {
+      // Phone registration - create new user account with phone + OTP + password
+      // TODO: Add password input field to collect user password during registration
+      const tempPassword = "TempPass123!"; // TEMPORARY - should be collected from user
+      
+      const response = await apiClient.post(API_PATHS.AUTH.REGISTER_PHONE, {
         phone: contact,
-        code: verificationCode
+        code: verificationCode,
+        password: tempPassword
       });
       
-      console.log("Phone verification successful:", response.data);
+      console.log("Phone registration successful:", response.data);
       
       const authData = response.data.data || response.data;
       

@@ -29,6 +29,7 @@ export const AUTH_PATHS = {
   RESET_PASSWORD: '/auth/reset-password',
   PHONE_SIGNIN: '/auth/phone-signin',
   VERIFY_PHONE: '/auth/verify-phone',
+  REGISTER_PHONE: '/auth/register-phone',
   CHECK_PHONE: '/auth/check-phone',
   COMPLETE_PROFILE: '/auth/complete-profile',
   STORE_PASSCODE: '/auth/store-passcode',
