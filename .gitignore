@@ -66,7 +66,13 @@ dist/
 tmp/
 temp/
 
-# Exclude Expo projects
-
+# Exclude app prebuilds
 swap-expo/ios
 swap-expo/android
+
+swap-flutter/ios
+swap-flutter/android
+swap-flutter/linux
+swap-flutter/macos
+swap-flutter/windows
+swap-flutter/web

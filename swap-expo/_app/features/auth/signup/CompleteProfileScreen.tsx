@@ -112,7 +112,8 @@ const CompleteProfileScreen = () => {
           first_name: firstName,
           last_name: lastName,
           username: username,
-          password: password  // Include the password in the request
+          password: password,  // Include the password in the request
+          account_type: 'personal' // Add account type to the request
         }, {
           headers: {
             Authorization: `Bearer ${accessToken}`
