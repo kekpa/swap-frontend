@@ -23,7 +23,7 @@ export default {
   },
   ios: {
     supportsTablet: true,
-    bundleIdentifier: "com.yourcompany.swap",
+    bundleIdentifier: "com.swapglobal.swap",
     config: {
       googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY
     },
@@ -39,7 +39,7 @@ export default {
       foregroundImage: "./assets/adaptive-icon.png",
       backgroundColor: "#ffffff",
     },
-    package: "com.yourcompany.swap",
+    package: "com.swapglobal.swap",
     config: {
       googleMaps: {
         apiKey: process.env.GOOGLE_MAPS_API_KEY
