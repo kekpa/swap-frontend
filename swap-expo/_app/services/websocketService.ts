@@ -113,6 +113,7 @@ class WebSocketService {
         // Backend WebSocket server uses /messaging namespace
         const socketUrl = `${ENV.REALTIME_URL}/messaging`;
         logger.debug(`[WebSocket] 🔌 Connecting to: ${socketUrl}`);
+        logger.info(`[WebSocket] 🔌 Full URL for debugging: ${socketUrl}`);
         
         this.socket = io(socketUrl, {
           auth: { token },
@@ -163,6 +164,10 @@ class WebSocketService {
             resolve(false);
           } else {
             logger.warn('[WebSocket] ❌ Connection error:', error.message);
+            logger.debug(`[WebSocket] Error Message: ${error.message}`);
+            logger.debug(`[WebSocket] Error Type: ${(error as any).type || 'Unknown'}`);
+            logger.debug(`[WebSocket] Error Details: ${JSON.stringify(error, null, 2)}`);
+            logger.warn('[WebSocket] ⚠️ Connection refused. Ensure the real-time server is running at ${socketUrl} and that your device is on the same network.');
             this.handleConnectionFailure(error);
             resolve(false); // Don't reject, return false for graceful handling
           }

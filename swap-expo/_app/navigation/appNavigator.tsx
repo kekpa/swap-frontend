@@ -1,24 +1,49 @@
 // Updated: Added Map tab to bottom navigation - 2025-01-30
 
-import React, { useEffect } from "react";
+import React, { useEffect, Suspense } from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { AuthGuard } from "../features/auth/components/AuthGuard";
-import WalletNavigator from "./walletNavigator";
-import InteractionsNavigator from "./interactions/interactionsNavigator";
-import ShopNavigator from "./shopNavigator";
-import MapNavigator from "./mapNavigator";
 import { getFocusedRouteNameFromRoute, RouteProp } from '@react-navigation/native';
-import { ViewStyle, Platform } from "react-native";
+import { ViewStyle, Platform, View, ActivityIndicator, Text } from "react-native";
 import { useTheme } from "../theme/ThemeContext";
-import OffersNavigator from "./offersNavigator";
 import ErrorBoundary from '../components/ErrorBoundary';
 import { crashLogger } from '../utils/crashLogger'; // Initialize global crash logging
+
+// Lazy load heavy navigators for better app startup performance
+const WalletNavigator = React.lazy(() => import("./walletNavigator"));
+const InteractionsNavigator = React.lazy(() => import("./interactions/interactionsNavigator"));
+const ShopNavigator = React.lazy(() => import("./shopNavigator"));
+const MapNavigator = React.lazy(() => import("./mapNavigator"));
+const OffersNavigator = React.lazy(() => import("./offersNavigator"));
 
 // Initialize crash logger immediately when app starts
 crashLogger; // This triggers the singleton initialization and global error handlers
 
 const Tab = createBottomTabNavigator();
+
+// Loading fallback component for lazy-loaded navigators
+const NavigatorLoadingFallback: React.FC<{ name: string }> = ({ name }) => {
+  const { theme } = useTheme();
+  
+  return (
+    <View style={{
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: theme.colors.background,
+    }}>
+      <ActivityIndicator size="large" color={theme.colors.primary} />
+      <Text style={{
+        color: theme.colors.textSecondary,
+        marginTop: theme.spacing.md,
+        fontSize: theme.typography.fontSize.sm,
+      }}>
+        Loading {name}...
+      </Text>
+    </View>
+  );
+};
 
 // Function to determine if tab bar should be hidden based on the route
 const getTabBarVisibility = (route: RouteProp<any, any>, theme: ReturnType<typeof useTheme>['theme']): ViewStyle | undefined => {
@@ -88,23 +113,43 @@ export default function AppNavigator() {
       >
         <Tab.Screen 
           name="Wallet" 
-          component={WalletNavigator}
+          children={() => (
+            <Suspense fallback={<NavigatorLoadingFallback name="Wallet" />}>
+              <WalletNavigator />
+            </Suspense>
+          )}
         />
         <Tab.Screen 
           name="Contacts" 
-          component={InteractionsNavigator}
+          children={() => (
+            <Suspense fallback={<NavigatorLoadingFallback name="Contacts" />}>
+              <InteractionsNavigator />
+            </Suspense>
+          )}
         />
         <Tab.Screen 
           name="Map" 
-          component={MapNavigator}
+          children={() => (
+            <Suspense fallback={<NavigatorLoadingFallback name="Map" />}>
+              <MapNavigator />
+            </Suspense>
+          )}
         />
         {/* <Tab.Screen 
           name="Shop" 
-          component={ShopNavigator}
+          children={() => (
+            <Suspense fallback={<NavigatorLoadingFallback name="Shop" />}>
+              <ShopNavigator />
+            </Suspense>
+          )}
         /> */}
         {/* <Tab.Screen 
           name="Offers" 
-          component={OffersNavigator}
+          children={() => (
+            <Suspense fallback={<NavigatorLoadingFallback name="Offers" />}>
+              <OffersNavigator />
+            </Suspense>
+          )}
         /> */}
       </Tab.Navigator>
     </ErrorBoundary>

@@ -1,6 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import * as ErrorRecovery from 'expo-error-recovery';
+import { ErrorBoundary as ReactErrorBoundary } from 'react-error-boundary';
 
 interface Props {
   children: ReactNode;
@@ -83,9 +83,8 @@ export default class ErrorBoundary extends Component<Props, State> {
     console.log('🔄 [ErrorBoundary] Attempting app restart...');
     // Note: ErrorRecovery restart functionality may not be available in all environments
     try {
-      if (ErrorRecovery.recoveredProps) {
-        console.log('Error recovery available, attempting restart...');
-      }
+      // Error recovery functionality removed - using simple reset instead
+      console.log('Restarting app by resetting error boundary...');
       // For now, just reset the error boundary
       this.handleReset();
     } catch (error) {

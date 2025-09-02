@@ -6,7 +6,7 @@
  */
 
 import logger from "./logger";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { MMKV } from 'react-native-mmkv';
 
 // Cache entry interface
 export interface CacheEntry<T> {
@@ -46,6 +46,12 @@ export const FEATURE_CACHE_KEYS: Record<string, string[]> = {
   // Add more feature mappings as needed
 };
 
+// Initialize MMKV storage instance
+const storage = new MMKV({
+  id: 'swap-cache',
+  encryptionKey: 'swap-cache-encryption-key-2025'
+});
+
 // Memory cache for faster access
 const memoryCache: Record<string, CacheEntry<any>> = {};
 
@@ -68,7 +74,7 @@ export const getFromCache = async <T>(
     }
 
     // Try persistent storage
-    const cachedData = await AsyncStorage.getItem(`cache:${key}`);
+    const cachedData = storage.getString(`cache:${key}`);
     if (!cachedData) return null;
 
     const parsedData = JSON.parse(cachedData) as CacheEntry<T>;
@@ -77,7 +83,7 @@ export const getFromCache = async <T>(
     if (Date.now() > parsedData.expiresAt) {
       logger.debug(`Cache expired: ${key}`, "cache");
       // Clean up expired cache
-      await AsyncStorage.removeItem(`cache:${key}`);
+      storage.delete(`cache:${key}`);
       delete memoryCache[key];
       return null;
     }
@@ -115,7 +121,7 @@ export const saveToCache = async <T>(
     memoryCache[key] = cacheEntry;
 
     // Save to persistent storage
-    await AsyncStorage.setItem(`cache:${key}`, JSON.stringify(cacheEntry));
+    storage.set(`cache:${key}`, JSON.stringify(cacheEntry));
 
     logger.debug(
       `Cached: ${key} (expires in ${Math.round(ttl / 60000)}m)`,
@@ -136,7 +142,7 @@ export const removeFromCache = async (key: string): Promise<void> => {
     delete memoryCache[key];
 
     // Remove from persistent storage
-    await AsyncStorage.removeItem(`cache:${key}`);
+    storage.delete(`cache:${key}`);
 
     logger.debug(`Removed from cache: ${key}`, "cache");
   } catch (error) {
@@ -155,12 +161,12 @@ export const clearCache = async (): Promise<void> => {
     });
 
     // Get all cache keys
-    const keys = await AsyncStorage.getAllKeys();
+    const keys = storage.getAllKeys();
     const cacheKeys = keys.filter((key) => key.startsWith("cache:"));
 
     // Remove all cache items
-    if (cacheKeys.length > 0) {
-      await AsyncStorage.multiRemove(cacheKeys);
+    for (const key of cacheKeys) {
+      storage.delete(key);
     }
 
     logger.info(`Cleared ${cacheKeys.length} cache entries`, "cache");
@@ -250,14 +256,14 @@ export const clearCacheCategory = async (prefix: string): Promise<void> => {
     });
 
     // Get all cache keys
-    const keys = await AsyncStorage.getAllKeys();
+    const keys = storage.getAllKeys();
     const cacheKeys = keys.filter(
       (key) => key.startsWith("cache:") && key.substring(6).startsWith(prefix)
     );
 
     // Remove matching cache items
-    if (cacheKeys.length > 0) {
-      await AsyncStorage.multiRemove(cacheKeys);
+    for (const key of cacheKeys) {
+      storage.delete(key);
     }
 
     logger.info(

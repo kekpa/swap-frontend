@@ -76,7 +76,7 @@ export const useToast = (): ToastState => {
 };
 
 // Toast component
-const ToastComponent: React.FC<{ state: ToastState }> = ({ state }) => {
+const ToastComponent: React.FC<{ state: ToastState }> = React.memo(({ state }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(-100)).current;
   
@@ -157,7 +157,7 @@ const ToastComponent: React.FC<{ state: ToastState }> = ({ state }) => {
       </View>
     </Animated.View>
   );
-};
+});
 
 // Container component to be placed at root of app
 export const ToastContainer: React.FC = () => {

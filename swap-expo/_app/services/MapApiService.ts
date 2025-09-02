@@ -19,7 +19,7 @@ console.log("[DEBUG] Map API Configuration:", {
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000, // 10 second timeout
+  timeout: 30000, // Increase to 30 second timeout for mobile
   headers: {
     'Content-Type': 'application/json',
   },

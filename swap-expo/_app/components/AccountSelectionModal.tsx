@@ -6,8 +6,8 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  FlatList,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 
@@ -103,38 +103,16 @@ const AccountSelectionModal: React.FC<AccountSelectionModalProps> = ({
     [theme],
   );
 
-  const renderItem = ({ item }: { item: AccountItem }) => {
-    const isHighlight = highlightCurrency && item.currency_id === highlightCurrency;
-    
-    // Format account display
-    const currencyDisplay = item.currency_code || item.currency_id;
-    const currencySymbol = item.currency_symbol || '';
-    
-    // Show account type if available
-    const accountTypeText = item.account_type?.name ? 
-      ` • ${item.account_type.name}` : '';
-    
-    // Show either balance (for own accounts) or last4 (for recipient accounts)
-    const balanceDisplay = item.is_recipient ? 
-      (item.account_number_last4 ? `•••• ${item.account_number_last4}` : '') : 
-      `${currencySymbol}${item.balance.toFixed(2)}`;
-    
-    // Remove redundant "Account" from display name
-    const displayName = item.account_name.replace(/ Account$/, '');
-      
+  const renderItem = React.useCallback(({ item }: { item: AccountItem }) => {
     return (
-      <TouchableOpacity
-        style={[styles.accountRow, isHighlight && { backgroundColor: theme.colors.primaryUltraLight }]}
-        onPress={() => onSelectAccount(item)}
-      >
-        <View style={styles.accountInfo}>
-          <Text style={styles.accountName}>{displayName}</Text>
-          <Text style={styles.accountType}>{currencyDisplay}{accountTypeText}</Text>
-        </View>
-        <Text style={styles.accountBalance}>{balanceDisplay}</Text>
-      </TouchableOpacity>
+      <AccountItem 
+        item={item} 
+        onSelect={onSelectAccount} 
+        highlightCurrency={highlightCurrency} 
+        theme={theme} 
+      />
     );
-  };
+  }, [onSelectAccount, highlightCurrency, theme]);
 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
@@ -148,10 +126,83 @@ const AccountSelectionModal: React.FC<AccountSelectionModalProps> = ({
             <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
           </TouchableOpacity>
         </View>
-        <FlatList data={accounts} keyExtractor={(item) => item.id} renderItem={renderItem} />
+        <FlashList 
+          data={accounts} 
+          keyExtractor={(item) => item.id} 
+          renderItem={renderItem}
+          estimatedItemSize={70}
+          getItemType={() => 'account'}
+        />
       </View>
     </Modal>
   );
 };
 
-export default AccountSelectionModal; 
+// Memoize the AccountItem component for better performance
+const AccountItem = React.memo<{ item: AccountItem; onSelect: (account: AccountItem) => void; highlightCurrency?: string; theme: any }>(({ item, onSelect, highlightCurrency, theme }) => {
+  const isHighlight = highlightCurrency && item.currency_id === highlightCurrency;
+  
+  // Format account display
+  const currencyDisplay = item.currency_code || item.currency_id;
+  const currencySymbol = item.currency_symbol || '';
+  
+  // Show account type if available
+  const accountTypeText = item.account_type?.name ? 
+    ` • ${item.account_type.name}` : '';
+  
+  // Show either balance (for own accounts) or last4 (for recipient accounts)
+  const balanceDisplay = item.is_recipient ? 
+    (item.account_number_last4 ? `•••• ${item.account_number_last4}` : '') : 
+    `${currencySymbol}${item.balance.toFixed(2)}`;
+  
+  // Remove redundant "Account" from display name
+  const displayName = item.account_name.replace(/ Account$/, '');
+
+  const styles = {
+    accountRow: {
+      flexDirection: 'row' as const,
+      justifyContent: 'space-between' as const,
+      alignItems: 'center' as const,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm + 4,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+      backgroundColor: isHighlight ? theme.colors.primaryUltraLight : 'transparent',
+    },
+    accountInfo: {
+      flexDirection: 'column' as const,
+      flexShrink: 1,
+    },
+    accountName: { 
+      fontSize: theme.typography.fontSize.md, 
+      fontWeight: '600' as const,
+      color: theme.colors.textPrimary, 
+      flexShrink: 1 
+    },
+    accountType: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.textTertiary,
+      marginTop: 2,
+    },
+    accountBalance: { 
+      fontSize: theme.typography.fontSize.md, 
+      fontWeight: '500' as const,
+      color: theme.colors.textSecondary 
+    },
+  };
+    
+  return (
+    <TouchableOpacity
+      style={styles.accountRow}
+      onPress={() => onSelect(item)}
+    >
+      <View style={styles.accountInfo}>
+        <Text style={styles.accountName}>{displayName}</Text>
+        <Text style={styles.accountType}>{currencyDisplay}{accountTypeText}</Text>
+      </View>
+      <Text style={styles.accountBalance}>{balanceDisplay}</Text>
+    </TouchableOpacity>
+  );
+});
+
+export default React.memo(AccountSelectionModal); 

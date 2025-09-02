@@ -6,13 +6,13 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  FlatList,
   SafeAreaView,
   StatusBar,
   RefreshControl,
   TextInput,
   ActivityIndicator,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -212,29 +212,6 @@ const TransactionListScreen: React.FC = () => {
     setRefreshing(false);
   };
 
-  // Render avatar for transaction entities
-  const renderTransactionAvatar = (transaction: WalletTransaction) => {
-    const initials = getInitials(transaction.name);
-    
-    // Generate a deterministic color based on name
-    const charCode = transaction.name.charCodeAt(0);
-    const colorPalette = [
-      theme.colors.primary, 
-      theme.colors.secondary, 
-      theme.colors.success, 
-      theme.colors.info, 
-      theme.colors.warning
-    ];
-    const avatarColor = colorPalette[charCode % colorPalette.length];
-
-    return (
-      <View 
-        style={[styles.transactionAvatar, { backgroundColor: avatarColor }]}
-      >
-        <Text style={styles.transactionAvatarText}>{initials}</Text>
-      </View>
-    );
-  };
 
   // Handle transaction press
   const handleTransactionPress = (transaction: WalletTransaction) => {
@@ -248,32 +225,52 @@ const TransactionListScreen: React.FC = () => {
 
 
 
-  // Render transaction item
-  const renderTransactionItem = ({ item }: { item: WalletTransaction }) => (
-    <TouchableOpacity 
-      style={styles.transactionItem}
-      onPress={() => handleTransactionPress(item)}
-    >
-      {renderTransactionAvatar(item)}
-      <View style={styles.transactionContent}>
-        <View style={styles.transactionInfo}>
-          <Text style={styles.transactionName}>{item.name}</Text>
-          <Text style={styles.transactionCategory}>{item.category}</Text>
-          <Text style={styles.transactionDate}>{item.date}</Text>
+  // Memoized transaction item component for FlashList performance
+  const TransactionItem = React.memo(({ item }: { item: WalletTransaction }) => {
+    const initials = getInitials(item.name);
+    const charCode = item.name.charCodeAt(0);
+    const colorPalette = [
+      theme.colors.primary, 
+      theme.colors.secondary, 
+      theme.colors.success, 
+      theme.colors.info, 
+      theme.colors.warning
+    ];
+    const avatarColor = colorPalette[charCode % colorPalette.length];
+
+    return (
+      <TouchableOpacity 
+        style={styles.transactionItem}
+        onPress={() => handleTransactionPress(item)}
+      >
+        <View style={[styles.transactionAvatar, { backgroundColor: avatarColor }]}>
+          <Text style={styles.transactionAvatarText}>{initials}</Text>
         </View>
-        <View style={styles.transactionRight}>
-          <Text
-            style={[
-              styles.transactionAmount,
-              { color: item.type === 'received' ? theme.colors.success : theme.colors.textPrimary }
-            ]}
-          >
-            {item.currency_symbol}{item.amount}
-          </Text>
+        <View style={styles.transactionContent}>
+          <View style={styles.transactionInfo}>
+            <Text style={styles.transactionName}>{item.name}</Text>
+            <Text style={styles.transactionCategory}>{item.category}</Text>
+            <Text style={styles.transactionDate}>{item.date}</Text>
+          </View>
+          <View style={styles.transactionRight}>
+            <Text
+              style={[
+                styles.transactionAmount,
+                { color: item.type === 'received' ? theme.colors.success : theme.colors.textPrimary }
+              ]}
+            >
+              {item.currency_symbol}{item.amount}
+            </Text>
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  });
+
+  // Render transaction item for FlashList
+  const renderTransactionItem = useCallback(({ item }: { item: WalletTransaction }) => (
+    <TransactionItem item={item} />
+  ), []);
 
 
 
@@ -515,11 +512,11 @@ const TransactionListScreen: React.FC = () => {
           </Text>
         </View>
       ) : (
-        <FlatList
-          style={styles.transactionsList}
+        <FlashList
           data={filteredTransactions}
           renderItem={renderTransactionItem}
           keyExtractor={(item) => item.id}
+          estimatedItemSize={80}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -529,6 +526,7 @@ const TransactionListScreen: React.FC = () => {
             />
           }
           showsVerticalScrollIndicator={false}
+          getItemType={() => 'transaction'}
         />
       )}
     </SafeAreaView>

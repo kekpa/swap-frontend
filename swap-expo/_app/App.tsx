@@ -46,7 +46,14 @@ if (__DEV__) {
 
 // Component to handle AppLifecycleManager initialization
 const AppLifecycleHandler: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const authContext = useAuthContext();
+  // Wrap useAuthContext in try-catch to handle initialization issues
+  let authContext;
+  try {
+    authContext = useAuthContext();
+  } catch (error) {
+    logger.warn('[AppLifecycleHandler] AuthContext not available yet, skipping lifecycle management');
+    return <>{children}</>;
+  }
   
   useEffect(() => {
     if (authContext.isAuthenticated && authContext.user && !authContext.isLoading) {

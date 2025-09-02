@@ -10,8 +10,8 @@ import {
   Switch,
   ScrollView,
   Modal,
-  FlatList,
 } from "react-native";
+import { FlashList } from '@shopify/flash-list';
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useAuthContext } from "../auth/context/AuthContext";
@@ -391,7 +391,7 @@ export default function AddMoneyScreen() {
                           </Text>
                         </View>
                       ) : (
-                        <FlatList
+                        <FlashList
                           data={currencies}
                           keyExtractor={(item) => item.id}
                           renderItem={({ item }) => (
@@ -415,6 +415,7 @@ export default function AddMoneyScreen() {
                               )}
                             </TouchableOpacity>
                           )}
+                          estimatedItemSize={50}
                           ItemSeparatorComponent={() => (
                             <View style={styles.separator} />
                           )}

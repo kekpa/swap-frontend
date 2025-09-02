@@ -7,14 +7,16 @@ import {
   SafeAreaView,
   StatusBar,
   TextInput,
-  FlatList,
   Modal,
   ScrollView,
   Keyboard,
+  ActivityIndicator,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { Theme } from '../../theme/theme';
+import { useFullTextSearch } from '../../query/hooks/useFullTextSearch';
 
 interface Transaction {
   id: string;
@@ -65,6 +67,9 @@ const TransactionSearchScreen: React.FC<TransactionSearchScreenProps> = ({
   const [noResults, setNoResults] = useState(false);
   
   const searchInputRef = useRef<TextInput>(null);
+  
+  // WhatsApp-style instant search
+  const { results: ftsResults, isLoading: ftsLoading, isEmpty: ftsEmpty, hasQuery } = useFullTextSearch(searchQuery);
   
   // Mock transaction data with theme-based colors
   const allTransactions: Transaction[] = useMemo(() => [
@@ -261,7 +266,85 @@ const TransactionSearchScreen: React.FC<TransactionSearchScreenProps> = ({
     );
   };
   
+  // Render FTS search result item
+  const renderFTSResult = ({ item }: { item: any }) => {
+    return (
+      <TouchableOpacity
+        style={styles.ftsResultItem}
+        onPress={() => {
+          if (item.type === 'transaction') {
+            onTransactionPress(item.id);
+          } else if (item.type === 'contact') {
+            // Handle contact navigation
+            console.log('Navigate to contact:', item.id);
+          }
+        }}
+      >
+        {/* Avatar/Icon */}
+        <View style={[styles.ftsResultIcon, { backgroundColor: item.avatarColor || theme.colors.primary }]}>
+          {item.type === 'transaction' ? (
+            <Ionicons name="swap-horizontal" size={20} color={theme.colors.white} />
+          ) : item.type === 'contact' ? (
+            <Text style={styles.ftsResultIconText}>{item.initials || 'U'}</Text>
+          ) : (
+            <Ionicons name="chatbubble" size={20} color={theme.colors.white} />
+          )}
+        </View>
+        
+        {/* Content */}
+        <View style={styles.ftsResultContent}>
+          <Text style={styles.ftsResultTitle}>{item.title}</Text>
+          <Text style={styles.ftsResultSubtitle}>{item.subtitle}</Text>
+        </View>
+        
+        {/* Amount/Metadata */}
+        {item.amount && (
+          <Text style={styles.ftsResultAmount}>
+            {item.currency}{item.amount}
+          </Text>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
   const renderSearchResults = () => {
+    // Show FTS results if we have a query
+    if (hasQuery) {
+      if (ftsLoading) {
+        return (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={styles.loadingText}>Searching...</Text>
+          </View>
+        );
+      }
+      
+      if (ftsEmpty) {
+        return renderNoResults();
+      }
+      
+      return (
+        <View style={styles.resultsContainer}>
+          <Text style={styles.resultsTitle}>Search results</Text>
+          
+          <View style={styles.resultsHeader}>
+            <Text style={styles.resultsCount}>
+              {ftsResults.all.length} Results
+            </Text>
+          </View>
+          
+          <FlashList
+            data={ftsResults.all}
+            renderItem={renderFTSResult}
+            keyExtractor={item => `${item.type}-${item.id}`}
+            estimatedItemSize={70}
+            getItemType={(item) => item.type}
+          />
+        </View>
+      );
+    }
+    
+    // Fallback to original transaction search for backward compatibility
     if (noResults) {
       return renderNoResults();
     }
@@ -302,12 +385,13 @@ const TransactionSearchScreen: React.FC<TransactionSearchScreenProps> = ({
           </Text>
         </View>
         
-        <FlatList
+        <FlashList
           data={searchResults}
           renderItem={renderTransaction}
           keyExtractor={item => item.id}
-          contentContainerStyle={styles.transactionsList}
+          estimatedItemSize={60}
           ListHeaderComponent={() => searchResults.length > 0 ? renderDateHeader(searchResults[0].dateGroup) : null}
+          getItemType={() => 'transaction'}
         />
       </View>
     );
@@ -883,6 +967,57 @@ const TransactionSearchScreen: React.FC<TransactionSearchScreenProps> = ({
       fontSize: theme.typography.fontSize.md,
       color: theme.colors.primary,
     fontWeight: '500',
+  },
+  // FTS result styles
+  ftsResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.divider,
+  },
+  ftsResultIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: theme.spacing.sm,
+  },
+  ftsResultIconText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: 'bold',
+    color: theme.colors.white,
+  },
+  ftsResultContent: {
+    flex: 1,
+  },
+  ftsResultTitle: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: '500',
+    color: theme.colors.textPrimary,
+    marginBottom: 2,
+  },
+  ftsResultSubtitle: {
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+  },
+  ftsResultAmount: {
+    fontSize: theme.typography.fontSize.md,
+    fontWeight: '500',
+    color: theme.colors.textPrimary,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: theme.spacing.xl,
+  },
+  loadingText: {
+    fontSize: theme.typography.fontSize.md,
+    color: theme.colors.textSecondary,
+    marginTop: theme.spacing.sm,
   },
   }), [theme]);
 

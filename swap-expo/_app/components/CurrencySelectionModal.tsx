@@ -6,9 +6,9 @@ import {
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
-  FlatList,
   TextInput,
 } from "react-native";
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -184,10 +184,11 @@ const CurrencySelectionModal: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <FlatList
+      <FlashList
         data={filteredCurrencies}
         renderItem={renderCurrencyItem}
         keyExtractor={(item) => item.code}
+        estimatedItemSize={70}
         style={styles.currencyList}
         showsVerticalScrollIndicator={false}
       />

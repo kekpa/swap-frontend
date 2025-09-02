@@ -471,7 +471,7 @@ const MapScreen = () => {
 
   // Tile server URL - now integrated into map backend
   // Using unified map backend for both data and tiles
-  const TILE_SERVER_BASE_URL = 'http://192.168.1.110:3004/api/tiles/grid'; // Integrated backend URL
+  const TILE_SERVER_BASE_URL = 'http://192.168.1.247:3004/api/tiles/grid'; // Integrated backend URL
 
   // State for the tile URL template, updated when map type changes
   const [gridTileUrlTemplate, setGridTileUrlTemplate] = useState<string | null>(null);

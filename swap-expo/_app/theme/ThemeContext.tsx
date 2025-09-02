@@ -8,7 +8,7 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { MMKV } from 'react-native-mmkv';
 import { StatusBar, Platform, StatusBarStyle } from "react-native";
 import defaultTheme, { // violetTheme is the default export
   Theme, 
@@ -22,6 +22,12 @@ import defaultTheme, { // violetTheme is the default export
   darkAmberTheme
 } from "./theme"; 
 import logger from "../utils/logger";
+
+// High-performance MMKV storage for theme preferences
+const themeStorage = new MMKV({
+  id: 'swap-theme-preferences',
+  encryptionKey: 'swap-theme-prefs-encryption-key-2025'
+});
 
 // Define available themes by name
 export const availableThemes: Record<string, Theme> = {
@@ -80,9 +86,10 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({
   const [statusBarStyle, setStatusBarStyle] = useState<StatusBarStyle>("dark-content");
 
   useEffect(() => {
-    const loadThemePreference = async () => {
+    const loadThemePreference = () => {
       try {
-        const savedThemeName = await AsyncStorage.getItem(THEME_STORAGE_KEY);
+        // Use MMKV for instant synchronous theme loading
+        const savedThemeName = themeStorage.getString(THEME_STORAGE_KEY);
         logger.debug(`Loaded theme preference: ${savedThemeName}`, "theme");
         
         if (savedThemeName && availableThemes[savedThemeName as ThemeName]) {
@@ -116,7 +123,7 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({
     loadThemePreference();
   }, []);
 
-  const setThemeByName = async (name: ThemeName) => {
+  const setThemeByName = (name: ThemeName) => {
     const theme = availableThemes[name];
     if (theme) {
       setCurrentTheme(theme);
@@ -129,9 +136,10 @@ export const ThemeProvider: React.FC<{ children: ReactNode }> = ({
       // Update status bar style based on dark mode
       setStatusBarStyle(isThemeDark ? "light-content" : "dark-content");
 
-      // Save theme preference to AsyncStorage
+      // Save theme preference to MMKV for instant performance
       try {
-        await AsyncStorage.setItem(THEME_STORAGE_KEY, name);
+        themeStorage.set(THEME_STORAGE_KEY, name);
+        logger.debug(`Saved theme preference: ${name}`, "theme");
       } catch (error) {
         logger.error("Error saving theme preference:", error);
       }

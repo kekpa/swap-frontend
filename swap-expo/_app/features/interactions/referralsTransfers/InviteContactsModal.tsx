@@ -19,12 +19,12 @@ import {
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
-  FlatList,
   TextInput,
   Share,
   Clipboard,
   Alert,
 } from "react-native";
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from "@expo/vector-icons";
 
 interface Contact {
@@ -146,11 +146,12 @@ const InviteContactsModal: React.FC<InviteContactsModalProps> = ({
         />
       </View>
 
-      <FlatList
+      <FlashList
         data={filteredContacts}
         renderItem={renderContactItem}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.contactsList}
+        estimatedItemSize={60}
+        getItemType={() => 'contact'}
       />
 
       {showCopiedMessage && (

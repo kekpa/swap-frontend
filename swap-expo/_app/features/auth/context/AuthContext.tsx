@@ -27,12 +27,18 @@ import { AUTH_EVENTS } from '../../../types/api.types';
 import { AUTH_PATHS } from '../../../_api/apiPaths';
 import logger from '../../../utils/logger';
 import { authManager, authEvents as authManagerEvents, AUTH_EVENT_TYPES } from '../../../utils/authManager';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { MMKV } from 'react-native-mmkv';
 import { clearAllCachedData } from '../../../localdb';
 import { storeLastUserForPin, getLastUserForPin as getStoredPinUser, clearLastUserForPin, hasPinUserStored as checkPinUserStored } from '../../../utils/pinUserStorage';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { jwtDecode } from 'jwt-decode';
 import { eventEmitter } from '../../../utils/eventEmitter';
+
+// High-performance MMKV storage for auth preferences
+const authStorage = new MMKV({
+  id: 'swap-auth-preferences',
+  encryptionKey: 'swap-auth-prefs-encryption-key-2025'
+});
 
 const SECURE_STORE_EMAIL_KEY = 'userEmail';
 const SECURE_STORE_PASSWORD_KEY = 'userPassword';
@@ -95,7 +101,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [needsLogin, setNeedsLogin] = useState<boolean>(false);
   const [rememberMe, setRememberMe] = useState<boolean>(true);
   const [justLoggedOut, setJustLoggedOut] = useState<boolean>(false);
-  const [persistentAuthEnabled, setPersistentAuthEnabled] = useState<boolean>(true);
+  const [persistentAuthEnabled, setPersistentAuthEnabled] = useState<boolean>(() => {
+    // Initialize from MMKV storage with default true
+    return authStorage.getBoolean(PERSISTENT_AUTH_KEY) ?? true;
+  });
   const [phoneVerification, setPhoneVerification] = useState<PhoneVerification | null>(null);
 
   const hasRunInitialCheckSession = useRef(false);
@@ -975,6 +984,88 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Add missing login function for backward compatibility
   const login = useCallback(async (identifier: string, password: string, skipStore = false): Promise<{ success: boolean; message?: string }> => {
+    console.log('🔑 [Login] Attempting personal login for:', identifier);
+    try {
+      const response = await apiClient.post(AUTH_PATHS.LOGIN, { identifier, password });
+      console.log('🔑 [Login] Personal login response status:', response.status);
+      console.log('🔑 [Login] Personal login response data:', response.data);
+      if (response.status === 200 || response.status === 201) {
+        let authData;
+        if ('access_token' in response.data) {
+          authData = response.data;
+        } else if (response.data.data && 'access_token' in response.data.data) {
+          authData = response.data.data;
+        } else {
+          console.error('❌ [Login] No access token in response:', response.data);
+          return { success: false, message: "Login failed - no access token received" };
+        }
+        console.log('🔑 [Login] Parsed auth data:', authData);
+        if (authData.access_token) {
+          console.log('✅ [Login] Personal login successful, processing tokens');
+          await saveAccessToken(authData.access_token);
+          if (authData.refresh_token) {
+            if (!skipStore) {
+              await saveRefreshToken(authData.refresh_token);
+              console.log('✅ [Login] Refresh token saved successfully');
+            } else {
+              console.warn('⚠️ [Login] Skipping refresh token storage as requested');
+            }
+          } else {
+            console.warn('⚠️ [Login] No refresh token in response');
+          }
+          if (authData.profile_id) {
+            apiClient.setProfileId(authData.profile_id);
+            console.log('✅ [Login] Profile ID set:', authData.profile_id);
+          }
+          // CRITICAL: Fetch user profile data after successful login
+          try {
+            const profileResponse = await apiClient.get(AUTH_PATHS.ME);
+            if (profileResponse.status === 200 && profileResponse.data) {
+              const profileData = profileResponse.data.data || profileResponse.data;
+              const mappedUser = {
+                id: profileData.id || profileData.user_id,
+                profileId: profileData.profile_id || profileData.id,
+                entityId: profileData.entity_id,
+                firstName: profileData.first_name,
+                lastName: profileData.last_name,
+                username: profileData.username,
+                avatarUrl: profileData.avatar_url || profileData.logo_url,
+                email: profileData.email,
+                profileType: profileData.type,
+                businessName: profileData.business_name,
+              };
+              setUser(mappedUser);
+              console.log('✅ [Login] User profile loaded:', mappedUser);
+            } else {
+              console.warn('⚠️ [Login] Failed to load user profile - empty response');
+            }
+          } catch (profileError: any) {
+            console.warn('⚠️ [Login] Failed to load user profile:', profileError);
+            // Continue with login even if profile fails
+          }
+          console.log('✅ [Login] Personal login completed successfully');
+          setIsAuthenticated(true); // Set authenticated state
+          return { success: true };
+        } else {
+          console.error('❌ [Login] No access token in response:', authData);
+          return { success: false, message: "Personal login failed - no access token received" };
+        }
+      } else {
+        console.error('❌ [Login] Unexpected response status:', response.status);
+        return { success: false, message: "Personal login failed - unexpected response status" };
+      }
+    } catch (error: any) {
+      console.error('❌ [Login] Personal login error:', error);
+      console.error('❌ [Login] Error response:', error.response?.data);
+      // If personal login fails with 401, it might be a business account
+      if (error.response?.status === 401) {
+        console.log('🔑 [Login] Personal login failed, trying business login as fallback...');
+        return await loginBusiness(identifier, password, skipStore);
+      }
+      return { success: false, message: error.response?.data?.errors?.[0]?.message || error.message || "Personal login failed" };
+    }
+    // If personal login fails for other reasons, fallback to business login
+    console.log('🔑 [Login] Personal login failed, trying business login as fallback...');
     return await loginBusiness(identifier, password, skipStore);
   }, []);
 
@@ -1074,7 +1165,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     persistentAuthEnabled,
     setPersistentAuthEnabled: (enabled: boolean) => {
       setPersistentAuthEnabled(enabled);
-      AsyncStorage.setItem(PERSISTENT_AUTH_KEY, JSON.stringify(enabled));
+      // Use MMKV for 30x faster performance
+      authStorage.set(PERSISTENT_AUTH_KEY, enabled);
     }
   };
 

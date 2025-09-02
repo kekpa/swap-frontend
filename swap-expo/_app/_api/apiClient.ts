@@ -19,7 +19,6 @@ import {
   CachedEntry
 } from "../types/api.types";
 import { jwtDecode } from "jwt-decode";
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 // Define the interface for the call history

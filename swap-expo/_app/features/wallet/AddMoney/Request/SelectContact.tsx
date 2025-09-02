@@ -20,10 +20,10 @@ import {
   SafeAreaView,
   StatusBar,
   TextInput,
-  FlatList,
   Image,
   ScrollView,
 } from "react-native";
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -222,49 +222,49 @@ const SelectContactScreen: React.FC<SelectContactScreenProps> = ({
             </View>
           )}
 
-          {sections.map((section) => (
-            <View key={section.letter}>
-              <Text style={styles.sectionHeader}>{section.letter}</Text>
-              {section.data.map((contact) => (
-                <TouchableOpacity
-                  key={contact.id}
-                  style={styles.contactItem}
-                  onPress={() => handleSelectContact(contact)}
-                >
-                  <View style={styles.contactAvatarContainer}>
-                    <View style={styles.contactAvatar}>
-                      <Text style={styles.contactInitial}>
-                        {contact.initial}
-                      </Text>
+          <FlashList
+            data={sections.flatMap(section => section.data)}
+            renderItem={({ item: contact }) => (
+              <TouchableOpacity
+                style={styles.contactItem}
+                onPress={() => handleSelectContact(contact)}
+              >
+                <View style={styles.contactAvatarContainer}>
+                  <View style={styles.contactAvatar}>
+                    <Text style={styles.contactInitial}>
+                      {contact.initial}
+                    </Text>
+                  </View>
+                  {contact.isN26User && (
+                    <View style={styles.n26Badge}>
+                      <Text style={styles.n26BadgeText}>N</Text>
                     </View>
-                    {contact.isN26User && (
-                      <View style={styles.n26Badge}>
-                        <Text style={styles.n26BadgeText}>N</Text>
-                      </View>
-                    )}
-                  </View>
+                  )}
+                </View>
 
-                  <View style={styles.contactInfo}>
-                    <Text style={styles.contactName}>{contact.name}</Text>
-                    {contact.email && (
-                      <Text style={styles.contactDetail}>{contact.email}</Text>
-                    )}
-                    {contact.phone && (
-                      <Text style={styles.contactDetail}>{contact.phone}</Text>
-                    )}
-                  </View>
+                <View style={styles.contactInfo}>
+                  <Text style={styles.contactName}>{contact.name}</Text>
+                  {contact.email && (
+                    <Text style={styles.contactDetail}>{contact.email}</Text>
+                  )}
+                  {contact.phone && (
+                    <Text style={styles.contactDetail}>{contact.phone}</Text>
+                  )}
+                </View>
 
-                  <TouchableOpacity style={styles.moreButton}>
-                    <Ionicons
-                      name="ellipsis-horizontal"
-                      size={20}
-                      color="#999"
-                    />
-                  </TouchableOpacity>
+                <TouchableOpacity style={styles.moreButton}>
+                  <Ionicons
+                    name="ellipsis-horizontal"
+                    size={20}
+                    color="#999"
+                  />
                 </TouchableOpacity>
-              ))}
-            </View>
-          ))}
+              </TouchableOpacity>
+            )}
+            keyExtractor={(item) => item.id}
+            estimatedItemSize={70}
+            getItemType={() => 'contact'}
+          />
         </View>
       </ScrollView>
     </SafeAreaView>

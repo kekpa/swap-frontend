@@ -7,7 +7,6 @@ import {
   SafeAreaView,
   StatusBar,
   ScrollView,
-  FlatList,
   ActivityIndicator,
   TextInput,
   Alert,
@@ -19,6 +18,7 @@ import {
   Dimensions,
   Modal,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import apiClient from '../../_api/apiClient';
 import { useRoute, useNavigation, RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -299,7 +299,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
   // Network state for offline handling
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   
-  const flatListRef = useRef<FlatList<TimelineItem>>(null);
+  const flatListRef = useRef<FlashList<TimelineItem>>(null);
   const styles = useMemo(() => createGlobalStyles(theme), [theme]);
 
   useEffect(() => {
@@ -686,11 +686,12 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
           </TouchableOpacity>
         </View>
         
-        <FlatList
+        <FlashList
           ref={flatListRef}
           data={filteredItems}
           keyExtractor={(item) => item.id}
           renderItem={renderTimelineItem}
+          estimatedItemSize={80}
           contentContainerStyle={[
             styles.timelineContent, 
             { flexGrow: 1, justifyContent: filteredItems.length > 0 ? 'flex-start' : 'center' }

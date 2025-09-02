@@ -42,7 +42,7 @@ const EXPANDED_FAN_OFFSET = 50; // Spacing between cards when fanned out DOWNWAR
 const STACK_SCALE_FACTOR = 0; // NO scale difference - only visual stacking at top
 const MAX_EXPANSION_HEIGHT = screenHeight * 0.4; // Don't exceed 40% of screen
 
-const WalletStackCard: React.FC<WalletStackCardProps> = ({
+const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
   wallets,
   selectedWalletId,
   isBalanceVisible,
@@ -463,6 +463,8 @@ const WalletStackCard: React.FC<WalletStackCardProps> = ({
       </Animated.View>
     </View>
   );
-};
+});
+
+WalletStackCard.displayName = 'WalletStackCard';
 
 export default WalletStackCard; 

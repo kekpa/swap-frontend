@@ -9,13 +9,13 @@ const envPath =
 require("dotenv").config({ path: envPath });
 
 export default {
-  name: "swap",
+  name: "Swap",
   slug: "swap",
   version: "1.0.0",
   orientation: "portrait",
   icon: "./assets/icon.png",
   userInterfaceStyle: "light",
-  newArchEnabled: false,
+  newArchEnabled: true,
   splash: {
     image: "./assets/splash-icon.png",
     resizeMode: "contain",

@@ -8,7 +8,6 @@ import {
   ScrollView,
   SafeAreaView,
   StatusBar,
-  FlatList,
   ActivityIndicator,
   InteractionManager,
 } from 'react-native';

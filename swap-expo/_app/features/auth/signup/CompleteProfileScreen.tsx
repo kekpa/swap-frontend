@@ -108,13 +108,20 @@ const CompleteProfileScreen = () => {
         const { phoneNumber, accessToken, profileId } = authContext.phoneVerification;
         
         // Step 1: Update the profile with name, username, and password
-        const response = await apiClient.put(`${API_PATHS.AUTH.COMPLETE_PROFILE}/${profileId}`, {
-          first_name: firstName,
-          last_name: lastName,
-          username: username,
-          password: password,  // Include the password in the request
-          account_type: 'personal' // Add account type to the request
-        }, {
+        const profileData = {
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          username: username.trim(),
+          password: password,
+        };
+        
+        console.log('🚀 Sending profile data:', {
+          profileId,
+          data: { ...profileData, password: '[REDACTED]' },
+          url: `${API_PATHS.AUTH.COMPLETE_PROFILE}/${profileId}`
+        });
+        
+        const response = await apiClient.put(`${API_PATHS.AUTH.COMPLETE_PROFILE}/${profileId}`, profileData, {
           headers: {
             Authorization: `Bearer ${accessToken}`
           }
@@ -142,12 +149,24 @@ const CompleteProfileScreen = () => {
         // Email-based signup flow - this path should not be hit in phone verification flow
         Alert.alert("Error", "Invalid signup flow detected");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Profile completion error:", error);
-      Alert.alert(
-        "Error",
-        "Failed to complete your profile. Please try again."
-      );
+      
+      // More specific error handling
+      let errorMessage = "Failed to complete your profile. Please try again.";
+      
+      if (error.response?.data?.errors) {
+        const backendErrors = error.response.data.errors;
+        if (backendErrors.some((e: any) => e.message?.includes('username'))) {
+          errorMessage = "Username is already taken. Please choose a different username.";
+        } else if (backendErrors.some((e: any) => e.message?.includes('password'))) {
+          errorMessage = "Password doesn't meet requirements. Please try a stronger password.";
+        } else {
+          errorMessage = backendErrors[0]?.message || errorMessage;
+        }
+      }
+      
+      Alert.alert("Error", errorMessage);
     } finally {
       setIsSubmitting(false);
     }

@@ -29,7 +29,7 @@ const getEnvVars = (): Environment => {
     NEST_API_URL:
       process.env.EXPO_PUBLIC_NEST_API_URL || expoConstants.NEST_API_URL || "",
     MAP_API_URL:
-      process.env.EXPO_PUBLIC_MAP_API_URL || expoConstants.MAP_API_URL || "http://192.168.1.110:3004",
+      process.env.EXPO_PUBLIC_MAP_API_URL || expoConstants.MAP_API_URL || "http://192.168.1.247:3004",
     REALTIME_URL:
       process.env.EXPO_PUBLIC_REALTIME_URL || expoConstants.REALTIME_URL || "",
     ENABLE_DEV_TOOLS:

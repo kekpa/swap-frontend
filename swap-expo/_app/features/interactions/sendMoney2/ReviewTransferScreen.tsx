@@ -12,7 +12,8 @@ import {
   StatusBar,
   Platform,
   TextStyle,
-  TextInput
+  TextInput,
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, CommonActions, RouteProp, useRoute } from '@react-navigation/native';
@@ -21,6 +22,7 @@ import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
 import { CreateDirectTransactionDto } from '../../../types/transaction.types';
 import { useAuthContext } from '../../auth/context/AuthContext';
+import { useSendMoney } from '../../../query/hooks/useSendMoney';
 import logger from '../../../utils/logger';
 
 interface ReviewTransferScreenProps {
@@ -49,9 +51,11 @@ const ReviewTransferScreen: React.FC<ReviewTransferScreenProps> = ({ route }) =>
   const navigation = useNavigation<StackNavigationProp<any>>();
   const { theme } = useTheme();
   const { user: currentUser } = useAuthContext();
-  const [isSending, setIsSending] = React.useState(false);
   const [editingMessage, setEditingMessage] = React.useState(false);
   const [messageText, setMessageText] = React.useState('');
+  
+  // Optimistic send money mutation with instant UI updates
+  const sendMoneyMutation = useSendMoney();
   
   const params = route.params || {
     amount: 0,
@@ -103,94 +107,85 @@ const ReviewTransferScreen: React.FC<ReviewTransferScreenProps> = ({ route }) =>
   };
 
   const handleSend = async () => {
-    if (isSending) return;
-    setIsSending(true);
+    if (sendMoneyMutation.isPending) return;
+
+    // CRITICAL: Ensure we're using the current user's entity ID as sender
+    const senderEntityId = currentUser?.entityId;
+
+    // Use the normalized recipient entity ID
+    // recipientEntityId is already extracted from params above
+    
+    // Debug logging to track the JWT token issue
+    logger.debug(`[ReviewTransferScreen] 🚀 OPTIMISTIC: Starting transaction - currentUser=${senderEntityId}, recipient=${recipientEntityId}, fromAccount=${fromAccount?.entity_id}`, "ReviewTransferScreen");
+    
+    if (!senderEntityId) {
+      alert('Authentication error: No sender entity ID found');
+      return;
+    }
+    
+    if (!recipientEntityId) {
+      alert('Error: No recipient selected');
+      return;
+    }
+    
+    if (senderEntityId === recipientEntityId) {
+      alert('Error: Cannot send transaction to yourself');
+      return;
+    }
 
     try {
-      // CRITICAL: Ensure we're using the current user's entity ID as sender
-      const senderEntityId = currentUser?.entityId;
-
-      // Use the normalized recipient entity ID
-      // recipientEntityId is already extracted from params above
-      
-      // Debug logging to track the JWT token issue
-      logger.debug(`[ReviewTransferScreen] Transaction details: currentUser=${senderEntityId}, recipient=${recipientEntityId}, fromAccount=${fromAccount?.entity_id}`, "ReviewTransferScreen");
-      
-      if (!senderEntityId) {
-        alert('Authentication error: No sender entity ID found');
-        setIsSending(false);
-        return;
-      }
-      
-      if (!recipientEntityId) {
-        alert('Error: No recipient selected');
-        setIsSending(false);
-        return;
-      }
-      
-      if (senderEntityId === recipientEntityId) {
-        alert('Error: Cannot send transaction to yourself');
-        setIsSending(false);
-        return;
-      }
-      
-      const dto: CreateDirectTransactionDto = {
-        recipient_id: recipientEntityId, // Backend will resolve/create recipient account automatically
-        amount: amount,
-        currency_id: currencyId,
-        description: messageText, // Use edited message if changed
-        metadata: {
-          sender_entity_id: senderEntityId, // Explicitly include sender entity ID
-          from_account_id: fromAccount?.id, // Hint for backend about sender's preferred account
-        },
-      };
-
-      logger.debug(`Sending transaction with params: ${JSON.stringify({
+      // ⚡ INSTANT: Execute optimistic mutation
+      const result = await sendMoneyMutation.mutateAsync({
         recipient_id: recipientEntityId,
-        sender_entity_id: senderEntityId,
         amount: amount,
-        description: messageText,
         currency_id: currencyId,
-      })}`, "ReviewTransferScreen");
+        description: messageText,
+        metadata: {
+          sender_entity_id: senderEntityId,
+          from_account_id: fromAccount?.id,
+        },
+        // Additional fields for optimistic updates
+        senderAccountId: fromAccount?.id || '',
+        senderEntityId: senderEntityId,
+        recipientName: contactName,
+        recipientInitials: contactInitial,
+      });
 
-      const resp = await data.sendDirectTransaction(dto);
-      // Ensure resp and its nested properties exist before trying to access them
-      const tx = resp?.transaction || resp?.data || resp;
+      logger.debug(`[ReviewTransferScreen] ✅ OPTIMISTIC: Transaction succeeded - ${result.id}`, "ReviewTransferScreen");
 
-      if (!tx || !tx.id) {
-        // Handle case where transaction data is not available
-        alert('Transfer failed: Could not retrieve transaction details.');
-        setIsSending(false);
-        return;
-      }
-    
-      // Navigate to ContactInteractionHistory2 and pass params to trigger TransferCompleted modal
-      // With context to ensure proper navigation back
+      // Navigate to ContactInteractionHistory2 with transfer completion
       navigation.navigate('ContactInteractionHistory2' as any, {
-        contactId: recipientEntityId, // Use the actual recipient entity ID
+        contactId: recipientEntityId,
         contactName: contactName,
         contactInitials: contactInitial,
         contactAvatarColor: contactColor,
-        interactionId: tx.interaction_id, // Pass interactionId if available from response
-        forceRefresh: true, // Force refresh of timeline
+        interactionId: result.interaction_id,
+        forceRefresh: true,
         showTransferCompletedModal: true,
         transferDetails: {
-          amount: tx.amount,
+          amount: result.amount,
           recipientName: contactName,
           recipientInitial: contactInitial,
           recipientColor: contactColor,
           message: messageText,
-          transactionId: tx.id,
-          status: tx.status,
-          createdAt: tx.created_at,
-          contactId: recipientEntityId, // Use recipient entity ID
-          interactionId: tx.interaction_id, // Pass interactionId for context
+          transactionId: result.id,
+          status: result.status,
+          createdAt: result.created_at,
+          contactId: recipientEntityId,
+          interactionId: result.interaction_id,
         },
       } as any);
-    } catch (e: any) {
-      alert(`Transfer failed: ${e.message || 'Unknown error'}`);
-    } finally {
-      setIsSending(false);
+
+    } catch (error: any) {
+      logger.error(`[ReviewTransferScreen] ❌ OPTIMISTIC: Transaction failed:`, error);
+      
+      // Enhanced error handling
+      if (error?.message?.includes('queued for offline sync')) {
+        alert(`Transaction queued for when you're back online. ${contactName} will receive the money once connected.`);
+        navigation.goBack();
+      } else {
+        alert(`Transfer failed: ${error.message || 'Unknown error'}`);
+      }
     }
   };
 
@@ -276,6 +271,15 @@ const ReviewTransferScreen: React.FC<ReviewTransferScreenProps> = ({ route }) =>
       marginTop: 'auto', 
       marginBottom: theme.spacing.lg, 
       padding: theme.spacing.md 
+    },
+    sendButtonDisabled: {
+      opacity: 0.6,
+      backgroundColor: theme.colors.textSecondary,
+    },
+    sendButtonContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     sendButtonText: { 
       ...(theme.commonStyles.primaryButtonText as TextStyle),
@@ -392,8 +396,19 @@ const ReviewTransferScreen: React.FC<ReviewTransferScreenProps> = ({ route }) =>
 
       {/* Send Button */}
       <View style={{flex:1}} />
-      <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
-        <Text style={styles.sendButtonText}>Send</Text>
+      <TouchableOpacity 
+        style={[styles.sendButton, sendMoneyMutation.isPending && styles.sendButtonDisabled]} 
+        onPress={handleSend}
+        disabled={sendMoneyMutation.isPending}
+      >
+        {sendMoneyMutation.isPending ? (
+          <View style={styles.sendButtonContent}>
+            <ActivityIndicator size="small" color={theme.colors.white} style={{ marginRight: 8 }} />
+            <Text style={styles.sendButtonText}>Sending...</Text>
+          </View>
+        ) : (
+          <Text style={styles.sendButtonText}>Send</Text>
+        )}
       </TouchableOpacity>
     </SafeAreaView>
   );

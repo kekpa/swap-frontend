@@ -7,7 +7,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  FlatList,
   TextInput,
   StyleSheet,
   Modal,
@@ -15,6 +14,7 @@ import {
   StatusBar,
   Dimensions,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { countryCodes, CountryCode } from '../constants/countryCodes';
 import { useTheme } from '../theme/ThemeContext';
@@ -136,7 +136,7 @@ const CountryCodePicker = forwardRef<CountryCodePickerRef, CountryCodePickerProp
             />
           </View>
           
-          <FlatList
+          <FlashList
             data={filteredCountries}
             keyExtractor={(item) => item.iso}
             renderItem={({ item }) => (
@@ -161,6 +161,7 @@ const CountryCodePicker = forwardRef<CountryCodePickerRef, CountryCodePickerProp
                 )}
               </TouchableOpacity>
             )}
+            estimatedItemSize={60}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContent}
           />

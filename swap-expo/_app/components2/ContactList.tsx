@@ -43,7 +43,7 @@ interface ContactListProps {
   areListsVisible: boolean; // Controls visibility of the list content under headers
 }
 
-const ContactList: React.FC<ContactListProps> = ({
+const ContactList: React.FC<ContactListProps> = React.memo(({
   appUserContacts,
   phoneOnlyContacts,
   isLoading,
@@ -66,53 +66,75 @@ const ContactList: React.FC<ContactListProps> = ({
 }) => {
   const { theme } = useTheme();
 
+  // Memoized app user contact item (clickable, no invite button)
+  const AppUserContactItem = React.memo<{ contact: DisplayableContact; keyPrefix: string; onPress: () => void }>(
+    ({ contact, keyPrefix, onPress }) => (
+      <TouchableOpacity
+        key={`${keyPrefix}-${contact.id}`}
+        style={styles.contactItem}
+        onPress={onPress}
+      >
+        <View style={[styles.avatar, { backgroundColor: contact.avatarColor }]}>
+          {contact.avatarUrl ? (
+            <Text>IMG</Text> // Placeholder for Image component if avatarUrl exists
+          ) : (
+            <Text style={styles.avatarText}>{contact.initials}</Text>
+          )}
+        </View>
+        <View style={styles.contactInfo}>
+          <Text style={styles.contactName}>{contact.name}</Text>
+          {contact.statusOrPhone && (
+            <Text style={styles.contactStatus}>{contact.statusOrPhone}</Text>
+          )}
+        </View>
+      </TouchableOpacity>
+    )
+  );
+
   // Render app user contact item (clickable, no invite button)
   const renderAppUserContactItem = (contact: DisplayableContact, keyPrefix: string) => (
-    <TouchableOpacity
-      key={`${keyPrefix}-${contact.id}`}
-      style={styles.contactItem}
-      onPress={() => onContactPress(contact)}
-    >
-      <View style={[styles.avatar, { backgroundColor: contact.avatarColor }]}>
-        {contact.avatarUrl ? (
-          <Text>IMG</Text> // Placeholder for Image component if avatarUrl exists
-        ) : (
+    <AppUserContactItem 
+      contact={contact} 
+      keyPrefix={keyPrefix} 
+      onPress={() => onContactPress(contact)} 
+    />
+  );
+
+  // Memoized phone-only contact item (not clickable, with invite button)
+  const PhoneOnlyContactItem = React.memo<{ contact: DisplayableContact; keyPrefix: string; onInvite?: () => void }>(
+    ({ contact, keyPrefix, onInvite }) => (
+      <View
+        key={`${keyPrefix}-${contact.id}`}
+        style={styles.contactItem}
+      >
+        <View style={[styles.avatar, { backgroundColor: contact.avatarColor }]}>
           <Text style={styles.avatarText}>{contact.initials}</Text>
+        </View>
+        <View style={styles.contactInfo}>
+          <Text style={styles.contactName}>{contact.name}</Text>
+          {contact.statusOrPhone && (
+            <Text style={styles.contactStatus}>{contact.statusOrPhone}</Text>
+          )}
+        </View>
+        {onInvite && (
+          <TouchableOpacity
+            style={styles.inviteButton}
+            onPress={onInvite}
+          >
+            <Text style={styles.inviteButtonText}>Invite</Text>
+          </TouchableOpacity>
         )}
       </View>
-      <View style={styles.contactInfo}>
-        <Text style={styles.contactName}>{contact.name}</Text>
-        {contact.statusOrPhone && (
-          <Text style={styles.contactStatus}>{contact.statusOrPhone}</Text>
-        )}
-      </View>
-    </TouchableOpacity>
+    )
   );
 
   // Render phone-only contact item (not clickable, with invite button)
   const renderPhoneOnlyContactItem = (contact: DisplayableContact, keyPrefix: string) => (
-    <View
-      key={`${keyPrefix}-${contact.id}`}
-      style={styles.contactItem}
-    >
-      <View style={[styles.avatar, { backgroundColor: contact.avatarColor }]}>
-        <Text style={styles.avatarText}>{contact.initials}</Text>
-      </View>
-      <View style={styles.contactInfo}>
-        <Text style={styles.contactName}>{contact.name}</Text>
-        {contact.statusOrPhone && (
-          <Text style={styles.contactStatus}>{contact.statusOrPhone}</Text>
-        )}
-      </View>
-      {onInviteContact && (
-        <TouchableOpacity
-          style={styles.inviteButton}
-          onPress={() => onInviteContact(contact)}
-        >
-          <Text style={styles.inviteButtonText}>Invite</Text>
-        </TouchableOpacity>
-      )}
-    </View>
+    <PhoneOnlyContactItem 
+      contact={contact} 
+      keyPrefix={keyPrefix} 
+      onInvite={onInviteContact ? () => onInviteContact(contact) : undefined} 
+    />
   );
 
   const styles = StyleSheet.create({
@@ -275,7 +297,11 @@ const ContactList: React.FC<ContactListProps> = ({
             <>
               {appUserContacts.length > 0 ? (
                 <View style={styles.contactsListContainer}>
-                  {appUserContacts.map(contact => renderAppUserContactItem(contact, 'app-user'))}
+                  {appUserContacts.map(contact => 
+                    <View key={contact.id}>
+                      {renderAppUserContactItem(contact, 'app-user')}
+                    </View>
+                  )}
                 </View>
               ) : (
                 !isLoading && permissionGranted && <Text style={styles.emptyListText}>{emptyStateMessageAppUsers}</Text>
@@ -324,7 +350,11 @@ const ContactList: React.FC<ContactListProps> = ({
           </View>
           {phoneOnlyContacts.length > 0 ? (
             <View style={styles.contactsListContainer}>
-              {phoneOnlyContacts.map(contact => renderPhoneOnlyContactItem(contact, 'phone-only'))}
+              {phoneOnlyContacts.map(contact => 
+                <View key={contact.id}>
+                  {renderPhoneOnlyContactItem(contact, 'phone-only')}
+                </View>
+              )}
             </View>
           ) : (
             !isLoading && <Text style={styles.emptyListText}>{emptyStateMessagePhoneContacts}</Text>
@@ -341,6 +371,6 @@ const ContactList: React.FC<ContactListProps> = ({
       )}
     </View>
   );
-};
+});
 
 export default ContactList; 
