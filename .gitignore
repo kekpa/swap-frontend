@@ -33,6 +33,7 @@ web-build/
 
 # macOS
 .DS_Store
+.DS_Store?
 
 # Windows
 Thumbs.db
@@ -66,13 +67,5 @@ dist/
 tmp/
 temp/
 
-# Exclude app prebuilds
-swap-expo/ios
-swap-expo/android
-
-swap-flutter/ios
-swap-flutter/android
-swap-flutter/linux
-swap-flutter/macos
-swap-flutter/windows
-swap-flutter/web
+# Exclude frontend directories that have their own repos
+_titato/
