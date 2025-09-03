@@ -49,6 +49,7 @@ import { MapLayerType, DEFAULT_CENTER_COORDINATE, DEFAULT_ZOOM_LEVEL, GRID, ZOOM
 import { getCurrentLocation } from '../../services/locationService';
 import { useAuthContext } from '../auth/context/AuthContext';
 import { useTheme } from '../../theme/ThemeContext';
+import { ENV } from '../../config/env';
 // Remove gridService imports for now, logic will be in WebView
 // import { getVisibleBounds } from '../../services/gridService'; 
 import { BoundingBox, Coordinate } from '../../types/map';
@@ -471,7 +472,7 @@ const MapScreen = () => {
 
   // Tile server URL - now integrated into map backend
   // Using unified map backend for both data and tiles
-  const TILE_SERVER_BASE_URL = 'http://192.168.1.247:3004/api/tiles/grid'; // Integrated backend URL
+  const TILE_SERVER_BASE_URL = `${ENV.MAP_API_URL}/api/tiles/grid`; // Use environment configuration
 
   // State for the tile URL template, updated when map type changes
   const [gridTileUrlTemplate, setGridTileUrlTemplate] = useState<string | null>(null);

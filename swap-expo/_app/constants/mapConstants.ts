@@ -19,7 +19,7 @@ export const DEFAULT_ZOOM_LEVEL = 12;
 
 // Map configuration
 export const MAP_STYLES = {
-  OPENSTREETMAP_BRIGHT: 'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}.png',
+  OPENSTREETMAP_BRIGHT: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
   // For MapLibre vector tiles if you prefer them over raster
   MAPLIBRE_BRIGHT: 'https://tiles.openfreemap.org/styles/bright'
 };
