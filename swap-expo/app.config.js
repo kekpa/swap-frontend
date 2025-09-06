@@ -24,7 +24,7 @@ export default {
   ios: {
     supportsTablet: false,
     bundleIdentifier: "com.swapglobal.swap",
-    teamId: "98Z2KMR9NT",
+    appleTeamId: "98Z2KMR9NT",
     config: {
       googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY
     },
@@ -67,6 +67,7 @@ export default {
             SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: "NO",
             SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: "NO",
             TARGETED_DEVICE_FAMILY: "1",
+            DEVELOPMENT_TEAM: "98Z2KMR9NT",
           },
         },
       },
@@ -76,6 +77,10 @@ export default {
     "expo-sqlite",
   ],
   extra: {
+    // EAS Configuration
+    eas: {
+      projectId: "2927c0b1-fa22-49c6-934d-3321f6e0cff7"
+    },
     // Load environment variables
     EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
     EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,

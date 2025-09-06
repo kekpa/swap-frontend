@@ -1,0 +1,41 @@
+{
+  "cli": {
+    "version": ">= 3.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "buildConfiguration": "Release"
+      }
+    },
+    "production": {
+      "ios": {
+        "buildConfiguration": "Release",
+        "distribution": "store",
+        "autoIncrement": true
+      },
+      "android": {
+        "buildType": "app-bundle",
+        "autoIncrement": true
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "frantz@swap.ht",
+        "ascAppId": "6749026345",
+        "appleTeamId": "98Z2KMR9NT"
+      }
+    }
+  }
+}
