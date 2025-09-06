@@ -18,7 +18,11 @@ import {
 } from './schema';
 
 // Database configuration
-const DATABASE_NAME = 'swap_cache_v3.db';
+const getDatabaseName = (): string => {
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.EXPO_PUBLIC_ENV === 'production';
+  return isProduction ? 'swap_cache_v3_prod.db' : 'swap_cache_v3.db';
+};
+const DATABASE_NAME = getDatabaseName();
 const DATABASE_VERSION = 1;
 
 // Initialization states

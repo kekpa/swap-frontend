@@ -2,7 +2,8 @@
 // Updated: Using renamed files (db-service.ts and db-interfaces.ts) - 2025-05-22
 // Updated: Fixed clearAllCachedData to handle missing tables gracefully - 2025-01-26
 
-// Re-export db-service.ts functions
+// Re-export db-service.ts functions (DEPRECATED - use DatabaseManager instead)
+// These are kept for backward compatibility but should not be used in new code
 export { 
   initDb,
   isDatabaseAvailable,
@@ -15,13 +16,21 @@ export {
 // Clear all cached data function
 export const clearAllCachedData = async (): Promise<void> => {
   const logger = require('../utils/logger').default;
+  const { databaseManager } = require('./DatabaseManager');
   
   try {
     logger.debug('[LocalDB] Starting clearAllCachedData - clearing all local database tables', 'localdb');
     
-    const db = require('./db-service').getDatabase();
-    if (!db) {
+    // Ensure database is initialized and get instance
+    const initialized = await databaseManager.initialize();
+    if (!initialized) {
       logger.warn('[LocalDB] Database not available for clearing', 'localdb');
+      return;
+    }
+    
+    const db = databaseManager.getDatabase();
+    if (!db) {
+      logger.warn('[LocalDB] Database instance not available for clearing', 'localdb');
       return;
     }
 

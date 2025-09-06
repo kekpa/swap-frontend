@@ -72,10 +72,11 @@ const initializeDatabaseInternal = async (): Promise<boolean> => {
   }
 };
 
-initializeDatabaseInternal().catch(err => {
-  const errMsg = err instanceof Error ? err.message : String(err);
-  logger.error('[SQLite_API] Initial auto-initialization of DB file failed: ' + errMsg, { error: err });
-});
+// Auto-initialization removed to prevent race condition with DatabaseManager
+// initializeDatabaseInternal().catch(err => {
+//   const errMsg = err instanceof Error ? err.message : String(err);
+//   logger.error('[SQLite_API] Initial auto-initialization of DB file failed: ' + errMsg, { error: err });
+// });
 
 export const isDatabaseAvailable = (): boolean => {
   const available = dbInitializedSuccessfully && database !== null;
