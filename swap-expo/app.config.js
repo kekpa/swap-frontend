@@ -24,6 +24,7 @@ export default {
   ios: {
     supportsTablet: false,
     bundleIdentifier: "com.swapglobal.swap",
+    teamId: "98Z2KMR9NT",
     config: {
       googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY
     },
