@@ -148,6 +148,7 @@
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
 				07A6C9F609774E43BEF93389 /* Remove signature files (Xcode workaround) */,
 				E0C51BCE125F0F4BFB73BE08 /* [CP] Embed Pods Frameworks */,
+				BE293C5726734D7B91F9600B /* Remove signature files (Xcode workaround) */,
 			);
 			buildRules = (
 			);
@@ -342,6 +343,23 @@
 			shellPath = /bin/sh;
 			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-swap/expo-configure-project.sh\"\n";
 		};
+		BE293C5726734D7B91F9600B /* Remove signature files (Xcode workaround) */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			name = "Remove signature files (Xcode workaround)";
+			inputPaths = (
+			);
+			outputPaths = (
+			);
+			shellPath = /bin/sh;
+			shellScript = "
+          echo \"Remove signature files (Xcode workaround)\";
+          rm -rf \"$CONFIGURATION_BUILD_DIR/MapLibre.xcframework-ios.signature\";
+        ";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -384,7 +402,7 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = com.swapglobal.swap;
-				PRODUCT_NAME = swap;
+				PRODUCT_NAME = "Swap";
 				SWIFT_OBJC_BRIDGING_HEADER = "swap/swap-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -415,7 +433,7 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.swapglobal.swap;
-				PRODUCT_NAME = swap;
+				PRODUCT_NAME = "Swap";
 				SWIFT_OBJC_BRIDGING_HEADER = "swap/swap-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
