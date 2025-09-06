@@ -22,12 +22,17 @@ export default {
     backgroundColor: "#ffffff",
   },
   ios: {
-    supportsTablet: true,
+    supportsTablet: false,
     bundleIdentifier: "com.swapglobal.swap",
     config: {
       googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY
     },
     infoPlist: {
+      CFBundleDisplayName: "Swap",
+      LSApplicationCategoryType: "public.app-category.finance",
+      UIRequiredDeviceCapabilities: ["arm64"],
+      UIStatusBarHidden: true,
+      UIViewControllerBasedStatusBarAppearance: false,
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoads: true,
         NSAllowsLocalNetworking: true,
@@ -55,6 +60,13 @@ export default {
       {
         ios: {
           useFrameworks: "static",
+          deploymentTarget: "15.1",
+          xcodeProps: {
+            SUPPORTS_MACCATALYST: "NO",
+            SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: "NO",
+            SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: "NO",
+            TARGETED_DEVICE_FAMILY: "1",
+          },
         },
       },
     ],
