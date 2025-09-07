@@ -38,6 +38,12 @@ export default {
         NSAllowsArbitraryLoads: true,
         NSAllowsLocalNetworking: true,
       },
+      // Privacy Usage Descriptions
+      NSContactsUsageDescription: "Swap needs access to your contacts to help you send money to friends and family easily.",
+      NSCameraUsageDescription: "Swap needs camera access to scan QR codes for payments and to take photos for profile and verification.",
+      NSLocationWhenInUseUsageDescription: "Swap needs your location to show nearby ATMs, merchants, and to comply with financial regulations.",
+      NSPhotoLibraryUsageDescription: "Swap needs access to your photos to let you upload profile pictures and documents for verification.",
+      NSPhotoLibraryAddUsageDescription: "Swap needs permission to save QR codes and receipts to your photo library.",
     },
   },
   android: {

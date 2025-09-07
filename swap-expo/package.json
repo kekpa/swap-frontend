@@ -78,5 +78,13 @@
     "@types/react-navigation": "^3.0.8",
     "typescript": "^5.3.3"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "lucide-react-native": {
+      "react": "$react"
+    },
+    "react-native": {
+      "@types/react": "$@types/react"
+    }
+  }
 }
