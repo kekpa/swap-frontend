@@ -21,6 +21,8 @@ import {
   ViewStyle,
   TextStyle,
   Image,
+  Platform,
+  StatusBar,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../theme/ThemeContext";
@@ -91,17 +93,25 @@ const SearchHeader: React.FC<SearchHeaderProps> = ({
       alignItems: "center",
       paddingHorizontal: theme.spacing.md,
       paddingVertical: theme.spacing.md,
+      // Add Android status bar padding
+      paddingTop: Platform.OS === 'android' ? 
+        (StatusBar.currentHeight || 0) + theme.spacing.md : 
+        theme.spacing.md,
       borderBottomWidth: transparent ? 0 : 1,
       backgroundColor: transparent ? "transparent" : theme.colors.card,
       borderBottomColor: transparent ? "transparent" : theme.colors.border,
-      ...(transparent && {
+      // Only apply shadow on iOS when transparent
+      ...(transparent && Platform.OS === 'ios' && {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
-        elevation: 3,
-        zIndex: 50,
       }),
+      // No elevation on Android when transparent to avoid shadow borders
+      ...(transparent && Platform.OS === 'android' && {
+        elevation: 0,
+      }),
+      zIndex: 50,
       ...(containerStyle as object),
     },
     headerTitle: {
@@ -128,12 +138,16 @@ const SearchHeader: React.FC<SearchHeaderProps> = ({
       backgroundColor: theme.colors.primary,
       justifyContent: "center",
       alignItems: "center",
-      ...(transparent && {
+      // Only apply shadow on iOS for transparent profile
+      ...(transparent && Platform.OS === 'ios' && {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.15,
         shadowRadius: 4,
-        elevation: 4,
+      }),
+      // No elevation on Android for transparent profile
+      ...(transparent && Platform.OS === 'android' && {
+        elevation: 0,
       }),
     },
     profileText: {
@@ -151,12 +165,15 @@ const SearchHeader: React.FC<SearchHeaderProps> = ({
       height: 40,
       borderWidth: 1,
       borderColor: isSearchActive ? theme.colors.primary : transparent ? theme.colors.inputBorder : theme.colors.inputBorder,
-      ...(transparent && {
+      ...(transparent && Platform.OS === 'ios' && {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
-        elevation: 3,
+      }),
+      // No elevation on Android when transparent to avoid shadow borders
+      ...(transparent && Platform.OS === 'android' && {
+        elevation: 0,
       }),
     },
     searchIcon: {
