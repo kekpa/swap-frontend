@@ -282,6 +282,111 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
 };
 
 /**
+ * Interface for wallet eligibility response
+ */
+interface WalletEligibilityResponse {
+  eligible: boolean;
+  reason?: 'KYC_REQUIRED' | 'PROFILE_INCOMPLETE' | 'BLOCKED';
+  kycStatus: 'none' | 'partial' | 'verified';
+  profileComplete: boolean;
+  nextStep: 'complete-profile' | 'verify-identity' | 'ready';
+  hasWallets: boolean;
+}
+
+/**
+ * Interface for wallet initialization response
+ */
+interface WalletInitializationResponse {
+  accounts: any[];
+  wallets: WalletBalance[];
+  defaultWalletId: string;
+}
+
+/**
+ * Hook for checking wallet eligibility
+ */
+export const useWalletEligibility = (entityId: string, options: UseBalancesOptions = {}) => {
+  const { enabled = true } = options;
+
+  // Validate entityId
+  const isValidEntityId = entityId && entityId.trim().length > 0 && entityId !== 'undefined' && entityId !== 'null';
+
+  return useQuery({
+    queryKey: ['wallet_eligibility', entityId],
+    queryFn: async (): Promise<WalletEligibilityResponse> => {
+      if (!isValidEntityId) {
+        throw new Error('Invalid entity ID');
+      }
+
+      logger.debug(`[useWalletEligibility] 🔍 Checking eligibility for entity: ${entityId}`);
+      const response = await apiClient.get(`/wallets/eligibility?entityId=${entityId}`);
+      logger.debug(`[useWalletEligibility] ✅ Eligibility result:`, response.data);
+
+      return response.data;
+    },
+    enabled: Boolean(enabled && isValidEntityId),
+    staleTime: 1000 * 60 * 5, // 5 minutes - eligibility doesn't change often
+    networkMode: 'always',
+  });
+};
+
+/**
+ * Hook for initializing wallet system
+ */
+export const useInitializeWallet = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationKey: ['initialize_wallet'],
+    mutationFn: async (entityId: string): Promise<WalletInitializationResponse> => {
+      logger.debug(`[useInitializeWallet] 🚀 Initializing wallet for entity: ${entityId}`);
+      const response = await apiClient.post(`/wallets/initialize?entityId=${entityId}`);
+      logger.debug(`[useInitializeWallet] ✅ Wallet initialized successfully`);
+
+      return response.data;
+    },
+    onSuccess: (data, entityId) => {
+      // Update the balances cache with new wallets
+      if (data.wallets && data.wallets.length > 0) {
+        queryClient.setQueryData(queryKeys.balancesByEntity(entityId), data.wallets);
+        logger.debug(`[useInitializeWallet] ✅ Updated cache with ${data.wallets.length} new wallets`);
+      }
+
+      // Invalidate eligibility cache since user now has wallets
+      queryClient.invalidateQueries({ queryKey: ['wallet_eligibility', entityId] });
+
+      // Transform API response to CurrencyWallet format for local storage
+      const repositoryBalances: CurrencyWallet[] = data.wallets.map((balance: WalletBalance) => ({
+        id: balance.wallet_id,
+        account_id: balance.account_id,
+        currency_id: balance.currency_id,
+        currency_code: balance.currency_code,
+        currency_symbol: balance.currency_symbol,
+        currency_name: balance.currency_name,
+        balance: balance.balance,
+        reserved_balance: balance.reserved_balance || 0,
+        available_balance: balance.available_balance || balance.balance,
+        balance_last_updated: balance.balance_last_updated || undefined,
+        is_active: balance.is_active ?? true,
+        is_primary: balance.isPrimary ?? false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_synced: true,
+      }));
+
+      // Save to local SQLite cache
+      currencyWalletsRepository.saveCurrencyWallets(repositoryBalances)
+        .then(() => {
+          logger.debug(`[useInitializeWallet] ✅ Saved ${repositoryBalances.length} wallets to cache`);
+        })
+        .catch((error) => {
+          logger.warn(`[useInitializeWallet] ⚠️ Failed to save wallets to cache:`, error);
+        });
+    },
+  });
+};
+
+/**
  * Hook for setting primary wallet with optimistic updates
  */
 export const useSetPrimaryWallet = () => {
