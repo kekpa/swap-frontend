@@ -21,13 +21,14 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import SearchHeader from '../header/SearchHeader';
 import { useAuthContext } from '../auth/context/AuthContext';
-import { useBalances, useSetPrimaryWallet } from '../../query/hooks/useBalances';
+import { useBalances, useSetPrimaryWallet, useWalletEligibility, useInitializeWallet } from '../../query/hooks/useBalances';
 import { useInteractions } from '../../query/hooks/useInteractions';
 import { useTheme } from '../../theme/ThemeContext';
 import { RootStackParamList } from '../../navigation/rootNavigator';
 import { WalletBalance } from '../../types/wallet.types';
 import { networkService } from '../../services/NetworkService';
 import { WalletStackCard } from './components';
+import WalletOnboarding from './components/WalletOnboarding';
 import logger from '../../utils/logger';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useWalletTransactions } from '../../query/hooks/useRecentTransactions';
@@ -153,6 +154,21 @@ const WalletDashboard: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedWallet, setSelectedWallet] = useState<WalletBalance | null>(null);
 
+  // NEW: Wallet state machine for KYC-gated access
+  const [walletState, setWalletState] = useState<
+    'loading' | 'no-access' | 'needs-init' | 'ready' | 'locked'
+  >('loading');
+
+  // NEW: Hook for checking wallet eligibility
+  const {
+    data: eligibility,
+    isLoading: isLoadingEligibility,
+    error: eligibilityError,
+  } = useWalletEligibility(entityId, { enabled: !!entityId });
+
+  // NEW: Hook for wallet initialization
+  const initializeWalletMutation = useInitializeWallet();
+
   // Professional wallet-specific transaction loading
   const { 
     transactions: allAccountTransactions = [], 
@@ -195,7 +211,63 @@ const WalletDashboard: React.FC = () => {
     
     return filteredTransactions;
   }, [allAccountTransactions, selectedWallet]);
-  
+
+  // NEW: Wallet state machine logic
+  useEffect(() => {
+    const checkWalletAccess = async () => {
+      if (!entityId || !user) {
+        setWalletState('loading');
+        return;
+      }
+
+      // Wait for eligibility check to complete
+      if (isLoadingEligibility) {
+        setWalletState('loading');
+        return;
+      }
+
+      if (eligibilityError) {
+        logger.error('[WalletDashboard] Eligibility check failed:', eligibilityError);
+        setWalletState('no-access');
+        return;
+      }
+
+      if (!eligibility) {
+        setWalletState('loading');
+        return;
+      }
+
+      // Check eligibility
+      if (!eligibility.eligible) {
+        logger.debug(`[WalletDashboard] User not eligible for wallet access. Reason: ${eligibility.reason}`);
+        setWalletState('no-access');
+        return;
+      }
+
+      // User is eligible - check if they have wallets
+      if (!eligibility.hasWallets) {
+        logger.debug('[WalletDashboard] User eligible but has no wallets, needs initialization');
+        setWalletState('needs-init');
+
+        // Auto-initialize wallet for eligible users
+        try {
+          logger.debug('[WalletDashboard] Auto-initializing wallet...');
+          await initializeWalletMutation.mutateAsync(entityId);
+          setWalletState('locked'); // Show biometric prompt after initialization
+        } catch (error) {
+          logger.error('[WalletDashboard] Wallet initialization failed:', error);
+          setWalletState('no-access');
+        }
+        return;
+      }
+
+      // User has wallets - show biometric lock
+      setWalletState('locked');
+    };
+
+    checkWalletAccess();
+  }, [entityId, user, eligibility, isLoadingEligibility, eligibilityError, initializeWalletMutation]);
+
   const [isWalletUnlocked, setIsWalletUnlocked] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const authenticationRef = useRef(false); // Immediate race condition protection
@@ -963,8 +1035,42 @@ const WalletDashboard: React.FC = () => {
     }
   };
 
-  // Early return if wallet is not unlocked
-  if (!isWalletUnlocked) {
+  // NEW: State-based rendering for KYC-gated wallet access
+  if (walletState === 'loading') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle={theme.name.includes('dark') ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading wallet...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (walletState === 'no-access' && eligibility) {
+    return (
+      <WalletOnboarding
+        reason={eligibility.reason || 'KYC_REQUIRED'}
+        kycStatus={eligibility.kycStatus}
+        profileComplete={eligibility.profileComplete}
+      />
+    );
+  }
+
+  if (walletState === 'needs-init') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle={theme.name.includes('dark') ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
+        <View style={styles.loadingContainer}>
+          <Ionicons name="wallet-outline" size={64} color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Creating your wallet...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Early return if wallet is not unlocked (existing biometric logic)
+  if (walletState === 'locked' && !isWalletUnlocked) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle={theme.name.includes('dark') ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
