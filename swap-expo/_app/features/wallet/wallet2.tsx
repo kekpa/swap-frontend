@@ -407,7 +407,7 @@ const WalletDashboard: React.FC = () => {
     }
   }, []);
 
-  // Trigger authentication when wallet screen is focused
+  // Trigger authentication when wallet screen is focused (ONLY for locked wallets)
   useFocusEffect(
     useCallback(() => {
       // Clear any existing timer first
@@ -415,14 +415,16 @@ const WalletDashboard: React.FC = () => {
           clearTimeout(authTimerRef.current);
         authTimerRef.current = null;
         }
-        
-      if (!isWalletUnlocked && !isAuthenticating && !authenticationRef.current && !alertShownRef.current) {
+
+      // CRITICAL FIX: Only trigger authentication when walletState is 'locked'
+      // This prevents authentication from running when user needs to complete KYC
+      if (walletState === 'locked' && !isWalletUnlocked && !isAuthenticating && !authenticationRef.current && !alertShownRef.current) {
         // Longer debounced authentication trigger (1 second delay)
         authTimerRef.current = setTimeout(() => {
           authenticateForWallet();
         }, 1000);
       }
-        
+
       // Cleanup function - ALWAYS defined, not conditional
         return () => {
           if (authTimerRef.current) {
@@ -430,7 +432,7 @@ const WalletDashboard: React.FC = () => {
             authTimerRef.current = null;
           }
         };
-    }, [isWalletUnlocked, isAuthenticating, authenticateForWallet])
+    }, [walletState, isWalletUnlocked, isAuthenticating, authenticateForWallet])
   );
 
   // Cleanup on component unmount
