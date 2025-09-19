@@ -25,8 +25,8 @@ type NavigationProp = StackNavigationProp<RootStackParamList>;
 
 const WalletOnboarding: React.FC<WalletOnboardingProps> = ({
   reason,
-  kycStatus,
-  profileComplete,
+  kycStatus: _kycStatus,
+  profileComplete: _profileComplete,
 }) => {
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
@@ -39,9 +39,9 @@ const WalletOnboarding: React.FC<WalletOnboardingProps> = ({
         title: 'Complete Your Profile First',
         subtitle: 'Just a few quick steps to unlock your wallet',
         benefits: [
-          'Add your name and basic info',
-          'Verify your identity securely',
-          'Get instant access to HTG wallet',
+          '📝 Add your name and basic information',
+          '✅ Quick identity verification process',
+          '💳 Get instant access to HTG wallet',
         ],
         primaryCta: 'Complete Profile',
         primaryAction: () => {
@@ -57,17 +57,19 @@ const WalletOnboarding: React.FC<WalletOnboardingProps> = ({
         icon: 'shield-checkmark-outline' as const,
         iconColor: theme.colors.primary,
         title: 'Verify Your Identity',
-        subtitle: 'Required by Haitian Central Bank for financial services',
+        subtitle: 'In order to send money, verify your identity',
         benefits: [
           '💰 Send & receive money instantly',
-          '💱 Multi-currency wallets (HTG & USD)',
           '🚀 Free transfers between Swap users',
           '📱 Request payments from anyone',
         ],
         primaryCta: 'Start Verification',
         primaryAction: () => {
-          logger.debug('[WalletOnboarding] Navigating to KYC verification');
-          navigation.navigate('VerifyYourIdentity' as any);
+          logger.debug('[WalletOnboarding] Navigating to KYC verification via ProfileModal');
+          // Navigate to ProfileModal with sourceRoute, ProfileNavigator will handle the rest
+          (navigation as any).navigate('ProfileModal', {
+            sourceRoute: 'Wallet'
+          });
         },
         estimatedTime: '3-5 minutes',
       };
@@ -80,9 +82,9 @@ const WalletOnboarding: React.FC<WalletOnboardingProps> = ({
       title: 'Wallet Access Restricted',
       subtitle: 'Please contact support for assistance',
       benefits: [
-        'Your account requires additional verification',
-        'Our support team can help resolve this',
-        'Wallet access will be restored once cleared',
+        '🔍 Account requires additional verification',
+        '💬 Our support team can help resolve this',
+        '⚡ Wallet access restored once cleared',
       ],
       primaryCta: 'Contact Support',
       primaryAction: () => {
@@ -102,42 +104,43 @@ const WalletOnboarding: React.FC<WalletOnboardingProps> = ({
       flex: 1,
       paddingHorizontal: theme.spacing.lg,
       paddingTop: theme.spacing.xl,
+      paddingBottom: theme.spacing.xl + 40,
       alignItems: 'center',
       justifyContent: 'center',
     },
     iconContainer: {
-      width: 120,
-      height: 120,
-      borderRadius: 60,
+      width: 60,
+      height: 60,
+      borderRadius: 30,
       backgroundColor: `${content.iconColor}15`,
       alignItems: 'center',
       justifyContent: 'center',
-      marginBottom: theme.spacing.xl,
+      marginBottom: theme.spacing.md,
     },
     title: {
-      fontSize: theme.typography.fontSize.xxl,
+      fontSize: theme.typography.fontSize.xxxl,
       fontWeight: 'bold',
       color: theme.colors.textPrimary,
       textAlign: 'center',
-      marginBottom: theme.spacing.md,
+      marginBottom: theme.spacing.sm,
     },
     subtitle: {
       fontSize: theme.typography.fontSize.lg,
       color: theme.colors.textSecondary,
       textAlign: 'center',
       lineHeight: 24,
-      marginBottom: theme.spacing.xl,
+      marginBottom: theme.spacing.sm,
     },
     estimatedTime: {
       fontSize: theme.typography.fontSize.sm,
       color: theme.colors.textSecondary,
       textAlign: 'center',
       fontStyle: 'italic',
-      marginBottom: theme.spacing.xl,
+      marginBottom: theme.spacing.lg,
     },
     benefitsContainer: {
       width: '100%',
-      marginBottom: theme.spacing.xl,
+      marginBottom: theme.spacing.lg,
     },
     benefitItem: {
       flexDirection: 'row',
@@ -163,40 +166,19 @@ const WalletOnboarding: React.FC<WalletOnboardingProps> = ({
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: content.iconColor,
-      borderRadius: theme.borderRadius.md,
-      paddingVertical: theme.spacing.lg,
-      paddingHorizontal: theme.spacing.xl,
-      marginBottom: theme.spacing.md,
-      ...theme.shadows.medium,
-    },
-    primaryButtonText: {
-      color: theme.colors.white,
-      fontSize: theme.typography.fontSize.lg,
-      fontWeight: '600',
-      marginLeft: theme.spacing.sm,
-    },
-    secondaryButton: {
-      width: '100%',
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 1,
-      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.primary,
       borderRadius: theme.borderRadius.md,
       paddingVertical: theme.spacing.md,
       paddingHorizontal: theme.spacing.lg,
+      ...theme.shadows.small,
     },
-    secondaryButtonText: {
-      color: theme.colors.textSecondary,
+    primaryButtonText: {
+      color: theme.colors.white,
       fontSize: theme.typography.fontSize.md,
-      fontWeight: '500',
+      fontWeight: '600',
+      marginLeft: theme.spacing.sm,
     },
   }), [theme, content]);
-
-  const handleBackPress = () => {
-    logger.debug('[WalletOnboarding] User pressed back, returning to previous screen');
-    navigation.goBack();
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -210,7 +192,7 @@ const WalletOnboarding: React.FC<WalletOnboardingProps> = ({
         <View style={styles.iconContainer}>
           <Ionicons
             name={content.icon}
-            size={60}
+            size={32}
             color={content.iconColor}
           />
         </View>
@@ -243,19 +225,10 @@ const WalletOnboarding: React.FC<WalletOnboardingProps> = ({
         >
           <Ionicons
             name="arrow-forward"
-            size={24}
+            size={20}
             color={theme.colors.white}
           />
           <Text style={styles.primaryButtonText}>{content.primaryCta}</Text>
-        </TouchableOpacity>
-
-        {/* Secondary Action */}
-        <TouchableOpacity
-          style={styles.secondaryButton}
-          onPress={handleBackPress}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.secondaryButtonText}>Continue with Social Features</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

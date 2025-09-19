@@ -179,7 +179,7 @@ apiClient.interceptors.request.use(
       }
       
       // Log the full URL being requested
-      const fullUrl = `${baseURL}${config.url.startsWith('/') ? '' : '/'}${config.url.startsWith('/api/v1/') ? config.url.substring(7) : config.url}`;
+      const fullUrl = `${config.baseURL}${config.url}`;
       logger.debug(`🔍 FULL REQUEST URL: ${fullUrl}`);
     }
     
