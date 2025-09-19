@@ -158,17 +158,50 @@ const VerifyYourIdentityScreen: React.FC = () => {
   
   // For compatibility with the existing component logic, create verificationStatus from kycStatus
   const verificationStatus = useMemo(() => {
-    if (!kycStatus?.steps) return null;
-    
-    const steps = kycStatus.steps;
+    if (!kycStatus?.data) return null;
+
+    const data = kycStatus.data;
     return {
-      personalInfo: { isCompleted: steps.personalInfo?.completed || false, isActive: false },
-      verifyId: { isCompleted: steps.documentUpload?.completed || false, isActive: false },
-      takeSelfie: { isCompleted: steps.identityVerification?.completed || false, isActive: false },
-      setupSecurity: { isCompleted: steps.backgroundCheck?.completed || false, isActive: false },
-      biometricSetup: { isCompleted: false, isActive: false }, // Not implemented in TanStack Query version yet
-      confirmPhone: { isCompleted: false, isActive: false }, // Not implemented in TanStack Query version yet
-      confirmEmail: { isCompleted: false, isActive: false }, // Not implemented in TanStack Query version yet
+      setupAccount: {
+        isCompleted: data.setup_account_completed || false,
+        isActive: false,
+        canAccess: true
+      },
+      confirmPhone: {
+        isCompleted: data.phone_verification_completed || false,
+        isActive: false,
+        canAccess: true
+      },
+      confirmEmail: {
+        isCompleted: data.email_verification_completed || false,
+        isActive: false,
+        canAccess: true
+      },
+      personalInfo: {
+        isCompleted: data.personal_info_completed || false,
+        isActive: false,
+        canAccess: true
+      },
+      verifyId: {
+        isCompleted: data.document_verification_completed || false,
+        isActive: false,
+        canAccess: true
+      },
+      takeSelfie: {
+        isCompleted: data.selfie_completed || false,
+        isActive: false,
+        canAccess: true
+      },
+      setupSecurity: {
+        isCompleted: data.security_setup_completed || false,
+        isActive: false,
+        canAccess: true
+      },
+      biometricSetup: {
+        isCompleted: data.biometric_setup_completed || false,
+        isActive: false,
+        canAccess: true
+      },
     };
   }, [kycStatus]);
   

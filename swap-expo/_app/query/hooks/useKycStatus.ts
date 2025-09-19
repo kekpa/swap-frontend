@@ -37,13 +37,14 @@ export interface KycStatus {
   // Entity info
   entity_type: 'profile' | 'business';
   kyc_status: KycLevel;
-  
+
   // Documents
   documents: KycDocument[];
-  
+
   // Verification flags
   email_verified: boolean;
   phone_verified: boolean;
+  setup_account_completed: boolean;
   personal_info_completed: boolean;
   email_verification_completed: boolean;
   phone_verification_completed: boolean;
@@ -60,6 +61,7 @@ export interface KycStatus {
   // Completion timestamps
   email_confirmed_at?: string;
   phone_confirmed_at?: string;
+  setup_account_completed_at?: string;
   personal_info_completed_at?: string;
   email_verification_completed_at?: string;
   phone_verification_completed_at?: string;
@@ -70,6 +72,7 @@ export interface KycStatus {
   
   // Step details
   steps: {
+    setup_account: KycStepStatus;
     personal_info: KycStepStatus;
     email_verification: KycStepStatus;
     phone_verification: KycStepStatus;
@@ -77,10 +80,18 @@ export interface KycStatus {
     selfie: KycStepStatus;
     security_setup: KycStepStatus;
     biometric_setup: KycStepStatus;
+    business_info?: KycStepStatus;
+    business_verification?: KycStepStatus;
+    business_security?: KycStepStatus;
   };
-  
+
   // Process info
   process: any;
+
+  // Compatibility properties for existing code
+  currentLevel?: KycLevel;
+  isVerificationInProgress?: boolean;
+  completedAt?: string;
 }
 
 /**
