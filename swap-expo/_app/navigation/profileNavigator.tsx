@@ -31,7 +31,8 @@ import PersonalInfoScreen from "../features/profile/PersonalInfo";
 import SecurityPrivacyScreen from "../features/profile/security/SecurityPrivacy";
 import PasscodeScreen from "../components2/Passcode";
 import PhoneEntryScreen from "../features/auth/signup/PhoneEntryScreen";
-import KycEmailEntryScreen from "../features/profile/kyc/KycEmailEntryScreen";
+// Email verification disabled for Haiti market - keeping for future use
+// import KycEmailEntryScreen from "../features/profile/kyc/KycEmailEntryScreen";
 import BiometricSetupScreen from "../features/profile/kyc/BiometricSetup";
 import VerificationCodeScreen from "../components2/VerificationCodeScreen";
 // Business KYC Components
@@ -100,11 +101,12 @@ export type ProfileStackParamList = {
   };
   AddCard: undefined;
   AddMoneyOptions: undefined;
-  KycEmailEntry: {
-    returnToTimeline?: boolean;
-    sourceRoute?: string;
-    currentEmail?: string | null;
-  };
+  // Email verification disabled for Haiti market
+  // KycEmailEntry: {
+  //   returnToTimeline?: boolean;
+  //   sourceRoute?: string;
+  //   currentEmail?: string | null;
+  // };
   VerificationCode: {
     type: "phone" | "email";
     contact: string;
@@ -273,13 +275,14 @@ export default function ProfileNavigator() {
           animation: "slide_from_right",
         }}
       />
-      <Stack.Screen
+      {/* Email verification disabled for Haiti market - keeping for future use */}
+      {/* <Stack.Screen
         name="KycEmailEntry"
         component={KycEmailEntryScreen}
         options={{
           animation: "slide_from_right",
         }}
-      />
+      /> */}
       <Stack.Screen 
         name="VerificationCode"
         component={VerificationCodeScreen}
