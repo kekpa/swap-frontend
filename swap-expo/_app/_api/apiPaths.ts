@@ -33,8 +33,9 @@ export const AUTH_PATHS = {
   CHECK_PHONE: '/auth/check-phone',
   COMPLETE_PROFILE: '/auth/complete-profile',
   STORE_PASSCODE: '/auth/store-passcode',
-  VERIFY_EMAIL: '/auth/verify-email',
-  RESEND_EMAIL_CODE: '/auth/resend-email-code',
+  // Email verification disabled for Haiti market - keeping for future use
+  // VERIFY_EMAIL: '/auth/verify-email',
+  // RESEND_EMAIL_CODE: '/auth/resend-email-code',
   VERIFY_RESET_CODE: '/auth/verify-reset-code',
 };
 
@@ -58,7 +59,7 @@ export const KYC_PATHS = {
   SUBMIT_DOCUMENTS: '/kyc/verification/documents',
   UPLOAD: '/kyc/upload',
   VERIFY_PHONE: '/kyc/phone/verify',
-  VERIFY_EMAIL: '/kyc/email/verify',
+  // VERIFY_EMAIL: '/kyc/email/verify', // Email verification disabled for Haiti market
   BIOMETRIC_SETUP: '/kyc/biometric/setup',
   REQUEST_PHONE_CHANGE: '/kyc/phone/request-change',
   SELFIE_COMPLETE: '/kyc/selfie/complete',
