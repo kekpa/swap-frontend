@@ -15,6 +15,7 @@ import { ProfileStackParamList } from '../../../../navigation/profileNavigator';
 import { useTheme } from '../../../../theme/ThemeContext'; // Import useTheme
 import { usePersonalInfoSave } from '../../../../hooks/usePersonalInfoSave'; // Import the hook
 import { usePersonalInfoLoad } from '../../../../hooks/usePersonalInfoLoad'; // Import the new hook
+import { invalidateQueries } from '../../../../query/queryClient'; // Professional cache invalidation
 
 import CountryOfResidence from './CountryOfResidence';
 import NameAsInId from './NameAsInId';
@@ -206,19 +207,30 @@ const PersonalInfoFlow: React.FC = () => {
 
   const handleReviewConfirm = async () => {
     try {
-      console.log(`[PersonalInfoFlow] Saving personal info before navigation...`);
+      console.log(`[PersonalInfoFlow] 🚀 Saving personal info with professional cache invalidation...`);
       const success = await savePersonalInfo(personalInfo);
-      
+
       if (success) {
-        // Always return to timeline when in KYC flow
-        if (returnToTimeline) {
-          console.log(`[PersonalInfoFlow] Personal info saved, returning to VerifyYourIdentity timeline`);
-          navigation.navigate('VerifyYourIdentity', sourceRoute ? { sourceRoute } : undefined);
-        } else {
-          // Default behavior for non-KYC usage - could continue to next step
-          console.log(`[PersonalInfoFlow] Personal info saved, continuing to UploadId`);
-          navigation.navigate('UploadId', { sourceRoute });
-        }
+        console.log(`[PersonalInfoFlow] ✅ Personal info saved successfully`);
+
+        // PROFESSIONAL: Invalidate KYC-related queries for instant UI updates
+        console.log(`[PersonalInfoFlow] 🔄 Triggering professional cache invalidation...`);
+        invalidateQueries(['kyc']); // Invalidate all KYC-related queries
+        invalidateQueries(['profile']); // Also invalidate profile data
+
+        // Small delay to allow invalidation to propagate
+        setTimeout(() => {
+          // Always return to timeline when in KYC flow
+          if (returnToTimeline) {
+            console.log(`[PersonalInfoFlow] 📍 Returning to VerifyYourIdentity with fresh cache`);
+            navigation.navigate('VerifyYourIdentity', sourceRoute ? { sourceRoute } : undefined);
+          } else {
+            // Default behavior for non-KYC usage - could continue to next step
+            console.log(`[PersonalInfoFlow] 📍 Continuing to UploadId`);
+            navigation.navigate('UploadId', { sourceRoute });
+          }
+        }, 100); // Brief delay for cache invalidation
+
       } else {
         Alert.alert('Error', 'Failed to save personal information. Please try again.');
       }

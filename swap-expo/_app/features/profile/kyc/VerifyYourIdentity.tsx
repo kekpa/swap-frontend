@@ -15,7 +15,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { ProfileStackParamList } from '../../../navigation/profileNavigator';
 import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
-import { useKycStatus } from '../../../query/hooks/useKycStatus';
+import { useKycStatusCritical, useKycStatus } from '../../../query/hooks/useKycQuery';
 import { useAuthContext } from '../../auth/context/AuthContext';
 import * as LocalAuthentication from 'expo-local-authentication';
 
@@ -154,7 +154,17 @@ const VerifyYourIdentityScreen: React.FC = () => {
   const route = useRoute<RouteProp<ProfileStackParamList, 'VerifyYourIdentity'>>();
   const { theme } = useTheme();
   const { user } = useAuthContext();
-  const { data: kycStatus, isLoading, error, refetch: refreshStatus } = useKycStatus(user?.entityId);
+
+  // Use professional KYC query with enterprise features
+  const {
+    data: kycStatus,
+    isLoading,
+    error,
+    refresh: refreshStatus,
+    invalidate: invalidateKycStatus,
+    isStale,
+    lastUpdated
+  } = useKycStatus(user?.entityId);
   
   // For compatibility with the existing component logic, create verificationStatus from kycStatus
   const verificationStatus = useMemo(() => {
@@ -214,42 +224,42 @@ const VerifyYourIdentityScreen: React.FC = () => {
   const isBusinessProfile = user?.profileType === 'business';
   const businessName = user?.businessName;
   
-  console.log('🔥 [VerifyYourIdentity] 📊 Component state:', {
+  console.log('🔥 [VerifyYourIdentity] 📊 Component state (Professional KYC):', {
     hasKycStatus: !!kycStatus,
     hasVerificationStatus: !!verificationStatus,
     isLoading,
     error,
     isBiometricAvailable,
+    isStale,
+    lastUpdated: lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'Never',
+    cacheStatus: isStale ? '🔴 Stale' : '🟢 Fresh',
     verificationStatus
   });
 
   const sourceRoute = route.params?.sourceRoute;
   
-  // TEMPORARILY DISABLED: Enhanced logging for mount/focus
-  // This useEffect was causing infinite refresh loops - needs refactoring for TanStack Query
+  // PROFESSIONAL: Enhanced focus/mount handling with intelligent refresh
   useEffect(() => {
-    console.log(`[VerifyYourIdentityScreen] FOCUS/MOUNT. Received sourceRoute: ${sourceRoute}, route.key: ${route.key}, route.name: ${route.name}`);
-    if(route.params) console.log(`[VerifyYourIdentityScreen] route.params on mount/focus: ${JSON.stringify(route.params)}`);
-    
-    // DISABLED: Check if we need to refresh verification status
-    // The TanStack Query hook handles data fetching automatically
-    // if (!verificationStatus && !isLoading) {
-    //   console.log('[VerifyYourIdentityScreen] No verification status available, triggering refresh');
-    //   refreshStatus();
-    // } else if (verificationStatus) {
-    //   console.log('[VerifyYourIdentityScreen] ✅ Verification status available from cache');
-    // }
-    
-    // Log KYC status for debugging
+    console.log(`[VerifyYourIdentityScreen] 🚀 FOCUS/MOUNT (Professional KYC). sourceRoute: ${sourceRoute}, route.key: ${route.key}`);
+
+    if (route.params) {
+      console.log(`[VerifyYourIdentityScreen] 📋 Route params:`, route.params);
+    }
+
+    // Professional logging of KYC status with cache info
     if (kycStatus) {
-      console.log(`[VerifyYourIdentityScreen] KYC Status:`, {
+      console.log(`[VerifyYourIdentityScreen] 📊 KYC Status (${isStale ? 'STALE' : 'FRESH'}):`, {
         currentLevel: kycStatus.currentLevel,
         isVerificationInProgress: kycStatus.isVerificationInProgress,
-        steps: kycStatus.steps,
+        steps: kycStatus.steps ? Object.keys(kycStatus.steps).length : 0,
         completedAt: kycStatus.completedAt,
+        lastUpdate: lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'Never',
+        cacheAge: lastUpdated ? `${Math.round((Date.now() - lastUpdated) / 1000)}s ago` : 'N/A'
       });
+    } else if (!isLoading) {
+      console.log('[VerifyYourIdentityScreen] ⚠️ No KYC status available (not loading)');
     }
-  }, [route.params, sourceRoute, route.key, route.name, kycStatus]);
+  }, [route.params, sourceRoute, route.key, kycStatus, isStale, lastUpdated, isLoading]);
 
   // Update active step based on verification status
   useEffect(() => {

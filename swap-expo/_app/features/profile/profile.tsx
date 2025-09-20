@@ -20,7 +20,7 @@ import logger from "../../utils/logger";
 import { ProfileStackParamList } from "../../navigation/profileNavigator";
 import { useTheme, availableThemes, ThemeName } from "../../theme/ThemeContext";
 import { Theme } from "../../theme/theme";
-import { useKycStatus } from "../../query/hooks/useKycStatus";
+import { useKycStatus } from "../../query/hooks/useKycQuery";
 import { useUserProfile } from "../../query/hooks/useUserProfile";
 
 // Define a type for the route params ProfileScreen might receive when opened as ProfileModal
