@@ -32,7 +32,7 @@ type VerifyYourIdentityRouteParams = {
 enum VerificationStep {
   SETUP_ACCOUNT = 0,
   CONFIRM_PHONE = 1,
-  CONFIRM_EMAIL = 2,
+  // CONFIRM_EMAIL = 2, // Disabled for Haiti market - using phone + PIN instead
   PERSONAL_INFO = 3,
   VERIFY_ID = 4,
   TAKE_SELFIE = 5,
@@ -172,11 +172,12 @@ const VerifyYourIdentityScreen: React.FC = () => {
         isActive: false,
         canAccess: true
       },
-      confirmEmail: {
-        isCompleted: data.email_verification_completed || false,
-        isActive: false,
-        canAccess: true
-      },
+      // Email verification disabled for Haiti market
+      // confirmEmail: {
+      //   isCompleted: data.email_verification_completed || false,
+      //   isActive: false,
+      //   canAccess: true
+      // },
       personalInfo: {
         isCompleted: data.personal_info_completed || false,
         isActive: false,
@@ -321,8 +322,8 @@ const VerifyYourIdentityScreen: React.FC = () => {
       }
     } else if (step === VerificationStep.CONFIRM_PHONE) {
       navigation.navigate('PhoneEntry', { ...navParams, currentPhone: kycStatus?.phone });
-    } else if (step === VerificationStep.CONFIRM_EMAIL) {
-      navigation.navigate('KycEmailEntry', { ...navParams, currentEmail: kycStatus?.email });
+    // } else if (step === VerificationStep.CONFIRM_EMAIL) {
+    //   navigation.navigate('KycEmailEntry', { ...navParams, currentEmail: kycStatus?.email });
     } else {
       console.log(`[VerifyYourIdentityScreen] handleStepPress: No navigation defined for step ${VerificationStep[step]}`);
     }
@@ -341,8 +342,9 @@ const VerifyYourIdentityScreen: React.FC = () => {
     
     if (!verificationStatus?.confirmPhone.isCompleted) {
       nextStep = VerificationStep.CONFIRM_PHONE;
-    } else if (!verificationStatus?.confirmEmail.isCompleted) {
-      nextStep = VerificationStep.CONFIRM_EMAIL;
+    // Email verification disabled for Haiti market
+    // } else if (!verificationStatus?.confirmEmail.isCompleted) {
+    //   nextStep = VerificationStep.CONFIRM_EMAIL;
     } else if (isBusinessProfile) {
       // Business profile flow
       if (!(verificationStatus as any)?.businessInfo?.isCompleted) {
@@ -381,9 +383,10 @@ const VerifyYourIdentityScreen: React.FC = () => {
         case VerificationStep.CONFIRM_PHONE:
           navigation.navigate('PhoneEntry', { ...navParams, currentPhone: kycStatus?.phone });
           break;
-        case VerificationStep.CONFIRM_EMAIL:
-          navigation.navigate('KycEmailEntry', { ...navParams, currentEmail: kycStatus?.email });
-          break;
+        // Email verification disabled for Haiti market
+        // case VerificationStep.CONFIRM_EMAIL:
+        //   navigation.navigate('KycEmailEntry', { ...navParams, currentEmail: kycStatus?.email });
+        //   break;
         case VerificationStep.SETUP_SECURITY:
           navigation.navigate('Passcode', { isKycFlow: true, ...navParams });
           break;
@@ -432,10 +435,10 @@ const VerifyYourIdentityScreen: React.FC = () => {
   const allStepsCompleted = useMemo(() => {
     if (!verificationStatus) return false;
     
-    // Get required steps based on profile type
-    const requiredSteps = isBusinessProfile 
-      ? ['setupAccount', 'confirmPhone', 'confirmEmail', 'businessInfo', 'businessVerification', 'businessSecurity']
-      : ['setupAccount', 'confirmPhone', 'confirmEmail', 'personalInfo', 'verifyId', 'takeSelfie', 'setupSecurity'];
+    // Get required steps based on profile type (email verification removed for Haiti market)
+    const requiredSteps = isBusinessProfile
+      ? ['setupAccount', 'confirmPhone', 'businessInfo', 'businessVerification', 'businessSecurity']
+      : ['setupAccount', 'confirmPhone', 'personalInfo', 'verifyId', 'takeSelfie', 'setupSecurity'];
     
     // Add biometric step if device supports it (for both profile types)
     if (isBiometricAvailable) {
@@ -630,14 +633,15 @@ const VerifyYourIdentityScreen: React.FC = () => {
               onPress={() => handleStepPress(VerificationStep.CONFIRM_PHONE)}
             />
             
-            <TimelineStep
+            {/* Email verification disabled for Haiti market - using phone + PIN instead */}
+            {/* <TimelineStep
               theme={theme}
               title="Confirm your email address"
               description="Email confirmed"
               isCompleted={verificationStatus?.confirmEmail?.isCompleted || false}
               canAccess={verificationStatus?.confirmEmail?.canAccess || true}
               onPress={() => handleStepPress(VerificationStep.CONFIRM_EMAIL)}
-            />
+            /> */}
             
             {isBusinessProfile ? (
               // Business Profile Steps
