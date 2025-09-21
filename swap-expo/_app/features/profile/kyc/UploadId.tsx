@@ -290,11 +290,43 @@ const UploadIdScreen: React.FC = () => {
       logger.debug('[UploadIdScreen] 🎯 Using KYC completion hook for instant cache update');
 
       // Complete the KYC step with proper cache invalidation
+      // Construct verification documents array for /kyc/verification/documents endpoint
+      const verificationDocuments = [];
+
+
+      // Add front document
+      if (frontResult.documentUrl) {
+        // ROBUST FIX: Always use explicit side values, don't rely on backend response
+        const frontDocumentSide = needsBothSides(selectedDocType) ? 'front' : 'single';
+        const frontDoc = {
+          document_type: selectedDocType,
+          document_url: frontResult.documentUrl,
+          document_number: frontResult.fullDocumentData?.document_number || undefined,
+          document_side: frontDocumentSide, // Use explicit value instead of relying on backend
+        };
+        verificationDocuments.push(frontDoc);
+      }
+
+      // Add back document if exists
+      if (backResult?.documentUrl) {
+        const backDoc = {
+          document_type: selectedDocType,
+          document_url: backResult.documentUrl,
+          document_number: backResult.fullDocumentData?.document_number || undefined,
+          document_side: 'back', // Always 'back' for back side documents
+        };
+        verificationDocuments.push(backDoc);
+      }
+
+
       const documentData = {
+        // Original data for local tracking
         documentType: selectedDocType,
         frontDocumentId: frontResult.documentId,
         backDocumentId: backResult?.documentId || null,
-        uploadedAt: new Date().toISOString()
+        uploadedAt: new Date().toISOString(),
+        // New verification data for API endpoint
+        verificationDocuments: verificationDocuments
       };
 
       // This will:

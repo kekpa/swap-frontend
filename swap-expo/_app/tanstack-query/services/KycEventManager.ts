@@ -76,7 +76,7 @@ class KycEventManagerClass {
       setup_account: '/auth/complete-signup',
       confirm_phone: '/auth/verify-phone',
       personal_info: '/kyc/personal-information',
-      upload_id: '/kyc/document-verification',
+      upload_id: '/kyc/verification/documents',
       take_selfie: '/kyc/selfie-complete',
       setup_security: '/auth/store-passcode',
       biometric_setup: '/auth/setup-biometric',

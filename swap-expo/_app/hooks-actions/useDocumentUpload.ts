@@ -12,6 +12,10 @@ export type DocumentType = 'passport' | 'national_id' | 'drivers_license';
 export interface DocumentUploadResult {
   success: boolean;
   documentId?: string;
+  documentUrl?: string;
+  documentType?: string;
+  documentSide?: string;
+  fullDocumentData?: any;
   error?: string;
 }
 
@@ -157,6 +161,10 @@ export const useDocumentUpload = (): UseDocumentUploadReturn => {
       return {
         success: true,
         documentId: documentData?.id || documentData?.documentId,
+        documentUrl: documentData?.document_url,
+        documentType: documentData?.document_type,
+        documentSide: documentData?.document_side,
+        fullDocumentData: documentData,
       };
       
     } catch (error: any) {

@@ -64,7 +64,7 @@ export const useKycCompletion = () => {
     const endpointMap: Record<KycStepType, string> = {
       confirm_phone: '/auth/verify-phone',
       personal_info: '/kyc/personal-information',
-      upload_id: '/kyc/document-verification',
+      upload_id: '/kyc/verification/documents',
       take_selfie: '/kyc/selfie-complete',
       setup_security: '/auth/store-passcode',
       biometric_setup: '/auth/setup-biometric',
@@ -221,7 +221,15 @@ export const useKycCompletion = () => {
       if (isOnline) {
         logger.debug(`[useKycCompletion] 🌐 Executing API call: ${endpoint}`);
 
-        const response = await apiClient.post(endpoint, data, {
+        // For document verification, send the verification documents array
+        const apiData = stepType === 'upload_id' && data.verificationDocuments
+          ? data.verificationDocuments
+          : data;
+
+
+        logger.debug(`[useKycCompletion] API payload for ${stepType}:`, apiData);
+
+        const response = await apiClient.post(endpoint, apiData, {
           timeout: 30000, // 30 second timeout for KYC operations
         });
 
@@ -244,7 +252,12 @@ export const useKycCompletion = () => {
 
         // Phase 3: Queue for offline processing using professional KYC offline queue
         if (user?.entityId) {
-          await kycOfflineQueue.queueKycOperation(stepType, data, user.entityId, endpoint);
+          // For document verification, queue the verification documents array
+          const queueData = stepType === 'upload_id' && data.verificationDocuments
+            ? data.verificationDocuments
+            : data;
+
+          await kycOfflineQueue.queueKycOperation(stepType, queueData, user.entityId, endpoint);
           logger.debug(`[useKycCompletion] ✅ KYC operation queued for offline processing: ${stepType}`);
         }
       }
