@@ -20,7 +20,7 @@ import RootNavigator from "./navigation/rootNavigator";
 import { AuthProvider } from "./features/auth/context/AuthContext";
 import { RefreshProvider } from "./contexts/RefreshContext";
 import { appLifecycleManager } from "./services/AppLifecycleManager";
-import { QueryProvider } from "./query/QueryProvider";
+import { QueryProvider } from "./tanstack-query/QueryProvider";
 import { useAuthContext } from "./features/auth/context/AuthContext";
 import { ToastContainer } from "./components/Toast";
 import { ThemeProvider } from './theme/ThemeContext';
@@ -30,6 +30,7 @@ import { View, ActivityIndicator, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { databaseManager } from './localdb/DatabaseManager';
 import logger from './utils/logger';
+import { navigationStateManager } from './utils/NavigationStateManager';
 
 // Configure logging based on environment
 if (__DEV__) {
@@ -138,7 +139,12 @@ const App: React.FC = () => {
         <AuthProvider>
           <RefreshProvider>
             <AppLifecycleHandler>
-              <NavigationContainer>
+              <NavigationContainer
+                onStateChange={(state) => {
+                  // Professional navigation state tracking
+                  navigationStateManager.updateNavigationState(state);
+                }}
+              >
                 <RootNavigator />
                 <ToastContainer />
                 <StatusBar style="auto" />

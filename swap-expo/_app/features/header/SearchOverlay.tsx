@@ -19,8 +19,8 @@ import { InteractionsStackParamList } from '../../navigation/interactions/intera
 import SearchResultsList from '../../components2/SearchResultsList';
 import { getAvatarProps } from '../../utils/avatarUtils';
 import logger from '../../utils/logger';
-import { useSearchEntities } from '../../query/hooks/useSearchEntities';
-import { useInteractions, InteractionItem } from '../../query/hooks/useInteractions';
+import { useSearchEntities } from '../../hooks-data/useSearchEntities';
+import { useInteractions, InteractionItem } from '../../hooks-data/useInteractions';
 
 type NavigationProp = StackNavigationProp<InteractionsStackParamList>;
 

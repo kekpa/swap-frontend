@@ -13,21 +13,27 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../../theme/ThemeContext';
-import { useLoadingState } from '../../../query/hooks/useLoadingState';
+import { useLoadingState } from '../../../hooks-data/useLoadingState';
 import { useAuthContext } from '../context/AuthContext';
 import logger from '../../../utils/logger';
 import { RootStackParamList } from '../../../navigation/rootNavigator';
+import { loadingOrchestrator, LoadingState, TransitionPhase } from '../../../utils/LoadingOrchestrator';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'LoadingScreen'>;
 
 const LoadingScreen: React.FC = () => {
-  console.log("🔥 [LoadingScreen] ===== COMPONENT MOUNTED =====");
-  
+  console.log("🏛️ [LoadingScreen] PROFESSIONAL: Component mounted with LoadingOrchestrator integration");
+
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const authContext = useAuthContext();
   const { user } = authContext;
-    const {
+
+  // PROFESSIONAL: Use LoadingOrchestrator instead of old useLoadingState
+  const [orchestratorState, setOrchestratorState] = useState<LoadingState>(loadingOrchestrator.getLoadingState());
+
+  // Legacy loading state for backward compatibility during transition
+  const {
     isInitialLoadComplete,
     loadingState,
     isLoadingInteractions,
@@ -53,14 +59,39 @@ const LoadingScreen: React.FC = () => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const loadingStartTime = useRef(Date.now());
 
-  const loadingMessages = [
-    'Initializing your account...',
-    'Loading your profile...',
-    'Fetching account balance...',
-    'Syncing conversations...',
-    'Loading transaction history...',
-    'Finalizing setup...'
-  ];
+  // PROFESSIONAL: Coordinated loading messages based on transition phase
+  const getLoadingMessage = (phase: TransitionPhase, primaryOperation: any): string => {
+    switch (phase) {
+      case TransitionPhase.AUTH_COMPLETING:
+        return 'Completing authentication...';
+      case TransitionPhase.DATA_LOADING:
+        return primaryOperation?.description || 'Loading your data...';
+      case TransitionPhase.UI_PREPARING:
+        return 'Preparing your experience...';
+      case TransitionPhase.TRANSITION_COMPLETE:
+        return 'Welcome back!';
+      default:
+        return primaryOperation?.description || 'Setting up your account...';
+    }
+  };
+
+  // PROFESSIONAL: Listen to LoadingOrchestrator state changes
+  useEffect(() => {
+    const unsubscribe = loadingOrchestrator.onStateChange((newState) => {
+      console.log('🏛️ [LoadingScreen] PROFESSIONAL: LoadingOrchestrator state update:', {
+        isLoading: newState.isLoading,
+        canShowUI: newState.canShowUI,
+        shouldShowSplash: newState.shouldShowSplash,
+        transitionPhase: newState.transitionPhase,
+        activeOperations: newState.activeOperations.length,
+        primaryOperation: newState.primaryOperation?.description
+      });
+
+      setOrchestratorState(newState);
+    });
+
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     // Fade in animation
@@ -71,88 +102,56 @@ const LoadingScreen: React.FC = () => {
     }).start();
   }, []);
 
-  // Monitor real loading progress from DataContext
+  // PROFESSIONAL: Monitor LoadingOrchestrator state for coordinated transitions
   useEffect(() => {
-    const realProgress = loadingState?.progress || 0;
-    const completedTasks = Array.from(loadingState?.completedTasks || []);
-    const isDataLoading = loadingState?.isLoading || false;
-    
-    console.log("🔥 [LoadingScreen] 📊 Loading state update:", {
-      progress: realProgress,
-      isLoading: isDataLoading,
-      completedTasks,
-      isInitialLoadComplete,
-      requiredTasks: loadingState?.requiredTasks || []
+    const professionalMessage = getLoadingMessage(orchestratorState.transitionPhase, orchestratorState.primaryOperation);
+    const professionalProgress = orchestratorState.activeOperations.length > 0 ?
+      Math.min(95, orchestratorState.activeOperations.filter(op => op.type.includes('USER') || op.type.includes('PROFILE')).length * 25) :
+      orchestratorState.canShowUI ? 100 : 50;
+
+    console.log("🏛️ [LoadingScreen] PROFESSIONAL: Orchestrator-based update:", {
+      canShowUI: orchestratorState.canShowUI,
+      shouldShowSplash: orchestratorState.shouldShowSplash,
+      transitionPhase: orchestratorState.transitionPhase,
+      isLoading: orchestratorState.isLoading,
+      activeOperations: orchestratorState.activeOperations.length,
+      professionalProgress,
+      professionalMessage
     });
-    
-    console.log("🔥 [LoadingScreen] 🎯 Navigation check:", {
-      condition1_isInitialLoadComplete: isInitialLoadComplete,
-      condition2_realProgress_gte_100: realProgress >= 100,
-      condition3_not_data_loading: !isDataLoading,
-      allConditionsMet: isInitialLoadComplete && realProgress >= 100 && !isDataLoading,
-      willNavigate: isInitialLoadComplete && realProgress >= 100 && !isDataLoading
-    });
-    
-    const messageIndex = Math.min(Math.floor(realProgress / 20), loadingMessages.length - 1);
-    
-    // Update progress and message based on real data loading
-    setOverallProgress(realProgress);
-    setCurrentMessage(loadingMessages[messageIndex]);
-    
-    // Animate progress bar to real progress
+
+    // Update UI based on LoadingOrchestrator state
+    setCurrentMessage(professionalMessage);
+    setOverallProgress(professionalProgress);
+
+    // Animate progress bar
     Animated.timing(progressAnim, {
-      toValue: realProgress,
+      toValue: professionalProgress,
       duration: 300,
       useNativeDriver: false,
     }).start();
-    
-    // Navigate when loading is actually complete AND user is still authenticated
-    if (isInitialLoadComplete && realProgress >= 100 && !isDataLoading) {
-      // CRITICAL: Check if user is still authenticated before navigating
+
+    // PROFESSIONAL: Navigation coordination
+    // The LoadingOrchestrator controls when UI can be shown to prevent white flash
+    if (orchestratorState.canShowUI && !orchestratorState.isLoading) {
       const isStillAuthenticated = authContext?.isAuthenticated || false;
-      
-      console.log("🔥 [LoadingScreen] 🎯 Pre-navigation auth check:", {
+
+      console.log("🏛️ [LoadingScreen] PROFESSIONAL: Transition coordination check:", {
+        canShowUI: orchestratorState.canShowUI,
+        isLoading: orchestratorState.isLoading,
         isStillAuthenticated,
-        isInitialLoadComplete,
-        realProgress,
-        isDataLoading
+        transitionPhase: orchestratorState.transitionPhase
       });
-      
-      if (!isStillAuthenticated) {
-        console.log("🔥 [LoadingScreen] ❌ User no longer authenticated, not navigating to App");
-        // Don't navigate - let RootNavigator handle the auth state change
-        return;
+
+      if (isStillAuthenticated) {
+        console.log("🏛️ [LoadingScreen] ✅ PROFESSIONAL: LoadingOrchestrator allows UI - smooth transition to app");
+        // The coordinated transition prevents white flash
+        // RootNavigator will handle the actual navigation
+      } else {
+        console.log("🏛️ [LoadingScreen] ❌ PROFESSIONAL: User no longer authenticated");
       }
-      
-      const minLoadTime = 2000; // Minimum 2 seconds for good UX
-      const elapsedTime = Date.now() - loadingStartTime.current;
-      const remainingTime = Math.max(0, minLoadTime - elapsedTime);
-      
-      console.log("🔥 [LoadingScreen] 🚀 NAVIGATION TRIGGERED!", {
-        minLoadTime,
-        elapsedTime,
-        remainingTime,
-        isInitialLoadComplete,
-        realProgress,
-        isDataLoading,
-        isStillAuthenticated
-      });
-      
-      setTimeout(() => {
-        // Double-check authentication before actually navigating
-        const finalAuthCheck = authContext?.isAuthenticated || false;
-        if (finalAuthCheck) {
-        console.log("🔥 [LoadingScreen] ✅ Data loading complete, navigating to app");
-          // DON'T navigate manually - let RootNavigator handle the transition
-          // The RootNavigator will automatically switch to App when isInitialLoadComplete becomes true
-          console.log("🔥 [LoadingScreen] 🎯 Letting RootNavigator handle navigation transition");
-        } else {
-          console.log("🔥 [LoadingScreen] ❌ Final auth check failed, not navigating");
-        }
-      }, remainingTime);
     }
-    
-  }, [loadingState, isInitialLoadComplete, navigation, authContext]);
+
+  }, [orchestratorState, authContext, progressAnim, getLoadingMessage]);
 
   const styles = StyleSheet.create({
     container: {

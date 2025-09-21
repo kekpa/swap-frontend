@@ -4,15 +4,15 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
-import apiClient from '../../_api/apiClient';
-import { API_PATHS } from '../../_api/apiPaths';
-import { TimelineItem, MessageTimelineItem, TransactionTimelineItem } from '../../types/timeline.types';
-import { queryKeys } from '../queryKeys';
-import logger from '../../utils/logger';
-import { useAuthContext } from '../../features/auth/context/AuthContext';
-import { timelineRepository } from '../../localdb/TimelineRepository';
-import { messageRepository } from '../../localdb/MessageRepository';
-import { transactionRepository } from '../../localdb/TransactionRepository';
+import apiClient from '../_api/apiClient';
+import { API_PATHS } from '../_api/apiPaths';
+import { TimelineItem, MessageTimelineItem, TransactionTimelineItem } from '../types/timeline.types';
+import { queryKeys } from '../tanstack-query/queryKeys';
+import logger from '../utils/logger';
+import { useAuthContext } from '../features/auth/context/AuthContext';
+import { timelineRepository } from '../localdb/TimelineRepository';
+import { messageRepository } from '../localdb/MessageRepository';
+import { transactionRepository } from '../localdb/TransactionRepository';
 
 export interface UseTimelineOptions {
   enabled?: boolean;

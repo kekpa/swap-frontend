@@ -3,14 +3,14 @@
 
 import React from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { queryKeys } from '../queryKeys';
-import { transactionManager } from '../../services/TransactionManager';
-import { transactionRepository } from '../../localdb/TransactionRepository';
-import { offlineTransactionQueue } from '../../services/OfflineTransactionQueue';
-import { CreateDirectTransactionDto, Transaction } from '../../types/transaction.types';
-import { WalletBalance } from '../../types/wallet.types';
-import logger from '../../utils/logger';
-import { networkService } from '../../services/NetworkService';
+import { queryKeys } from '../tanstack-query/queryKeys';
+import { transactionManager } from '../services/TransactionManager';
+import { transactionRepository } from '../localdb/TransactionRepository';
+import { offlineTransactionQueue } from '../services/OfflineTransactionQueue';
+import { CreateDirectTransactionDto, Transaction } from '../types/transaction.types';
+import { WalletBalance } from '../types/wallet.types';
+import logger from '../utils/logger';
+import { networkService } from '../services/NetworkService';
 
 interface SendMoneyContext {
   previousTransactions: Transaction[] | undefined;

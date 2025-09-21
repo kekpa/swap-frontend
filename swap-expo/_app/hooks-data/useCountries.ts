@@ -5,10 +5,10 @@
  * Local-first approach with SQLite caching and background sync.
  */
 
-import { queryKeys } from '../queryKeys';
-import apiClient from '../../_api/apiClient';
-import { API_PATHS } from '../../_api/apiPaths';
-import logger from '../../utils/logger';
+import { queryKeys } from '../tanstack-query/queryKeys';
+import apiClient from '../_api/apiClient';
+import { API_PATHS } from '../_api/apiPaths';
+import logger from '../utils/logger';
 import { useStandardQuery, createQueryResponse } from './useStandardQuery';
 
 export interface Country {

@@ -45,10 +45,12 @@ export const usePersonalInfoSave = () => {
         }
       };
 
+      console.log('🔍 [usePersonalInfoSave] INVESTIGATION: Starting simple API call (original working pattern)');
       console.log('[usePersonalInfoSave] Saving personal info:', requestData);
 
       const response = await apiClient.post('/kyc/personal-information', requestData);
 
+      console.log('🔍 [usePersonalInfoSave] INVESTIGATION: Simple API call completed successfully - NO EVENT EMISSION');
       console.log('[usePersonalInfoSave] Personal info saved successfully:', response.data);
       return true;
 

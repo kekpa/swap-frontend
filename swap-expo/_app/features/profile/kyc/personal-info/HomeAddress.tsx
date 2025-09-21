@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../theme/ThemeContext';
 import { Theme } from '../../../../theme/theme';
-import { usePersonalInfoLoad } from '../../../../hooks/usePersonalInfoLoad';
+import { usePersonalInfoLoad } from '../../../../hooks-actions/usePersonalInfoLoad';
 
 interface HomeAddressProps {
   onBack: () => void;

@@ -16,7 +16,7 @@ import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { Theme } from '../../theme/theme';
-import { useFullTextSearch } from '../../query/hooks/useFullTextSearch';
+import { useFullTextSearch } from '../../hooks-data/useFullTextSearch';
 
 interface Transaction {
   id: string;

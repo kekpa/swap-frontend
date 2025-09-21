@@ -26,8 +26,7 @@ import { ProfileStackParamList } from '../../../navigation/profileNavigator';
 import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
 import CameraCapture from '../../../components2/CameraCapture';
-import apiClient from '../../../_api/apiClient';
-import { API_PATHS } from '../../../_api/apiPaths';
+import { useKycCompletion } from '../../../hooks-actions/useKycCompletion';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 type TakeSelfieRouteProp = RouteProp<ProfileStackParamList, 'TakeSelfie'>;
@@ -41,7 +40,8 @@ const TakeSelfieScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<TakeSelfieRouteProp>();
   const { theme } = useTheme();
-  
+  const { completeSelfie } = useKycCompletion();
+
   const [selfieState, setSelfieState] = useState<SelfieState>('initial');
   const [selfieUri, setSelfieUri] = useState<string | null>(null);
 
@@ -91,38 +91,27 @@ const TakeSelfieScreen: React.FC = () => {
   const handleContinue = async () => {
     if (selfieState === 'review') {
       setSelfieState('processing');
-      
-      try {
-        // Call backend API to mark selfie as completed
-        await apiClient.post(API_PATHS.KYC.SELFIE_COMPLETE);
-        
-        // Context-aware navigation after completion
+
+      console.log(`[TakeSelfieScreen] 🚀 Starting professional KYC completion for selfie...`);
+
+      // Use professional KYC completion system
+      const result = await completeSelfie({
+        returnToTimeline,
+        sourceRoute,
+        showSuccessAlert: false,
+        customSuccessMessage: 'Selfie verification completed successfully!'
+      });
+
+      if (result.success) {
+        console.log(`[TakeSelfieScreen] ✅ Professional selfie completion successful!`);
+
+        // Show success for 3 seconds before navigation (already handled by completion system)
         setTimeout(() => {
-          if (returnToTimeline) {
-            console.log(`[TakeSelfieScreen] Selfie saved, returning to VerifyYourIdentity timeline`);
-            navigation.navigate('VerifyYourIdentity', sourceRoute ? { sourceRoute } : undefined);
-          } else {
-            // Default behavior for non-KYC usage - continue to next step
-            console.log(`[TakeSelfieScreen] Selfie saved, continuing to Passcode`);
-            navigation.navigate('Passcode', { 
-              isKycFlow: true,
-              sourceRoute
-            });
-          }
+          // Navigation is handled by the completion system
         }, 3000);
-      } catch (error) {
-        console.error('Error marking selfie as completed:', error);
-        // Still navigate even if API call fails
-      setTimeout(() => {
-          if (returnToTimeline) {
-            navigation.navigate('VerifyYourIdentity', sourceRoute ? { sourceRoute } : undefined);
-          } else {
-            navigation.navigate('Passcode', { 
-              isKycFlow: true,
-              sourceRoute
-            });
-          }
-      }, 3000);
+      } else {
+        console.log(`[TakeSelfieScreen] ❌ Professional selfie completion failed - handled by completion system`);
+        setSelfieState('review'); // Reset to review state on failure
       }
     }
   };

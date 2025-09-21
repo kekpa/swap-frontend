@@ -21,8 +21,8 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import SearchHeader from '../header/SearchHeader';
 import { useAuthContext } from '../auth/context/AuthContext';
-import { useBalances, useSetPrimaryWallet, useWalletEligibility, useInitializeWallet } from '../../query/hooks/useBalances';
-import { useInteractions } from '../../query/hooks/useInteractions';
+import { useBalances, useSetPrimaryWallet, useWalletEligibility, useInitializeWallet } from '../../hooks-data/useBalances';
+import { useInteractions } from '../../hooks-data/useInteractions';
 import { useTheme } from '../../theme/ThemeContext';
 import { RootStackParamList } from '../../navigation/rootNavigator';
 import { WalletBalance } from '../../types/wallet.types';
@@ -31,11 +31,11 @@ import { WalletStackCard } from './components';
 import WalletOnboarding from './components/WalletOnboarding';
 import logger from '../../utils/logger';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { useWalletTransactions } from '../../query/hooks/useRecentTransactions';
+import { useWalletTransactions } from '../../hooks-data/useRecentTransactions';
 
 // 🚀 PROFESSIONAL: Add intelligent preloading for WhatsApp-style instant loading
-import { queryClient } from '../../query/queryClient';
-import { queryKeys } from '../../query/queryKeys';
+import { queryClient } from '../../tanstack-query/queryClient';
+import { queryKeys } from '../../tanstack-query/queryKeys';
 import { transactionManager } from '../../services/TransactionManager';
 
 interface WalletTransaction {

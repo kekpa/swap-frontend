@@ -3,9 +3,9 @@
 
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { queryKeys } from '../queryKeys';
-import { fullTextSearchRepository } from '../../localdb/FullTextSearchRepository';
-import logger from '../../utils/logger';
+import { queryKeys } from '../tanstack-query/queryKeys';
+import { fullTextSearchRepository } from '../localdb/FullTextSearchRepository';
+import logger from '../utils/logger';
 
 interface SearchResult {
   id: string;

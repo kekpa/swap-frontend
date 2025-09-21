@@ -15,7 +15,7 @@ import { FlashList } from '@shopify/flash-list';
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { useAuthContext } from "../auth/context/AuthContext";
-import { useBalances } from "../../query/hooks/useBalances";
+import { useBalances } from '../../hooks-data/useBalances';
 import apiClient from "../../_api/apiClient";
 import logger from "../../utils/logger";
 import { MonCashWebView } from "./components";

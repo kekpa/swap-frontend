@@ -131,10 +131,10 @@ export const useDocumentUpload = (): UseDocumentUploadReturn => {
       
       setUploadProgress(50);
       
-      logger.debug(`[useDocumentUpload] Uploading to ${API_PATHS.KYC.UPLOAD}`);
+      logger.debug(`[useDocumentUpload] Uploading to ${API_PATHS.KYC.DOCUMENTS}`);
       
-      // Upload to backend
-      const response = await apiClient.post(API_PATHS.KYC.UPLOAD, formData, {
+      // Upload to backend using professional RESTful endpoint
+      const response = await apiClient.post(API_PATHS.KYC.DOCUMENTS, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -161,10 +161,34 @@ export const useDocumentUpload = (): UseDocumentUploadReturn => {
       
     } catch (error: any) {
       logger.error('[useDocumentUpload] Upload failed:', error);
-      
+
+      // Professional error handling with user-friendly messages
+      let errorMessage = 'Upload failed';
+
+      if (error.response?.status) {
+        switch (error.response.status) {
+          case 404:
+            errorMessage = 'Document upload service unavailable';
+            break;
+          case 413:
+            errorMessage = 'File too large (max 10MB)';
+            break;
+          case 415:
+            errorMessage = 'Invalid file type (JPG, PNG, PDF only)';
+            break;
+          case 400:
+            errorMessage = 'Invalid document information';
+            break;
+          default:
+            errorMessage = error.response?.data?.message || error.message || 'Upload failed';
+        }
+      } else {
+        errorMessage = error.message || 'Network error occurred';
+      }
+
       return {
         success: false,
-        error: error.response?.data?.message || error.message || 'Upload failed',
+        error: errorMessage,
       };
     } finally {
       setUploading(false);

@@ -291,12 +291,27 @@ class WebSocketService {
     }
 
     this.socket.on('transaction_update', callback);
-    
+
     return () => {
       if (this.socket) {
         this.socket.off('transaction_update', callback);
     }
   };
+  }
+
+  onKycUpdate(callback: (data: any) => void): () => void {
+    if (!this.socket) {
+      logger.warn('[WebSocket] ⚠️ Cannot listen for KYC updates - socket not initialized');
+      return () => {};
+    }
+
+    this.socket.on('kyc_status_update', callback);
+
+    return () => {
+      if (this.socket) {
+        this.socket.off('kyc_status_update', callback);
+      }
+    };
   }
 
   isSocketConnected(): boolean {

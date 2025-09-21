@@ -2,10 +2,10 @@
 // TanStack Query integration for search functionality
 
 import { useQuery } from '@tanstack/react-query';
-import { queryKeys } from '../queryKeys';
-import { EntityResolver, ResolvedEntity } from '../../services/EntityResolver';
-import logger from '../../utils/logger';
-import { networkService } from '../../services/NetworkService';
+import { queryKeys } from '../tanstack-query/queryKeys';
+import { EntityResolver, ResolvedEntity } from '../services/EntityResolver';
+import logger from '../utils/logger';
+import { networkService } from '../services/NetworkService';
 
 interface SearchResults {
   entities: ResolvedEntity[];

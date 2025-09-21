@@ -8,11 +8,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect } from '@react-navigation/native';
 import React from 'react';
-import { logger } from '../../utils/logger';
-import { queryKeys } from '../queryKeys';
-import apiClient from '../../_api/apiClient';
-import { getStaleTimeForQuery, staleTimeManager } from '../config/staleTimeConfig';
-import { useOptimisticUpdates } from '../optimistic/useOptimisticUpdates';
+import logger from '../utils/logger';
+import { queryKeys } from '../tanstack-query/queryKeys';
+import apiClient from '../_api/apiClient';
+import { getStaleTimeForQuery, staleTimeManager } from '../tanstack-query/config/staleTimeConfig';
+import { useOptimisticUpdates } from '../tanstack-query/optimistic/useOptimisticUpdates';
+import { userRepository } from '../localdb/UserRepository';
 
 // KYC status types based on actual backend response
 export type KycLevel = 'not_started' | 'pending' | 'approved' | 'rejected';
@@ -145,15 +146,98 @@ export const useKycQuery = (config: KycQueryConfig) => {
       logger.debug('[useKycQuery] Fetching KYC status for entity:', config.entityId);
 
       try {
+        // STEP 1: Check local database first (local-first pattern)
+        const localKycStatus = await userRepository.getKycStatus();
+        if (localKycStatus) {
+          logger.debug('[useKycQuery] 💾 Returning cached KYC status from local DB');
+
+          // PROFESSIONAL FIX: Parse local database format to match API response format
+          let parsedLocalData;
+          if (localKycStatus.data && typeof localKycStatus.data === 'string') {
+            try {
+              // Parse JSON string from local database
+              parsedLocalData = JSON.parse(localKycStatus.data);
+              logger.debug('[useKycQuery] 🔧 Parsed local KYC data from JSON string');
+            } catch (parseError) {
+              logger.warn('[useKycQuery] ⚠️ Failed to parse local KYC data JSON, using raw data');
+              parsedLocalData = localKycStatus;
+            }
+          } else {
+            // Data is already an object or doesn't exist
+            parsedLocalData = localKycStatus.data || localKycStatus;
+          }
+
+          // STEP 2: Background sync if data might be stale (non-blocking)
+          setTimeout(async () => {
+            try {
+              logger.debug('[useKycQuery] 🔄 Background sync: Fetching fresh KYC status');
+              const response = await apiClient.get('/kyc/verification-status');
+
+              if (response.data) {
+                // Update local DB with fresh data
+                await userRepository.saveKycStatus({
+                  ...response.data,
+                  id: config.entityId,
+                  is_synced: true
+                });
+
+                // Only update cache if data has actually changed (prevents unnecessary re-renders)
+                const currentData = queryClient.getQueryData(queryKey);
+                if (JSON.stringify(currentData) !== JSON.stringify(response.data)) {
+                  queryClient.setQueryData(queryKey, response.data);
+                  logger.debug('[useKycQuery] ✅ Background sync: Updated with fresh data');
+                } else {
+                  logger.debug('[useKycQuery] ✅ Background sync: Data unchanged, skipping cache update');
+                }
+              }
+            } catch (error) {
+              logger.debug('[useKycQuery] ⚠️ Background sync failed (non-critical):', error.message);
+            }
+          }, 1000); // 1 second delay for background sync
+
+          // Return parsed data in the expected format
+          return parsedLocalData;
+        }
+
+        // STEP 3: No local cache - fetch from API (first time only)
+        logger.debug('[useKycQuery] 🌐 No local cache, fetching from API');
         const response = await apiClient.get('/kyc/verification-status');
 
         if (response.data) {
-          logger.debug('[useKycQuery] ✅ KYC status fetched successfully');
+          // Save to local DB for next time
+          await userRepository.saveKycStatus({
+            ...response.data,
+            id: config.entityId,
+            is_synced: true
+          });
+          logger.debug('[useKycQuery] ✅ KYC status fetched and saved to local DB');
           return response.data;
         } else {
           throw new Error('No KYC status data received');
         }
       } catch (error) {
+        // Check if we have local data as fallback
+        const localKycStatus = await userRepository.getKycStatus();
+        if (localKycStatus) {
+          logger.debug('[useKycQuery] 📱 Using local cache as fallback due to error');
+
+          // PROFESSIONAL FIX: Apply same parsing logic for fallback data
+          let parsedLocalData;
+          if (localKycStatus.data && typeof localKycStatus.data === 'string') {
+            try {
+              parsedLocalData = JSON.parse(localKycStatus.data);
+              logger.debug('[useKycQuery] 🔧 Parsed fallback KYC data from JSON string');
+            } catch (parseError) {
+              logger.warn('[useKycQuery] ⚠️ Failed to parse fallback KYC data JSON, using raw data');
+              parsedLocalData = localKycStatus;
+            }
+          } else {
+            parsedLocalData = localKycStatus.data || localKycStatus;
+          }
+
+          return parsedLocalData;
+        }
+
         logger.error('[useKycQuery] ❌ Failed to fetch KYC status:', error);
         throw error;
       }

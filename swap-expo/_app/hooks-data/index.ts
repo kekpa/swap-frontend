@@ -1,8 +1,10 @@
 /**
- * TanStack Query Hooks Exports
- * 
- * Centralized exports for all data fetching hooks.
- * Provides comprehensive data access layer for the Swap app.
+ * Data Hooks - Fetching & Caching
+ *
+ * These hooks provide cached data, real-time sync, and queries.
+ * Use these when you need to GET something (queries, real-time updates).
+ *
+ * For action hooks (mutations, side effects), see /hooks-actions/index.ts
  */
 
 // Balance and wallet hooks
@@ -20,7 +22,7 @@ export * from './useRecentConversations';
 
 // User profile and identity hooks
 export * from './useUserProfile';
-export * from './useKycStatus';
+export * from './useKycQuery'; // Renamed from useKycStatus
 
 // Reference data hooks
 export * from './useCountries';
@@ -36,6 +38,7 @@ export * from './useBackgroundSync';
 
 // WebSocket integration hooks
 export * from './useWebSocketQuerySync';
+export * from './useKycWebSocketSync';
 
 // Adaptive configuration hooks
 export * from './useAdaptiveStaleTime';
@@ -62,5 +65,6 @@ export * from './useAdaptiveStaleTime';
  * 
  * **Real-time:**
  * - `useWebSocketQuerySync(entityId)` - Enable real-time updates
+ * - `useKycWebSocketSync(entityId)` - Enable KYC real-time updates (Phase 3)
  * - `useBackgroundSync(entityId)` - Background data sync
  */

@@ -17,7 +17,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { CommonActions, StackActions } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { InteractionsStackParamList } from '../../navigation/interactions/interactionsNavigator';
-import { useSearchEntities } from '../../query/hooks/useSearchEntities';
+import { useSearchEntities } from '../../hooks-data/useSearchEntities';
 // EntitySearchResult type moved to query hooks
 interface EntitySearchResult {
   id: string;

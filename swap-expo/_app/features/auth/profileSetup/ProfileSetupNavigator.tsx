@@ -1,11 +1,9 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
-import { 
-  HowYouHeardAboutUs, 
-  NotificationActivation, 
-  PasscodeSetup, 
-  BioSetup 
-} from './index';
+import HowYouHeardAboutUs from './HowYouHeardAboutUs';
+import NotificationActivation from './NotificationActivation';
+import PasscodeSetup from './PasscodeSetup';
+import BioSetup from './BioSetup';
 
 // Define the profile setup stack navigator param list
 export type ProfileSetupStackParamList = {

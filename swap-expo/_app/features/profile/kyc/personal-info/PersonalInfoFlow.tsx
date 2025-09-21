@@ -13,9 +13,10 @@ import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navig
 import { StackNavigationProp } from '@react-navigation/stack';
 import { ProfileStackParamList } from '../../../../navigation/profileNavigator';
 import { useTheme } from '../../../../theme/ThemeContext'; // Import useTheme
-import { usePersonalInfoSave } from '../../../../hooks/usePersonalInfoSave'; // Import the hook
-import { usePersonalInfoLoad } from '../../../../hooks/usePersonalInfoLoad'; // Import the new hook
-import { invalidateQueries } from '../../../../query/queryClient'; // Professional cache invalidation
+import { usePersonalInfoLoad } from '../../../../hooks-actions/usePersonalInfoLoad'; // Import the new hook
+import { useKycCompletion } from '../../../../hooks-actions/useKycCompletion'; // Professional KYC completion system
+import { invalidateQueries } from '../../../../tanstack-query/queryClient'; // Professional cache invalidation
+import { eventCoordinator } from '../../../../utils/EventCoordinator'; // Professional event coordination
 
 import CountryOfResidence from './CountryOfResidence';
 import NameAsInId from './NameAsInId';
@@ -51,8 +52,9 @@ const PersonalInfoFlow: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProp<ProfileStackParamList, 'PersonalInfoFlow'>>();
   const { theme } = useTheme();
-  const { savePersonalInfo } = usePersonalInfoSave();
+  const { completePersonalInfo } = useKycCompletion();
   const { personalInfo: savedPersonalInfo, loading } = usePersonalInfoLoad();
+  // PROFESSIONAL: No more old reactive KYC operation tracking
   
   // Extract navigation context from route params
   const sourceRoute = route.params?.sourceRoute;
@@ -207,35 +209,73 @@ const PersonalInfoFlow: React.FC = () => {
 
   const handleReviewConfirm = async () => {
     try {
-      console.log(`[PersonalInfoFlow] 🚀 Saving personal info with professional cache invalidation...`);
-      const success = await savePersonalInfo(personalInfo);
+      console.log(`🔬 [PersonalInfoFlow] PROFESSIONAL: Starting KYC completion with EventCoordinator`);
 
-      if (success) {
-        console.log(`[PersonalInfoFlow] ✅ Personal info saved successfully`);
+      // Prepare data for API
+      const apiData = {
+        firstName: personalInfo.firstName,
+        lastName: personalInfo.lastName,
+        middleName: personalInfo.middleName || null,
+        birthDate: personalInfo.birthDay && personalInfo.birthMonth && personalInfo.birthYear
+          ? `${personalInfo.birthYear}-${String(personalInfo.birthMonth).padStart(2, '0')}-${String(personalInfo.birthDay).padStart(2, '0')}`
+          : null,
+        countryOfResidence: personalInfo.country,
+        address: {
+          addressLine1: personalInfo.addressLine1,
+          addressLine2: personalInfo.addressLine2 || '',
+          city: personalInfo.city,
+          postalCode: personalInfo.postalCode,
+          countryCode: personalInfo.country || 'HT'
+        }
+      };
 
-        // PROFESSIONAL: Invalidate KYC-related queries for instant UI updates
-        console.log(`[PersonalInfoFlow] 🔄 Triggering professional cache invalidation...`);
+      // PROFESSIONAL: Use EventCoordinator for KYC operation coordination
+      console.log(`🔬 [PersonalInfoFlow] PROFESSIONAL: Coordinating KYC completion operation`);
+
+      const result = await completePersonalInfo(apiData, {
+        skipNavigation: true, // We'll handle navigation ourselves
+        showSuccessAlert: false,
+        customSuccessMessage: 'Personal information saved successfully!'
+      });
+
+      console.log(`🔬 [PersonalInfoFlow] PROFESSIONAL: KYC completion result:`, result.success);
+
+      if (result.success) {
+        console.log(`🔬 [PersonalInfoFlow] PROFESSIONAL: KYC completion successful - triggering cache invalidation`);
+
+        // PROFESSIONAL CACHE INVALIDATION
         invalidateQueries(['kyc']); // Invalidate all KYC-related queries
         invalidateQueries(['profile']); // Also invalidate profile data
 
-        // Small delay to allow invalidation to propagate
+        // PROFESSIONAL: Use EventCoordinator for data coordination
+        eventCoordinator.emitDataUpdated('kyc', apiData, {
+          source: 'PersonalInfoFlow.handleReviewConfirm',
+          action: 'personal_info_completed'
+        });
+
+        console.log(`🔬 [PersonalInfoFlow] PROFESSIONAL: Cache invalidation and event coordination triggered`);
+
+        // Brief delay for cache invalidation propagation
         setTimeout(() => {
-          // Always return to timeline when in KYC flow
+          console.log(`🔬 [PersonalInfoFlow] PROFESSIONAL: Starting navigation`);
+
+          // PROFESSIONAL NAVIGATION
           if (returnToTimeline) {
-            console.log(`[PersonalInfoFlow] 📍 Returning to VerifyYourIdentity with fresh cache`);
+            console.log(`🔬 [PersonalInfoFlow] PROFESSIONAL: Navigating to VerifyYourIdentity`);
             navigation.navigate('VerifyYourIdentity', sourceRoute ? { sourceRoute } : undefined);
           } else {
-            // Default behavior for non-KYC usage - could continue to next step
-            console.log(`[PersonalInfoFlow] 📍 Continuing to UploadId`);
+            console.log(`🔬 [PersonalInfoFlow] PROFESSIONAL: Navigating to UploadId`);
             navigation.navigate('UploadId', { sourceRoute });
           }
         }, 100); // Brief delay for cache invalidation
 
       } else {
-        Alert.alert('Error', 'Failed to save personal information. Please try again.');
+        console.log(`🔬 [PersonalInfoFlow] PROFESSIONAL: KYC completion failed`);
+        const errorMessage = result.error?.message || 'Failed to save personal information. Please try again.';
+        Alert.alert('Error', errorMessage);
       }
     } catch (error) {
-      console.error('Error saving personal information:', error);
+      console.error(`🔬 [PersonalInfoFlow] PROFESSIONAL: Error in handleReviewConfirm:`, error);
       Alert.alert('Error', 'An error occurred while saving personal information. Please try again.');
     }
   };

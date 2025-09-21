@@ -20,7 +20,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { User, AuthContextType, UserData, PhoneVerification, AuthLevel } from '../../../types/auth.types';
-import { useAuth } from '../../../hooks/useAuth';
+import { useAuth } from '../../../hooks-actions/useAuth';
 import { getAccessToken, clearTokens, saveAccessToken, saveRefreshToken } from '../../../utils/tokenStorage';
 import apiClient, { authEvents } from '../../../_api/apiClient';
 import { AUTH_EVENTS } from '../../../types/api.types';
@@ -32,7 +32,9 @@ import { clearAllCachedData } from '../../../localdb';
 import { storeLastUserForPin, getLastUserForPin as getStoredPinUser, clearLastUserForPin, hasPinUserStored as checkPinUserStored } from '../../../utils/pinUserStorage';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { jwtDecode } from 'jwt-decode';
-import { eventEmitter } from '../../../utils/eventEmitter';
+import { authStateMachine, AuthState, AuthEvent } from '../../../utils/AuthStateMachine';
+import { loadingOrchestrator, LoadingOperationType, LoadingPriority } from '../../../utils/LoadingOrchestrator';
+import { eventCoordinator } from '../../../utils/EventCoordinator';
 
 // High-performance MMKV storage for auth preferences
 const authStorage = new MMKV({
@@ -91,7 +93,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   
   // Session management
   const [hasPersistedSession, setHasPersistedSession] = useState<boolean>(false);
-  
+
+  // PROFESSIONAL ARCHITECTURE: Remove reactive session restoration
+  // State machine handles all auth coordination now
+
   // Wallet security
   const [isWalletUnlocked, setIsWalletUnlocked] = useState<boolean>(false);
   const [lastWalletUnlock, setLastWalletUnlock] = useState<number | null>(null);
@@ -109,6 +114,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const hasRunInitialCheckSession = useRef(false);
   const authHook = useAuth();
+
+  // PROFESSIONAL: Direct state machine coordination - no wrapper bullshit
 
   // Clear corrupted session data
   const clearCorruptedSession = useCallback(async () => {
@@ -413,10 +420,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
 
 
-  // Enhanced session restoration with better error handling - renamed to checkSession
+  // PROFESSIONAL ARCHITECTURE: State machine coordinated session check
   const checkSession = useCallback(async (): Promise<boolean> => {
+    // Check if auth operations are allowed by navigation state
+    if (!authStateMachine.canPerformAuthOperation()) {
+      console.log('🏛️ [AuthContext] PROFESSIONAL: Navigation state prevents auth operations - skipping session check');
+      return false;
+    }
+
     try {
-      console.log('🔒 [AuthContext] Starting session restoration...');
+      console.log('🏛️ [AuthContext] PROFESSIONAL: Starting state machine coordinated session check');
+
+      // Notify state machine we're starting session refresh
+      authStateMachine.transition(AuthEvent.SESSION_REFRESH_START, {
+        event: AuthEvent.SESSION_REFRESH_START,
+        timestamp: Date.now(),
+        metadata: { trigger: 'checkSession_called' }
+      });
+
       setIsLoading(true);
       
       const token = await getAccessToken();
@@ -519,7 +540,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         setIsAuthenticated(true);
         setAuthLevel(AuthLevel.AUTHENTICATED);
         setIsGuestMode(false);
-        
+
+        // PROFESSIONAL: Notify state machine of successful session refresh
+        authStateMachine.transition(AuthEvent.SESSION_REFRESH_SUCCESS, {
+          event: AuthEvent.SESSION_REFRESH_SUCCESS,
+          timestamp: Date.now(),
+          authData: {
+            userId: mappedUser.id,
+            profileId: mappedUser.profileId,
+            accessToken: token
+          }
+        });
+
+        // PROFESSIONAL: LoadingOrchestrator coordination for session restore
+        loadingOrchestrator.coordinateAuthToAppTransition();
+
         console.log('✅ [AuthContext] Session restored successfully with profile data:', {
           userId: mappedUser.id,
           profileId: mappedUser.profileId,
@@ -531,6 +566,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         return true;
           } else {
         console.log('🔒 [AuthContext] No profile data received, clearing session');
+
+        // PROFESSIONAL: Notify state machine of session refresh failure
+        authStateMachine.transition(AuthEvent.SESSION_REFRESH_FAILURE, {
+          event: AuthEvent.SESSION_REFRESH_FAILURE,
+          timestamp: Date.now(),
+          error: new Error('No profile data received')
+        });
+
         await clearTokens();
         setIsAuthenticated(false);
         setIsGuestMode(false);
@@ -539,14 +582,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
     } catch (error: any) {
       console.error('❌ [AuthContext] Session restoration failed:', error);
-      
+
+      // PROFESSIONAL: Notify state machine of session refresh failure
+      authStateMachine.transition(AuthEvent.SESSION_REFRESH_FAILURE, {
+        event: AuthEvent.SESSION_REFRESH_FAILURE,
+        timestamp: Date.now(),
+        error: error
+      });
+
       // If it's a 401, the token is invalid - clear everything
       if (error.response?.status === 401) {
         console.log('🔒 [AuthContext] Received 401, clearing invalid session');
         await clearTokens();
         delete apiClient.defaults.headers.common['Authorization'];
       }
-      
+
       setIsAuthenticated(false);
       setIsGuestMode(false);
       setUser(null);
@@ -642,7 +692,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       // Return to guest mode
       await enableGuestMode();
-      
+
+      // PROFESSIONAL: Direct auth state machine coordination
+      authStateMachine.transition(AuthEvent.LOGOUT, {
+        event: AuthEvent.LOGOUT,
+        timestamp: Date.now()
+      });
+
       console.log('✅ [Logout] Completed successfully');
     } catch (error) {
       console.error('❌ [Logout] Error during cleanup:', error);
@@ -825,6 +881,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
         
         console.log('✅ [BusinessLogin] Business login completed successfully');
+
+        // PROFESSIONAL: Direct auth state machine coordination
+        authStateMachine.transition(AuthEvent.LOGIN_SUCCESS, {
+          event: AuthEvent.LOGIN_SUCCESS,
+          timestamp: Date.now(),
+          authData: {
+            userId: authData.user_id,
+            profileId: authData.profile_id,
+            accessToken: authData.access_token
+          }
+        });
+
+        // PROFESSIONAL: Direct LoadingOrchestrator coordination to prevent white flash
+        loadingOrchestrator.coordinateAuthToAppTransition();
+
         setIsLoading(false);
         return { success: true };
       } else {
@@ -926,6 +997,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
         
         console.log('✅ [LoginWithPin] PIN login completed successfully');
+
+        // PROFESSIONAL: Direct auth state machine coordination
+        authStateMachine.transition(AuthEvent.LOGIN_SUCCESS, {
+          event: AuthEvent.LOGIN_SUCCESS,
+          timestamp: Date.now(),
+          authData: {
+            userId: authData.user_id,
+            profileId: authData.profile_id,
+            accessToken: authData.access_token
+          }
+        });
+
+        // PROFESSIONAL: Direct LoadingOrchestrator coordination to prevent white flash
+        loadingOrchestrator.coordinateAuthToAppTransition();
+
         setIsLoading(false);
         return { success: true };
       } else {
@@ -1045,6 +1131,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           }
           console.log('✅ [Login] Personal login completed successfully');
           setIsAuthenticated(true); // Set authenticated state
+
+          // PROFESSIONAL: Direct auth state machine coordination
+          authStateMachine.transition(AuthEvent.LOGIN_SUCCESS, {
+            event: AuthEvent.LOGIN_SUCCESS,
+            timestamp: Date.now(),
+            authData: {
+              userId: authData.user_id,
+              profileId: authData.profile_id,
+              accessToken: authData.access_token
+            }
+          });
+
+          // PROFESSIONAL: Direct LoadingOrchestrator coordination to prevent white flash
+          loadingOrchestrator.coordinateAuthToAppTransition();
+
           return { success: true };
         } else {
           console.error('❌ [Login] No access token in response:', authData);
@@ -1082,24 +1183,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, []);
 
+  // PROFESSIONAL ARCHITECTURE: Listen to EventCoordinator for all data events
   useEffect(() => {
-    // Handler for data_updated events
-    const handleDataUpdated = (payload: { type: string; data: any }) => {
-      switch (payload.type) {
+    const unsubscribeEvents = eventCoordinator.onDataUpdated((eventType, data, metadata) => {
+      console.log('🏛️ [AuthContext] PROFESSIONAL: EventCoordinator event received:', {
+        eventType,
+        metadata,
+        timestamp: Date.now()
+      });
+
+      switch (eventType) {
         case 'user':
-        case 'kyc':
-          // Reload user/auth data from local DB/cache
-          checkSession();
+          // User data changes require session validation
+          if (!isAuthenticated || isLoading) {
+            console.log('🏛️ [AuthContext] PROFESSIONAL: User data update - triggering session check');
+            checkSession();
+          }
           break;
+
+        case 'kyc':
+          // KYC data changes require session validation if not authenticated
+          if (!isAuthenticated || isLoading) {
+            console.log('🏛️ [AuthContext] PROFESSIONAL: KYC data update - triggering session check');
+            checkSession();
+          }
+          break;
+
         default:
+          console.log('🏛️ [AuthContext] PROFESSIONAL: Ignoring event type:', eventType);
           break;
       }
-    };
-    eventEmitter.on('data_updated', handleDataUpdated);
-    return () => {
-      eventEmitter.off('data_updated', handleDataUpdated);
-    };
-  }, [checkSession]);
+    });
+
+    return unsubscribeEvents;
+  }, [isAuthenticated, isLoading, checkSession]);
 
 
   // Context value
@@ -1113,7 +1230,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     
     // Session Management
     hasPersistedSession,
-    
+
+    // PROFESSIONAL ARCHITECTURE: State machine coordination (no more reactive chaos)
+
     // Wallet Security
     isWalletUnlocked,
     lastWalletUnlock,

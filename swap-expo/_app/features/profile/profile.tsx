@@ -14,14 +14,14 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect, useRoute, RouteProp, CommonActions } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { useAuth } from "../../hooks/useAuth";
+import { useAuth } from '../../hooks-actions/useAuth';
 import { useAuthContext } from "../auth/context/AuthContext";
 import logger from "../../utils/logger";
 import { ProfileStackParamList } from "../../navigation/profileNavigator";
 import { useTheme, availableThemes, ThemeName } from "../../theme/ThemeContext";
 import { Theme } from "../../theme/theme";
-import { useKycStatus } from "../../query/hooks/useKycQuery";
-import { useUserProfile } from "../../query/hooks/useUserProfile";
+import { useKycStatus } from '../../hooks-data/useKycQuery';
+import { useUserProfile } from '../../hooks-data/useUserProfile';
 
 // Define a type for the route params ProfileScreen might receive when opened as ProfileModal
 // These params are passed to ProfileModal, not ProfileStackParamList for the 'Profile' screen itself.

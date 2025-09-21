@@ -2,12 +2,13 @@
 // Same pattern as useTimeline and useBalances for instant cached data display
 
 import { useQuery } from '@tanstack/react-query';
-import { queryKeys } from '../queryKeys';
-import { transactionManager } from '../../services/TransactionManager';
-import { transactionRepository } from '../../localdb/TransactionRepository';
-import { Transaction } from '../../types/transaction.types';
-import logger from '../../utils/logger';
-import { networkService } from '../../services/NetworkService';
+import { queryKeys } from '../tanstack-query/queryKeys';
+import { queryClient } from '../tanstack-query/queryClient';
+import { transactionManager } from '../services/TransactionManager';
+import { transactionRepository } from '../localdb/TransactionRepository';
+import { Transaction } from '../types/transaction.types';
+import logger from '../utils/logger';
+import { networkService } from '../services/NetworkService';
 
 interface BaseTransactionResult {
   transactions: Transaction[];
@@ -47,7 +48,6 @@ const fetchWalletTransactionsWhatsAppStyle = async (accountId: string, limit: nu
             logger.debug(`[useWalletTransactions] ✅ BACKGROUND SYNC: Updated ${apiTransactions.length} transactions in cache`);
             
             // Update TanStack Query cache with fresh data
-            const queryClient = require('../queryClient').queryClient;
             queryClient.setQueryData(queryKeys.transactionsByAccount(accountId, limit), apiTransactions);
           }
           

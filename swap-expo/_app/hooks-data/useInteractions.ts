@@ -4,12 +4,12 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import apiClient from '../../_api/apiClient';
-import { queryKeys } from '../queryKeys';
-import logger from '../../utils/logger';
-import { useAuthContext } from '../../features/auth/context/AuthContext';
-import { interactionRepository } from '../../localdb/InteractionRepository';
-import { eventEmitter } from '../../utils/eventEmitter';
+import apiClient from '../_api/apiClient';
+import { queryKeys } from '../tanstack-query/queryKeys';
+import logger from '../utils/logger';
+import { useAuthContext } from '../features/auth/context/AuthContext';
+import { interactionRepository } from '../localdb/InteractionRepository';
+import { eventEmitter } from '../utils/eventEmitter';
 
 export interface InteractionItem {
   id: string;

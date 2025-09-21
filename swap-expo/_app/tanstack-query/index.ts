@@ -22,8 +22,8 @@ export { QueryProvider } from './QueryProvider';
 // Query keys
 export { queryKeys, validateQueryKey } from './queryKeys';
 
-// Hooks exports
-export * from './hooks';
+// Hooks exports (moved to hooks-data folder)
+export * from '../hooks-data';
 
 // Mutation exports  
 export * from './mutations';
@@ -70,7 +70,7 @@ export * from './api';
  * 
  * 2. Use query hooks:
  * ```tsx
- * import { useBalance, useRecentTransactions } from './query/hooks';
+ * import { useBalance, useRecentTransactions } from ../tanstack-query/hooks';
  * 
  * const { data: balance } = useBalance(entityId);
  * const { data: transactions } = useRecentTransactions(entityId, 20);
@@ -78,7 +78,7 @@ export * from './api';
  * 
  * 3. Use mutation hooks:
  * ```tsx
- * import { useTransferMoney, useSendMessage } from './query/mutations';
+ * import { useTransferMoney, useSendMessage } from ../tanstack-query/mutations';
  * 
  * const transferMutation = useTransferMoney();
  * const sendMessageMutation = useSendMessage();
@@ -86,14 +86,14 @@ export * from './api';
  * 
  * 4. Use prefetching:
  * ```tsx
- * import { usePrefetchStrategy } from './query/prefetch';
+ * import { usePrefetchStrategy } from ../tanstack-query/prefetch';
  * 
  * const { prefetchForBalance } = usePrefetchStrategy({ entityId });
  * ```
  * 
  * 5. Monitor performance:
  * ```tsx
- * import { useRequestMonitoring, usePrefetchMonitoring } from './query/monitoring';
+ * import { useRequestMonitoring, usePrefetchMonitoring } from ../tanstack-query/monitoring';
  * 
  * useRequestMonitoring({ enablePeriodicReporting: true });
  * const { getPrefetchMetrics } = usePrefetchMonitoring();

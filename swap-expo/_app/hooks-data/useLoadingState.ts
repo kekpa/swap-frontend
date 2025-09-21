@@ -5,10 +5,11 @@
  * Monitors the loading state of essential app data for initial load completion.
  */
 
+import { useMemo } from 'react';
 import { useBalances } from './useBalances';
 import { useInteractions } from './useInteractions';
-import { useAuthContext } from '../../features/auth/context/AuthContext';
-import logger from '../../utils/logger';
+import { useAuthContext } from '../features/auth/context/AuthContext';
+import logger from '../utils/logger';
 
 interface LoadingState {
   isLoading: boolean;
@@ -56,42 +57,56 @@ export const useLoadingState = (): UseLoadingStateResult => {
   const userProfileData = authContext?.user;
   const userProfileError = null;
 
-  // Calculate loading state
-  const requiredTasks = ['balances', 'interactions', 'userProfile'];
-  const completedTasks = new Set<string>();
-  const errors: string[] = [];
+  // Calculate loading state with proper memoization to prevent unnecessary re-renders
+  const requiredTasks = useMemo(() => ['balances', 'interactions', 'userProfile'], []);
 
-  // Check completed tasks
-  if (balancesData && !isLoadingBalances) {
-    completedTasks.add('balances');
-  }
-  if (interactionsData && !isLoadingInteractions) {
-    completedTasks.add('interactions');
-  }
-  if (userProfileData && !isLoadingUserData) {
-    completedTasks.add('userProfile');
-  }
+  const { completedTasks, errors } = useMemo(() => {
+    const completed = new Set<string>();
+    const errorList: string[] = [];
 
-  // Check errors
-  if (balancesError) {
-    errors.push(`Balances: ${balancesError.message || 'Unknown error'}`);
-  }
-  if (interactionsError) {
-    errors.push(`Interactions: ${interactionsError.message || 'Unknown error'}`);
-  }
+    // Check completed tasks
+    if (balancesData && !isLoadingBalances) {
+      completed.add('balances');
+    }
+    if (interactionsData && !isLoadingInteractions) {
+      completed.add('interactions');
+    }
+    if (userProfileData && !isLoadingUserData) {
+      completed.add('userProfile');
+    }
 
-  // Calculate progress
-  const progress = (completedTasks.size / requiredTasks.length) * 100;
-  const isLoading = isLoadingBalances || isLoadingInteractions || isLoadingUserData;
-  const isInitialLoadComplete = completedTasks.size === requiredTasks.length && !isLoading;
+    // Check errors
+    if (balancesError) {
+      errorList.push(`Balances: ${balancesError.message || 'Unknown error'}`);
+    }
+    if (interactionsError) {
+      errorList.push(`Interactions: ${interactionsError.message || 'Unknown error'}`);
+    }
 
-  const loadingState: LoadingState = {
-    isLoading,
-    progress,
-    completedTasks,
-    requiredTasks,
-    errors,
-  };
+    return { completedTasks: completed, errors: errorList };
+  }, [balancesData, isLoadingBalances, interactionsData, isLoadingInteractions, userProfileData, isLoadingUserData, balancesError, interactionsError]);
+
+  // Calculate progress and loading state with memoization
+  const { progress, isLoading, isInitialLoadComplete, loadingState } = useMemo(() => {
+    const prog = (completedTasks.size / requiredTasks.length) * 100;
+    const loading = isLoadingBalances || isLoadingInteractions || isLoadingUserData;
+    const complete = completedTasks.size === requiredTasks.length && !loading;
+
+    const state: LoadingState = {
+      isLoading: loading,
+      progress: prog,
+      completedTasks,
+      requiredTasks,
+      errors,
+    };
+
+    return {
+      progress: prog,
+      isLoading: loading,
+      isInitialLoadComplete: complete,
+      loadingState: state
+    };
+  }, [completedTasks, requiredTasks, errors, isLoadingBalances, isLoadingInteractions, isLoadingUserData]);
 
   // Local data checking functions
   const hasLocalData = async (): Promise<boolean> => {

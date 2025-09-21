@@ -7,7 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
-  ActivityIndicator,
+  ActivityIndicator, // Still used in loading/error states
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -15,7 +15,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { ProfileStackParamList } from '../../../navigation/profileNavigator';
 import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
-import { useKycStatusCritical, useKycStatus } from '../../../query/hooks/useKycQuery';
+import { useKycStatusCritical, useKycStatus } from '../../../hooks-data/useKycQuery';
 import { useAuthContext } from '../../auth/context/AuthContext';
 import * as LocalAuthentication from 'expo-local-authentication';
 
@@ -166,11 +166,10 @@ const VerifyYourIdentityScreen: React.FC = () => {
     lastUpdated
   } = useKycStatus(user?.entityId);
   
-  // For compatibility with the existing component logic, create verificationStatus from kycStatus
+  // OPTIMISTIC UI: Instant verification status computation with defensive data access
   const verificationStatus = useMemo(() => {
-    if (!kycStatus?.data) return null;
-
-    const data = kycStatus.data;
+    // DEFENSIVE: Try multiple data access patterns for robustness
+    const data = kycStatus?.data || kycStatus || {};
     return {
       setupAccount: {
         isCompleted: data.setup_account_completed || false,
@@ -220,11 +219,14 @@ const VerifyYourIdentityScreen: React.FC = () => {
   const isBiometricAvailable = true; // Simplified for now
   const [activeStep, setActiveStep] = useState<VerificationStep>(VerificationStep.PERSONAL_INFO);
   
+  // OPTIMISTIC UI: Always show timeline instantly - no loading states, true local-first
+  // Data is always "ready" - we show defaults for missing data, update in background
+
   // Determine profile type
   const isBusinessProfile = user?.profileType === 'business';
   const businessName = user?.businessName;
-  
-  console.log('🔥 [VerifyYourIdentity] 📊 Component state (Professional KYC):', {
+
+  console.log('🔥 [VerifyYourIdentity] 📊 Component state (OPTIMISTIC UI - Professional KYC):', {
     hasKycStatus: !!kycStatus,
     hasVerificationStatus: !!verificationStatus,
     isLoading,
@@ -233,6 +235,7 @@ const VerifyYourIdentityScreen: React.FC = () => {
     isStale,
     lastUpdated: lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'Never',
     cacheStatus: isStale ? '🔴 Stale' : '🟢 Fresh',
+    optimisticUI: 'Always showing timeline instantly',
     verificationStatus
   });
 
@@ -620,11 +623,11 @@ const VerifyYourIdentityScreen: React.FC = () => {
             {getProcessStatusMessage()}
           </Text>
           
-          {/* Timeline */}
+          {/* OPTIMISTIC UI: Always show timeline instantly - true local-first experience */}
           <View style={styles.timelineContainer}>
             {/* Main timeline vertical line */}
             <View style={styles.timelineMainLine}></View>
-            
+
             <TimelineStep
               theme={theme}
               title={isBusinessProfile ? "Set up business account" : "Set up Swap account"}
@@ -633,130 +636,130 @@ const VerifyYourIdentityScreen: React.FC = () => {
               canAccess={verificationStatus?.setupAccount?.canAccess || true}
               onPress={() => handleStepPress(VerificationStep.SETUP_ACCOUNT)}
             />
-            
-            <TimelineStep
-              theme={theme}
-              title="Confirm your phone number"
-              description="Receive verification code"
-              isCompleted={verificationStatus?.confirmPhone?.isCompleted || false}
-              canAccess={verificationStatus?.confirmPhone?.canAccess || true}
-              onPress={() => handleStepPress(VerificationStep.CONFIRM_PHONE)}
-            />
-            
-            {/* Email verification disabled for Haiti market - using phone + PIN instead */}
-            {/* <TimelineStep
-              theme={theme}
-              title="Confirm your email address"
-              description="Email confirmed"
-              isCompleted={verificationStatus?.confirmEmail?.isCompleted || false}
-              canAccess={verificationStatus?.confirmEmail?.canAccess || true}
-              onPress={() => handleStepPress(VerificationStep.CONFIRM_EMAIL)}
-            /> */}
-            
-            {isBusinessProfile ? (
-              // Business Profile Steps
-              <>
-                <TimelineStep
-                  theme={theme}
-                  title="Your business information"
-                  description="Business name, type, address, and registration details"
-                  isCompleted={(verificationStatus as any)?.businessInfo?.isCompleted || false}
-                  isActive={(verificationStatus as any)?.businessInfo?.isActive || false}
-                  canAccess={(verificationStatus as any)?.businessInfo?.canAccess || true}
-                  stepStatus={kycStatus?.steps?.business_info?.status}
-                  onPress={() => handleStepPress(VerificationStep.PERSONAL_INFO)} // Reuse enum for navigation
-                />
-                
-                <TimelineStep
-                  theme={theme}
-                  title="Verify your business"
-                  description="Upload business documents or photos"
-                  isCompleted={(verificationStatus as any)?.businessVerification?.isCompleted || false}
-                  isActive={(verificationStatus as any)?.businessVerification?.isActive || false}
-                  canAccess={(verificationStatus as any)?.businessVerification?.canAccess || true}
-                  stepStatus={kycStatus?.steps?.business_verification?.status}
-                  onPress={() => handleStepPress(VerificationStep.VERIFY_ID)} // Reuse enum for navigation
-                />
-                
-                <TimelineStep
-                  theme={theme}
-                  title="Set up business security"
-                  description="Create a 6-digit business passcode"
-                  isCompleted={(verificationStatus as any)?.businessSecurity?.isCompleted || false}
-                  isActive={(verificationStatus as any)?.businessSecurity?.isActive || false}
-                  canAccess={(verificationStatus as any)?.businessSecurity?.canAccess || true}
-                  stepStatus={kycStatus?.steps?.business_security?.status}
-                  isLast={!isBiometricAvailable}
-                  onPress={() => handleStepPress(VerificationStep.SETUP_SECURITY)}
-                />
-              </>
-            ) : (
-              // Personal Profile Steps
-              <>
-                <TimelineStep
-                  theme={theme}
-                  title="Your personal information"
-                  description="Full name, Date of birth, Country of residence, Citizenship"
-                  isCompleted={verificationStatus?.personalInfo?.isCompleted || false}
-                  isActive={verificationStatus?.personalInfo?.isActive || false}
-                  canAccess={verificationStatus?.personalInfo?.canAccess || true}
-                  stepStatus={kycStatus?.steps?.personal_info?.status}
-                  onPress={() => handleStepPress(VerificationStep.PERSONAL_INFO)}
-                />
-                
-                <TimelineStep
-                  theme={theme}
-                  title="Verify your identity"
-                  description="Upload ID document"
-                  isCompleted={verificationStatus?.verifyId?.isCompleted || false}
-                  isActive={verificationStatus?.verifyId?.isActive || false}
-                  canAccess={verificationStatus?.verifyId?.canAccess || true}
-                  stepStatus={kycStatus?.steps?.document_verification?.status}
-                  onPress={() => handleStepPress(VerificationStep.VERIFY_ID)}
-                />
-                
-                <TimelineStep
-                  theme={theme}
-                  title="Take a selfie"
-                  description="Verify photo matches ID"
-                  isCompleted={verificationStatus?.takeSelfie?.isCompleted || false}
-                  isActive={verificationStatus?.takeSelfie?.isActive || false}
-                  canAccess={verificationStatus?.takeSelfie?.canAccess || true}
-                  stepStatus={kycStatus?.steps?.selfie?.status}
-                  onPress={() => handleStepPress(VerificationStep.TAKE_SELFIE)}
-                />
-                
-                <TimelineStep
-                  theme={theme}
-                  title="Set up security"
-                  description="Create a 6-digit passcode"
-                  isCompleted={verificationStatus?.setupSecurity?.isCompleted || false}
-                  isActive={verificationStatus?.setupSecurity?.isActive || false}
-                  canAccess={verificationStatus?.setupSecurity?.canAccess || true}
-                  stepStatus={kycStatus?.steps?.security_setup?.status}
-                  isLast={!isBiometricAvailable}
-                  onPress={() => handleStepPress(VerificationStep.SETUP_SECURITY)}
-                />
-              </>
-            )}
-            
-            {/* Only show biometric setup if device supports it */}
-            {isBiometricAvailable && (
+
+          <TimelineStep
+            theme={theme}
+            title="Confirm your phone number"
+            description="Receive verification code"
+            isCompleted={verificationStatus?.confirmPhone?.isCompleted || false}
+            canAccess={verificationStatus?.confirmPhone?.canAccess || true}
+            onPress={() => handleStepPress(VerificationStep.CONFIRM_PHONE)}
+          />
+
+          {/* Email verification disabled for Haiti market - using phone + PIN instead */}
+          {/* <TimelineStep
+            theme={theme}
+            title="Confirm your email address"
+            description="Email confirmed"
+            isCompleted={verificationStatus?.confirmEmail?.isCompleted || false}
+            canAccess={verificationStatus?.confirmEmail?.canAccess || true}
+            onPress={() => handleStepPress(VerificationStep.CONFIRM_EMAIL)}
+          /> */}
+
+          {isBusinessProfile ? (
+            // Business Profile Steps
+            <>
               <TimelineStep
                 theme={theme}
-                title="Set up biometric authentication"
-                description="Enable Face ID, Touch ID, or fingerprint login"
-                isCompleted={verificationStatus?.biometricSetup?.isCompleted || false}
-                isActive={verificationStatus?.biometricSetup?.isActive || false}
-                canAccess={verificationStatus?.biometricSetup?.canAccess || true}
-                stepStatus={kycStatus?.steps?.biometric_setup?.status}
-                isLast={true}
-                onPress={() => handleStepPress(VerificationStep.BIOMETRIC_SETUP)}
+                title="Your business information"
+                description="Business name, type, address, and registration details"
+                isCompleted={(verificationStatus as any)?.businessInfo?.isCompleted || false}
+                isActive={(verificationStatus as any)?.businessInfo?.isActive || false}
+                canAccess={(verificationStatus as any)?.businessInfo?.canAccess || true}
+                stepStatus={kycStatus?.steps?.business_info?.status}
+                onPress={() => handleStepPress(VerificationStep.PERSONAL_INFO)} // Reuse enum for navigation
               />
-            )}
+
+              <TimelineStep
+                theme={theme}
+                title="Verify your business"
+                description="Upload business documents or photos"
+                isCompleted={(verificationStatus as any)?.businessVerification?.isCompleted || false}
+                isActive={(verificationStatus as any)?.businessVerification?.isActive || false}
+                canAccess={(verificationStatus as any)?.businessVerification?.canAccess || true}
+                stepStatus={kycStatus?.steps?.business_verification?.status}
+                onPress={() => handleStepPress(VerificationStep.VERIFY_ID)} // Reuse enum for navigation
+              />
+
+              <TimelineStep
+                theme={theme}
+                title="Set up business security"
+                description="Create a 6-digit business passcode"
+                isCompleted={(verificationStatus as any)?.businessSecurity?.isCompleted || false}
+                isActive={(verificationStatus as any)?.businessSecurity?.isActive || false}
+                canAccess={(verificationStatus as any)?.businessSecurity?.canAccess || true}
+                stepStatus={kycStatus?.steps?.business_security?.status}
+                isLast={!isBiometricAvailable}
+                onPress={() => handleStepPress(VerificationStep.SETUP_SECURITY)}
+              />
+            </>
+          ) : (
+            // Personal Profile Steps
+            <>
+              <TimelineStep
+                theme={theme}
+                title="Your personal information"
+                description="Full name, Date of birth, Country of residence, Citizenship"
+                isCompleted={verificationStatus?.personalInfo?.isCompleted || false}
+                isActive={verificationStatus?.personalInfo?.isActive || false}
+                canAccess={verificationStatus?.personalInfo?.canAccess || true}
+                stepStatus={kycStatus?.steps?.personal_info?.status}
+                onPress={() => handleStepPress(VerificationStep.PERSONAL_INFO)}
+              />
+
+              <TimelineStep
+                theme={theme}
+                title="Verify your identity"
+                description="Upload ID document"
+                isCompleted={verificationStatus?.verifyId?.isCompleted || false}
+                isActive={verificationStatus?.verifyId?.isActive || false}
+                canAccess={verificationStatus?.verifyId?.canAccess || true}
+                stepStatus={kycStatus?.steps?.document_verification?.status}
+                onPress={() => handleStepPress(VerificationStep.VERIFY_ID)}
+              />
+
+              <TimelineStep
+                theme={theme}
+                title="Take a selfie"
+                description="Verify photo matches ID"
+                isCompleted={verificationStatus?.takeSelfie?.isCompleted || false}
+                isActive={verificationStatus?.takeSelfie?.isActive || false}
+                canAccess={verificationStatus?.takeSelfie?.canAccess || true}
+                stepStatus={kycStatus?.steps?.selfie?.status}
+                onPress={() => handleStepPress(VerificationStep.TAKE_SELFIE)}
+              />
+
+              <TimelineStep
+                theme={theme}
+                title="Set up security"
+                description="Create a 6-digit passcode"
+                isCompleted={verificationStatus?.setupSecurity?.isCompleted || false}
+                isActive={verificationStatus?.setupSecurity?.isActive || false}
+                canAccess={verificationStatus?.setupSecurity?.canAccess || true}
+                stepStatus={kycStatus?.steps?.security_setup?.status}
+                isLast={!isBiometricAvailable}
+                onPress={() => handleStepPress(VerificationStep.SETUP_SECURITY)}
+              />
+            </>
+          )}
+
+          {/* Only show biometric setup if device supports it */}
+          {isBiometricAvailable && (
+            <TimelineStep
+              theme={theme}
+              title="Set up biometric authentication"
+              description="Enable Face ID, Touch ID, or fingerprint login"
+              isCompleted={verificationStatus?.biometricSetup?.isCompleted || false}
+              isActive={verificationStatus?.biometricSetup?.isActive || false}
+              canAccess={verificationStatus?.biometricSetup?.canAccess || true}
+              stepStatus={kycStatus?.steps?.biometric_setup?.status}
+              isLast={true}
+              onPress={() => handleStepPress(VerificationStep.BIOMETRIC_SETUP)}
+            />
+          )}
           </View>
-          
-          {/* Continue Button */}
+
+          {/* OPTIMISTIC UI: Always show continue button - true local-first experience */}
           <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
             <Text style={styles.continueButtonText}>
               {allStepsCompleted ? 'Back to Profile' : 'Continue'}

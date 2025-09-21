@@ -18,8 +18,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuthContext } from '../auth/context/AuthContext';
-import { useTransactionList } from '../../query/hooks/useRecentTransactions';
-import { useBalances } from '../../query/hooks/useBalances';
+import { useTransactionList } from '../../hooks-data/useRecentTransactions';
+import { useBalances } from '../../hooks-data/useBalances';
 import logger from '../../utils/logger';
 
 interface WalletTransaction {

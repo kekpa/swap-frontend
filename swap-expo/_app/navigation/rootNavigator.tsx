@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, Suspense } from "react";
+import React, { useEffect, useRef, Suspense, useState } from "react";
 import { createStackNavigator } from "@react-navigation/stack";
 import { useAuthContext } from "../features/auth/context/AuthContext";
-import { useLoadingState } from "../query/hooks/useLoadingState";
+import { useLoadingState } from '../hooks-data/useLoadingState';
+import { loadingOrchestrator, LoadingState } from '../utils/LoadingOrchestrator';
 import AuthNavigator from "./authNavigator";
 import AppNavigator from "./appNavigator";
 import ProfileNavigator from "./profileNavigator";
@@ -123,6 +124,10 @@ export type RootStackParamList = {
 export default function RootNavigator() {
   const authContext = useAuthContext();
   const { isInitialLoadComplete } = useLoadingState();
+
+  // PROFESSIONAL: LoadingOrchestrator integration for proper auth-to-app coordination
+  const [orchestratorState, setOrchestratorState] = useState<LoadingState>(loadingOrchestrator.getLoadingState());
+
   const isAuthenticated = authContext?.isAuthenticated || false;
   const isLoading = authContext?.isLoading || false;
   const needsLogin = authContext?.needsLogin || false;
@@ -131,6 +136,23 @@ export default function RootNavigator() {
   const lastNeedsLoginState = useRef(needsLogin);
   const isHandlingNeedsLogin = useRef(false);
   const needsLoginTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // PROFESSIONAL: Listen to LoadingOrchestrator state changes for coordinated navigation
+  useEffect(() => {
+    const unsubscribe = loadingOrchestrator.onStateChange((newState) => {
+      console.log('🏛️ [RootNavigator] PROFESSIONAL: LoadingOrchestrator state update:', {
+        isLoading: newState.isLoading,
+        canShowUI: newState.canShowUI,
+        shouldShowSplash: newState.shouldShowSplash,
+        transitionPhase: newState.transitionPhase,
+        activeOperations: newState.activeOperations.length
+      });
+
+      setOrchestratorState(newState);
+    });
+
+    return unsubscribe;
+  }, []);
 
   // Prevent rapid needsLogin state changes that cause navigation loops
   useEffect(() => {
@@ -172,24 +194,38 @@ export default function RootNavigator() {
     };
   }, [needsLogin, authContext]);
 
-  // Three-state navigation logic:
+  // PROFESSIONAL: Enhanced three-state navigation logic with LoadingOrchestrator coordination:
   // 1. Not authenticated → Auth stack
-  // 2. Authenticated but data still loading → LoadingScreen
-  // 3. Authenticated and data loaded → App stack
-  const showAppNavigator = isAuthenticated && isInitialLoadComplete;
-  const showLoadingScreen = isAuthenticated && !isInitialLoadComplete;
+  // 2. Authenticated but data still loading or LoadingOrchestrator not ready → LoadingScreen
+  // 3. Authenticated and data loaded AND LoadingOrchestrator ready → App stack
+  const showAppNavigator = isAuthenticated && isInitialLoadComplete && orchestratorState.canShowUI;
+  const showLoadingScreen = isAuthenticated && (!isInitialLoadComplete || !orchestratorState.canShowUI);
   const showAuthNavigator = !isAuthenticated;
 
   // In development mode, can force app navigator
   const forceAppInDev = isDevelopment && DEV_ALWAYS_AUTHENTICATED;
 
-  console.log('🔄 [RootNavigator] Navigation state:', {
-    isAuthenticated,
-    isInitialLoadComplete,
-    showAppNavigator: showAppNavigator || forceAppInDev,
-    showLoadingScreen,
-    showAuthNavigator,
-    forceAppInDev
+  console.log('🔄 [RootNavigator] PROFESSIONAL: Navigation state decision with LoadingOrchestrator:', {
+    inputs: {
+      isAuthenticated,
+      isInitialLoadComplete,
+      orchestratorCanShowUI: orchestratorState.canShowUI,
+      orchestratorIsLoading: orchestratorState.isLoading,
+      orchestratorTransitionPhase: orchestratorState.transitionPhase,
+      isDevelopment,
+      DEV_ALWAYS_AUTHENTICATED
+    },
+    calculations: {
+      showAppNavigator,
+      showLoadingScreen,
+      showAuthNavigator,
+      forceAppInDev
+    },
+    finalDecision: {
+      willShow: showAppNavigator || forceAppInDev ? 'App' : showLoadingScreen ? 'LoadingScreen' : 'Auth',
+      timestamp: Date.now(),
+      trigger: 'professional_navigation_coordination'
+    }
   });
 
   return (

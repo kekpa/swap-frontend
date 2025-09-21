@@ -78,7 +78,9 @@ export interface AuthContextType {
   
   // Session Management
   hasPersistedSession: boolean;
-  
+
+  // KYC Operation Tracking removed - now handled by EventCoordinator professional architecture
+
   // Wallet Security
   isWalletUnlocked: boolean;
   lastWalletUnlock: number | null;

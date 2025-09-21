@@ -51,13 +51,21 @@ export const USER_PATHS = {
 
 /**
  * KYC (Know Your Customer) endpoints
+ * Professional RESTful design following Fortune 500 standards
  */
 export const KYC_PATHS = {
   STATUS: '/kyc/verification/status',
   REQUIREMENTS: '/kyc/verification/requirements',
-  DOCUMENTS: '/kyc/verification/documents',
+
+  // Professional Document Management Endpoints
+  DOCUMENTS: '/kyc/documents',                              // POST - Upload new document, GET - List all documents
+  DOCUMENT_DETAILS: (documentId: string) => `/kyc/documents/${documentId}`,  // GET - Get specific document
+  DOCUMENT_UPDATE: (documentId: string) => `/kyc/documents/${documentId}`,   // PUT - Update/replace document
+
+  // Legacy endpoints (keep for backward compatibility during transition)
   SUBMIT_DOCUMENTS: '/kyc/verification/documents',
-  UPLOAD: '/kyc/upload',
+
+  // Other KYC endpoints
   VERIFY_PHONE: '/kyc/phone/verify',
   // VERIFY_EMAIL: '/kyc/email/verify', // Email verification disabled for Haiti market
   BIOMETRIC_SETUP: '/kyc/biometric/setup',

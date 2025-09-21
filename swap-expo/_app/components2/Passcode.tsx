@@ -16,8 +16,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { ProfileStackParamList } from '../navigation/profileNavigator';
 import { useTheme } from '../theme/ThemeContext';
 import { Theme } from '../theme/theme';
-import apiClient from '../_api/apiClient';
-import { AUTH_PATHS } from '../_api/apiPaths';
+import { useKycCompletion } from '../hooks-actions/useKycCompletion';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 type PasscodeScreenRouteProp = RouteProp<ProfileStackParamList, 'Passcode'>;
@@ -39,6 +38,7 @@ const PasscodeScreen: React.FC<PasscodeProps> = ({
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<PasscodeScreenRouteProp>();
   const { theme } = useTheme();
+  const { completePasscode } = useKycCompletion();
   const isKycFlow = route.params?.isKycFlow || false;
   const returnToTimeline = route.params?.returnToTimeline;
   const sourceRoute = route.params?.sourceRoute;
@@ -112,41 +112,31 @@ const PasscodeScreen: React.FC<PasscodeProps> = ({
   }, [passcode, mode, originalPasscode, navigation, onPasscodeConfirmed, isKycFlow, sourceRoute]);
 
   const storePasscodeInBackend = async (confirmedPasscode: string) => {
-    try {
-      console.log('[PasscodeScreen] Calling backend to store passcode...');
-      await apiClient.post(AUTH_PATHS.STORE_PASSCODE, {
-        passcode: confirmedPasscode
-      });
-      
-      console.log('[PasscodeScreen] Passcode stored successfully in backend');
-      
-      // Context-aware navigation after successful passcode storage
+    console.log(`[PasscodeScreen] 🚀 Starting professional KYC completion for passcode...`);
+
+    // Use professional KYC completion system
+    const result = await completePasscode(confirmedPasscode, {
+      returnToTimeline,
+      sourceRoute,
+      showSuccessAlert: false,
+      customSuccessMessage: 'Passcode setup completed successfully!',
+      skipNavigation: !isKycFlow // Skip navigation if not in KYC flow
+    });
+
+    if (result.success) {
+      console.log(`[PasscodeScreen] ✅ Professional passcode completion successful!`);
+
+      // Add a small delay for better UX
       setTimeout(() => {
-        if (returnToTimeline) {
-          console.log(`[PasscodeScreen] Passcode saved, returning to VerifyYourIdentity timeline`);
-          navigation.navigate('VerifyYourIdentity', sourceRoute ? { sourceRoute } : undefined);
-        } else {
-          // Default behavior for non-KYC usage - continue to verification complete
-          console.log(`[PasscodeScreen] Passcode saved, continuing to VerificationComplete`);
-        navigation.navigate('VerificationComplete');
+        if (!isKycFlow) {
+          // Default behavior for non-KYC usage
+          console.log(`[PasscodeScreen] Non-KYC flow, navigating to VerificationComplete`);
+          navigation.navigate('VerificationComplete');
         }
+        // KYC navigation is handled by the completion system
       }, 500);
-    } catch (error) {
-      console.error('[PasscodeScreen] Error storing passcode:', error);
-      Alert.alert(
-        'Error',
-        'Failed to save your passcode. Please try again.',
-        [
-          {
-            text: 'Retry',
-            onPress: () => storePasscodeInBackend(confirmedPasscode)
-          },
-          {
-            text: 'Cancel',
-            style: 'cancel'
-          }
-        ]
-      );
+    } else {
+      console.log(`[PasscodeScreen] ❌ Professional passcode completion failed - handled by completion system`);
     }
   };
 

@@ -7,8 +7,8 @@
 
 import { useEffect, useState } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
-import { staleTimeManager, type DataType, type UserBehavior } from '../config/staleTimeConfig';
-import { logger } from '../../utils/logger';
+import { staleTimeManager, type DataType, type UserBehavior } from '../tanstack-query/config/staleTimeConfig';
+import logger from '../utils/logger';
 
 interface UseAdaptiveStaleTimeOptions {
   dataType: DataType;

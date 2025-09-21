@@ -1,8 +1,10 @@
 /**
- * Main Hooks Exports
- * 
- * Centralized exports for utility hooks and feature-specific hooks.
- * For data fetching hooks, see /query/hooks/index.ts
+ * Action Hooks - Business Logic & Operations
+ *
+ * These hooks handle user actions, mutations, and side effects.
+ * Use these when you need to DO something (POST, PUT, DELETE).
+ *
+ * For data fetching hooks, see /hooks-data/index.ts
  */
 
 // Authentication hooks
@@ -14,6 +16,7 @@ export * from './useDocumentUpload';
 // KYC and profile hooks
 export * from './usePersonalInfoLoad';
 export * from './usePersonalInfoSave';
+export * from './useKycCompletion';
 
 /**
  * Quick reference for common hooks:
@@ -29,5 +32,5 @@ export * from './usePersonalInfoSave';
  * - `usePersonalInfoSave()` - Save personal information data
  * 
  * **Data Fetching:**
- * For data fetching hooks with TanStack Query, see `/query/hooks/index.ts`
+ * For data fetching hooks with TanStack Query, see `/hooks-data/index.ts`
  */

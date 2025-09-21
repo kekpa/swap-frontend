@@ -26,8 +26,8 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { ProfileStackParamList } from '../../../navigation/profileNavigator';
 import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
-import { useDocumentUpload, DocumentType } from '../../../hooks/useDocumentUpload';
-import { useKycStatus } from '../../../query/hooks/useKycQuery';
+import { useDocumentUpload, DocumentType } from '../../../hooks-actions/useDocumentUpload';
+import { useKycStatus } from '../../../hooks-data/useKycQuery';
 import CameraCapture from '../../../components2/CameraCapture';
 import logger from '../../../utils/logger';
 

@@ -6,7 +6,7 @@
  */
 
 import { useQuery, UseQueryOptions } from '@tanstack/react-query';
-import { createRetryFunction, getUserErrorMessage } from '../../utils/errorHandler';
+import { createRetryFunction, getUserErrorMessage } from '../utils/errorHandler';
 
 // Standard query configuration templates
 export const QUERY_DEFAULTS = {

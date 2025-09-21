@@ -6,11 +6,11 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import logger from '../../utils/logger';
-import { queryKeys } from '../queryKeys';
-import apiClient from '../../_api/apiClient';
-import { getStaleTimeForQuery } from '../config/staleTimeConfig';
-import { createRetryFunction } from '../../utils/errorHandler';
+import logger from '../utils/logger';
+import { queryKeys } from '../tanstack-query/queryKeys';
+import apiClient from '../_api/apiClient';
+import { getStaleTimeForQuery } from '../tanstack-query/config/staleTimeConfig';
+import { createRetryFunction } from '../utils/errorHandler';
 
 // User profile interface matching PersonalUserProfileDto from backend
 export interface UserProfile {

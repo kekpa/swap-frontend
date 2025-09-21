@@ -22,7 +22,7 @@ import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
 import { CreateDirectTransactionDto } from '../../../types/transaction.types';
 import { useAuthContext } from '../../auth/context/AuthContext';
-import { useSendMoney } from '../../../query/hooks/useSendMoney';
+import { useSendMoney } from '../../../hooks-data/useSendMoney';
 import logger from '../../../utils/logger';
 
 interface ReviewTransferScreenProps {

@@ -6,12 +6,12 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { queryKeys } from '../queryKeys';
-import apiClient from '../../_api/apiClient';
-import { API_PATHS } from '../../_api/apiPaths';
-import { logger } from '../../utils/logger';
-import { currencyWalletsRepository, CurrencyWallet } from '../../localdb/CurrencyWalletsRepository';
-import { WalletBalance } from '../../types/wallet.types';
+import { queryKeys } from '../tanstack-query/queryKeys';
+import apiClient from '../_api/apiClient';
+import { API_PATHS } from '../_api/apiPaths';
+import logger from '../utils/logger';
+import { currencyWalletsRepository, CurrencyWallet } from '../localdb/CurrencyWalletsRepository';
+import { WalletBalance } from '../types/wallet.types';
 
 interface UseBalancesOptions {
   enabled?: boolean;

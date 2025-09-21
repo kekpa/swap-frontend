@@ -32,12 +32,12 @@ import API_PATHS from '../../_api/apiPaths';
 import { websocketService } from '../../services/websocketService';
 import { useTheme } from '../../theme/ThemeContext';
 import { Theme } from '../../theme/theme';
-import { useTimeline } from '../../query/hooks/useTimeline';
-import { queryKeys } from '../../query/queryKeys';
-import { queryClient } from '../../query/queryClient';
+import { useTimeline } from '../../hooks-data/useTimeline';
+import { queryKeys } from '../../tanstack-query/queryKeys';
+import { queryClient } from '../../tanstack-query/queryClient';
 // DataContext replaced with TanStack Query hooks
-import { useSendMessage } from '../../query/mutations/useSendMessage';
-import { useGetOrCreateDirectInteraction } from '../../query/mutations/useCreateInteraction';
+import { useSendMessage } from '../../tanstack-query/mutations/useSendMessage';
+import { useGetOrCreateDirectInteraction } from '../../tanstack-query/mutations/useCreateInteraction';
 import { SendMessageRequest, MessageType, Message as ApiMessage, MessageStatus } from '../../types/message.types';
 import { TimelineItem, TimelineItemType as ImportedTimelineItemType, MessageTimelineItem, TransactionTimelineItem, DateSeparatorTimelineItem } from '../../types/timeline.types';
 import TransferCompletedScreen from './sendMoney2/TransferCompletedScreen';

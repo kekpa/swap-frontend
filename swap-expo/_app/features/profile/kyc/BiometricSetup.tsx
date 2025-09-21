@@ -22,7 +22,7 @@ import { ProfileStackParamList } from '../../../navigation/profileNavigator';
 import apiClient from '../../../_api/apiClient';
 import { API_PATHS } from '../../../_api/apiPaths';
 import { useAuthContext } from '../../auth/context/AuthContext';
-import { useKycStatus } from '../../../query/hooks/useKycQuery';
+import { useKycStatus } from '../../../hooks-data/useKycQuery';
 import PasswordVerificationModal from '../../../components/PasswordVerificationModal';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;

@@ -45,6 +45,12 @@ export const queryKeys = {
   profileDetails: (entityId: string) => ['profile', 'details', entityId] as const,
   kycStatus: (entityId: string) => ['kyc', 'status', entityId] as const,
   verificationStatus: (entityId: string) => ['verification', 'status', entityId] as const,
+
+  // KYC related queries (Phase 3)
+  kyc: ['kyc'] as const,
+  kycByEntity: (entityId: string) => ['kyc', 'entity', entityId] as const,
+  kycStep: (entityId: string, stepType: string) => ['kyc', 'step', entityId, stepType] as const,
+  kycProgress: (entityId: string) => ['kyc', 'progress', entityId] as const,
   
   // Contact related queries
   contacts: ['contacts'] as const,
@@ -81,6 +87,8 @@ export const queryKeyUtils = {
     queryKeys.transactionsByEntity(entityId),
     queryKeys.contactsByEntity(entityId),
     queryKeys.currentProfile(entityId),
+    queryKeys.kycByEntity(entityId),
+    queryKeys.kycProgress(entityId),
   ],
   
   /**

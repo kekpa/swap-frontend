@@ -16,7 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { useTheme } from '../theme/ThemeContext';
-import { DocumentType } from '../hooks/useDocumentUpload';
+import { DocumentType } from '../hooks-actions/useDocumentUpload';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 

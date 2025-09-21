@@ -20,8 +20,8 @@ import { InteractionsStackParamList } from '../../navigation/interactions/intera
 import SearchHeader from '../header/SearchHeader';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuthContext } from '../auth/context/AuthContext';
-import { useInteractions, InteractionItem } from '../../query/hooks/useInteractions';
-import { usePrefetchTimeline } from '../../query/hooks/useTimeline';
+import { useInteractions, InteractionItem } from '../../hooks-data/useInteractions';
+import { usePrefetchTimeline } from '../../hooks-data/useTimeline';
 // EntitySearchResult type - keeping for compatibility
 interface EntitySearchResult {
   id: string;

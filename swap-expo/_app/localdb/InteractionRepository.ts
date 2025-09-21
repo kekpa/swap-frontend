@@ -2,7 +2,7 @@
 
 import * as SQLite from 'expo-sqlite';
 import { databaseManager } from './DatabaseManager';
-import { eventEmitter } from '../utils/eventEmitter';
+import { eventCoordinator } from '../utils/EventCoordinator';
 import logger from '../utils/logger';
 
 /**
@@ -167,7 +167,7 @@ export class InteractionRepository {
       
       await statement.finalizeAsync();
       logger.debug(`[InteractionRepository] Saved interaction: ${interaction.id}`);
-      eventEmitter.emit('data_updated', { type: 'interactions', data: interaction });
+      await eventCoordinator.emitDataUpdated('user', interaction, { source: 'InteractionRepository' });
       
     } catch (error) {
       logger.error(`[InteractionRepository] Error inserting interaction ${interaction.id}: ${error instanceof Error ? error.message : String(error)}`);
@@ -203,7 +203,7 @@ export class InteractionRepository {
           JSON.stringify(interaction.metadata ?? {})
         ]
       );
-      eventEmitter.emit('data_updated', { type: 'interactions', data: interaction });
+      await eventCoordinator.emitDataUpdated('user', interaction, { source: 'InteractionRepository' });
     } catch (error) {
       logger.error('[InteractionRepository] Error upserting interaction:', error instanceof Error ? error.message : String(error));
     }
@@ -217,7 +217,7 @@ export class InteractionRepository {
     try {
       const db = await this.getDatabase();
       await db.runAsync('DELETE FROM interactions WHERE id = ?', [id]);
-      eventEmitter.emit('data_updated', { type: 'interactions', data: { id, removed: true } });
+      await eventCoordinator.emitDataUpdated('user', { id, removed: true }, { source: 'InteractionRepository.delete' });
     } catch (error) {
       logger.error('[InteractionRepository] Error deleting interaction:', error instanceof Error ? error.message : String(error));
     }
@@ -233,7 +233,7 @@ export class InteractionRepository {
       for (const interaction of remoteInteractions) {
         await this.upsertInteraction(interaction);
       }
-      eventEmitter.emit('data_updated', { type: 'interactions', data: remoteInteractions });
+      await eventCoordinator.emitDataUpdated('user', remoteInteractions, { source: 'InteractionRepository.sync' });
     } catch (error) {
       logger.error('[InteractionRepository] Error syncing interactions from remote:', error instanceof Error ? error.message : String(error));
     }

@@ -7,10 +7,10 @@
 
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import logger from '../../utils/logger';
-import { queryKeys } from '../queryKeys';
-import { websocketService } from '../../services/websocketService';
-import { Message } from '../../types/message.types';
+import logger from '../utils/logger';
+import { queryKeys } from '../tanstack-query/queryKeys';
+import { websocketService } from '../services/websocketService';
+import { Message } from '../types/message.types';
 
 // WebSocket message types
 interface WebSocketMessage {
