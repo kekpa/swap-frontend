@@ -22,6 +22,7 @@ import { ProfileStackParamList } from '../../../navigation/profileNavigator';
 import apiClient from '../../../_api/apiClient';
 import { API_PATHS } from '../../../_api/apiPaths';
 import { useAuthContext } from '../../auth/context/AuthContext';
+import { useKycCompletion } from '../../../hooks-actions/useKycCompletion';
 import { useKycStatus } from '../../../hooks-data/useKycQuery';
 import PasswordVerificationModal from '../../../components/PasswordVerificationModal';
 
@@ -41,8 +42,9 @@ const BiometricSetup: React.FC = () => {
   const route = useRoute<BiometricSetupRouteProp>();
   const { theme } = useTheme();
   const authContext = useAuthContext();
+  const { completeBiometric } = useKycCompletion();
   const { data: kycStatus } = useKycStatus(authContext.user?.entityId);
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [isBiometricAvailable, setIsBiometricAvailable] = useState(false);
   const [availableBiometrics, setAvailableBiometrics] = useState<LocalAuthentication.AuthenticationType[]>([]);
@@ -193,17 +195,23 @@ const BiometricSetup: React.FC = () => {
         return;
       }
       await authContext.setupBiometricLogin(userEmail, password);
-      
-      // Call backend API to mark biometric setup as completed
-      await apiClient.post(API_PATHS.KYC.BIOMETRIC_SETUP, {
-        biometricType,
+
+      // PROFESSIONAL FIX: Use KYC completion hook for instant checkmark
+      console.log('[BiometricSetup] 🎯 Using KYC completion hook for instant cache update');
+
+      // This will:
+      // 1. Update local database immediately
+      // 2. Call backend API to mark as completed
+      // 3. Invalidate queries for instant UI update
+      // 4. Navigate automatically
+      await completeBiometric({
+        returnToTimeline,
+        sourceRoute,
+        showSuccessAlert: true,
+        customSuccessMessage: 'You can now use biometric authentication to sign in to your account.'
       });
-      
-      Alert.alert(
-        'Biometric Setup Complete!', 
-        'You can now use biometric authentication to sign in to your account.',
-        [{ text: 'Continue', onPress: handleContinue }]
-      );
+
+      console.log('[BiometricSetup] ✅ Biometric setup completed with cache invalidation');
     } catch (error) {
       console.error('[BiometricSetup] Error setting up biometric:', error);
       Alert.alert(

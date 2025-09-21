@@ -27,6 +27,7 @@ import { ProfileStackParamList } from '../../../navigation/profileNavigator';
 import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
 import { useDocumentUpload, DocumentType } from '../../../hooks-actions/useDocumentUpload';
+import { useKycCompletion } from '../../../hooks-actions/useKycCompletion';
 import { useKycStatus } from '../../../hooks-data/useKycQuery';
 import CameraCapture from '../../../components2/CameraCapture';
 import logger from '../../../utils/logger';
@@ -60,6 +61,7 @@ const UploadIdScreen: React.FC = () => {
   const [forceReupload, setForceReupload] = useState<boolean>(false);
   
   const { uploading, uploadProgress, captureDocument, uploadDocument, pickFromLibrary } = useDocumentUpload();
+  const { completeDocumentUpload } = useKycCompletion();
   const { kycStatus, requirements, isLoading: kycLoading } = useKycStatus();
 
   // Helper function to determine if document needs both sides
@@ -280,29 +282,32 @@ const UploadIdScreen: React.FC = () => {
       
       setUploadedDocumentId(frontResult.documentId || null);
       setForceReupload(false);
-      
-      Alert.alert(
-        'Upload Successful',
-        needsBothSides(selectedDocType) && backImageUri
+
+      // PROFESSIONAL FIX: Use KYC completion hook for instant checkmark
+      logger.debug('[UploadIdScreen] 🎯 Using KYC completion hook for instant cache update');
+
+      // Complete the KYC step with proper cache invalidation
+      const documentData = {
+        documentType: selectedDocType,
+        frontDocumentId: frontResult.documentId,
+        backDocumentId: backResult?.documentId || null,
+        uploadedAt: new Date().toISOString()
+      };
+
+      // This will:
+      // 1. Update local database immediately
+      // 2. Invalidate queries for instant UI update
+      // 3. Navigate automatically to next step or timeline
+      await completeDocumentUpload(documentData, {
+        returnToTimeline,
+        sourceRoute,
+        showSuccessAlert: true,
+        customSuccessMessage: needsBothSides(selectedDocType) && backImageUri
           ? 'Both sides of your document have been uploaded successfully.'
-          : 'Your document has been uploaded successfully.',
-        [
-          {
-            text: 'Continue',
-            onPress: () => {
-              // Always return to timeline when in KYC flow
-              if (returnToTimeline) {
-                console.log(`[UploadIdScreen] Document uploaded, returning to VerifyYourIdentity timeline`);
-                navigation.navigate('VerifyYourIdentity', sourceRoute ? { sourceRoute } : undefined);
-              } else {
-                // Default behavior for non-KYC usage - could continue to next step
-                console.log(`[UploadIdScreen] Document uploaded, continuing to TakeSelfie with sourceRoute: ${sourceRoute}`);
-              navigation.navigate('TakeSelfie', { sourceRoute });
-              }
-            }
-          }
-        ]
-      );
+          : 'Your document has been uploaded successfully.'
+      });
+
+      logger.debug('[UploadIdScreen] ✅ Document upload completed with cache invalidation');
       
     } catch (error) {
       logger.error('[UploadIdScreen] Error during upload:', error);
