@@ -260,13 +260,16 @@ const UploadIdScreen: React.FC = () => {
       }
       
       logger.debug(`[UploadIdScreen] Front upload successful, document ID: ${frontResult.documentId}`);
-      
+
+      // Initialize backResult outside the conditional block
+      let backResult = null;
+
       // If document needs both sides and we have back image, upload it too
       if (needsBothSides(selectedDocType) && backImageUri) {
         logger.debug(`[UploadIdScreen] Uploading back image for ${selectedDocType}`);
-        
-        const backResult = await uploadDocument(selectedDocType, backImageUri, 'back');
-        
+
+        backResult = await uploadDocument(selectedDocType, backImageUri, 'back');
+
         if (!backResult.success) {
           logger.error(`[UploadIdScreen] Back upload failed: ${backResult.error}`);
           Alert.alert(
@@ -276,7 +279,7 @@ const UploadIdScreen: React.FC = () => {
           );
           return;
         }
-        
+
         logger.debug(`[UploadIdScreen] Back upload successful, document ID: ${backResult.documentId}`);
       }
       
