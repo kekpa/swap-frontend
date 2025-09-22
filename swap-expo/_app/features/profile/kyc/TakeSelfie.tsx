@@ -26,7 +26,7 @@ import { ProfileStackParamList } from '../../../navigation/profileNavigator';
 import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
 import CameraCapture from '../../../components2/CameraCapture';
-import { useKycCompletion } from '../../../hooks-actions/useKycCompletion';
+import apiClient from '../../../_api/apiClient';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 type TakeSelfieRouteProp = RouteProp<ProfileStackParamList, 'TakeSelfie'>;
@@ -40,7 +40,6 @@ const TakeSelfieScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<TakeSelfieRouteProp>();
   const { theme } = useTheme();
-  const { completeSelfie } = useKycCompletion();
 
   const [selfieState, setSelfieState] = useState<SelfieState>('initial');
   const [selfieUri, setSelfieUri] = useState<string | null>(null);
@@ -89,29 +88,68 @@ const TakeSelfieScreen: React.FC = () => {
   };
 
   const handleContinue = async () => {
-    if (selfieState === 'review') {
+    if (selfieState === 'review' && selfieUri) {
       setSelfieState('processing');
 
-      console.log(`[TakeSelfieScreen] 🚀 Starting professional KYC completion for selfie...`);
+      console.log(`[TakeSelfieScreen] 🚀 Starting selfie upload and completion...`);
 
-      // Use professional KYC completion system
-      const result = await completeSelfie({
-        returnToTimeline,
-        sourceRoute,
-        showSuccessAlert: false,
-        customSuccessMessage: 'Selfie verification completed successfully!'
-      });
+      try {
+        // Convert URI to FormData for upload
+        const formData = new FormData();
+        formData.append('file', {
+          uri: selfieUri,
+          type: 'image/jpeg',
+          name: 'selfie.jpg',
+        } as any);
 
-      if (result.success) {
-        console.log(`[TakeSelfieScreen] ✅ Professional selfie completion successful!`);
+        // Upload selfie using the new clean endpoint
+        const response = await apiClient.post('/kyc/selfie', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
 
-        // Show success for 3 seconds before navigation (already handled by completion system)
-        setTimeout(() => {
-          // Navigation is handled by the completion system
-        }, 3000);
-      } else {
-        console.log(`[TakeSelfieScreen] ❌ Professional selfie completion failed - handled by completion system`);
-        setSelfieState('review'); // Reset to review state on failure
+        console.log(`[TakeSelfieScreen] ✅ Selfie upload successful!`);
+
+        // Show success alert
+        Alert.alert(
+          'Success',
+          'Selfie verification completed successfully!',
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                // Navigate back to timeline
+                if (returnToTimeline) {
+                  navigation.navigate('VerifyYourIdentity', sourceRoute ? { sourceRoute } : undefined);
+                } else {
+                  if (navigation.canGoBack()) {
+                    navigation.goBack();
+                  } else {
+                    navigation.navigate('VerifyYourIdentity');
+                  }
+                }
+              }
+            }
+          ]
+        );
+      } catch (error) {
+        console.log(`[TakeSelfieScreen] ❌ Selfie upload failed:`, error);
+        Alert.alert(
+          'Error',
+          'Failed to upload selfie. Please try again.',
+          [
+            {
+              text: 'Retry',
+              onPress: () => handleContinue()
+            },
+            {
+              text: 'Cancel',
+              style: 'cancel',
+              onPress: () => setSelfieState('review')
+            }
+          ]
+        );
       }
     }
   };

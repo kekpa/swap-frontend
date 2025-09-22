@@ -28,7 +28,7 @@ type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 export type KycStepType =
   | 'confirm_phone'
   | 'personal_info'
-  | 'upload_id'
+  // | 'upload_id' // Removed - documents handle completion automatically via POST /kyc/documents
   | 'take_selfie'
   | 'setup_security'
   | 'biometric_setup'
@@ -62,12 +62,12 @@ export const useKycCompletion = () => {
    */
   const getApiEndpoint = useCallback((stepType: KycStepType): string => {
     const endpointMap: Record<KycStepType, string> = {
-      confirm_phone: '/auth/verify-phone',
+      confirm_phone: '/kyc/phone-verify',
       personal_info: '/kyc/personal-information',
-      upload_id: '/kyc/verification/documents',
-      take_selfie: '/kyc/selfie-complete',
+      // upload_id: removed - documents handle completion automatically via POST /kyc/documents
+      take_selfie: '/kyc/selfie',
       setup_security: '/auth/store-passcode',
-      biometric_setup: '/auth/setup-biometric',
+      biometric_setup: '/kyc/biometric-setup',
       business_info: '/kyc/business-information',
       business_verification: '/kyc/business-verification',
       business_security: '/kyc/business-security',
@@ -93,7 +93,7 @@ export const useKycCompletion = () => {
     const stepDependencies: Partial<Record<KycStepType, string[]>> = {
       confirm_phone: ['auth', 'phone'],
       personal_info: ['profile', 'user'],
-      upload_id: ['documents', 'verification'],
+      // upload_id: removed - documents handle cache invalidation directly
       setup_security: ['auth', 'security'],
       biometric_setup: ['auth', 'biometric'],
       business_info: ['business'],
@@ -221,10 +221,8 @@ export const useKycCompletion = () => {
       if (isOnline) {
         logger.debug(`[useKycCompletion] 🌐 Executing API call: ${endpoint}`);
 
-        // For document verification, send the verification documents array
-        const apiData = stepType === 'upload_id' && data.verificationDocuments
-          ? data.verificationDocuments
-          : data;
+        // Use data directly (upload_id no longer supported - documents handle completion automatically)
+        const apiData = data;
 
 
         logger.debug(`[useKycCompletion] API payload for ${stepType}:`, apiData);
@@ -252,10 +250,8 @@ export const useKycCompletion = () => {
 
         // Phase 3: Queue for offline processing using professional KYC offline queue
         if (user?.entityId) {
-          // For document verification, queue the verification documents array
-          const queueData = stepType === 'upload_id' && data.verificationDocuments
-            ? data.verificationDocuments
-            : data;
+          // Use data directly (upload_id no longer supported - documents handle completion automatically)
+          const queueData = data;
 
           await kycOfflineQueue.queueKycOperation(stepType, queueData, user.entityId, endpoint);
           logger.debug(`[useKycCompletion] ✅ KYC operation queued for offline processing: ${stepType}`);
@@ -401,8 +397,7 @@ export const useKycCompletion = () => {
   const completePasscode = useCallback((passcode: string, options?: KycCompletionOptions) =>
     completeStep('setup_security', { passcode }, options), [completeStep]);
 
-  const completeDocumentUpload = useCallback((documentData: any, options?: KycCompletionOptions) =>
-    completeStep('upload_id', documentData, options), [completeStep]);
+  // completeDocumentUpload: removed - documents handle completion automatically via POST /kyc/documents
 
   const completeBiometric = useCallback((options?: KycCompletionOptions) =>
     completeStep('biometric_setup', {}, options), [completeStep]);
@@ -418,7 +413,7 @@ export const useKycCompletion = () => {
     completePersonalInfo,
     completeSelfie,
     completePasscode,
-    completeDocumentUpload,
+    // completeDocumentUpload: removed - documents handle completion automatically
     completeBiometric,
     completeBusinessInfo,
 

@@ -54,23 +54,22 @@ export const USER_PATHS = {
  * Professional RESTful design following Fortune 500 standards
  */
 export const KYC_PATHS = {
-  STATUS: '/kyc/verification/status',
-  REQUIREMENTS: '/kyc/verification/requirements',
+  STATUS: '/kyc/verification-status',
+  REQUIREMENTS: '/kyc/verification-requirements',
 
-  // Professional Document Management Endpoints
-  DOCUMENTS: '/kyc/documents',                              // POST - Upload new document, GET - List all documents
+  // Clean RESTful Document Management Endpoints
+  DOCUMENTS: '/kyc/documents',                              // POST - Upload documents, GET - List documents
   DOCUMENT_DETAILS: (documentId: string) => `/kyc/documents/${documentId}`,  // GET - Get specific document
   DOCUMENT_UPDATE: (documentId: string) => `/kyc/documents/${documentId}`,   // PUT - Update/replace document
 
-  // Legacy endpoints (keep for backward compatibility during transition)
-  SUBMIT_DOCUMENTS: '/kyc/verification/documents',
+  // Clean RESTful Selfie Endpoints
+  SELFIE: '/kyc/selfie',                                    // POST - Upload selfie, GET - Get selfie
 
-  // Other KYC endpoints
-  VERIFY_PHONE: '/kyc/phone/verify',
-  // VERIFY_EMAIL: '/kyc/email/verify', // Email verification disabled for Haiti market
-  BIOMETRIC_SETUP: '/kyc/biometric/setup',
-  REQUEST_PHONE_CHANGE: '/kyc/phone/request-change',
-  SELFIE_COMPLETE: '/kyc/selfie/complete',
+  // Other KYC endpoints with hyphen convention
+  VERIFY_PHONE: '/kyc/phone-verify',
+  // VERIFY_EMAIL: '/kyc/email-verify', // Email verification disabled for Haiti market
+  BIOMETRIC_SETUP: '/kyc/biometric-setup',
+  REQUEST_PHONE_CHANGE: '/kyc/phone-request-change',
   ADMIN: {
     PENDING: '/kyc/admin/pending',
     DOCUMENT: (id: string) => `/kyc/admin/documents/${id}`,

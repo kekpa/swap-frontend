@@ -74,12 +74,12 @@ class KycEventManagerClass {
   private getApiEndpoint(stepType: KycStepType): string {
     const endpointMap: Record<KycStepType, string> = {
       setup_account: '/auth/complete-signup',
-      confirm_phone: '/auth/verify-phone',
+      confirm_phone: '/kyc/phone-verify',
       personal_info: '/kyc/personal-information',
-      upload_id: '/kyc/verification/documents',
-      take_selfie: '/kyc/selfie-complete',
+      upload_id: '/kyc/documents',
+      take_selfie: '/kyc/selfie',
       setup_security: '/auth/store-passcode',
-      biometric_setup: '/auth/setup-biometric',
+      biometric_setup: '/kyc/biometric-setup',
       business_info: '/kyc/business-information',
       business_verification: '/kyc/business-verification',
       business_security: '/kyc/business-security',

@@ -27,7 +27,7 @@ import { ProfileStackParamList } from '../../../navigation/profileNavigator';
 import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
 import { useDocumentUpload, DocumentType } from '../../../hooks-actions/useDocumentUpload';
-import { useKycCompletion } from '../../../hooks-actions/useKycCompletion';
+import { invalidateQueries } from '../../../tanstack-query/queryClient';
 import { useKycStatus } from '../../../hooks-data/useKycQuery';
 import CameraCapture from '../../../components2/CameraCapture';
 import logger from '../../../utils/logger';
@@ -61,8 +61,7 @@ const UploadIdScreen: React.FC = () => {
   const [forceReupload, setForceReupload] = useState<boolean>(false);
   
   const { uploading, uploadProgress, captureDocument, uploadDocument, pickFromLibrary } = useDocumentUpload();
-  const { completeDocumentUpload } = useKycCompletion();
-  const { kycStatus, requirements, isLoading: kycLoading } = useKycStatus();
+  const { data: kycStatus, isLoading: kycLoading } = useKycStatus();
 
   // Helper function to determine if document needs both sides
   const needsBothSides = (docType: DocumentType): boolean => {
@@ -71,38 +70,38 @@ const UploadIdScreen: React.FC = () => {
 
   // Helper function to get document status with active document logic
   const getDocumentStatus = (docType: DocumentType) => {
-    if (!requirements) return { status: 'not_submitted', isUploaded: false, isActive: false };
-    
-    const requirement = requirements.requirements.find(req => req.type === docType);
-    const isUploaded = requirement && requirement.status !== 'not_submitted';
-    const isActive = requirement?.is_active || false; // NEW: Check if this is the active document
+    if (!kycStatus) return { status: 'not_submitted', isUploaded: false, isActive: false };
+
+    // Check if document is uploaded based on documents array
+    const isUploaded = kycStatus.documents && kycStatus.documents.some(doc => doc.document_type === docType);
+    const isActive = kycStatus.active_document_type === docType; // Check if this is the active document
     
     return {
-      status: requirement?.status || 'not_submitted',
+      status: isUploaded ? 'submitted' : 'not_submitted',
       isUploaded,
-      isActive, // NEW: Include active status
-      submittedAt: requirement?.submitted_at
+      isActive,
+      submittedAt: isUploaded ? new Date().toISOString() : undefined
     };
   };
 
   // Helper function to get the active document type
   const getActiveDocumentType = (): DocumentType | null => {
-    if (!requirements || !requirements.active_document_type) return null;
-    
+    if (!kycStatus || !kycStatus.active_document_type) return null;
+
     // Validate that the active document type is a valid DocumentType
     const validTypes: DocumentType[] = ['passport', 'drivers_license', 'national_id'];
-    const activeType = requirements.active_document_type;
-    
+    const activeType = kycStatus.active_document_type;
+
     if (validTypes.includes(activeType as DocumentType)) {
       return activeType as DocumentType;
     }
-    
+
     return null;
   };
 
   // Effect to pre-select the active document type
   useEffect(() => {
-    if (!kycLoading && requirements && uploadState === 'select_type' && !selectedDocType) {
+    if (!kycLoading && kycStatus && uploadState === 'select_type' && !selectedDocType) {
       // Pre-select the active document if one exists
       const activeDocType = getActiveDocumentType();
       
@@ -114,7 +113,7 @@ const UploadIdScreen: React.FC = () => {
         console.log('[UploadIdScreen] No active document found, user can choose any document type');
       }
     }
-  }, [kycLoading, requirements, uploadState, selectedDocType]);
+  }, [kycLoading, kycStatus, uploadState, selectedDocType]);
 
   const handleBack = () => {
     console.log(`[UploadIdScreen] handleBack called. Current uploadState: ${uploadState}, returnToTimeline: ${returnToTimeline}, sourceRoute: ${sourceRoute}`);
@@ -290,7 +289,7 @@ const UploadIdScreen: React.FC = () => {
       logger.debug('[UploadIdScreen] 🎯 Using KYC completion hook for instant cache update');
 
       // Complete the KYC step with proper cache invalidation
-      // Construct verification documents array for /kyc/verification/documents endpoint
+      // Construct verification documents array for /kyc/verification-documents endpoint
       const verificationDocuments = [];
 
 
@@ -319,28 +318,46 @@ const UploadIdScreen: React.FC = () => {
       }
 
 
-      const documentData = {
-        // Original data for local tracking
-        documentType: selectedDocType,
-        frontDocumentId: frontResult.documentId,
-        backDocumentId: backResult?.documentId || null,
-        uploadedAt: new Date().toISOString(),
-        // New verification data for API endpoint
-        verificationDocuments: verificationDocuments
-      };
+      // Backend already marked step as completed, just need to:
+      // 1. Invalidate queries for instant UI update
+      // 2. Show success alert
+      // 3. Navigate to next step or timeline
 
-      // This will:
-      // 1. Update local database immediately
-      // 2. Invalidate queries for instant UI update
-      // 3. Navigate automatically to next step or timeline
-      await completeDocumentUpload(documentData, {
-        returnToTimeline,
-        sourceRoute,
-        showSuccessAlert: true,
-        customSuccessMessage: needsBothSides(selectedDocType) && backImageUri
+      logger.debug('[UploadIdScreen] 🔄 Triggering cache invalidation for document upload');
+
+      // Primary KYC cache invalidation (same as useKycCompletion)
+      invalidateQueries(['kyc']);
+      invalidateQueries(['profile']);
+
+      // Document-specific cache invalidation
+      invalidateQueries(['documents', 'verification']);
+
+      logger.debug('[UploadIdScreen] ✅ Cache invalidation completed');
+
+      // Show success alert and navigate
+      Alert.alert(
+        'Success',
+        needsBothSides(selectedDocType) && backImageUri
           ? 'Both sides of your document have been uploaded successfully.'
-          : 'Your document has been uploaded successfully.'
-      });
+          : 'Your document has been uploaded successfully.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate back to timeline or next step
+              if (returnToTimeline) {
+                navigation.navigate('VerifyYourIdentity', sourceRoute ? { sourceRoute } : undefined);
+              } else {
+                if (navigation.canGoBack()) {
+                  navigation.goBack();
+                } else {
+                  navigation.navigate('VerifyYourIdentity');
+                }
+              }
+            }
+          }
+        ]
+      );
 
       logger.debug('[UploadIdScreen] ✅ Document upload completed with cache invalidation');
       
