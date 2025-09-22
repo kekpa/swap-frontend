@@ -149,6 +149,20 @@ export interface ThemeColors {
   received: string;         // Positive financial transaction
   spent: string;            // Negative financial transaction
   pending: string;          // Pending/in-progress transaction
+
+  // Status-specific colors for KYC and other status indicators
+  status: {
+    pending: string;        // Orange for "Under Review" status
+    completed: string;      // Green for "Completed" status
+    inProgress: string;     // Blue for "In Progress" status
+    error: string;          // Red for error states
+  };
+  statusBackground: {
+    pending: string;        // Light orange background
+    completed: string;      // Light green background
+    inProgress: string;     // Light blue background
+    error: string;          // Light red background
+  };
 }
 
 // Rest of the interfaces remain the same
@@ -321,6 +335,20 @@ const lightBaseColors: Partial<ThemeColors> = {
   received: PALETTE.semantic.success,
   spent: PALETTE.neutral.gray900,
   pending: PALETTE.semantic.warning,
+
+  // Status colors - consistent across all themes
+  status: {
+    pending: '#FF9800',     // Orange for "Under Review"
+    completed: '#4CAF50',   // Green for "Completed"
+    inProgress: '#2196F3',  // Blue for "In Progress"
+    error: '#F44336',       // Red for error states
+  },
+  statusBackground: {
+    pending: '#FFF8E1',     // Light orange background
+    completed: '#E8F5E8',   // Light green background
+    inProgress: '#E3F2FD',  // Light blue background
+    error: '#FFEBEE',       // Light red background
+  },
 };
 
 // Dark mode base colors (shared by all dark themes)
@@ -364,6 +392,20 @@ const darkBaseColors: Partial<ThemeColors> = {
   received: PALETTE.semantic.success,
   spent: PALETTE.neutral.gray300,
   pending: PALETTE.semantic.warning,
+
+  // Status colors - consistent across all themes (same as light mode)
+  status: {
+    pending: '#FF9800',     // Orange for "Under Review"
+    completed: '#4CAF50',   // Green for "Completed"
+    inProgress: '#2196F3',  // Blue for "In Progress"
+    error: '#F44336',       // Red for error states
+  },
+  statusBackground: {
+    pending: '#332211',     // Dark orange background for dark theme
+    completed: '#1a2e1a',   // Dark green background for dark theme
+    inProgress: '#1a2332',  // Dark blue background for dark theme
+    error: '#331a1a',       // Dark red background for dark theme
+  },
 };
 
 //=============================================================================

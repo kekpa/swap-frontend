@@ -78,7 +78,7 @@ export default function AppNavigator() {
             if (route.name === "Wallet") {
               iconName = focused ? "wallet" : "wallet-outline";
             } else if (route.name === "Offers") {
-              iconName = focused ? "gift" : "gift-outline";
+              iconName = focused ? "pricetag" : "pricetag-outline";
             }
             else if (route.name === "Contacts") {
               iconName = focused ? "people" : "people-outline";
@@ -123,14 +123,6 @@ export default function AppNavigator() {
           )}
         />
         <Tab.Screen 
-          name="Offers" 
-          children={() => (
-            <Suspense fallback={<NavigatorLoadingFallback name="Offers" />}>
-              <OffersNavigator />
-            </Suspense>
-          )}
-        />
-        <Tab.Screen 
           name="Contacts" 
           children={() => (
             <Suspense fallback={<NavigatorLoadingFallback name="Contacts" />}>
@@ -139,13 +131,22 @@ export default function AppNavigator() {
           )}
         />
         <Tab.Screen 
+          name="Offers" 
+          children={() => (
+            <Suspense fallback={<NavigatorLoadingFallback name="Offers" />}>
+              <OffersNavigator />
+            </Suspense>
+          )}
+        />
+        
+        {/* <Tab.Screen 
           name="Map" 
           children={() => (
             <Suspense fallback={<NavigatorLoadingFallback name="Map" />}>
               <MapNavigator />
             </Suspense>
           )}
-        />
+        /> */}
         {/* <Tab.Screen 
           name="Shop" 
           children={() => (
