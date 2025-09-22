@@ -53,6 +53,32 @@ const WalletOnboarding: React.FC<WalletOnboardingProps> = ({
     }
 
     if (reason === 'KYC_REQUIRED') {
+      // Check if KYC is in progress/under review vs not started
+      if (_kycStatus === 'partial') {
+        // User has submitted KYC and it's under review - they should have wallet access
+        // This case should not normally happen with the new backend logic
+        logger.warn('[WalletOnboarding] KYC is under review but wallet access denied - possible backend issue');
+        return {
+          icon: 'time-outline' as const,
+          iconColor: theme.colors.status?.pending || theme.colors.warning,
+          title: 'Identity Under Review',
+          subtitle: 'Your documents are being verified. Wallet access should be available.',
+          benefits: [
+            '⏳ Verification in progress',
+            '💰 Limited wallet access available',
+            '📞 Contact support if needed',
+          ],
+          primaryCta: 'Refresh',
+          primaryAction: () => {
+            logger.debug('[WalletOnboarding] Refreshing wallet status');
+            // Force refresh of wallet eligibility
+            window.location.reload();
+          },
+          estimatedTime: 'Review in progress',
+        };
+      }
+
+      // KYC not started yet
       return {
         icon: 'shield-checkmark-outline' as const,
         iconColor: theme.colors.primary,

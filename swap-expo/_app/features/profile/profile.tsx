@@ -22,6 +22,7 @@ import { useTheme, availableThemes, ThemeName } from "../../theme/ThemeContext";
 import { Theme } from "../../theme/theme";
 import { useKycStatus } from '../../hooks-data/useKycQuery';
 import { useUserProfile } from '../../hooks-data/useUserProfile';
+import { useBiometricAvailability } from '../../hooks-data/useBiometricAvailability';
 
 // Define a type for the route params ProfileScreen might receive when opened as ProfileModal
 // These params are passed to ProfileModal, not ProfileStackParamList for the 'Profile' screen itself.
@@ -185,6 +186,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const { theme } = useTheme(); // Get current theme for styling ProfileScreen itself
   const { data: kycStatus, isLoading: isKycLoading, refetch: refetchKyc } = useKycStatus(authContext.user?.entityId);
   const { data: userProfile, isLoading: isLoadingUserProfile, refetch: refetchProfile } = useUserProfile(authContext.user?.entityId);
+  const { isAvailable: isBiometricAvailable } = useBiometricAvailability();
   
   // Determine if initial load is complete based on both KYC and profile data
   const isInitialLoadComplete = !isKycLoading && !isLoadingUserProfile;
@@ -200,24 +202,47 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   // TanStack Query handles data fetching and caching automatically
   // No manual refresh needed on focus
 
+  // Get the actual overall status from backend
+  const actualOverallStatus = useMemo(() => {
+    const processStatus = kycStatus?.process?.overall_status || kycStatus?.data?.process?.overall_status;
+    return processStatus || 'not_started';
+  }, [kycStatus]);
+
   const allStepsCompleted = useMemo(() => {
     console.log('🔥 [ProfileScreen] 📊 allStepsCompleted calculation triggered');
     console.log('🔥 [ProfileScreen] 📊 kycStatus:', kycStatus);
-    
-    if (!kycStatus?.steps) {
+
+    // Check both possible data structures (kycStatus.steps or kycStatus.data.steps)
+    const steps = kycStatus?.steps || kycStatus?.data?.steps;
+
+    if (!steps) {
       console.log('🔥 [ProfileScreen] ❌ No KYC steps available');
       return false;
     }
-    
+
     // Get all KYC steps
-    const steps = kycStatus.steps;
+    console.log('🔥 [ProfileScreen] ✅ Found KYC steps:', Object.keys(steps));
     const stepKeys = Object.keys(steps) as Array<keyof typeof steps>;
     
-    // Check if all steps are completed
+    // Check if all steps are completed (skip biometric if device doesn't support it)
     const completed = stepKeys.every(stepKey => {
       const step = steps[stepKey];
-      const isCompleted = step?.completed || false;
-      console.log(`🔥 [ProfileScreen] Step ${stepKey}: isCompleted=${isCompleted}`);
+      // Check for both 'completed' field and 'status' === 'completed'
+      const isCompleted = step?.completed || step?.status === 'completed';
+
+      // Skip biometric step if device doesn't support biometrics
+      if (stepKey === 'biometricSetup' && !isBiometricAvailable) {
+        console.log(`🔥 [ProfileScreen] Step ${stepKey}: SKIPPED (no biometric hardware)`);
+        return true; // Consider biometric step as "completed" if device doesn't support it
+      }
+
+      // Skip email verification step (disabled for Haiti market)
+      if (stepKey === 'emailVerification') {
+        console.log(`🔥 [ProfileScreen] Step ${stepKey}: SKIPPED (email disabled for Haiti market)`);
+        return true; // Email is not required
+      }
+
+      console.log(`🔥 [ProfileScreen] Step ${stepKey}: isCompleted=${isCompleted}, status=${step?.status}`);
       return isCompleted;
     });
     
@@ -227,11 +252,11 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       totalSteps: stepKeys.length,
       allCompleted: completed,
       currentLevel: kycStatus.currentLevel,
-      overallStatus: kycStatus.isVerificationInProgress ? 'in_progress' : 'completed'
+      actualOverallStatus: actualOverallStatus
     });
     
     return completed;
-  }, [kycStatus]);
+  }, [kycStatus, isBiometricAvailable, actualOverallStatus]);
 
   // Create styles for the ProfileScreen component with access to the theme
   const styles = React.useMemo(() => StyleSheet.create({
@@ -680,7 +705,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 <Text style={[styles.userName, { color: theme.colors.textPrimary, marginBottom: 0 }]}>
                 {user?.firstName || user?.lastName ? `${user?.firstName || ''} ${user?.lastName || ''}`.trim() : (user?.email || 'User')}
               </Text>
-                {allStepsCompleted && (
+                {actualOverallStatus === 'completed' && (
                   <View style={styles.verifiedBadge}>
                       <Ionicons name="shield-checkmark" size={14} color={theme.colors.primary} />
                       <Text style={styles.verifiedText}>Verified</Text>
@@ -701,23 +726,42 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </View>
 
           {/* KYC Banner: shows different content based on completion status */}
-          {allStepsCompleted ? (
-            <View style={[styles.setupBanner, { backgroundColor: theme.colors.primaryUltraLight, borderColor: theme.colors.primaryLight }]}>
-              <Text style={[styles.setupTitle, { color: theme.colors.primary }]}>Identity Verified</Text>
+          {actualOverallStatus === 'completed' ? (
+            <View style={[styles.setupBanner, {
+              backgroundColor: theme.colors.statusBackground.completed,
+              borderColor: theme.colors.status.completed
+            }]}>
+              <Text style={[styles.setupTitle, { color: theme.colors.status.completed }]}>Identity Verified</Text>
               <Text style={[styles.setupDescription, { color: theme.colors.textSecondary }]}>
                 Your account is fully verified. You can review your details at any time.
               </Text>
-              <TouchableOpacity style={[styles.setupButton, { backgroundColor: theme.colors.primary }]} onPress={handleContinueSetup}>
+              <TouchableOpacity style={[styles.setupButton, { backgroundColor: theme.colors.status.completed }]} onPress={handleContinueSetup}>
+                <Text style={[styles.setupButtonText, { color: theme.colors.white }]}>Review Details</Text>
+              </TouchableOpacity>
+            </View>
+          ) : actualOverallStatus === 'in_review' ? (
+            <View style={[styles.setupBanner, {
+              backgroundColor: theme.colors.statusBackground.pending,
+              borderColor: theme.colors.status.pending
+            }]}>
+              <Text style={[styles.setupTitle, { color: theme.colors.status.pending }]}>Under Review</Text>
+              <Text style={[styles.setupDescription, { color: theme.colors.textSecondary }]}>
+                Your identity is under review. We'll notify you once verification is complete. You can use all features while we verify your documents.
+              </Text>
+              <TouchableOpacity style={[styles.setupButton, { backgroundColor: theme.colors.status.pending }]} onPress={handleContinueSetup}>
                 <Text style={[styles.setupButtonText, { color: theme.colors.white }]}>Review Details</Text>
               </TouchableOpacity>
             </View>
           ) : (
-          <View style={[styles.setupBanner, { backgroundColor: theme.colors.primaryUltraLight, borderColor: theme.colors.primaryLight }]}>
-            <Text style={[styles.setupTitle, { color: theme.colors.primary }]}>Finish account setup</Text>
+          <View style={[styles.setupBanner, {
+            backgroundColor: theme.colors.statusBackground.inProgress,
+            borderColor: theme.colors.status.inProgress
+          }]}>
+            <Text style={[styles.setupTitle, { color: theme.colors.status.inProgress }]}>Finish account setup</Text>
             <Text style={[styles.setupDescription, { color: theme.colors.textSecondary }]}>
               Complete your profile to use all Swap money functionalities
             </Text>
-            <TouchableOpacity style={[styles.setupButton, { backgroundColor: theme.colors.primary }]} onPress={handleContinueSetup}>
+            <TouchableOpacity style={[styles.setupButton, { backgroundColor: theme.colors.status.inProgress }]} onPress={handleContinueSetup}>
               <Text style={[styles.setupButtonText, { color: theme.colors.white }]}>Continue setup</Text>
             </TouchableOpacity>
           </View>

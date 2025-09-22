@@ -25,7 +25,7 @@ export interface UserProfile {
   phone?: string;
   national_id?: string;
   avatar_url?: string;
-  kyc_status: 'not_started' | 'pending' | 'approved' | 'rejected';
+  kyc_status: 'not_started' | 'pending' | 'approved' | 'rejected' | 'in_review';
   status: 'active' | 'inactive' | 'suspended';
   country_code?: string;
   p2p_display_preferences?: Record<string, any>;

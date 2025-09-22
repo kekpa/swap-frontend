@@ -17,6 +17,7 @@ import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
 import { useKycStatusCritical, useKycStatus } from '../../../hooks-data/useKycQuery';
 import { useAuthContext } from '../../auth/context/AuthContext';
+import { useBiometricAvailability } from '../../../hooks-data/useBiometricAvailability';
 import * as LocalAuthentication from 'expo-local-authentication';
 
 // Updated: Enhanced component to work with new KYC process structure and improved error handling - 2025-01-26
@@ -215,8 +216,8 @@ const VerifyYourIdentityScreen: React.FC = () => {
     };
   }, [kycStatus]);
   
-  // Biometric availability check
-  const isBiometricAvailable = true; // Simplified for now
+  // Dynamic biometric availability check for iOS and Android
+  const { isAvailable: isBiometricAvailable, isLoading: isBiometricLoading } = useBiometricAvailability();
   const [activeStep, setActiveStep] = useState<VerificationStep>(VerificationStep.PERSONAL_INFO);
   
   // OPTIMISTIC UI: Always show timeline instantly - no loading states, true local-first

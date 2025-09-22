@@ -16,7 +16,7 @@ import { useOptimisticUpdates } from '../tanstack-query/optimistic/useOptimistic
 import { userRepository } from '../localdb/UserRepository';
 
 // KYC status types based on actual backend response
-export type KycLevel = 'not_started' | 'pending' | 'approved' | 'rejected';
+export type KycLevel = 'not_started' | 'pending' | 'approved' | 'rejected' | 'in_review';
 export type KycDocumentType = 'passport' | 'drivers_license' | 'national_id' | 'utility_bill' | 'bank_statement';
 export type KycDocumentStatus = 'pending' | 'approved' | 'rejected' | 'expired';
 
@@ -539,6 +539,7 @@ export const useKycLimits = (entityId?: string) => {
   // Adjust limits based on KYC status
   switch (kycStatus.kyc_status) {
     case 'approved':
+    case 'in_review':
       return {
         dailyTransactionLimit: 10000,
         monthlyTransactionLimit: 100000,
@@ -583,8 +584,8 @@ export const useTransactionLimitCheck = (entityId?: string, amount: number = 0) 
     };
   }
 
-  // For approved users, allow transaction
-  if (kycStatus.kyc_status === 'approved') {
+  // For approved and in_review users, allow transaction
+  if (['approved', 'in_review'].includes(kycStatus.kyc_status)) {
     return {
       canTransact: true,
       exceedsLimit: false,

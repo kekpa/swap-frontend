@@ -19,6 +19,7 @@ import { userRepository } from '../localdb/UserRepository';
 import { networkService } from '../services/NetworkService';
 import { useAuthContext } from '../features/auth/context/AuthContext';
 import { kycOfflineQueue } from '../services/KycOfflineQueue';
+import { useBiometricAvailability } from '../hooks-data/useBiometricAvailability';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -56,6 +57,7 @@ interface KycCompletionOptions {
 export const useKycCompletion = () => {
   const navigation = useNavigation<NavigationProp>();
   const { user } = useAuthContext();
+  const { isAvailable: isBiometricAvailable } = useBiometricAvailability();
 
   /**
    * Get API endpoint for KYC step
@@ -109,27 +111,43 @@ export const useKycCompletion = () => {
    * Get next KYC step after current completion
    */
   const getNextKycStep = useCallback((completedStep: KycStepType): string | null => {
-    const stepFlow = {
+    const stepFlow: Record<string, string | null> = {
       'confirm_phone': 'PersonalInfoFlow',
       'personal_info': 'UploadId',
       'upload_id': 'TakeSelfie',
       'take_selfie': 'Passcode',
-      'setup_security': 'BiometricSetup',
+      'setup_security': isBiometricAvailable ? 'BiometricSetup' : null, // Skip biometric if not available
       'biometric_setup': null, // Final step
     };
 
     return stepFlow[completedStep] || null;
-  }, []);
+  }, [isBiometricAvailable]);
 
   /**
    * Professional navigation handler with direct next step navigation
    */
-  const handleNavigation = useCallback((options: KycCompletionOptions, completedStep?: KycStepType) => {
+  const handleNavigation = useCallback(async (options: KycCompletionOptions, completedStep?: KycStepType) => {
     if (options.skipNavigation) return;
 
     // NEW: Direct next step navigation for better UX
     if (options.returnToTimeline && completedStep) {
       const nextStep = getNextKycStep(completedStep);
+
+      // Special handling for security setup completion without biometrics
+      if (completedStep === 'setup_security' && !isBiometricAvailable && !nextStep) {
+        logger.debug('[useKycCompletion] 🎯 No biometric capability detected - marking KYC as complete');
+
+        try {
+          // Call backend to mark KYC as complete for non-biometric devices
+          const response = await apiClient.post('/kyc/complete-without-biometric', {});
+          logger.debug('[useKycCompletion] ✅ KYC marked as complete for non-biometric device');
+
+          // Invalidate cache to update UI
+          invalidateKycCache('setup_security');
+        } catch (error) {
+          logger.error('[useKycCompletion] ❌ Failed to mark KYC complete:', error);
+        }
+      }
 
       if (nextStep) {
         logger.debug(`[useKycCompletion] 🎯 Navigating directly to next step: ${nextStep}`);
@@ -165,7 +183,7 @@ export const useKycCompletion = () => {
         navigation.navigate('VerifyYourIdentity');
       }
     }
-  }, [navigation, getNextKycStep]);
+  }, [navigation, getNextKycStep, isBiometricAvailable, invalidateKycCache]);
 
   /**
    * Professional KYC step completion
