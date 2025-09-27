@@ -31,7 +31,9 @@ export const AUTH_PATHS = {
   VERIFY_PHONE: '/auth/verify-phone',
   REGISTER_PHONE: '/auth/register-phone',
   CHECK_PHONE: '/auth/check-phone',
+  CHECK_USERNAME: '/auth/check-username',
   COMPLETE_PROFILE: '/auth/complete-profile',
+  COMPLETE_BUSINESS_PROFILE: '/auth/complete-business-profile',
   STORE_PASSCODE: '/auth/store-passcode',
   // Email verification disabled for Haiti market - keeping for future use
   // VERIFY_EMAIL: '/auth/verify-email',
