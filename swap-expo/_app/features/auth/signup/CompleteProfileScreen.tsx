@@ -53,11 +53,6 @@ const CompleteProfileScreen = () => {
 
   useEffect(() => {
     // Log whether phone verification data is available for debugging
-    console.log("CompleteProfileScreen - Phone verification data available:", !!authContext.phoneVerification);
-    console.log("CompleteProfileScreen - Account type:", accountType);
-    if (authContext.phoneVerification) {
-      console.log("CompleteProfileScreen - Phone number from verification:", authContext.phoneVerification.phoneNumber);
-    }
   }, [authContext.phoneVerification, accountType]);
 
   // Personal form state
@@ -89,15 +84,6 @@ const CompleteProfileScreen = () => {
   // Username availability checking
   const usernameAvailability = useUsernameAvailability(username, 500);
 
-  // Debug logging for username availability
-  useEffect(() => {
-    console.log('🔍 CompleteProfileScreen - Username availability state:', {
-      username,
-      isChecking: usernameAvailability.isChecking,
-      result: usernameAvailability.result,
-      error: usernameAvailability.error
-    });
-  }, [username, usernameAvailability]);
 
   // Password strength validation
   const passwordStrength = usePasswordStrength(password);
@@ -237,7 +223,6 @@ const CompleteProfileScreen = () => {
 
     try {
       if (isFromPhoneVerification && authContext.phoneVerification) {
-        console.log("CompleteProfileScreen - Submitting profile with phone verification:", authContext.phoneVerification);
         // Phone-based signup flow - complete profile after phone verification
         const { accessToken, profileId } = authContext.phoneVerification;
 
@@ -262,11 +247,6 @@ const CompleteProfileScreen = () => {
             employee_count: employeeCount,
           };
 
-          console.log('🚀 Creating business profile with admin:', {
-            profileId,
-            data: { ...completeBusinessData, password: '[REDACTED]' },
-            url: `${API_PATHS.AUTH.COMPLETE_BUSINESS_PROFILE}/${profileId}`
-          });
 
           // Single API call to complete business registration
           // This will: update auth.users, create business_profiles, create business_admin_team
@@ -284,11 +264,6 @@ const CompleteProfileScreen = () => {
             password: password,
           };
 
-          console.log('🚀 Sending profile data:', {
-            profileId,
-            data: { ...profileData, password: '[REDACTED]' },
-            url: `${API_PATHS.AUTH.COMPLETE_PROFILE}/${profileId}`
-          });
 
           response = await apiClient.put(`${API_PATHS.AUTH.COMPLETE_PROFILE}/${profileId}`, profileData, {
             headers: {
@@ -297,10 +272,7 @@ const CompleteProfileScreen = () => {
           });
         }
         
-        console.log("CompleteProfileScreen - Profile update response:", response.data);
-        
         if (response.data) {
-          console.log("CompleteProfileScreen - Password included in profile completion for login support");
           
           // Profile updated successfully, set authenticated
           authContext.setIsAuthenticated(true);

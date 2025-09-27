@@ -50,10 +50,6 @@ export const useLoadingState = (): UseLoadingStateResult => {
   // CRUCIAL: Only load balances if user is authenticated, has entityId, AND has completed KYC
   const shouldLoadBalances = isAuthenticated && entityId && entityId !== '' && isKycApproved;
 
-  // Log KYC gating decision for debugging
-  if (isAuthenticated && entityId) {
-    logger.debug(`[useLoadingState] KYC Status: ${kycStatus?.kyc_status || 'loading'}, shouldLoadBalances: ${shouldLoadBalances}`);
-  }
 
   // Get loading states from individual hooks - with authentication guard
   const {
@@ -142,9 +138,6 @@ export const useLoadingState = (): UseLoadingStateResult => {
     // Check if we have essential data for offline operation
     return !!(balancesData && interactionsData);
   };
-
-  // Log loading state changes with authentication and KYC context
-  logger.debug(`[useLoadingState] Loading state: ${progress.toFixed(1)}% complete, tasks: ${Array.from(completedTasks).join(', ')}, authenticated: ${isAuthenticated}, entityId: ${entityId ? 'present' : 'missing'}, KYC: ${kycStatus?.kyc_status || 'loading'}`);
 
   return {
     isInitialLoadComplete,
