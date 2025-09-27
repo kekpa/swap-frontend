@@ -9,6 +9,7 @@ import { useMemo } from 'react';
 import { useBalances } from './useBalances';
 import { useInteractions } from './useInteractions';
 import { useAuthContext } from '../features/auth/context/AuthContext';
+import { useKycStatus } from './useKycQuery';
 import logger from '../utils/logger';
 
 interface LoadingState {
@@ -39,9 +40,20 @@ export const useLoadingState = (): UseLoadingStateResult => {
   const authContext = useAuthContext();
   const entityId = authContext?.user?.entityId || '';
 
-  // PROFESSIONAL FIX: Only load balances when user is authenticated and has entity ID
+  // PROFESSIONAL FIX: Only load balances when user is authenticated, has entity ID, AND KYC is approved
   const isAuthenticated = authContext?.isAuthenticated || false;
-  const shouldLoadBalances = isAuthenticated && entityId && entityId !== '';
+
+  // Check KYC status before enabling balance loading
+  const { data: kycStatus } = useKycStatus(entityId, { enabled: isAuthenticated && !!entityId });
+  const isKycApproved = kycStatus?.kyc_status === 'approved';
+
+  // CRUCIAL: Only load balances if user is authenticated, has entityId, AND has completed KYC
+  const shouldLoadBalances = isAuthenticated && entityId && entityId !== '' && isKycApproved;
+
+  // Log KYC gating decision for debugging
+  if (isAuthenticated && entityId) {
+    logger.debug(`[useLoadingState] KYC Status: ${kycStatus?.kyc_status || 'loading'}, shouldLoadBalances: ${shouldLoadBalances}`);
+  }
 
   // Get loading states from individual hooks - with authentication guard
   const {
@@ -68,14 +80,15 @@ export const useLoadingState = (): UseLoadingStateResult => {
     const completed = new Set<string>();
     const errorList: string[] = [];
 
-    // Check completed tasks with authentication awareness
+    // Check completed tasks with authentication and KYC awareness
     if (shouldLoadBalances) {
-      // Only check balances if authentication allows it
+      // Only check balances if authentication AND KYC allows it
       if (balancesData !== undefined && !isLoadingBalances) {
         completed.add('balances');
       }
     } else {
-      // Mark balances as completed if user isn't authenticated yet (skip balances for unauthenticated users)
+      // Mark balances as completed if user isn't authenticated or KYC isn't approved
+      // (skip balances for users who haven't completed KYC)
       completed.add('balances');
     }
 
@@ -95,7 +108,7 @@ export const useLoadingState = (): UseLoadingStateResult => {
     }
 
     return { completedTasks: completed, errors: errorList };
-  }, [balancesData, isLoadingBalances, interactionsData, isLoadingInteractions, userProfileData, isLoadingUserData, balancesError, interactionsError, shouldLoadBalances]);
+  }, [balancesData, isLoadingBalances, interactionsData, isLoadingInteractions, userProfileData, isLoadingUserData, balancesError, interactionsError, shouldLoadBalances, kycStatus]);
 
   // Calculate progress and loading state with memoization
   const { progress, isLoading, isInitialLoadComplete, loadingState } = useMemo(() => {
@@ -130,8 +143,8 @@ export const useLoadingState = (): UseLoadingStateResult => {
     return !!(balancesData && interactionsData);
   };
 
-  // Log loading state changes with authentication context
-  logger.debug(`[useLoadingState] Loading state: ${progress.toFixed(1)}% complete, tasks: ${Array.from(completedTasks).join(', ')}, authenticated: ${isAuthenticated}, entityId: ${entityId ? 'present' : 'missing'}`);
+  // Log loading state changes with authentication and KYC context
+  logger.debug(`[useLoadingState] Loading state: ${progress.toFixed(1)}% complete, tasks: ${Array.from(completedTasks).join(', ')}, authenticated: ${isAuthenticated}, entityId: ${entityId ? 'present' : 'missing'}, KYC: ${kycStatus?.kyc_status || 'loading'}`);
 
   return {
     isInitialLoadComplete,

@@ -47,12 +47,17 @@ export const useUsernameAvailability = (username: string, debounceMs: number = 5
       });
 
       console.log('🔍 useUsernameAvailability - API Response:', response.data);
+
+      // Extract the actual data from the nested response structure
+      const actualResult = response.data.data || response.data;
+      console.log('🔍 useUsernameAvailability - Extracted result:', actualResult);
+
       setState({
         isChecking: false,
-        result: response.data,
+        result: actualResult,
         error: null,
       });
-      console.log('🔍 useUsernameAvailability - State updated with result:', response.data);
+      console.log('🔍 useUsernameAvailability - State updated with result:', actualResult);
     } catch (error: any) {
       console.log('🔍 useUsernameAvailability - API Error:', error);
       setState({
