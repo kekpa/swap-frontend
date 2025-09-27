@@ -28,11 +28,15 @@ export const usePasswordStrength = (password: string): PasswordStrengthResult =>
     const feedback: string[] = [];
     let score = 0;
 
-    // Length check
+    // Length check with bonus for longer passwords
     if (password.length < 8) {
       feedback.push('At least 8 characters required');
     } else if (password.length >= 8) {
       score += 1;
+      // Bonus points for longer passwords
+      if (password.length >= 12) {
+        score += 1; // Extra point for 12+ characters
+      }
     }
 
     // Uppercase letter check
@@ -91,8 +95,10 @@ export const usePasswordStrength = (password: string): PasswordStrengthResult =>
       strength = 'fair';
     } else if (score === 4) {
       strength = 'good';
-    } else {
+    } else if (score >= 5) {
       strength = 'strong';
+    } else {
+      strength = 'good';
     }
 
     // Password is valid if it meets minimum requirements

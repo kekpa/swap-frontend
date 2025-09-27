@@ -89,6 +89,16 @@ const CompleteProfileScreen = () => {
   // Username availability checking
   const usernameAvailability = useUsernameAvailability(username, 500);
 
+  // Debug logging for username availability
+  useEffect(() => {
+    console.log('🔍 CompleteProfileScreen - Username availability state:', {
+      username,
+      isChecking: usernameAvailability.isChecking,
+      result: usernameAvailability.result,
+      error: usernameAvailability.error
+    });
+  }, [username, usernameAvailability]);
+
   // Password strength validation
   const passwordStrength = usePasswordStrength(password);
 
