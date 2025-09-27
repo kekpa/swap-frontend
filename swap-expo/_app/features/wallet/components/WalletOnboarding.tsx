@@ -13,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useTheme } from '../../../theme/ThemeContext';
 import { RootStackParamList } from '../../../navigation/rootNavigator';
+import { useAuthContext } from '../../auth/context/AuthContext';
 import logger from '../../../utils/logger';
 
 interface WalletOnboardingProps {
@@ -30,6 +31,10 @@ const WalletOnboarding: React.FC<WalletOnboardingProps> = ({
 }) => {
   const { theme } = useTheme();
   const navigation = useNavigation<NavigationProp>();
+  const { user } = useAuthContext();
+
+  // Determine if this is a business user
+  const isBusinessUser = user?.profileType === 'business';
 
   const content = useMemo(() => {
     if (reason === 'PROFILE_INCOMPLETE') {
@@ -78,7 +83,30 @@ const WalletOnboarding: React.FC<WalletOnboardingProps> = ({
         };
       }
 
-      // KYC not started yet
+      // KYC not started yet - different messaging for business vs personal
+      if (isBusinessUser) {
+        return {
+          icon: 'business-outline' as const,
+          iconColor: theme.colors.primary,
+          title: 'Verify Your Business',
+          subtitle: 'Complete business verification to access financial services',
+          benefits: [
+            '🏢 Send & receive business payments',
+            '💼 Professional financial management',
+            '📊 Business transaction tracking',
+          ],
+          primaryCta: 'Start Business Verification',
+          primaryAction: () => {
+            logger.debug('[WalletOnboarding] Navigating to business KYC verification via ProfileModal');
+            (navigation as any).navigate('ProfileModal', {
+              sourceRoute: 'Wallet'
+            });
+          },
+          estimatedTime: '5-10 minutes',
+        };
+      }
+
+      // Personal user KYC messaging
       return {
         icon: 'shield-checkmark-outline' as const,
         iconColor: theme.colors.primary,
@@ -119,7 +147,7 @@ const WalletOnboarding: React.FC<WalletOnboardingProps> = ({
       },
       estimatedTime: 'Support response in 24h',
     };
-  }, [reason, theme.colors, navigation]);
+  }, [reason, theme.colors, navigation, isBusinessUser]);
 
   const styles = useMemo(() => StyleSheet.create({
     container: {

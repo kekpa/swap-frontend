@@ -38,13 +38,17 @@ interface UseLoadingStateResult {
 export const useLoadingState = (): UseLoadingStateResult => {
   const authContext = useAuthContext();
   const entityId = authContext?.user?.entityId || '';
-  
-  // Get loading states from individual hooks
-  const { 
-    isLoading: isLoadingBalances, 
-    data: balancesData, 
-    error: balancesError 
-  } = useBalances(entityId);
+
+  // PROFESSIONAL FIX: Only load balances when user is authenticated and has entity ID
+  const isAuthenticated = authContext?.isAuthenticated || false;
+  const shouldLoadBalances = isAuthenticated && entityId && entityId !== '';
+
+  // Get loading states from individual hooks - with authentication guard
+  const {
+    isLoading: isLoadingBalances,
+    data: balancesData,
+    error: balancesError
+  } = useBalances(entityId, { enabled: shouldLoadBalances });
   
   const { 
     interactions: interactionsData,
@@ -64,10 +68,17 @@ export const useLoadingState = (): UseLoadingStateResult => {
     const completed = new Set<string>();
     const errorList: string[] = [];
 
-    // Check completed tasks
-    if (balancesData && !isLoadingBalances) {
+    // Check completed tasks with authentication awareness
+    if (shouldLoadBalances) {
+      // Only check balances if authentication allows it
+      if (balancesData !== undefined && !isLoadingBalances) {
+        completed.add('balances');
+      }
+    } else {
+      // Mark balances as completed if user isn't authenticated yet (skip balances for unauthenticated users)
       completed.add('balances');
     }
+
     if (interactionsData && !isLoadingInteractions) {
       completed.add('interactions');
     }
@@ -75,8 +86,8 @@ export const useLoadingState = (): UseLoadingStateResult => {
       completed.add('userProfile');
     }
 
-    // Check errors
-    if (balancesError) {
+    // Check errors - but ignore auth-related balance errors
+    if (balancesError && shouldLoadBalances) {
       errorList.push(`Balances: ${balancesError.message || 'Unknown error'}`);
     }
     if (interactionsError) {
@@ -84,7 +95,7 @@ export const useLoadingState = (): UseLoadingStateResult => {
     }
 
     return { completedTasks: completed, errors: errorList };
-  }, [balancesData, isLoadingBalances, interactionsData, isLoadingInteractions, userProfileData, isLoadingUserData, balancesError, interactionsError]);
+  }, [balancesData, isLoadingBalances, interactionsData, isLoadingInteractions, userProfileData, isLoadingUserData, balancesError, interactionsError, shouldLoadBalances]);
 
   // Calculate progress and loading state with memoization
   const { progress, isLoading, isInitialLoadComplete, loadingState } = useMemo(() => {
@@ -119,8 +130,8 @@ export const useLoadingState = (): UseLoadingStateResult => {
     return !!(balancesData && interactionsData);
   };
 
-  // Log loading state changes
-  logger.debug(`[useLoadingState] Loading state: ${progress.toFixed(1)}% complete, tasks: ${Array.from(completedTasks).join(', ')}`);
+  // Log loading state changes with authentication context
+  logger.debug(`[useLoadingState] Loading state: ${progress.toFixed(1)}% complete, tasks: ${Array.from(completedTasks).join(', ')}, authenticated: ${isAuthenticated}, entityId: ${entityId ? 'present' : 'missing'}`);
 
   return {
     isInitialLoadComplete,

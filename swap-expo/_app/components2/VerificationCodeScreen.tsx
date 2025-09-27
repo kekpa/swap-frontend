@@ -23,14 +23,15 @@ import { saveAccessToken, saveRefreshToken } from "./../utils/tokenStorage";
 // Define type for route and navigation - now supports both phone and email
 type AuthStackParamList = {
   PhoneEntry: undefined;
-  VerificationCode: { 
+  VerificationCode: {
     type: 'phone' | 'email';
     contact: string; // phone number or email
     channel?: 'sms' | 'whatsapp'; // only for phone verification
     returnToTimeline?: boolean; // for KYC flows
     sourceRoute?: string; // for KYC flows
+    accountType?: 'personal' | 'business'; // for business registration support
   };
-  CompleteProfile: undefined;
+  CompleteProfile: { accountType?: 'personal' | 'business' };
   EmailVerification: { email: string };
   ResetPassword: { email: string }; // for forgot password flow
   VerifyYourIdentity: { sourceRoute?: string }; // for KYC flows
@@ -42,12 +43,13 @@ type RouteProps = RouteProp<AuthStackParamList, 'VerificationCode'>;
 const VerificationCodeScreen = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProps>();
-  const { 
-    type, 
-    contact, 
-    channel = 'SMS', 
-    returnToTimeline, 
-    sourceRoute 
+  const {
+    type,
+    contact,
+    channel,
+    returnToTimeline,
+    sourceRoute,
+    accountType
   } = route.params;
   
   const themeContext = useTheme();
@@ -168,7 +170,7 @@ const VerificationCodeScreen = () => {
           // Resend phone verification code
         const response = await apiClient.post(API_PATHS.AUTH.PHONE_SIGNIN, {
             phone: contact,
-            channel: channel.toLowerCase() === 'whatsapp' ? 'whatsapp' : 'sms'
+            channel: channel?.toLowerCase() === 'whatsapp' ? 'whatsapp' : 'sms'
           });
           console.log("Phone OTP resent successfully:", response.data);
         } else {
@@ -184,7 +186,7 @@ const VerificationCodeScreen = () => {
         setCanResend(false);
         
         const contactType = type === 'phone' ? 'phone number' : 'email';
-        const channelText = type === 'phone' ? ` via ${channel}` : '';
+        const channelText = type === 'phone' ? ` via ${channel || 'SMS'}` : '';
         
         Alert.alert(
           "Code Resent", 
@@ -237,7 +239,7 @@ const VerificationCodeScreen = () => {
       await apiClient.post(API_PATHS.KYC.VERIFY_PHONE, {
         phone: contact,
         code: verificationCode,
-        channel: channel.toLowerCase(),
+        channel: channel?.toLowerCase() || 'sms',
       });
       console.log("KYC Phone verification successful");
       // Navigate back to the timeline, which will refetch the status
@@ -246,14 +248,29 @@ const VerificationCodeScreen = () => {
       // Phone registration - create new user account with phone + OTP + password
       // TODO: Add password input field to collect user password during registration
       const tempPassword = "TempPass123!"; // TEMPORARY - should be collected from user
-      
-      const response = await apiClient.post(API_PATHS.AUTH.REGISTER_PHONE, {
-        phone: contact,
-        code: verificationCode,
-        password: tempPassword
-      });
-      
-      console.log("Phone registration successful:", response.data);
+
+      // Choose registration endpoint based on account type
+      let response;
+      if (accountType === 'business') {
+        console.log("Creating business profile via phone registration");
+        // TODO: Backend needs to support phone-based business registration
+        // For now, pass accountType to help backend identify business registration intent
+        response = await apiClient.post(API_PATHS.AUTH.REGISTER_PHONE, {
+          phone: contact,
+          code: verificationCode,
+          password: tempPassword,
+          accountType: 'business'
+        });
+        console.log("Business phone registration successful:", response.data);
+      } else {
+        // Personal registration (existing flow)
+        response = await apiClient.post(API_PATHS.AUTH.REGISTER_PHONE, {
+          phone: contact,
+          code: verificationCode,
+          password: tempPassword
+        });
+        console.log("Personal phone registration successful:", response.data);
+      }
       
       const authData = response.data.data || response.data;
       
@@ -272,15 +289,15 @@ const VerificationCodeScreen = () => {
         }
         
         if (authData.is_new_user) {
-          navigation.navigate("CompleteProfile");
+          navigation.navigate("CompleteProfile", { accountType });
         } else {
           const hasRequiredFields = authData.has_required_fields || false;
-          
+
           if (hasRequiredFields) {
             authContext.setIsAuthenticated(true);
             await authContext.checkSession();
           } else {
-            navigation.navigate("CompleteProfile");
+            navigation.navigate("CompleteProfile", { accountType });
           }
         }
       }
@@ -323,7 +340,7 @@ const VerificationCodeScreen = () => {
 
   const getSubtitle = () => {
     if (type === 'phone') {
-      return `We've sent a verification code to ${contact} via ${channel}`;
+      return `We've sent a verification code to ${contact} via ${channel || 'SMS'}`;
     } else {
       return `We've sent a 6-digit verification code to ${contact}`;
     }

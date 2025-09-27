@@ -326,11 +326,27 @@ const ReviewTransferScreen: React.FC<ReviewTransferScreenProps> = ({ route }) =>
             </Text>
             <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}>
               <Text style={styles.avatarText}>
-                {currentUser?.firstName && currentUser?.lastName
-                  ? `${currentUser.firstName[0]}${currentUser.lastName[0]}`.toUpperCase()
-                  : currentUser?.firstName
-                    ? currentUser.firstName.substring(0, 2).toUpperCase()
-                    : 'ME'}
+                {(() => {
+                  // For business users, use business name initials
+                  if (currentUser?.businessName) {
+                    const words = currentUser.businessName.split(' ').filter(word => word.length > 0);
+                    if (words.length >= 2) {
+                      return `${words[0].charAt(0)}${words[1].charAt(0)}`.toUpperCase();
+                    }
+                    if (words.length === 1) {
+                      return words[0].substring(0, 2).toUpperCase();
+                    }
+                  }
+
+                  // For personal users, use first/last name
+                  if (currentUser?.firstName && currentUser?.lastName) {
+                    return `${currentUser.firstName[0]}${currentUser.lastName[0]}`.toUpperCase();
+                  }
+                  if (currentUser?.firstName) {
+                    return currentUser.firstName.substring(0, 2).toUpperCase();
+                  }
+                  return 'ME';
+                })()}
               </Text>
             </View>
           </View>

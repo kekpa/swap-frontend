@@ -119,11 +119,16 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
   const { enabled = true } = options;
   const queryClient = useQueryClient();
 
-  // CRITICAL FIX: Validate entityId to prevent 400 errors during app initialization
+  // PROFESSIONAL FIX: Validate entityId AND check if enabled to prevent unauthorized API calls
   const isValidEntityId = entityId && entityId.trim().length > 0 && entityId !== 'undefined' && entityId !== 'null';
-  
+  const shouldExecute = enabled && isValidEntityId;
+
   if (!isValidEntityId) {
     logger.debug(`[useBalances] ⏸️ SKIPPING: Invalid entityId "${entityId}" - waiting for user data to load`);
+  }
+
+  if (!enabled) {
+    logger.debug(`[useBalances] ⏸️ SKIPPING: Hook disabled - likely due to authentication state`);
   }
 
   // WhatsApp-style fetchBalances function
@@ -261,16 +266,16 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
   return useQuery({
     queryKey: queryKeys.balancesByEntity(entityId),
     queryFn: fetchBalances,
-    enabled: Boolean(enabled && isValidEntityId), // CRITICAL FIX: Only enable when entityId is valid
+    enabled: Boolean(shouldExecute), // PROFESSIONAL FIX: Only enable when authenticated and entityId is valid
     staleTime: Infinity, // Never show loading for cached data
     gcTime: 1000 * 60 * 30, // 30 minutes
     networkMode: 'always',
     // Return cached data immediately if available
     initialData: () => {
-      if (!isValidEntityId) {
-        return []; // Return empty array for invalid entityId
+      if (!shouldExecute) {
+        return []; // Return empty array for unauthenticated or invalid entityId
       }
-      
+
       const cached = queryClient.getQueryData<WalletBalance[]>(queryKeys.balancesByEntity(entityId));
       if (cached && cached.length > 0) {
         logger.debug(`[useBalances] ⚡ INITIAL: Using ${cached.length} cached balances`);

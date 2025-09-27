@@ -230,18 +230,11 @@ const SignInScreen = () => {
       
       // Continue with login using the identifier as is (could be email, username, or phone)
       try {
-        // Try personal login first, then business as fallback
-        console.log('Trying personal login first...');
-        let response = await authContext.login(identifierToLogin, password);
-        let loginType = 'personal';
-        
-        // If personal login fails, try business as fallback
-        if (!response?.success) {
-          console.log('Personal login failed, trying business login as fallback...');
-          response = await authContext.loginBusiness(identifierToLogin, password);
-          loginType = 'business';
-        }
-          
+        // Use unified login that automatically detects user type
+        console.log('Using unified login that automatically detects user type...');
+        const response = await authContext.unifiedLogin(identifierToLogin, password);
+        const loginType = response?.user_type || 'unknown';
+
         if (response && response.success) {
           console.log(`🚀 [SignInScreen] ${loginType} sign in successful, RootNavigator will handle LoadingScreen`);
           // RootNavigator automatically shows LoadingScreen when authenticated but data loading
@@ -276,30 +269,30 @@ const SignInScreen = () => {
             }
           }
         } else {
-          // Both personal and business login failed
+          // Unified login failed
           let errorMessage = "Invalid credentials. Please check your email/phone and password.";
-          
+
           // Check if it's a "no profile found" error vs actual credential error
-          if (response?.message?.includes('No personal profile found') || 
-              response?.message?.includes('No business profile found')) {
+          if (response?.message?.includes('User profile not found') ||
+              response?.message?.includes('Invalid credentials')) {
             errorMessage = "No account found with these credentials. Please check your email/phone and password, or create a new account.";
           }
-          
+
           Alert.alert("Login Failed", errorMessage);
         }
       } catch (error: any) {
-        console.error('Login error:', error);
+        console.error('Unified login error:', error);
         let errorMessage = "Failed to sign in. Please try again.";
-        
+
         // Handle specific error cases
-        if (error.message?.includes('No personal profile found') || 
-            error.message?.includes('No business profile found')) {
+        if (error.message?.includes('User profile not found') ||
+            error.message?.includes('Invalid credentials')) {
           errorMessage = "No account found with these credentials. Please check your email/phone and password, or create a new account.";
         } else if (error.message?.includes('Invalid credentials')) {
           errorMessage = "Invalid credentials. Please check your email/phone and password.";
         }
-        
-        Alert.alert("Login Error", errorMessage);
+
+        Alert.alert("Unified Login Error", errorMessage);
       }
     } else if (activeTab === 'pin') {
       const currentPin = pin.join("");

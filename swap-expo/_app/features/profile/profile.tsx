@@ -663,7 +663,19 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     activeThemeNameText: styles.activeThemeNameText,
   };
 
-  const getInitials = (firstName?: string, lastName?: string, email?: string) => {
+  const getInitials = (firstName?: string, lastName?: string, email?: string, businessName?: string) => {
+    // For business users, use business name initials
+    if (businessName) {
+      const words = businessName.split(' ').filter(word => word.length > 0);
+      if (words.length >= 2) {
+        return `${words[0].charAt(0)}${words[1].charAt(0)}`.toUpperCase();
+      }
+      if (words.length === 1) {
+        return words[0].substring(0, 2).toUpperCase();
+      }
+    }
+
+    // For personal users, use first/last name
     if (firstName && lastName) {
       return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
     }
@@ -696,14 +708,14 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 <Image source={{ uri: user.avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 35 }} />
               ) : (
                 <Text style={[styles.avatarText, { color: theme.colors.white }]}>
-                  {getInitials(user?.firstName, user?.lastName, user?.email)}
+                  {getInitials(user?.firstName, user?.lastName, user?.email, user?.businessName)}
                 </Text>
               )}
             </View>
             <View>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
                 <Text style={[styles.userName, { color: theme.colors.textPrimary, marginBottom: 0 }]}>
-                {user?.firstName || user?.lastName ? `${user?.firstName || ''} ${user?.lastName || ''}`.trim() : (user?.email || 'User')}
+                {user?.businessName ? user.businessName : (user?.firstName || user?.lastName ? `${user?.firstName || ''} ${user?.lastName || ''}`.trim() : (user?.email || 'User'))}
               </Text>
                 {actualOverallStatus === 'completed' && (
                   <View style={styles.verifiedBadge}>

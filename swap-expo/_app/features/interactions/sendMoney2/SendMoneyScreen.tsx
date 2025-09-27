@@ -80,6 +80,18 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
   const recipientColor = params.recipientColor || params.contactAvatarColor || theme.colors.secondary;
 
   const senderInitial = useMemo(() => {
+    // For business users, use business name initials
+    if (currentUser?.businessName) {
+      const words = currentUser.businessName.split(' ').filter(word => word.length > 0);
+      if (words.length >= 2) {
+        return `${words[0].charAt(0)}${words[1].charAt(0)}`.toUpperCase();
+      }
+      if (words.length === 1) {
+        return words[0].substring(0, 2).toUpperCase();
+      }
+    }
+
+    // For personal users, use first/last name
     if (currentUser?.firstName && currentUser.lastName) {
       return `${currentUser.firstName[0]}${currentUser.lastName[0]}`.toUpperCase();
     }
@@ -410,7 +422,7 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
           setIsSenderAccountModalVisible(false);
         }}
         onClose={() => setIsSenderAccountModalVisible(false)}
-        title={`Select ${currentUser?.firstName || 'Your'}'s Account`}
+        title={`Select ${currentUser?.businessName || currentUser?.firstName || 'Your'}'s Account`}
         highlightCurrency={selectedSenderAccount?.currency_id}
       />
     </SafeAreaView>

@@ -1170,6 +1170,112 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     return await loginBusiness(identifier, password, skipStore);
   }, []);
 
+  // Unified login method that handles both personal and business users
+  const unifiedLogin = useCallback(async (identifier: string, password: string, skipStore = false): Promise<{ success: boolean; message?: string; user_type?: string }> => {
+    console.log('🔑 [UnifiedLogin] Attempting unified login for:', identifier);
+    try {
+      const response = await apiClient.post('/auth/unified-login', { identifier, password });
+      console.log('🔑 [UnifiedLogin] Response status:', response.status);
+      console.log('🔑 [UnifiedLogin] Response data:', response.data);
+
+      if (response.status === 200 || response.status === 201) {
+        let authData;
+        if ('access_token' in response.data) {
+          authData = response.data;
+        } else if (response.data.data && 'access_token' in response.data.data) {
+          authData = response.data.data;
+        } else {
+          console.error('❌ [UnifiedLogin] No access token in response:', response.data);
+          return { success: false, message: "Unified login failed - no access token received" };
+        }
+
+        console.log('🔑 [UnifiedLogin] Parsed auth data:', authData);
+        const userType = authData.user_type || 'unknown';
+        console.log('🔑 [UnifiedLogin] User type detected:', userType);
+
+        if (authData.access_token) {
+          console.log('✅ [UnifiedLogin] Login successful, processing tokens');
+          await saveAccessToken(authData.access_token);
+
+          if (authData.refresh_token) {
+            if (!skipStore) {
+              await saveRefreshToken(authData.refresh_token);
+              console.log('✅ [UnifiedLogin] Refresh token saved successfully');
+            } else {
+              console.warn('⚠️ [UnifiedLogin] Skipping refresh token storage as requested');
+            }
+          } else {
+            console.warn('⚠️ [UnifiedLogin] No refresh token in response');
+          }
+
+          if (authData.profile_id) {
+            apiClient.setProfileId(authData.profile_id);
+            console.log('✅ [UnifiedLogin] Profile ID set:', authData.profile_id);
+          }
+
+          // CRITICAL: Fetch user profile data after successful login
+          try {
+            const profileResponse = await apiClient.get(AUTH_PATHS.ME);
+            if (profileResponse.status === 200 && profileResponse.data) {
+              const profileData = profileResponse.data.data || profileResponse.data;
+              const mappedUser = {
+                id: profileData.id || profileData.user_id,
+                profileId: profileData.profile_id || profileData.id,
+                entityId: profileData.entity_id,
+                firstName: profileData.first_name,
+                lastName: profileData.last_name,
+                username: profileData.username,
+                avatarUrl: profileData.avatar_url || profileData.logo_url,
+                email: profileData.email,
+                profileType: profileData.type || userType,
+                businessName: profileData.business_name,
+              };
+              setUser(mappedUser);
+              console.log('✅ [UnifiedLogin] User profile loaded:', mappedUser);
+            } else {
+              console.warn('⚠️ [UnifiedLogin] Failed to load user profile - empty response');
+            }
+          } catch (profileError: any) {
+            console.warn('⚠️ [UnifiedLogin] Failed to load user profile:', profileError);
+            // Continue with login even if profile fails
+          }
+
+          console.log('✅ [UnifiedLogin] Login completed successfully');
+          setIsAuthenticated(true);
+
+          // PROFESSIONAL: Direct auth state machine coordination
+          authStateMachine.transition(AuthEvent.LOGIN_SUCCESS, {
+            event: AuthEvent.LOGIN_SUCCESS,
+            timestamp: Date.now(),
+            authData: {
+              userId: authData.user_id,
+              profileId: authData.profile_id,
+              accessToken: authData.access_token
+            }
+          });
+
+          // PROFESSIONAL: Direct LoadingOrchestrator coordination to prevent white flash
+          loadingOrchestrator.coordinateAuthToAppTransition();
+
+          return { success: true, user_type: userType };
+        } else {
+          console.error('❌ [UnifiedLogin] No access token in response:', authData);
+          return { success: false, message: "Unified login failed - no access token received" };
+        }
+      } else {
+        console.error('❌ [UnifiedLogin] Unexpected response status:', response.status);
+        return { success: false, message: "Unified login failed - unexpected response status" };
+      }
+    } catch (error: any) {
+      console.error('❌ [UnifiedLogin] Error:', error);
+      console.error('❌ [UnifiedLogin] Error response:', error.response?.data);
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message || "Unified login failed"
+      };
+    }
+  }, []);
+
   // DEVELOPMENT HELPER: Emergency cleanup for testing
   const emergencyCleanupForDev = useCallback(async () => {
     if (__DEV__) {
@@ -1241,6 +1347,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         login,
         loginBusiness,
         loginWithPin,
+        unifiedLogin,
         logout,
     
     // Progressive Authentication

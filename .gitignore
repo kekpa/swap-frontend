@@ -69,3 +69,4 @@ temp/
 
 # Exclude frontend directories that have their own repos
 _titato/
+pos-frontend/

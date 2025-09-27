@@ -448,13 +448,13 @@ const PhoneEntryScreen: React.FC = () => {
 
   const getMainTitle = () => {
     if (isKycFlow) return 'Verify your phone number';
-    return isBusinessSignup ? 'Enter business contact number' : 'Enter your number';
+    return isBusinessSignup ? 'Enter your phone number' : 'Enter your number';
   };
 
   const getSubtitle = () => {
     if (isKycFlow) return "We'll send a code to verify your phone number";
-    return isBusinessSignup 
-      ? "We'll send a verification code to your business contact number"
+    return isBusinessSignup
+      ? "We'll send a verification code to create your business admin account"
       : "We'll send a code for verification";
   };
 
@@ -492,7 +492,7 @@ const PhoneEntryScreen: React.FC = () => {
               }]}>
                 <Ionicons name="business-outline" size={20} color={theme.colors.primary} />
                 <Text style={[styles.businessNoteText, { color: theme.colors.primary }]}>
-                  This will be your main business contact number
+                  You'll use this to manage your business account
                 </Text>
               </View>
             )}

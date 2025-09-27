@@ -198,7 +198,7 @@ const TempAddMoney: React.FC = () => {
           <View style={styles.userInfoRow}>
             <Text style={styles.userInfoLabel}>Username:</Text>
             <Text style={styles.userInfoValue}>
-              {user?.username || (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : 'Not available')}
+              {user?.username || user?.businessName || (user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.email || 'Not available')}
             </Text>
           </View>
           

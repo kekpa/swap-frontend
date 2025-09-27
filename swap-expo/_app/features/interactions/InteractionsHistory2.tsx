@@ -1123,6 +1123,18 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
 
   // Helper to get initials for the header
   const getHeaderInitials = () => {
+    // For business users, use business name initials
+    if (user?.businessName) {
+      const words = user.businessName.split(' ').filter(word => word.length > 0);
+      if (words.length >= 2) {
+        return `${words[0].charAt(0)}${words[1].charAt(0)}`.toUpperCase();
+      }
+      if (words.length === 1) {
+        return words[0].substring(0, 2).toUpperCase();
+      }
+    }
+
+    // For personal users, use first/last name
     if (user?.firstName && user?.lastName) {
       return `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase();
     }
@@ -1132,7 +1144,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     if (user?.email) {
       return user.email.charAt(0).toUpperCase();
     }
-    return "UA"; 
+    return "UA";
   };
 
   // Render empty state
