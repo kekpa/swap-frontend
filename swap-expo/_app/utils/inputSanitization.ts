@@ -41,8 +41,8 @@ export const sanitizeBusinessName = (businessName: string): string => {
   if (!businessName) return '';
 
   return businessName
-    .replace(/[<>'"&]/g, '') // Remove XSS characters
-    .replace(/[^\w\s\-&.,()]/g, '') // Allow word chars, spaces, hyphens, ampersands, periods, commas, parentheses
+    .replace(/[<>'"]/g, '') // Remove XSS characters (keep & for business names like "A & B Corp")
+    .replace(/[^a-zA-Z0-9À-ÿŠšŽžœŒæÆęĘćĆźŹłŁĄą\s\-&.,()]/g, '') // Allow alphanumeric, accents, spaces, and business chars
     .replace(/\s+/g, ' ') // Replace multiple spaces with single space
     .trim()
     .slice(0, 100); // Limit to 100 characters
