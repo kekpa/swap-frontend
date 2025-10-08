@@ -178,9 +178,6 @@ apiClient.interceptors.request.use(
         logger.debug(`Fixed API URL by removing duplicate prefix: ${config.url}`, "api");
       }
       
-      // Log the full URL being requested
-      const fullUrl = `${config.baseURL}${config.url}`;
-      logger.debug(`🔍 FULL REQUEST URL: ${fullUrl}`);
     }
     
     // Track API call frequency for debugging refresh cycles
@@ -468,6 +465,7 @@ apiClient.interceptors.request.use(
     } catch (error) {
       logger.error('Error in request interceptor:', error);
     }
+
     return config;
   },
   (error) => Promise.reject(error)
@@ -500,17 +498,17 @@ apiClient.interceptors.response.use(
       `API Response ${JSON.stringify({
         status: response.status,
         url: response.config.url,
-        size: JSON.stringify(response.data).length,
+        size: response.data ? (typeof response.data === 'string' ? response.data.length : 'object') : 0,
       })}`,
       "api"
     );
-    
+
     return response;
   },
   async (error: AxiosError) => {
-    
-    // Skip retry for requests that already have a retry flag
     const originalRequest = error.config as any;
+
+    // Skip retry for requests that already have a retry flag
     if (!originalRequest) return Promise.reject(error);
     
     // Check if this is an auth endpoint (logout, refresh, etc.)
@@ -716,7 +714,7 @@ if (IS_DEVELOPMENT) {
       logger.debug("API Response", "api", {
         status: response.status,
         url: response.config.url,
-        size: response.data ? JSON.stringify(response.data).length : 0,
+        size: response.data ? (typeof response.data === 'string' ? response.data.length : 'object') : 0,
       });
       return response;
     },
