@@ -69,8 +69,6 @@ const SearchOverlay: React.FC<SearchOverlayProps> = React.memo(({
   });
 
   const [hasSearched, setHasSearched] = useState(false);
-  const [mappedSearchResults, setMappedSearchResults] = useState<SearchResult[]>([]);
-  const [suggestions, setSuggestions] = useState<SearchResult[]>([]);
   
   // Convert interactions to suggestions format
   const memoizedSuggestions = useMemo(() => {
@@ -110,76 +108,52 @@ const SearchOverlay: React.FC<SearchOverlayProps> = React.memo(({
     });
   }, [interactions, user?.entityId]);
 
-  // Load suggestions when component mounts or interactions change
-  useEffect(() => {
-    logger.debug(`[SearchOverlay] Mount effect - loading suggestions. Interactions length: ${interactions?.length || 0}`);
-    
-    // Set suggestions from memoized value
-    setSuggestions(memoizedSuggestions);
-    
-    // Log what we're displaying
-    if (memoizedSuggestions.length > 0) {
-      logger.debug(`[SearchOverlay] Found recent conversations: ${memoizedSuggestions.length}`);
-      memoizedSuggestions.forEach((conv, idx) => {
-        logger.debug(`[SearchOverlay] Recent suggestion ${idx}: ${conv.name}, type=${conv.type}, id=${conv.id}`);
-      });
-    } else {
-      logger.debug('[SearchOverlay] No suggestions available');
-    }
-  }, [memoizedSuggestions, interactions]);
-
   // Handle search state changes
   useEffect(() => {
-    // If query is empty, show suggestions
-    if (!searchQuery || searchQuery.trim().length === 0) {
-      setHasSearched(false);
-      setMappedSearchResults([]);
-      return;
-    }
-
     // Mark as searched for queries >= 2 characters
-    if (searchQuery.trim().length >= 2) {
+    if (searchQuery && searchQuery.trim().length >= 2) {
       setHasSearched(true);
+    } else {
+      setHasSearched(false);
     }
   }, [searchQuery]);
 
-  // Convert entity search results to SearchResult format
-  useEffect(() => {
-    if (searchResults?.entities && searchResults.entities.length > 0) {
-      logger.debug(`[SearchOverlay] Processing ${searchResults.entities.length} search results. Current user entityId: ${user?.entityId}`);
-      
-      // Filter out current user's entity to prevent self-chat
-      const filteredResults = searchResults.entities.filter(entity => {
-        const shouldKeep = entity.id !== user?.entityId;
-        if (!shouldKeep) {
-          logger.debug(`[SearchOverlay] Filtering out current user's entity: ${entity.id} (displayName: ${entity.displayName})`);
-        }
-        return shouldKeep;
-      });
-      
-      logger.debug(`[SearchOverlay] After filtering: ${filteredResults.length} results (removed ${searchResults.entities.length - filteredResults.length} self-results)`);
-      
-      const mappedResults = filteredResults.map(entity => {
-        const avatarProps = getAvatarProps(entity.id, entity.displayName);
-        
-        return {
-          id: entity.id,
-          name: entity.displayName,
-          type: 'entity' as const,
-          avatarUrl: entity.avatarUrl,
-          initials: avatarProps.initials,
-          avatarColor: avatarProps.color,
-          secondaryText: entity.entityType === 'profile' ? 'Profile' : 
-                        entity.entityType === 'business' ? 'Business' : 'Account',
-          originalData: entity,
-        };
-      });
-      
-      setMappedSearchResults(mappedResults);
-    } else if (hasSearched) {
-      setMappedSearchResults([]);
+  // Convert entity search results to SearchResult format using useMemo (React best practice)
+  const mappedSearchResults = useMemo(() => {
+    // Return empty array if no search has been performed or no results
+    if (!hasSearched || !searchResults?.entities || searchResults.entities.length === 0) {
+      return [];
     }
-  }, [searchResults, hasSearched, user?.entityId]);
+
+    logger.debug(`[SearchOverlay] Processing ${searchResults.entities.length} search results. Current user entityId: ${user?.entityId}`);
+
+    // Filter out current user's entity to prevent self-chat
+    const filteredResults = searchResults.entities.filter(entity => {
+      const shouldKeep = entity.id !== user?.entityId;
+      if (!shouldKeep) {
+        logger.debug(`[SearchOverlay] Filtering out current user's entity: ${entity.id} (displayName: ${entity.displayName})`);
+      }
+      return shouldKeep;
+    });
+
+    logger.debug(`[SearchOverlay] After filtering: ${filteredResults.length} results (removed ${searchResults.entities.length - filteredResults.length} self-results)`);
+
+    return filteredResults.map(entity => {
+      const avatarProps = getAvatarProps(entity.id, entity.displayName);
+
+      return {
+        id: entity.id,
+        name: entity.displayName,
+        type: 'entity' as const,
+        avatarUrl: entity.avatarUrl,
+        initials: avatarProps.initials,
+        avatarColor: avatarProps.color,
+        secondaryText: entity.entityType === 'profile' ? 'Profile' :
+                      entity.entityType === 'business' ? 'Business' : 'Account',
+        originalData: entity,
+      };
+    });
+  }, [searchResults?.entities, hasSearched, user?.entityId]);
 
   // Handle item selection
   const handleItemPress = useCallback((item: SearchResult) => {
@@ -345,8 +319,8 @@ const SearchOverlay: React.FC<SearchOverlayProps> = React.memo(({
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Recent Conversations</Text>
             </View>
-            
-            {isLoadingInteractions && suggestions.length === 0 ? (
+
+            {isLoadingInteractions && memoizedSuggestions.length === 0 ? (
               <View style={{ padding: 20, alignItems: 'center' }}>
                 <ActivityIndicator size="small" color={theme.colors.primary} />
                 <Text style={{ marginTop: 8, color: theme.colors.textSecondary }}>
@@ -360,8 +334,8 @@ const SearchOverlay: React.FC<SearchOverlayProps> = React.memo(({
                   Failed to load recent conversations
                 </Text>
               </View>
-            ) : suggestions.length > 0 ? (
-              suggestions.map(renderSearchItem)
+            ) : memoizedSuggestions.length > 0 ? (
+              memoizedSuggestions.map(renderSearchItem)
             ) : (
               <View style={{ padding: 20, alignItems: 'center' }}>
                 <Text style={{ color: theme.colors.textSecondary }}>

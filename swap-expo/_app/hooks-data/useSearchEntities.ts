@@ -6,6 +6,7 @@ import { queryKeys } from '../tanstack-query/queryKeys';
 import { EntityResolver, ResolvedEntity } from '../services/EntityResolver';
 import logger from '../utils/logger';
 import { networkService } from '../services/NetworkService';
+import apiClient from '../_api/apiClient';
 
 interface SearchResults {
   entities: ResolvedEntity[];
@@ -63,14 +64,33 @@ export const useSearchEntities = ({
       logger.debug(`[useSearchEntities] Searching for: "${query}"`);
       
       try {
-        // For now, return empty results as a placeholder
-        // This will be replaced with actual search implementation
-        logger.debug(`[useSearchEntities] Search functionality not yet implemented for "${query}"`);
-        
+        // Call backend privacy-aware search API
+        const response = await apiClient.get('/search', {
+          params: {
+            q: query,
+            limit: limit
+          }
+        });
+
+        // API Gateway wraps response in {data: {...}, meta: {...}}
+        const searchData = response.data.data;
+
+        logger.debug(`[useSearchEntities] Search results for "${query}": ${searchData.results?.length || 0} results (total: ${searchData.total})`);
+
+        // Transform backend results to ResolvedEntity format
+        const entities: ResolvedEntity[] = (searchData.results || []).map((result: any) => ({
+          id: result.id,
+          type: result.type,
+          displayName: result.name,
+          avatarUrl: result.avatarUrl,
+          secondaryText: result.secondaryText,
+          metadata: result.entity_specific_data
+        }));
+
         return {
-          entities: [],
-          total: 0,
-          hasMore: false
+          entities,
+          total: searchData.total || 0,
+          hasMore: entities.length === limit
         };
       } catch (error) {
         logger.error(`[useSearchEntities] Search failed for "${query}":`, error);
