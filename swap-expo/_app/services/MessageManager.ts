@@ -136,7 +136,7 @@ class MessageManager {
       const response = await apiClient.post(API_PATHS.MESSAGE.SEND, dto);
       
       if (response.status === 201 || response.status === 200) {
-        const message = response.data.data || response.data;
+        const message = response.data;
       
         // Map optimistic ID to server ID
         if (message.id) {

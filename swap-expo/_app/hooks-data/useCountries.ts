@@ -44,22 +44,13 @@ const fetchCountries = async (): Promise<CountryOption[]> => {
   
   // Handle different possible response structures
   let countriesData: Country[] = [];
-  
+
   if (Array.isArray(response.data)) {
     // Direct array response
     countriesData = response.data;
   } else if (response.data && typeof response.data === 'object') {
-    // Check if data is nested
-    if (Array.isArray(response.data.data)) {
-      countriesData = response.data.data;
-    } else if (response.data.data && typeof response.data.data === 'object') {
-      // Handle case where data is an object with numbered keys
-      const dataObj = response.data.data;
-      countriesData = Object.values(dataObj);
-    } else {
-      // Handle case where response.data is an object with numbered keys
-      countriesData = Object.values(response.data);
-    }
+    // Handle case where response.data is an object with numbered keys
+    countriesData = Object.values(response.data);
   }
   
   logger.debug(`[useCountries] Parsed countries data: ${JSON.stringify(countriesData)}`);

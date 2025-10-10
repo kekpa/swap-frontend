@@ -224,6 +224,46 @@ export class InteractionRepository {
   }
 
   /**
+   * Delete multiple interactions by IDs (for sync reconciliation - Option B pattern)
+   * Called when backend indicates interactions were deleted
+   *
+   * @param ids - Array of interaction IDs to delete
+   */
+  public async deleteInteractions(ids: string[]): Promise<void> {
+    if (!ids || ids.length === 0) {
+      logger.debug('[InteractionRepository] No interaction IDs to delete');
+      return;
+    }
+
+    logger.debug(`[InteractionRepository] Deleting ${ids.length} interactions from sync`);
+
+    if (!(await this.isDatabaseAvailable())) {
+      logger.warn('[InteractionRepository] Database not available for deleteInteractions');
+      return;
+    }
+
+    try {
+      const db = await this.getDatabase();
+
+      for (const id of ids) {
+        // Delete members first (foreign key constraint)
+        await db.runAsync('DELETE FROM interaction_members WHERE interaction_id = ?', [id]);
+        logger.debug(`[InteractionRepository] Deleted members for interaction: ${id}`);
+
+        // Delete interaction
+        await db.runAsync('DELETE FROM interactions WHERE id = ?', [id]);
+        logger.debug(`[InteractionRepository] Deleted interaction: ${id}`);
+      }
+
+      logger.info(`[InteractionRepository] ✅ Deleted ${ids.length} interactions from sync reconciliation`);
+      await eventCoordinator.emitDataUpdated('user', { deletedIds: ids }, { source: 'InteractionRepository.deleteInteractions' });
+
+    } catch (error) {
+      logger.error('[InteractionRepository] Error deleting interactions:', error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  /**
    * Background sync: fetch from remote, update local, emit event
    */
   public async syncInteractionsFromRemote(fetchRemote: () => Promise<LocalInteraction[]>): Promise<void> {

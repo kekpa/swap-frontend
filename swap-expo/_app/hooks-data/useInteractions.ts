@@ -1,9 +1,11 @@
 // TanStack Query hook for interactions with local-first pattern
 // Replaces custom interaction fetching logic in DataContext
 // Created: 2025-01-10 for TanStack Query migration
+// Updated: 2025-01-12 - Added Option B deletion events pattern for sync
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../_api/apiClient';
 import { queryKeys } from '../tanstack-query/queryKeys';
 import logger from '../utils/logger';
@@ -44,16 +46,48 @@ export interface UseInteractionsResult {
   isFetching: boolean;
 }
 
+// Sync timestamp storage key for Option B deletion events pattern
+const SYNC_TIMESTAMP_KEY = 'interactions_last_sync';
+
+/**
+ * Get the last sync timestamp from AsyncStorage
+ * Used to request deleted interactions since last sync (Option B pattern)
+ */
+const getLastSyncTimestamp = async (): Promise<string | null> => {
+  try {
+    const timestamp = await AsyncStorage.getItem(SYNC_TIMESTAMP_KEY);
+    logger.debug(`[useInteractions] Last sync timestamp: ${timestamp || 'none'}`);
+    return timestamp;
+  } catch (error) {
+    logger.error('[useInteractions] Error reading sync timestamp:', error);
+    return null;
+  }
+};
+
+/**
+ * Save the sync timestamp to AsyncStorage
+ * Used for next sync request to get incremental deletions
+ */
+const saveSyncTimestamp = async (timestamp: string): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(SYNC_TIMESTAMP_KEY, timestamp);
+    logger.debug(`[useInteractions] Saved sync timestamp: ${timestamp}`);
+  } catch (error) {
+    logger.error('[useInteractions] Error saving sync timestamp:', error);
+  }
+};
+
 /**
  * TanStack Query hook for interactions with local-first pattern
- * 
+ *
  * Features:
  * - Local-first loading from SQLite cache
  * - Background sync with API
  * - Automatic deduplication through TanStack Query
  * - Network-aware caching
  * - Member data included
- * 
+ * - Deletion sync (Option B pattern) - processes deletedIds from backend
+ *
  * @param options - Configuration options
  */
 export const useInteractions = (
@@ -69,7 +103,7 @@ export const useInteractions = (
   const isAuthenticated = authContext?.isAuthenticated;
   const queryClient = useQueryClient();
 
-  // Local-first interactions fetcher
+  // Local-first interactions fetcher with deletion sync
   const fetchInteractions = useCallback(async (): Promise<InteractionItem[]> => {
     if (!isAuthenticated || !user) {
       logger.debug('[useInteractions] Not authenticated, returning empty array');
@@ -112,22 +146,42 @@ export const useInteractions = (
       logger.error('[useInteractions] Error loading local interactions:', error, 'interactions_query');
     }
 
-    // STEP 2: Fetch from API (TanStack Query handles deduplication automatically)
+    // STEP 2: Fetch from API with sync timestamp (Option B deletion events pattern)
     try {
-      logger.debug('[useInteractions] Fetching from API: /interactions?public=true', 'interactions_query');
-      const response = await apiClient.get('/interactions?public=true');
-      
-      // Process API response
+      // Get last sync timestamp for incremental sync
+      const lastSync = await getLastSyncTimestamp();
+
+      // Build API URL with sync parameter
+      const apiUrl = lastSync
+        ? `/interactions?public=true&since=${encodeURIComponent(lastSync)}`
+        : '/interactions?public=true';
+
+      logger.debug(`[useInteractions] Fetching from API: ${apiUrl}`, 'interactions_query');
+      const response = await apiClient.get(apiUrl);
+
+      // Process API response - now with Option B deletion events support
       let fetchedInteractions: InteractionItem[] = [];
-      if (Array.isArray(response.data)) {
-        fetchedInteractions = response.data;
-      } else if (response.data?.data && Array.isArray(response.data.data)) {
-        fetchedInteractions = response.data.data;
-      } else if (response.data?.interactions && Array.isArray(response.data.interactions)) {
+      let deletedIds: string[] = [];
+      let syncTimestamp: string = new Date().toISOString();
+
+      // Handle response format: {interactions, deletedIds, syncTimestamp, meta}
+      if (response.data?.interactions && Array.isArray(response.data.interactions)) {
         fetchedInteractions = response.data.interactions;
+        deletedIds = response.data.deletedIds || [];
+        syncTimestamp = response.data.syncTimestamp || syncTimestamp;
+      } else if (Array.isArray(response.data)) {
+        // Fallback for direct array response
+        fetchedInteractions = response.data;
       }
 
-      logger.debug(`[useInteractions] Retrieved ${fetchedInteractions.length} API interactions`, 'interactions_query');
+      logger.debug(`[useInteractions] Retrieved ${fetchedInteractions.length} API interactions, ${deletedIds.length} deleted`, 'interactions_query');
+
+      // CRITICAL: Process deletions FIRST (Option B pattern!)
+      // This ensures deleted interactions are removed before saving new ones
+      if (deletedIds.length > 0) {
+        logger.info(`[useInteractions] Processing ${deletedIds.length} deletions from backend`, 'interactions_query');
+        await interactionRepository.deleteInteractions(deletedIds);
+      }
 
       if (fetchedInteractions.length > 0) {
                  // Save to local cache in background
@@ -176,12 +230,19 @@ export const useInteractions = (
           logger.warn(`[useInteractions] Error saving interactions to local cache: ${saveError}`);
         }
 
+        // Save sync timestamp for next request (Option B pattern)
+        await saveSyncTimestamp(syncTimestamp);
+
         // Emit update event for other components
         eventEmitter.emit('data_updated', { type: 'interactions', data: fetchedInteractions });
-        
+
         return fetchedInteractions;
       } else {
-        // No API data, return local data if we have any
+        // No API data, but still save sync timestamp if provided
+        // This ensures we track sync state even with empty results
+        await saveSyncTimestamp(syncTimestamp);
+
+        // Return local data if we have any
         return localInteractions;
       }
     } catch (apiError) {

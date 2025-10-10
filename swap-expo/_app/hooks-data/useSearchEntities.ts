@@ -72,8 +72,8 @@ export const useSearchEntities = ({
           }
         });
 
-        // API Gateway wraps response in {data: {...}, meta: {...}}
-        const searchData = response.data.data;
+        // Clean response format: {results, total, meta}
+        const searchData = response.data;
 
         logger.debug(`[useSearchEntities] Search results for "${query}": ${searchData.results?.length || 0} results (total: ${searchData.total})`);
 

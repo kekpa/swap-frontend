@@ -407,11 +407,6 @@ export const useSetPrimaryWallet = () => {
       // Handle the response data - it's a single wallet object, not an array
       let walletData = response.data;
       
-      // If response has a 'data' property, extract it
-      if (walletData && typeof walletData === 'object' && walletData.data) {
-        walletData = walletData.data;
-      }
-      
       // If the data is a JSON string, parse it
       if (typeof walletData === 'string') {
         try {

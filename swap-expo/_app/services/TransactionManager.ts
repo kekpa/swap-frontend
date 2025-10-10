@@ -111,7 +111,7 @@ class TransactionManager {
       });
       
       if (response.status === 200) {
-        let result = response.data.data || response.data;
+        let result = response.data;
         
         // Handle complex nested JSON structure from backend
         // The backend returns: {"data":"{\"data\":\"{\\\"0\\\":\\\"{...}\\\",\\\"1\\\":\\\"{...}\\\"}\",\"pagination\":\"{...}\"}"}
@@ -268,7 +268,7 @@ class TransactionManager {
       const response = await apiClient.post(API_PATHS.TRANSACTION.CREATE, dto);
       
       if (response.status === 201 || response.status === 200) {
-        const transaction = response.data.data || response.data;
+        const transaction = response.data;
       
       // Map optimistic ID to server ID
         if (transaction.id) {

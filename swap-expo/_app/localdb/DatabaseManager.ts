@@ -439,6 +439,56 @@ class DatabaseManager {
   }
 
   /**
+   * DEVELOPER UTILITY: Clear all data from SQLite database
+   * This will wipe all tables but keep the schema intact
+   * USE WITH CAUTION: This cannot be undone!
+   */
+  public async clearAllData(): Promise<void> {
+    if (!this.database) {
+      throw new Error('Database not initialized. Call initialize() first.');
+    }
+
+    logger.warn('[DatabaseManager] 🗑️ CLEARING ALL DATA from SQLite database...');
+
+    try {
+      await this.database.execAsync('BEGIN TRANSACTION');
+
+      // Delete from all tables in correct order (respect foreign keys)
+      const tablesToClear = [
+        'timeline',
+        'search_history',
+        'locations',
+        'notifications',
+        'messages',
+        'transactions',
+        'interaction_members',
+        'interactions',
+        'currency_wallets',
+        'user_contacts',
+        'users',
+        'currency',
+      ];
+
+      for (const table of tablesToClear) {
+        try {
+          await this.database.execAsync(`DELETE FROM ${table}`);
+          logger.debug(`[DatabaseManager] ✅ Cleared table: ${table}`);
+        } catch (error) {
+          // Table might not exist, continue
+          logger.debug(`[DatabaseManager] ⚠️ Could not clear ${table}: ${String(error)}`);
+        }
+      }
+
+      await this.database.execAsync('COMMIT');
+      logger.warn('[DatabaseManager] ✅ All data cleared from SQLite database');
+    } catch (error) {
+      await this.database.execAsync('ROLLBACK');
+      logger.error('[DatabaseManager] ❌ Failed to clear database', error);
+      throw error;
+    }
+  }
+
+  /**
    * Close database connection
    */
   public async close(): Promise<void> {
