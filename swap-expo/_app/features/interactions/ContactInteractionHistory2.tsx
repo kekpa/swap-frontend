@@ -37,7 +37,9 @@ import { queryKeys } from '../../tanstack-query/queryKeys';
 import { queryClient } from '../../tanstack-query/queryClient';
 // DataContext replaced with TanStack Query hooks
 import { useSendMessage } from '../../tanstack-query/mutations/useSendMessage';
+import { useWebSocketQueryInvalidation } from '../../hooks/useWebSocketQueryInvalidation';
 import { useGetOrCreateDirectInteraction } from '../../tanstack-query/mutations/useCreateInteraction';
+import { useCreateDirectInteraction } from '../../tanstack-query/mutations/useCreateDirectInteraction';
 import { SendMessageRequest, MessageType, Message as ApiMessage, MessageStatus } from '../../types/message.types';
 import { TimelineItem, TimelineItemType as ImportedTimelineItemType, MessageTimelineItem, TransactionTimelineItem, DateSeparatorTimelineItem } from '../../types/timeline.types';
 import TransferCompletedScreen from './sendMoney2/TransferCompletedScreen';
@@ -110,7 +112,7 @@ const transactionStyles = (theme: Theme) => StyleSheet.create({
   transactionTime: { fontSize: theme.typography.fontSize.xs, color: theme.colors.textTertiary },
 });
 const messageBubbleStyles = (theme: Theme) => StyleSheet.create({
-  messageContainer: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: theme.spacing.xs },
+  messageContainer: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: theme.spacing.xs, paddingHorizontal: theme.spacing.md },
   receivedContainer: { justifyContent: 'flex-start' },
   messageBubble: { backgroundColor: theme.colors.primary, borderRadius: theme.borderRadius.md, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm, maxWidth: '70%', borderBottomRightRadius: theme.borderRadius.xs },
   receivedBubble: { backgroundColor: theme.colors.grayUltraLight, borderBottomRightRadius: theme.borderRadius.md, borderBottomLeftRadius: theme.borderRadius.xs },
@@ -252,7 +254,8 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
   // TanStack Query hooks for message operations
   const sendMessageMutation = useSendMessage();
   const { getOrCreateDirectInteraction } = useGetOrCreateDirectInteraction();
-  
+  const createDirectInteractionMutation = useCreateDirectInteraction();
+
   const { 
     contactId, 
     contactName, 
@@ -280,6 +283,10 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     error: timelineError,
     isRefetching
   } = useTimeline(currentInteractionId || '', { enabled: !!currentInteractionId });
+
+  // 🔔 Layer 3: WebSocket event listener for real-time message sync
+  // This connects WebSocket events → React Query invalidation
+  useWebSocketQueryInvalidation(currentInteractionId || undefined);
 
   // Debug logging for timeline state
   useEffect(() => {
@@ -332,14 +339,14 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     return networkUnsubscribe;
   }, []);
 
-  // Initialize interaction - simplified
+  // Initialize interaction - simplified with stable dependencies
   useEffect(() => {
     const initializeInteraction = async () => {
       logger.debug(
         `[ContactInteractionHistory] 🚀 INITIALIZING INTERACTION: passedInteractionId=${passedInteractionId}, contactId=${contactId}`,
         "ContactInteractionHistory"
       );
-      
+
       if (passedInteractionId) {
         logger.debug(
           `[ContactInteractionHistory] ✅ Using passed interaction ID: ${passedInteractionId}`,
@@ -357,7 +364,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
             "ContactInteractionHistory"
           );
           const newInteractionId = await getOrCreateDirectInteraction(contactId);
-          
+
           if (newInteractionId) {
             logger.debug(
               `[ContactInteractionHistory] ✅ SUCCESS: Set interaction ID: ${newInteractionId}`,
@@ -365,10 +372,11 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
             );
             setCurrentInteractionId(newInteractionId);
           } else {
-            logger.error(
-              `[ContactInteractionHistory] ❌ ERROR: getOrCreateDirectInteraction returned null for contactId: ${contactId}`,
+            logger.debug(
+              `[ContactInteractionHistory] ✅ No conversation exists yet with ${contactId} - will create on first message/transaction`,
               "ContactInteractionHistory"
             );
+            // Keep currentInteractionId as null - it will be created when user sends first message
           }
         } catch (error) {
           logger.error(
@@ -386,6 +394,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     };
 
     initializeInteraction();
+    // Only depend on data that actually changes - function is now memoized with useCallback
   }, [passedInteractionId, contactId, getOrCreateDirectInteraction]);
 
   // Enhanced focus effect - simplified
@@ -460,15 +469,17 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!messageInput.trim() || !currentUser?.entityId || !currentInteractionId) {
+    // Validate input and user
+    if (!messageInput.trim() || !currentUser?.entityId || !contactId) {
       const errorDetails = {
         messageInputEmpty: !messageInput.trim(),
         currentUserMissing: !currentUser?.entityId,
-        interactionIdMissing: !currentInteractionId
+        contactIdMissing: !contactId,
       };
-      logger.warn("Cannot send message: Missing input, user/entity ID, or interaction ID.", 
-        `Details: ${JSON.stringify(errorDetails)}`);
-      if (!currentInteractionId) alert("Error: Chat session not ready. Please try again.");
+      logger.warn(
+        'Cannot send message: Missing input, user/entity ID, or contact ID.',
+        `Details: ${JSON.stringify(errorDetails)}`
+      );
       return;
     }
 
@@ -477,20 +488,46 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     setMessageInput('');
 
     try {
+      let interactionIdToUse = currentInteractionId;
+
+      // If no interaction exists yet, create it (first message scenario)
+      if (!interactionIdToUse) {
+        logger.debug(
+          '[ContactInteractionHistory] 🆕 No interaction exists - creating new interaction for first message',
+          'ContactInteractionHistory'
+        );
+
+        const newInteraction = await createDirectInteractionMutation.mutateAsync({
+          entity_one_id: currentUser.entityId,
+          entity_two_id: contactId,
+        });
+
+        interactionIdToUse = newInteraction.id;
+        setCurrentInteractionId(interactionIdToUse);
+
+        logger.debug(
+          `[ContactInteractionHistory] ✅ Created new interaction: ${interactionIdToUse}`,
+          'ContactInteractionHistory'
+        );
+      }
+
+      // Send message with interaction ID (either existing or newly created)
       const sentMessage = await sendMessageMutation.mutateAsync({
-        interactionId: currentInteractionId,
+        interactionId: interactionIdToUse,
         recipientEntityId: contactId,
         content: messageToSend,
-        messageType: 'text'
+        messageType: 'text',
       });
-      
+
       if (!sentMessage) {
         throw new Error('Failed to send message');
       }
 
+      logger.debug('[ContactInteractionHistory] ✅ Message sent successfully');
     } catch (error) {
       logger.error('[ContactInteractionHistory] Error sending message', error);
       setMessageInput(messageToSend); // Restore message input
+      Alert.alert('Error', 'Failed to send message. Please try again.');
     } finally {
       setIsSending(false);
     }
@@ -513,9 +550,8 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
   }, [timelineItems, activeTab]);
   
   const renderTimelineItem = ({ item }: { item: TimelineItem }) => {
-    if ((item.itemType === 'message' || item.type === 'message') && 
-        (item.interaction_id === currentInteractionId)) {
-      
+    if (item.itemType === 'message' || item.type === 'message') {
+
       const messageItem = item as MessageTimelineItem;
       const messageContent = messageItem.content || '';
       const messageTimestamp = messageItem.timestamp || messageItem.createdAt || new Date().toISOString();
@@ -726,10 +762,10 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
               onChangeText={setMessageInput} 
               multiline={true} 
             />
-            <TouchableOpacity 
-              style={[styles.sendButton, (!messageInput.trim() || isSending) && styles.disabledSendButton]} 
-              onPress={handleSendMessage} 
-              disabled={!messageInput.trim() || isSending || !currentInteractionId}
+            <TouchableOpacity
+              style={[styles.sendButton, (!messageInput.trim() || isSending) && styles.disabledSendButton]}
+              onPress={handleSendMessage}
+              disabled={!messageInput.trim() || isSending}
             >
               {isSending ? (
                 <ActivityIndicator size="small" color={theme.colors.white} />

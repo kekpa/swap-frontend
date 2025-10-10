@@ -1,17 +1,21 @@
 /**
  * useSendMessage Hook
- * 
+ *
  * TanStack Query mutation hook for sending messages with optimistic updates.
  * Implements proper message handling with rollback on failure.
+ *
+ * Professional implementation - NO MOCKS, uses real backend API.
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { logger } from '../../utils/logger';
 import { queryKeys } from '../queryKeys';
-import { Message } from '../../types/message.types';
+import { Message, MessageType } from '../../types/message.types';
 import { networkService } from '../../services/NetworkService';
+import MessagesApiService, { CreateDirectMessageRequest, DirectMessageResponse } from '../../_api/messages.api';
+import * as Crypto from 'expo-crypto';
 
-// Message send request interface
+// Message send request interface (frontend format)
 export interface SendMessageRequest {
   interactionId: string;
   recipientEntityId: string;
@@ -35,20 +39,25 @@ export interface SendMessageResponse {
 }
 
 /**
- * Mock send message function - replace with actual API call
+ * Real API call to backend - Professional implementation
  */
 const sendMessageAPI = async (request: SendMessageRequest): Promise<SendMessageResponse> => {
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 500));
-  
-  // Simulate occasional failures for testing
-  if (Math.random() < 0.05) {
-    throw new Error('Message failed to send');
-  }
-  
+  // Map frontend request to backend DTO
+  const backendRequest: CreateDirectMessageRequest = {
+    recipient_id: request.recipientEntityId,
+    content: request.content,
+    message_type: request.messageType as MessageType,
+    metadata: request.metadata,
+    idempotency_key: Crypto.randomUUID(), // Expo's crypto - native, no polyfills
+  };
+
+  // Call real backend API
+  const response: DirectMessageResponse = await MessagesApiService.sendDirectMessage(backendRequest);
+
+  // Map backend response to frontend format
   return {
-    messageId: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-    timestamp: new Date().toISOString(),
+    messageId: response.message.id,
+    timestamp: response.message.created_at,
     status: 'sent',
   };
 };
@@ -75,16 +84,16 @@ export const useSendMessage = () => {
       });
 
       // Cancel any outgoing refetches for timeline/messages
-      await queryClient.cancelQueries({ 
-        queryKey: queryKeys.timeline() 
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.timeline(request.interactionId)
       });
-      
-      await queryClient.cancelQueries({ 
-        queryKey: queryKeys.interactions() 
+
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.interactions
       });
 
       // Get current timeline data for the interaction
-      const timelineQueryKey = queryKeys.timelineByInteraction(request.interactionId);
+      const timelineQueryKey = queryKeys.timeline(request.interactionId);
       const previousTimeline = queryClient.getQueryData<Message[]>(timelineQueryKey);
 
       // Create optimistic message
@@ -152,9 +161,9 @@ export const useSendMessage = () => {
 
       // Replace optimistic message with real message data
       if (context?.tempId && context?.optimisticMessage) {
-        const timelineQueryKey = queryKeys.timelineByInteraction(variables.interactionId);
+        const timelineQueryKey = queryKeys.timeline(variables.interactionId);
         const currentTimeline = queryClient.getQueryData<Message[]>(timelineQueryKey);
-        
+
         if (currentTimeline) {
           const updatedTimeline = currentTimeline.map(message => {
             if (message.id === context.tempId) {
@@ -167,15 +176,15 @@ export const useSendMessage = () => {
             }
             return message;
           });
-          
+
           queryClient.setQueryData(timelineQueryKey, updatedTimeline);
           logger.debug('[useSendMessage] ✅ Optimistic message replaced with real data');
         }
       }
 
       // Invalidate related queries to ensure fresh data
-      queryClient.invalidateQueries({ 
-        queryKey: queryKeys.interactions(),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.interactions,
         refetchType: 'none', // Don't refetch immediately
       });
     },
@@ -191,7 +200,7 @@ export const useSendMessage = () => {
 
       // Rollback timeline if we have previous data
       if (context?.previousTimeline) {
-        const timelineQueryKey = queryKeys.timelineByInteraction(variables.interactionId);
+        const timelineQueryKey = queryKeys.timeline(variables.interactionId);
         queryClient.setQueryData(timelineQueryKey, context.previousTimeline);
         logger.debug('[useSendMessage] 🔄 Timeline optimistic update rolled back');
       }
@@ -217,9 +226,9 @@ export const useSendMessage = () => {
       });
 
       // Invalidate timeline to ensure consistency
-      queryClient.invalidateQueries({ 
-        queryKey: queryKeys.timelineByInteraction(variables.interactionId),
-        refetchType: 'none', // Don't refetch immediately since we have optimistic data
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.timeline(variables.interactionId),
+        refetchType: 'active', // Refetch active queries to ensure UI updates
       });
     },
 
@@ -255,18 +264,18 @@ export const useBulkMessageOperations = () => {
     },
     
     onSuccess: (data, messageIds) => {
-      // Update all relevant timeline queries
-      queryClient.invalidateQueries({ 
-        queryKey: queryKeys.timeline(),
+      // Update all relevant timeline queries (invalidate all timelines)
+      queryClient.invalidateQueries({
+        predicate: (query) => Array.isArray(query.queryKey) && query.queryKey[0] === 'timeline',
         refetchType: 'none',
       });
-      
+
       // Update interactions to decrease unread counts
-      queryClient.invalidateQueries({ 
-        queryKey: queryKeys.interactions(),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.interactions,
         refetchType: 'none',
       });
-      
+
       logger.debug('[useBulkMessageOperations] ✅ Messages marked as read:', messageIds);
     },
   });
@@ -280,9 +289,11 @@ export const useBulkMessageOperations = () => {
     
     onSuccess: (data, messageIds) => {
       // Invalidate all timeline and interaction queries
-      queryClient.invalidateQueries({ queryKey: queryKeys.timeline() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.interactions() });
-      
+      queryClient.invalidateQueries({
+        predicate: (query) => Array.isArray(query.queryKey) && query.queryKey[0] === 'timeline',
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.interactions });
+
       logger.debug('[useBulkMessageOperations] ✅ Messages deleted:', messageIds);
     },
   });
