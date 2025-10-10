@@ -148,14 +148,14 @@ export const useDocumentUpload = (): UseDocumentUploadReturn => {
       
       logger.debug(`[useDocumentUpload] Upload successful:`, response.data);
       
-      // Parse the nested JSON response from backend
+      // Parse the JSON response from backend
       let documentData;
-      if (typeof response.data.data === 'string') {
-        // Backend sends nested JSON as string
-        documentData = JSON.parse(response.data.data);
+      if (typeof response.data === 'string') {
+        // Backend sends JSON as string
+        documentData = JSON.parse(response.data);
       } else {
         // Direct object response
-        documentData = response.data.data || response.data;
+        documentData = response.data;
       }
       
       return {

@@ -41,8 +41,8 @@ export const useUsernameAvailability = (username: string, debounceMs: number = 5
         username: usernameToCheck,
       });
 
-      // Extract the actual data from the nested response structure
-      const actualResult = response.data.data || response.data;
+      // Extract the actual data from the response
+      const actualResult = response.data;
 
       setState({
         isChecking: false,

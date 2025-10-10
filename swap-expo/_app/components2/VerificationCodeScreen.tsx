@@ -271,9 +271,9 @@ const VerificationCodeScreen = () => {
         });
         console.log("Personal phone registration successful:", response.data);
       }
-      
-      const authData = response.data.data || response.data;
-      
+
+      const authData = response.data;
+
       if (authData.access_token && authContext) {
         await saveAccessToken(authData.access_token);
         await saveRefreshToken(authData.refresh_token);
