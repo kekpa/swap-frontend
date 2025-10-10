@@ -150,9 +150,9 @@ export const refreshAccessToken = async (): Promise<string | null> => {
       }
 
       const data = JSON.parse(responseText); // Parse after logging raw text
-      
-      // Handle nested response structure: { data: { access_token: ... }, meta: { ... } }
-      const tokenData = data.data || data; // Support both nested and flat structures
+
+      // Clean response structure: { access_token: ..., refresh_token: ..., meta: { ... } }
+      const tokenData = data;
       
       if (tokenData.access_token) {
         console.debug('[refreshAccessToken] Token refreshed successfully.');

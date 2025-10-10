@@ -807,17 +807,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       console.log('🔑 [BusinessLogin] Business login response status:', response.status);
       console.log('🔑 [BusinessLogin] Business login response data:', response.data);
       
-      // Parse the response data - backend returns nested JSON string
+      // Parse the response data
       let authData;
-      if (response.data?.data) {
-        // If data is a string, parse it as JSON
-        if (typeof response.data.data === 'string') {
-          authData = JSON.parse(response.data.data);
-        } else {
-          authData = response.data.data;
-        }
+      // If data is a string, parse it as JSON
+      if (typeof response.data === 'string') {
+        authData = JSON.parse(response.data);
       } else {
-        // Fallback: check if tokens are directly in response.data
         authData = response.data;
       }
       
@@ -1076,12 +1071,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       console.log('🔑 [Login] Personal login response status:', response.status);
       console.log('🔑 [Login] Personal login response data:', response.data);
       if (response.status === 200 || response.status === 201) {
-        let authData;
-        if ('access_token' in response.data) {
-          authData = response.data;
-        } else if (response.data.data && 'access_token' in response.data.data) {
-          authData = response.data.data;
-        } else {
+        let authData = response.data;
+        if (!('access_token' in authData)) {
           console.error('❌ [Login] No access token in response:', response.data);
           return { success: false, message: "Login failed - no access token received" };
         }
@@ -1107,7 +1098,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           try {
             const profileResponse = await apiClient.get(AUTH_PATHS.ME);
             if (profileResponse.status === 200 && profileResponse.data) {
-              const profileData = profileResponse.data.data || profileResponse.data;
+              const profileData = profileResponse.data;
               const mappedUser = {
                 id: profileData.id || profileData.user_id,
                 profileId: profileData.profile_id || profileData.id,
@@ -1179,12 +1170,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       console.log('🔑 [UnifiedLogin] Response data:', response.data);
 
       if (response.status === 200 || response.status === 201) {
-        let authData;
-        if ('access_token' in response.data) {
-          authData = response.data;
-        } else if (response.data.data && 'access_token' in response.data.data) {
-          authData = response.data.data;
-        } else {
+        let authData = response.data;
+        if (!('access_token' in authData)) {
           console.error('❌ [UnifiedLogin] No access token in response:', response.data);
           return { success: false, message: "Unified login failed - no access token received" };
         }
@@ -1217,7 +1204,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           try {
             const profileResponse = await apiClient.get(AUTH_PATHS.ME);
             if (profileResponse.status === 200 && profileResponse.data) {
-              const profileData = profileResponse.data.data || profileResponse.data;
+              const profileData = profileResponse.data;
               const mappedUser = {
                 id: profileData.id || profileData.user_id,
                 profileId: profileData.profile_id || profileData.id,

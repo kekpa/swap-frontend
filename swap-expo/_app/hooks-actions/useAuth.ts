@@ -214,9 +214,9 @@ export function useAuth() {
       logger.debug(`[useAuth] Raw response from apiClient.post: ${JSON.stringify(response)}`, 'auth');
       if (response && response.data) {
         logger.debug(`[useAuth] response.data from apiClient.post: ${JSON.stringify(response.data)}`, 'auth');
-        logger.debug(`[useAuth] typeof response.data.data: ${typeof response.data.data}`, 'auth');
-        if(response.data.data) {
-            logger.debug(`[useAuth] typeof response.data.data.access_token: ${typeof response.data.data.access_token}`, 'auth');
+        logger.debug(`[useAuth] typeof response.data: ${typeof response.data}`, 'auth');
+        if (response.data.access_token) {
+          logger.debug(`[useAuth] typeof response.data.access_token: ${typeof response.data.access_token}`, 'auth');
         }
       } else {
         logger.warn('[useAuth] apiClient.post did not return response or response.data', 'auth');
@@ -224,29 +224,22 @@ export function useAuth() {
       // ---- END DETAILED LOGGING ----
 
       let actualData;
-      // Scenario 1: response.data.data is already the parsed object we need
-      if (response.data && response.data.data && typeof response.data.data === 'object' && typeof response.data.data.access_token !== 'undefined') {
-        logger.debug('[useAuth] Using response.data.data directly as parsed object.', 'auth');
-        actualData = response.data.data;
-      } 
-      // Scenario 2: response.data.data is a string that needs parsing (original expectation)
-      else if (response.data && typeof response.data.data === 'string') {
-        logger.debug('[useAuth] response.data.data is a string, attempting JSON.parse.', 'auth');
+      // Handle response - clean format from interceptor
+      if (response.data && typeof response.data === 'string') {
+        // If data is a string, parse it
+        logger.debug('[useAuth] response.data is a string, attempting JSON.parse.', 'auth');
         try {
-          actualData = JSON.parse(response.data.data);
+          actualData = JSON.parse(response.data);
         } catch (parseError) {
-          logger.error('Failed to parse backend login response data string:', { error: parseError, dataString: response.data.data }, 'auth');
+          logger.error('Failed to parse backend login response data string:', { error: parseError, dataString: response.data }, 'auth');
           throw new Error('Invalid response format from server (JSON parse failed).');
         }
-      } 
-      // Scenario 3: Fallback if response.data itself is the object we need (less likely with current backend logs)
-      else if (response.data && typeof response.data.access_token !== 'undefined'){
-        logger.debug('[useAuth] Using response.data as the parsed object (fallback).', 'auth');
+      } else if (response.data && typeof response.data === 'object' && typeof response.data.access_token !== 'undefined') {
+        // Direct object with access_token
+        logger.debug('[useAuth] Using response.data directly as parsed object.', 'auth');
         actualData = response.data;
-      } 
-      // Scenario 4: Unexpected structure
-      else {
-        logger.error('[useAuth] Unexpected backend login response structure after all checks:', { responseData: response.data }, 'auth');
+      } else {
+        logger.error('[useAuth] Unexpected backend login response structure:', { responseData: response.data }, 'auth');
         throw new Error('Unexpected response structure from server.');
       }
       
@@ -400,13 +393,11 @@ export function useAuth() {
         logger.debug(`[useAuth] Raw response: ${JSON.stringify(response.data)}`, 'auth');
 
         let profileData;
-        if (response.data && response.data.data && typeof response.data.data === 'object') {
-          profileData = response.data.data; 
-        } else if (response.data && typeof response.data === 'object') {
+        if (response.data && typeof response.data === 'object') {
           profileData = response.data;
         } else {
           logger.error(`[useAuth] Unexpected response structure: ${JSON.stringify(response.data)}`, 'auth');
-          return null; 
+          return null;
         }
 
         // ✅ NEW: Clean discriminated union approach

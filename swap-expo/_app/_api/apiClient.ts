@@ -719,13 +719,15 @@ if (IS_DEVELOPMENT) {
       return response;
     },
     (error) => {
-      // Skip logging 401 errors for login endpoints (these are expected during auto-detection)
-      const isLoginEndpoint = error.config?.url?.includes('/auth/login') || 
+      // Skip logging for expected errors
+      const isLoginEndpoint = error.config?.url?.includes('/auth/login') ||
                              error.config?.url?.includes('/auth/business/login');
       const is401Error = error.response?.status === 401;
-      
-      if (isLoginEndpoint && is401Error) {
-        logger.debug("Expected auth failure during login auto-detection", "api", {
+      const is404DirectInteraction = error.response?.status === 404 &&
+                                      error.config?.url?.includes('/interactions/direct/');
+
+      if ((isLoginEndpoint && is401Error) || is404DirectInteraction) {
+        logger.debug("Expected API status (not an error)", "api", {
           status: error.response?.status,
           url: error.config?.url,
         });
