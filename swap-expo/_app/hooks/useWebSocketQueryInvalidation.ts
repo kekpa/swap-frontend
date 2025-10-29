@@ -35,18 +35,18 @@ export const useWebSocketQueryInvalidation = (interactionId?: string) => {
      */
     const handleMessageNew = (data: any) => {
       logger.debug('[useWebSocketQueryInvalidation] 🔔 Received message:new event:', {
-        eventInteractionId: data.interactionId,
+        eventInteractionId: data.interaction_id,
         scopedInteractionId: interactionId,
-        shouldInvalidate: !interactionId || data.interactionId === interactionId,
+        shouldInvalidate: !interactionId || data.interaction_id === interactionId,
       });
 
       // If we're scoped to a specific interaction, only invalidate that one
-      if (interactionId && data.interactionId !== interactionId) {
+      if (interactionId && data.interaction_id !== interactionId) {
         logger.debug('[useWebSocketQueryInvalidation] ⏭️ Skipping - event for different interaction');
         return;
       }
 
-      const targetInteractionId = data.interactionId || interactionId;
+      const targetInteractionId = data.interaction_id || interactionId;
 
       if (!targetInteractionId) {
         logger.warn('[useWebSocketQueryInvalidation] ⚠️ No interaction ID available for invalidation');
