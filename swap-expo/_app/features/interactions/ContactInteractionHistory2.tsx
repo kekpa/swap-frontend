@@ -12,7 +12,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  RefreshControl,
   NativeSyntheticEvent,
   NativeScrollEvent,
   Dimensions,
@@ -32,7 +31,7 @@ import API_PATHS from '../../_api/apiPaths';
 import { websocketService } from '../../services/websocketService';
 import { useTheme } from '../../theme/ThemeContext';
 import { Theme } from '../../theme/theme';
-import { useTimeline } from '../../hooks-data/useTimeline';
+import { useTimelineInfinite } from '../../hooks-data/useTimeline';
 import { queryKeys } from '../../tanstack-query/queryKeys';
 import { queryClient } from '../../tanstack-query/queryClient';
 // DataContext replaced with TanStack Query hooks
@@ -274,15 +273,17 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
   const [isSending, setIsSending] = useState(false);
   const [currentInteractionId, setCurrentInteractionId] = useState<string | null>(passedInteractionId || null);
   
-  // 🚀 SIMPLIFIED TanStack Query usage - no complex local-first loading
+  // 🚀 Infinite scroll with WhatsApp-style pagination (scroll to top loads more)
   const {
-    timeline: timelineItems,
+    flatTimeline: timelineItems,
     isLoading: isLoadingTimeline,
     refetch: refetchTimeline,
     isError: hasTimelineError,
     error: timelineError,
-    isRefetching
-  } = useTimeline(currentInteractionId || '', { enabled: !!currentInteractionId });
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useTimelineInfinite(currentInteractionId || '', { enabled: !!currentInteractionId, pageSize: 50 });
 
   // 🔔 Layer 3: WebSocket event listener for real-time message sync
   // This connects WebSocket events → React Query invalidation
@@ -404,7 +405,12 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
         `[ContactInteractionHistory] Screen focused. contactId: ${contactId}, currentInteractionId: ${currentInteractionId}`,
         "ContactInteractionHistory"
       );
-      
+
+      // Scroll to bottom when screen regains focus (WhatsApp/Messenger UX)
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+      }, 100);
+
       // Join WebSocket room for real-time updates
       if (currentInteractionId) {
         if (websocketService.isSocketAuthenticated()) {
@@ -524,6 +530,11 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
       }
 
       logger.debug('[ContactInteractionHistory] ✅ Message sent successfully');
+
+      // Auto-scroll to bottom to show the latest message (WhatsApp/Messenger UX)
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     } catch (error) {
       logger.error('[ContactInteractionHistory] Error sending message', error);
       setMessageInput(messageToSend); // Restore message input
@@ -537,7 +548,19 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     logger.debug(`[ContactInteractionHistory] Changing tab from ${activeTab} to ${tab}`, "ContactInteractionHistory");
     setActiveTab(tab);
   };
-  
+
+  // Auto-scroll when new messages arrive (WhatsApp/Messenger UX)
+  const previousTimelineLength = useRef(timelineItems.length);
+  useEffect(() => {
+    if (timelineItems.length > previousTimelineLength.current) {
+      // New message arrived, scroll to bottom
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    }
+    previousTimelineLength.current = timelineItems.length;
+  }, [timelineItems.length]);
+
   // Filter timeline items based on active tab
   const filteredItems = useMemo(() => {
     if (activeTab === 'all') {
@@ -729,19 +752,32 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
           renderItem={renderTimelineItem}
           estimatedItemSize={80}
           contentContainerStyle={[
-            styles.timelineContent, 
+            styles.timelineContent,
             { flexGrow: 1, justifyContent: filteredItems.length > 0 ? 'flex-start' : 'center' }
           ]}
-          inverted={false} // CRITICAL FIX: Remove inverted to show proper chronological order (oldest to newest)
+          inverted={false} // Keep chronological order: oldest at top, newest at bottom
           ListEmptyComponent={renderEmptyState}
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={refetchTimeline}
-              colors={[theme.colors.primary]}
-              tintColor={theme.colors.primary}
-            />
+          onScroll={(event) => {
+            // Load older messages when scrolling UP to the TOP
+            const yOffset = event.nativeEvent.contentOffset.y;
+            const threshold = 100; // Trigger when within 100px of top
+
+            if (yOffset <= threshold && hasNextPage && !isFetchingNextPage) {
+              logger.debug('[ContactInteractionHistory] Near top - loading older messages...', 'ContactInteractionHistory');
+              fetchNextPage();
+            }
+          }}
+          scrollEventThrottle={400}
+          ListHeaderComponent={
+            isFetchingNextPage ? (
+              <View style={{ padding: 16, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+                <Text style={{ marginTop: 8, color: theme.colors.textSecondary, fontSize: 12 }}>
+                  Loading older messages...
+                </Text>
+              </View>
+            ) : null
           }
         />
         

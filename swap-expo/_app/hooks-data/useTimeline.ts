@@ -2,7 +2,7 @@
 // Replaces custom deduplicateRequest function in DataContext
 // Created: 2025-01-10 for TanStack Query migration
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
 import apiClient from '../_api/apiClient';
 import { API_PATHS } from '../_api/apiPaths';
@@ -540,4 +540,275 @@ export const usePrefetchTimeline = () => {
       logger.debug(`[usePrefetchTimeline] Prefetch failed for ${interactionId}: ${String(error)}`, 'timeline_query');
     }
   }, [queryClient, user?.entityId]);
-}; 
+};
+
+// ==================== INFINITE QUERY FOR PAGINATION ====================
+
+export interface UseTimelineInfiniteOptions {
+  enabled?: boolean;
+  pageSize?: number;
+}
+
+export interface UseTimelineInfiniteResult {
+  pages: TimelineItem[][];
+  flatTimeline: TimelineItem[]; // All pages flattened for convenience
+  isLoading: boolean;
+  isError: boolean;
+  error: Error | null;
+  fetchNextPage: () => void;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  refetch: () => void;
+}
+
+/**
+ * Infinite query hook for paginated timeline loading (WhatsApp-style "load more")
+ * Use this for chat conversations with "scroll to top to load older messages" pattern
+ *
+ * Features:
+ * - Cursor-based pagination (backend returns next_cursor)
+ * - Local-first: first page from cache, subsequent pages from API
+ * - WhatsApp behavior: smooth infinite scroll upwards
+ * - Memory efficient: limits max pages
+ *
+ * @param interactionId - The interaction ID to fetch timeline for
+ * @param options - Configuration options
+ */
+export const useTimelineInfinite = (
+  interactionId: string,
+  options: UseTimelineInfiniteOptions = {}
+): UseTimelineInfiniteResult => {
+  const { enabled = true, pageSize = 50 } = options;
+
+  const authContext = useAuthContext();
+  const user = authContext?.user;
+
+  logger.debug(`[useTimelineInfinite] Hook called: interactionId=${interactionId}, pageSize=${pageSize}`, 'timeline_query');
+
+  const queryResult = useInfiniteQuery({
+    queryKey: queryKeys.timelineInfinite(interactionId, pageSize),
+    queryFn: async ({ pageParam }) => {
+      const cursor = pageParam as string | undefined;
+
+      logger.debug(`[useTimelineInfinite] Fetching page: cursor=${cursor || 'initial'}`, 'timeline_query');
+
+      // Build API request
+      const path = API_PATHS.INTERACTION.TIMELINE(interactionId);
+      const params: any = {
+        limit: pageSize,
+        currentUserEntityId: user?.entityId
+      };
+
+      if (cursor) {
+        params.cursor = cursor;
+      }
+
+      try {
+        const response = await apiClient.get(path, { params });
+
+        let items: TimelineItem[] = [];
+        let nextCursor: string | undefined;
+        let hasMore = false;
+
+        // Parse response (backend returns: {items, next_cursor, has_more_next})
+        const raw = response.data;
+
+        if (Array.isArray(raw?.items)) {
+          items = raw.items;
+          nextCursor = raw.next_cursor || raw.nextCursor;
+          hasMore = raw.has_more_next ?? raw.hasMore ?? false;
+        } else if (raw?.data && Array.isArray(raw.data.items)) {
+          items = raw.data.items;
+          nextCursor = raw.data.next_cursor || raw.data.nextCursor;
+          hasMore = raw.data.has_more_next ?? raw.data.hasMore ?? false;
+        } else if (typeof raw?.items === 'string') {
+          // Handle stringified response
+          try {
+            const parsedItems = JSON.parse(raw.items);
+            if (Array.isArray(parsedItems)) {
+              items = parsedItems;
+            } else if (parsedItems && typeof parsedItems === 'object') {
+              items = Object.values(parsedItems).map(item => {
+                if (typeof item === 'string') {
+                  try {
+                    return JSON.parse(item);
+                  } catch {
+                    return item;
+                  }
+                }
+                return item;
+              });
+            }
+            nextCursor = raw.next_cursor || raw.nextCursor;
+            hasMore = raw.has_more_next ?? raw.hasMore ?? false;
+          } catch (parseError) {
+            logger.warn(`[useTimelineInfinite] Error parsing stringified items: ${String(parseError)}`, 'timeline_query');
+          }
+        }
+
+        logger.debug(`[useTimelineInfinite] Page loaded: ${items.length} items, hasMore=${hasMore}, nextCursor=${nextCursor}`, 'timeline_query');
+
+        // Save to local cache (background)
+        if (items.length > 0) {
+          setTimeout(async () => {
+            try {
+              const messagesToSave = items
+                .filter(item => (item.type === 'message' || item.itemType === 'message') && item.id && item.interaction_id)
+                .map(item => ({
+                  ...item,
+                  id: String(item.id),
+                  interaction_id: String(item.interaction_id),
+                  itemType: 'message',
+                  type: 'message',
+                  sender_entity_id: item.sender_entity_id ? String(item.sender_entity_id) : 'system_or_unknown',
+                  created_at: typeof item.createdAt === 'number' ? new Date(item.createdAt).toISOString() : String(item.createdAt || item.timestamp),
+                  metadata: { ...item.metadata, isOptimistic: false }
+                }));
+
+              const transactionsToSave = items
+                .filter(item => (item.type === 'transaction' || item.itemType === 'transaction') && item.id && item.interaction_id)
+                .map(item => ({
+                  ...item,
+                  id: String(item.id),
+                  interaction_id: String(item.interaction_id),
+                  itemType: 'transaction',
+                  type: 'transaction',
+                  from_account_id: item.from_account_id || item.from_entity_id,
+                  to_account_id: item.to_account_id || item.to_entity_id,
+                  created_at: typeof item.createdAt === 'number' ? new Date(item.createdAt).toISOString() : String(item.createdAt || item.timestamp),
+                  status: item.status || 'completed',
+                  transaction_type: item.transaction_type || 'transfer',
+                  entry_type: item.entry_type,
+                  metadata: { ...item.metadata, isOptimistic: false }
+                }));
+
+              if (messagesToSave.length > 0) {
+                await messageRepository.saveMessages(messagesToSave);
+              }
+              if (transactionsToSave.length > 0) {
+                await transactionRepository.saveTransactions(transactionsToSave);
+              }
+            } catch (saveError) {
+              logger.debug(`[useTimelineInfinite] Background save failed: ${String(saveError)}`, 'timeline_query');
+            }
+          }, 100);
+        }
+
+        // Add date separators to this page
+        const itemsWithDates = timelineRepository.addDateSeparators(items);
+
+        return {
+          items: itemsWithDates,
+          nextCursor,
+          hasMore,
+        };
+      } catch (error) {
+        logger.error(`[useTimelineInfinite] Failed to fetch page: ${String(error)}`, 'timeline_query');
+        throw error;
+      }
+    },
+    getNextPageParam: (lastPage) => {
+      // Return nextCursor if there are more pages, undefined otherwise
+      return lastPage.hasMore ? lastPage.nextCursor : undefined;
+    },
+    initialPageParam: undefined, // No cursor for first page
+    enabled: enabled && !!interactionId && !!user?.entityId,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 60 * 60 * 1000, // 1 hour
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+    refetchOnMount: false,
+    networkMode: 'offlineFirst',
+    maxPages: 10, // Limit memory usage - keep max 10 pages (500 messages)
+    retry: (failureCount, error: any) => {
+      if (!interactionId || !enabled) return false;
+      if (error?.status >= 400 && error?.status < 500) return false;
+      return failureCount < 1;
+    },
+    retryDelay: 2000,
+  });
+
+  // Flatten all pages for convenience
+  const flatTimeline = queryResult.data?.pages.flatMap(page => page.items) || [];
+
+  logger.debug(`[useTimelineInfinite] Query state: pages=${queryResult.data?.pages.length || 0}, flatItems=${flatTimeline.length}, hasNextPage=${queryResult.hasNextPage}`, 'timeline_query');
+
+  return {
+    pages: queryResult.data?.pages.map(p => p.items) || [],
+    flatTimeline,
+    isLoading: queryResult.isLoading,
+    isError: queryResult.isError,
+    error: queryResult.error,
+    fetchNextPage: queryResult.fetchNextPage,
+    hasNextPage: queryResult.hasNextPage ?? false,
+    isFetchingNextPage: queryResult.isFetchingNextPage,
+    refetch: queryResult.refetch,
+  };
+};
+
+/**
+ * Hook to prefetch first page of infinite timeline
+ */
+export const usePrefetchTimelineInfinite = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuthContext();
+
+  return useCallback(async (interactionId: string, pageSize: number = 50) => {
+    if (!interactionId || !user?.entityId) {
+      logger.debug(`[usePrefetchTimelineInfinite] Skipping - missing interactionId or user`, 'timeline_query');
+      return;
+    }
+
+    // Check if we already have data
+    const existingData = queryClient.getQueryData(queryKeys.timelineInfinite(interactionId, pageSize));
+    if (existingData) {
+      logger.debug(`[usePrefetchTimelineInfinite] Skipping - data exists for: ${interactionId}`, 'timeline_query');
+      return;
+    }
+
+    logger.debug(`[usePrefetchTimelineInfinite] Prefetching for: ${interactionId}`, 'timeline_query');
+
+    try {
+      await queryClient.prefetchInfiniteQuery({
+        queryKey: queryKeys.timelineInfinite(interactionId, pageSize),
+        queryFn: async ({ pageParam }) => {
+          const cursor = pageParam as string | undefined;
+          const path = API_PATHS.INTERACTION.TIMELINE(interactionId);
+          const params: any = {
+            limit: pageSize,
+            currentUserEntityId: user.entityId
+          };
+
+          if (cursor) {
+            params.cursor = cursor;
+          }
+
+          const response = await apiClient.get(path, { params });
+          const raw = response.data;
+
+          let items: TimelineItem[] = [];
+          let nextCursor: string | undefined;
+          let hasMore = false;
+
+          if (Array.isArray(raw?.items)) {
+            items = raw.items;
+            nextCursor = raw.next_cursor || raw.nextCursor;
+            hasMore = raw.has_more_next ?? raw.hasMore ?? false;
+          }
+
+          const itemsWithDates = timelineRepository.addDateSeparators(items);
+
+          return {
+            items: itemsWithDates,
+            nextCursor,
+            hasMore,
+          };
+        },
+        initialPageParam: undefined,
+        pages: 1, // Only prefetch first page
+      });
+    } catch (error) {
+      logger.debug(`[usePrefetchTimelineInfinite] Prefetch failed: ${String(error)}`, 'timeline_query');
+    }
+  }, [queryClient, user?.entityId]);
+};

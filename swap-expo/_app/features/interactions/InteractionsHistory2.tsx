@@ -22,6 +22,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useAuthContext } from '../auth/context/AuthContext';
 import { useInteractions, InteractionItem } from '../../hooks-data/useInteractions';
 import { usePrefetchTimeline } from '../../hooks-data/useTimeline';
+import { useWebSocketQueryInvalidation } from '../../hooks/useWebSocketQueryInvalidation';
 // EntitySearchResult type - keeping for compatibility
 interface EntitySearchResult {
   id: string;
@@ -159,14 +160,17 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
   const isAuthenticated = authContext.isAuthenticated;
   
   // 🚀 SIMPLIFIED TanStack Query usage - no complex loading state management
-  const { 
-    interactions: interactionsList, 
-    isLoading: isLoadingInteractions, 
+  const {
+    interactions: interactionsList,
+    isLoading: isLoadingInteractions,
     refetch: refreshInteractions,
     isError: hasInteractionsError,
     error: interactionsError,
     isRefetching
   } = useInteractions({ enabled: !!user });
+
+  // 🚀 REAL-TIME: Listen for WebSocket events to update chat list in real-time
+  useWebSocketQueryInvalidation(); // No interactionId = listens to ALL interactions
 
   // 🚀 PROFESSIONAL: Add intelligent conversation preloading
   const prefetchTimeline = usePrefetchTimeline();

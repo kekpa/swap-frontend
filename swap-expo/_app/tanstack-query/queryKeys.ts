@@ -19,7 +19,8 @@ export const queryKeys = {
   // Timeline related queries
   timeline: (interactionId: string) => ['timeline', interactionId] as const,
   timelineWithLimit: (interactionId: string, limit: number) => ['timeline', interactionId, 'limit', limit] as const,
-  
+  timelineInfinite: (interactionId: string, pageSize: number) => ['timeline', interactionId, 'infinite', pageSize] as const,
+
   // Message related queries
   messages: ['messages'] as const,
   messagesByInteraction: (interactionId: string) => ['messages', 'interaction', interactionId] as const,

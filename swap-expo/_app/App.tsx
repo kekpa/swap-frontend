@@ -57,14 +57,38 @@ const AppLifecycleHandler: React.FC<{ children: React.ReactNode }> = ({ children
   }
   
   useEffect(() => {
+    // Professional debugging - log every single trigger
+    console.log('🔥 [AppLifecycleHandler] useEffect triggered:', {
+      isAuthenticated: authContext.isAuthenticated,
+      hasUser: !!authContext.user,
+      userId: authContext.user?.entityId,
+      isLoading: authContext.isLoading,
+      timestamp: new Date().toISOString(),
+    });
+
     if (authContext.isAuthenticated && authContext.user && !authContext.isLoading) {
+      console.log('🔥 [AppLifecycleHandler] ✅ ALL CONDITIONS MET - Calling initialize()');
+
       // Initialize services when user is authenticated
       appLifecycleManager.initialize(authContext).catch(error => {
         logger.error('[AppLifecycleHandler] Failed to initialize services:', error);
+        console.error('🔥 [AppLifecycleHandler] ❌ Initialize failed:', error);
       });
     } else if (!authContext.isAuthenticated && !authContext.isLoading) {
+      console.log('🔥 [AppLifecycleHandler] User logged out - cleaning up services');
       // Cleanup services when user logs out
       appLifecycleManager.cleanup();
+    } else {
+      console.log('🔥 [AppLifecycleHandler] ⏸️ CONDITIONS NOT MET - Skipping initialization:', {
+        reason: !authContext.isAuthenticated ? 'NOT_AUTHENTICATED' :
+                !authContext.user ? 'NO_USER_OBJECT' :
+                authContext.isLoading ? 'STILL_LOADING' : 'UNKNOWN',
+        details: {
+          isAuthenticated: authContext.isAuthenticated,
+          hasUser: !!authContext.user,
+          isLoading: authContext.isLoading,
+        }
+      });
     }
   }, [authContext.isAuthenticated, authContext.user, authContext.isLoading]);
 

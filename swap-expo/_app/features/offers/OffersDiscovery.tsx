@@ -44,9 +44,15 @@ const OffersDiscoveryScreen: React.FC = () => {
   const handleEarnPress = () => navigation.navigate('Challenges');
   const handleMyPointsPress = () => navigation.navigate('OffersHome');
   
+  // TODO: Replace with real API call when offers backend is implemented
+  // Currently uses mock data - refresh simulates API latency for demo purposes
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => { console.log('Refreshing offers data'); setRefreshing(false); }, 1500);
+    // Simulate API latency (replace with actual TanStack Query refetch)
+    setTimeout(() => {
+      console.log('[OffersDiscovery] Refresh triggered - mock data (no backend yet)');
+      setRefreshing(false);
+    }, 1500);
   }, []);
 
   const getHeaderInitials = () => {

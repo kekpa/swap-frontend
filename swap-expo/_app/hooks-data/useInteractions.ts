@@ -276,7 +276,7 @@ export const useInteractions = (
   // Manual refetch function
   const refetch = useCallback(() => {
     logger.debug('[useInteractions] Manual refetch triggered', 'interactions_query');
-    queryResult.refetch();
+    return queryResult.refetch();
   }, [queryResult.refetch]);
 
   return {
