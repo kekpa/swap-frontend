@@ -134,13 +134,32 @@ class WebSocketService {
           }
         }, timeout);
 
+        // Set up timeout for authentication (5 seconds after connection)
+        let authTimeout: NodeJS.Timeout | null = null;
+
         this.socket.on('connect', () => {
           clearTimeout(connectionTimeout);
           this.isConnected = true;
-          this.isAuthenticated = true;
           this.reconnectAttempts = 0;
           logger.info('[WebSocket] ✅ Connected successfully');
-          resolve(true);
+          console.log('🔥🔥🔥 [websocketService] SOCKET CONNECTED:', {
+            socketId: this.socket?.id,
+            willAuthenticate: true,
+            timestamp: new Date().toISOString()
+          });
+
+          // Send authentication message to backend
+          logger.debug('[WebSocket] 🔐 Sending authentication token...');
+          console.log('🔥🔥🔥 [websocketService] SENDING AUTH TOKEN');
+          this.socket!.emit('authenticate', { token });
+
+          // Wait for 'authenticated' event before resolving (5 second timeout)
+          authTimeout = setTimeout(() => {
+            if (!this.isAuthenticated) {
+              logger.warn('[WebSocket] ⏰ Authentication timeout - no response from backend');
+              resolve(false);
+            }
+          }, 5000);
         });
 
         this.socket.on('disconnect', (reason) => {
@@ -175,11 +194,20 @@ class WebSocketService {
         
         // Handle authentication events
         this.socket.on('authenticated', () => {
+          if (authTimeout) clearTimeout(authTimeout);
           this.isAuthenticated = true;
           logger.info('[WebSocket] 🔐 Authentication successful');
+          console.log('🔥🔥🔥 [websocketService] AUTHENTICATED EVENT RECEIVED:', {
+            isAuthenticated: this.isAuthenticated,
+            isConnected: this.isConnected,
+            socketId: this.socket?.id,
+            timestamp: new Date().toISOString()
+          });
+          resolve(true); // NOW resolve after backend confirms authentication
         });
 
         this.socket.on('unauthorized', (error) => {
+          if (authTimeout) clearTimeout(authTimeout);
           this.isAuthenticated = false;
           logger.error('[WebSocket] 🚫 Authentication failed:', error.message);
           resolve(false);
@@ -235,12 +263,18 @@ class WebSocketService {
       return;
     }
 
-    if (this.isConnected && this.socket) {
-      this.socket.emit('join_interaction', { interactionId });
-      logger.debug(`[WebSocket] 🏠 Joined interaction: ${interactionId}`);
-      } else {
+    if (!this.isConnected || !this.socket) {
       logger.warn(`[WebSocket] ⚠️ Cannot join interaction ${interactionId} - not connected`);
-      }
+      return;
+    }
+
+    if (!this.isAuthenticated) {
+      logger.warn(`[WebSocket] Socket not authenticated. Cannot join room.`);
+      return;
+    }
+
+    this.socket.emit('join_interaction', { interactionId });
+    logger.debug(`[WebSocket] 🏠 Joined interaction: ${interactionId}`);
   }
 
   leaveInteraction(interactionId: string): void {
@@ -275,11 +309,25 @@ class WebSocketService {
       return () => {};
     }
 
-    this.socket.on('new_message', callback);
-    
+    // Wrap callback with logging to track raw Socket.IO events
+    const wrappedCallback = (data: any) => {
+      console.log('🔥🔥🔥 [websocketService] RAW SOCKET.IO EVENT RECEIVED:', {
+        event: 'new_message',
+        messageId: data?.id,
+        interactionId: data?.interaction_id,
+        senderId: data?.sender_entity_id,
+        timestamp: new Date().toISOString(),
+        socketConnected: this.isConnected,
+        socketAuthenticated: this.isAuthenticated,
+      });
+      callback(data);
+    };
+
+    this.socket.on('new_message', wrappedCallback);
+
     return () => {
       if (this.socket) {
-        this.socket.off('new_message', callback);
+        this.socket.off('new_message', wrappedCallback);
           }
     };
   }

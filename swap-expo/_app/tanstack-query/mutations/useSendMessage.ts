@@ -182,10 +182,11 @@ export const useSendMessage = () => {
         }
       }
 
-      // Invalidate related queries to ensure fresh data
+      // Invalidate related queries - WebSocket handles the actual refetch
+      // Pure WebSocket pattern: mark as stale but don't HTTP refetch (WebSocket will trigger update)
       queryClient.invalidateQueries({
         queryKey: queryKeys.interactions,
-        refetchType: 'none', // Don't refetch immediately
+        refetchType: 'none', // WebSocket-only updates, no HTTP fallback
       });
     },
 

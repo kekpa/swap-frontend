@@ -34,6 +34,13 @@ export const useWebSocketQueryInvalidation = (interactionId?: string) => {
      * This is fired by WebSocketHandler when a message:new event is received
      */
     const handleMessageNew = (data: any) => {
+      console.log('🔥🔥🔥 [useWebSocketQueryInvalidation] HANDLER CALLED - message:new:', {
+        eventInteractionId: data.interaction_id,
+        scopedInteractionId: interactionId,
+        shouldInvalidate: !interactionId || data.interaction_id === interactionId,
+        timestamp: new Date().toISOString()
+      });
+
       logger.debug('[useWebSocketQueryInvalidation] 🔔 Received message:new event:', {
         eventInteractionId: data.interaction_id,
         scopedInteractionId: interactionId,
@@ -60,11 +67,27 @@ export const useWebSocketQueryInvalidation = (interactionId?: string) => {
         refetchType: 'active', // Only refetch if query is currently active/mounted
       });
 
+      // Also invalidate infinite timeline queries (for chat pagination)
+      logger.debug('[useWebSocketQueryInvalidation] 🔄 Invalidating infinite timeline queries:', targetInteractionId);
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey;
+          // Match: ['timeline', interactionId, 'infinite', pageSize]
+          return (
+            Array.isArray(key) &&
+            key[0] === 'timeline' &&
+            key[1] === targetInteractionId &&
+            key[2] === 'infinite'
+          );
+        },
+        refetchType: 'active', // Only refetch if query is currently active/mounted
+      });
+
       // Also invalidate interactions list to update last message preview
       logger.debug('[useWebSocketQueryInvalidation] 🔄 Invalidating interactions list');
       queryClient.invalidateQueries({
         queryKey: queryKeys.interactions,
-        refetchType: 'none', // Don't refetch interactions list, just mark as stale
+        refetchType: 'active', // Refetch if component is mounted (Slack/WhatsApp pattern)
       });
     };
 
@@ -99,8 +122,20 @@ export const useWebSocketQueryInvalidation = (interactionId?: string) => {
       interactionId: interactionId || 'all',
     });
 
+    console.log('🔥🔥🔥 [useWebSocketQueryInvalidation] SETTING UP LISTENERS:', {
+      interactionId: interactionId || 'all',
+      willListenTo: ['message:new', 'transaction:update'],
+      timestamp: new Date().toISOString()
+    });
+
     eventEmitter.on('message:new', handleMessageNew);
     eventEmitter.on('transaction:update', handleTransactionUpdate);
+
+    console.log('🔥🔥🔥 [useWebSocketQueryInvalidation] LISTENERS REGISTERED:', {
+      interactionId: interactionId || 'all',
+      registeredEvents: ['message:new', 'transaction:update'],
+      timestamp: new Date().toISOString()
+    });
 
     // Cleanup on unmount
     return () => {

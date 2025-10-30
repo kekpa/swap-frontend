@@ -117,6 +117,13 @@ class WebSocketHandler {
     });
     
     console.log('🔥 [WebSocketHandler] ✅ ALL MESSAGE HANDLERS REGISTERED');
+    console.log('🔥 [WebSocketHandler] Handler registration verification:', {
+      messageCleanupExists: !!this.messageCleanup,
+      transactionCleanupExists: !!this.transactionCleanup,
+      socketConnected: websocketService.isSocketConnected(),
+      socketAuthenticated: websocketService.isSocketAuthenticated(),
+      timestamp: new Date().toISOString()
+    });
     logger.debug('[WebSocketHandler] Message handlers set up successfully');
   }
   

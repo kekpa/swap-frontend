@@ -39,8 +39,19 @@ class AppLifecycleManager {
    */
   async initialize(authContext: AuthContext): Promise<void> {
     const { isAuthenticated, user, getAccessToken } = authContext;
-    
-    if (!isAuthenticated || !user || this.isInitialized) {
+
+    if (!isAuthenticated || !user) {
+      return;
+    }
+
+    // Check if WebSocket is actually connected, reset if stale (handles Metro hot-reload)
+    if (this.isInitialized && !websocketService.isSocketConnected()) {
+      logger.info('[AppLifecycleManager] 🔄 Detected stale initialization (WebSocket disconnected), resetting...');
+      if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🔄 Resetting stale initialization state');
+      this.isInitialized = false;
+    }
+
+    if (this.isInitialized) {
       return;
     }
 
@@ -48,12 +59,12 @@ class AppLifecycleManager {
     if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🚀 STARTING service initialization...');
 
     try {
-      // Initialize WebSocket connection
-      await this.initializeWebSocket(getAccessToken);
-      
-      // Initialize network monitoring
+      // CRITICAL: Initialize network monitoring FIRST - must detect online/offline before WebSocket attempts connection
       await this.initializeNetworkService(authContext);
-      
+
+      // Initialize WebSocket connection AFTER network state is known
+      await this.initializeWebSocket(getAccessToken);
+
       this.isInitialized = true;
       if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] ✅ All services initialized successfully');
       
@@ -68,15 +79,31 @@ class AppLifecycleManager {
    */
   private async initializeWebSocket(getAccessToken: () => Promise<string>): Promise<void> {
     try {
+      // CRITICAL: Log NetworkService state BEFORE attempting WebSocket connection
+      const networkState = networkService.getNetworkState();
+      if (IS_DEVELOPMENT) {
+        console.log('🔥 [AppLifecycleManager] 🌐 NetworkService state before WebSocket:', {
+          isConnected: networkState.isConnected,
+          isInternetReachable: networkState.isInternetReachable,
+          isOfflineMode: networkState.isOfflineMode,
+          type: networkState.type
+        });
+      }
+
+      if (networkState.isOfflineMode) {
+        logger.warn('[AppLifecycleManager] ⚠️ NetworkService reports OFFLINE - WebSocket connection may fail');
+        if (IS_DEVELOPMENT) console.warn('🔥 [AppLifecycleManager] ⚠️ WARNING: NetworkService reports OFFLINE mode!');
+      }
+
       if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🧪 Testing WebSocket connection...');
       const isConnected = websocketService.isSocketConnected();
       const isAuthenticated = websocketService.isSocketAuthenticated();
-      
+
       if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] WebSocket status:', {
         isConnected,
         isAuthenticated
       });
-      
+
       if (!isConnected) {
         if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🔌 WebSocket not connected, attempting to connect...');
         const token = await getAccessToken();

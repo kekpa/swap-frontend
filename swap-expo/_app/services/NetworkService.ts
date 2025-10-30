@@ -122,7 +122,9 @@ class NetworkService extends SimpleEventEmitter {
       isConnected: netInfoState.isConnected ?? false,
       isInternetReachable: netInfoState.isInternetReachable ?? false,
       type: netInfoState.type || 'unknown',
-      isOfflineMode: !netInfoState.isConnected || !netInfoState.isInternetReachable,
+      // Only mark as offline if WiFi/cellular is disconnected
+      // Don't check isInternetReachable because local backend might be reachable even without public internet
+      isOfflineMode: !netInfoState.isConnected,
     };
     
     // Log network state changes
