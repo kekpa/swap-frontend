@@ -114,6 +114,13 @@ class WebSocketService {
         const socketUrl = `${ENV.REALTIME_URL}/messaging`;
         logger.debug(`[WebSocket] 🔌 Connecting to: ${socketUrl}`);
         logger.info(`[WebSocket] 🔌 Full URL for debugging: ${socketUrl}`);
+        console.log('🔥🔥🔥 [websocketService] ATTEMPTING CONNECTION:', {
+          url: socketUrl,
+          realtimeUrl: ENV.REALTIME_URL,
+          hasToken: !!token,
+          isOfflineMode: this.isOfflineMode,
+          timestamp: new Date().toISOString()
+        });
         
         this.socket = io(socketUrl, {
           auth: { token },
@@ -282,11 +289,36 @@ class WebSocketService {
       logger.debug(`[WebSocket] 📱 OFFLINE MODE: Cannot leave interaction ${interactionId}`);
           return;
         }
-        
+
     if (this.isConnected && this.socket) {
       this.socket.emit('leave_interaction', { interactionId });
       logger.debug(`[WebSocket] 🚪 Left interaction: ${interactionId}`);
     }
+  }
+
+  joinProfileRoom(profileId: string): void {
+    if (this.isOfflineMode) {
+      logger.debug(`[WebSocket] 📱 OFFLINE MODE: Cannot join profile room ${profileId}`);
+      return;
+    }
+
+    if (!this.isConnected || !this.socket) {
+      logger.warn(`[WebSocket] ⚠️ Cannot join profile room ${profileId} - not connected`);
+      return;
+    }
+
+    if (!this.isAuthenticated) {
+      logger.warn(`[WebSocket] Socket not authenticated. Cannot join profile room.`);
+      return;
+    }
+
+    this.socket.emit('join_profile_room', { profileId });
+    logger.info(`[WebSocket] 🏠 Joined profile room: ${profileId}`);
+    console.log('🔥🔥🔥 [websocketService] JOINED PROFILE ROOM:', {
+      profileId,
+      socketId: this.socket?.id,
+      timestamp: new Date().toISOString()
+    });
   }
 
   sendMessage(messageData: any): void {

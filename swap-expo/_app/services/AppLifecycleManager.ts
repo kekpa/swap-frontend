@@ -108,15 +108,21 @@ class AppLifecycleManager {
         if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🔌 WebSocket not connected, attempting to connect...');
         const token = await getAccessToken();
         if (token) {
-          await websocketService.connect(token);
+          const connected = await websocketService.connect(token);
           if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] ✅ WebSocket connected successfully');
+
+          // Join personal profile room for guaranteed message delivery (WhatsApp pattern)
+          if (connected && authContext.user?.profileId) {
+            if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🏠 Joining personal profile room...');
+            websocketService.joinProfileRoom(authContext.user.profileId);
+          }
         }
       }
-      
+
       // Initialize the WebSocketHandler
       if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🧪 Initializing WebSocket event handlers...');
       webSocketHandler.initialize();
-      
+
       if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 💰 Balance data handled by TanStack Query hooks');
       
     } catch (error) {
