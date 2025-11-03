@@ -63,7 +63,7 @@ class AppLifecycleManager {
       await this.initializeNetworkService(authContext);
 
       // Initialize WebSocket connection AFTER network state is known
-      await this.initializeWebSocket(getAccessToken);
+      await this.initializeWebSocket(getAccessToken, user);
 
       this.isInitialized = true;
       if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] ✅ All services initialized successfully');
@@ -77,7 +77,7 @@ class AppLifecycleManager {
   /**
    * Initialize WebSocket connection and handlers
    */
-  private async initializeWebSocket(getAccessToken: () => Promise<string>): Promise<void> {
+  private async initializeWebSocket(getAccessToken: () => Promise<string>, user: User | null = null): Promise<void> {
     try {
       // CRITICAL: Log NetworkService state BEFORE attempting WebSocket connection
       const networkState = networkService.getNetworkState();
@@ -112,9 +112,9 @@ class AppLifecycleManager {
           if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] ✅ WebSocket connected successfully');
 
           // Join personal profile room for guaranteed message delivery (WhatsApp pattern)
-          if (connected && authContext.user?.profileId) {
+          if (connected && user?.profileId) {
             if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🏠 Joining personal profile room...');
-            websocketService.joinProfileRoom(authContext.user.profileId);
+            websocketService.joinProfileRoom(user.profileId);
           }
         }
       }
