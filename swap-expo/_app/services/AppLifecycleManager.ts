@@ -109,12 +109,23 @@ class AppLifecycleManager {
         const token = await getAccessToken();
         if (token) {
           const connected = await websocketService.connect(token);
-          if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] ✅ WebSocket connected successfully');
+          if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] ✅ WebSocket connection result:', connected);
 
-          // Join personal profile room for guaranteed message delivery (WhatsApp pattern)
+          // CRITICAL: Only join profile room AFTER successful authentication
+          // The websocketService.connect() should return true only after authentication is complete
           if (connected && user?.profileId) {
-            if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🏠 Joining personal profile room...');
-            websocketService.joinProfileRoom(user.profileId);
+            if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🏠 WebSocket authenticated, joining personal profile room...');
+            
+            // Add small delay to ensure authentication is fully processed by backend
+            setTimeout(() => {
+              if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🏠 Attempting to join profile room:', user.profileId);
+              websocketService.joinProfileRoom(user.profileId);
+            }, 100);
+          } else {
+            if (IS_DEVELOPMENT) console.warn('🔥 [AppLifecycleManager] ⚠️ Cannot join profile room - not authenticated or no profileId:', {
+              connected,
+              profileId: user?.profileId
+            });
           }
         }
       }

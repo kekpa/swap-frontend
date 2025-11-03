@@ -157,13 +157,19 @@ class WebSocketService {
 
           // Send authentication message to backend
           logger.debug('[WebSocket] 🔐 Sending authentication token...');
-          console.log('🔥🔥🔥 [websocketService] SENDING AUTH TOKEN');
+          console.log('🔥🔥🔥 [websocketService] SENDING AUTH TOKEN:', {
+            tokenLength: token ? token.length : 0,
+            tokenStart: token ? token.substring(0, 20) : 'null',
+            socketId: this.socket?.id,
+            timestamp: new Date().toISOString()
+          });
           this.socket!.emit('authenticate', { token });
 
           // Wait for 'authenticated' event before resolving (5 second timeout)
           authTimeout = setTimeout(() => {
             if (!this.isAuthenticated) {
               logger.warn('[WebSocket] ⏰ Authentication timeout - no response from backend');
+              console.log('🔥🔥🔥 [websocketService] AUTH TIMEOUT - NO BACKEND RESPONSE');
               resolve(false);
             }
           }, 5000);
@@ -272,16 +278,63 @@ class WebSocketService {
 
     if (!this.isConnected || !this.socket) {
       logger.warn(`[WebSocket] ⚠️ Cannot join interaction ${interactionId} - not connected`);
+      console.log('🔥🔥🔥 [websocketService] INTERACTION JOIN FAILED - NOT CONNECTED:', {
+        interactionId,
+        isConnected: this.isConnected,
+        hasSocket: !!this.socket,
+        timestamp: new Date().toISOString()
+      });
       return;
     }
 
     if (!this.isAuthenticated) {
-      logger.warn(`[WebSocket] Socket not authenticated. Cannot join room.`);
+      logger.warn(`[WebSocket] Socket not authenticated. Cannot join interaction room.`);
+      console.log('🔥🔥🔥 [websocketService] INTERACTION JOIN FAILED - NOT AUTHENTICATED:', {
+        interactionId,
+        isAuthenticated: this.isAuthenticated,
+        timestamp: new Date().toISOString()
+      });
       return;
     }
 
-    this.socket.emit('join_interaction', { interactionId });
-    logger.debug(`[WebSocket] 🏠 Joined interaction: ${interactionId}`);
+    logger.info(`[WebSocket] 🏠 Attempting to join interaction: ${interactionId}`);
+    console.log('🔥🔥🔥 [websocketService] JOINING INTERACTION ROOM:', {
+      interactionId,
+      socketId: this.socket?.id,
+      isConnected: this.isConnected,
+      isAuthenticated: this.isAuthenticated,
+      timestamp: new Date().toISOString()
+    });
+
+    this.socket.emit('join_interaction', { interactionId }, (response: any) => {
+      if (response?.success) {
+        logger.info(`[WebSocket] 🏠 Successfully joined interaction: ${interactionId}`);
+        console.log('🔥🔥🔥 [websocketService] INTERACTION ROOM JOIN SUCCESS:', {
+          interactionId,
+          response,
+          socketId: this.socket?.id,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        logger.error(`[WebSocket] 🚫 Failed to join interaction: ${interactionId}`, response?.error);
+        console.log('🔥🔥🔥 [websocketService] INTERACTION ROOM JOIN FAILED:', {
+          interactionId,
+          error: response?.error,
+          socketId: this.socket?.id,
+          timestamp: new Date().toISOString()
+        });
+
+        // Retry once after a short delay if authentication failed
+        if (response?.error === 'Not authenticated') {
+          setTimeout(() => {
+            console.log('🔥🔥🔥 [websocketService] RETRYING INTERACTION ROOM JOIN after authentication failure...');
+            if (this.isConnected && this.socket && this.isAuthenticated) {
+              this.joinInteraction(interactionId);
+            }
+          }, 1000);
+        }
+      }
+    });
   }
 
   leaveInteraction(interactionId: string): void {
@@ -312,13 +365,37 @@ class WebSocketService {
       return;
     }
 
-    this.socket.emit('join_profile_room', { profileId });
-    logger.info(`[WebSocket] 🏠 Joined profile room: ${profileId}`);
-    console.log('🔥🔥🔥 [websocketService] JOINED PROFILE ROOM:', {
-      profileId,
-      socketId: this.socket?.id,
-      timestamp: new Date().toISOString()
+    this.socket.emit('join_profile_room', { profileId }, (response: any) => {
+      if (response?.success) {
+        logger.info(`[WebSocket] 🏠 Successfully joined profile room: ${profileId}`);
+        console.log('🔥🔥🔥 [websocketService] PROFILE ROOM JOIN SUCCESS:', {
+          profileId,
+          profileRoom: response.profileRoom,
+          socketId: this.socket?.id,
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        logger.error(`[WebSocket] 🚫 Failed to join profile room: ${profileId}`, response?.error);
+        console.log('🔥🔥🔥 [websocketService] PROFILE ROOM JOIN FAILED:', {
+          profileId,
+          error: response?.error,
+          socketId: this.socket?.id,
+          timestamp: new Date().toISOString()
+        });
+
+        // Retry once after a short delay if authentication failed
+        if (response?.error === 'Not authenticated') {
+          setTimeout(() => {
+            console.log('🔥🔥🔥 [websocketService] RETRYING PROFILE ROOM JOIN after authentication failure...');
+            if (this.isConnected && this.socket && this.isAuthenticated) {
+              this.joinProfileRoom(profileId);
+            }
+          }, 1000);
+        }
+      }
     });
+    
+    logger.info(`[WebSocket] 🏠 Attempting to join profile room: ${profileId}`);
   }
 
   sendMessage(messageData: any): void {
