@@ -43,7 +43,7 @@ class EventEmitter {
     });
 
     if (listenerCount === 0) {
-      console.warn(`🔥🔥🔥 [EventEmitter] ⚠️ WARNING: No listeners for '${event}' event!`);
+      console.log(`🔥🔥🔥 [EventEmitter] ℹ️ INFO: No listeners for '${event}' event (fire-and-forget)`);
     }
 
     this.listeners[event]?.forEach(cb => {

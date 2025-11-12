@@ -197,7 +197,7 @@ class NavigationStateManager {
 
     // Set transition timeout
     this.transitionTimer = setTimeout(() => {
-      logger.warn('[NavigationStateManager] ⚠️ Transition timeout exceeded', {
+      logger.debug('[NavigationStateManager] Transition timeout reached (this is normal for slower devices)', {
         route,
         duration: Date.now() - timestamp,
         maxDuration: this.config.transitionTimeout
