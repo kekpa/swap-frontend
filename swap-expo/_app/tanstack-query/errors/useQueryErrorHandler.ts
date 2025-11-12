@@ -76,8 +76,26 @@ export const useQueryErrorHandler = (options: UseQueryErrorHandlerOptions = {}) 
 
   // Handle query errors
   const handleQueryError = useCallback((error: unknown, queryKey: unknown[]) => {
+    // PROFESSIONAL FIX: Filter out query cancellation and dehydration errors
+    // These are technical warnings, not user-facing errors
+    if (error instanceof Error) {
+      const errorMessage = error.message.toLowerCase();
+      if (
+        errorMessage.includes('dehydrated') ||
+        errorMessage.includes('cancellederror') ||
+        errorMessage.includes('cancelled') ||
+        errorMessage.includes('abort')
+      ) {
+        logger.debug('[useQueryErrorHandler] Ignoring technical error (cancellation/dehydration):', {
+          error: error.message,
+          queryKey,
+        });
+        return; // Skip processing for technical errors
+      }
+    }
+
     const normalizedError = transformError ? transformError(error) : QueryErrorUtils.normalize(error);
-    
+
     if (logErrors) {
       logger.error('[useQueryErrorHandler] Query error:', {
         error: normalizedError.toJSON(),

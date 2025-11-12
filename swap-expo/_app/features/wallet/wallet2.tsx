@@ -164,6 +164,7 @@ const WalletDashboard: React.FC = () => {
     data: eligibility,
     isLoading: isLoadingEligibility,
     error: eligibilityError,
+    refetch: refetchEligibility,
   } = useWalletEligibility(entityId, { enabled: !!entityId });
 
   // NEW: Hook for wallet initialization
@@ -253,7 +254,14 @@ const WalletDashboard: React.FC = () => {
         try {
           logger.debug('[WalletDashboard] Auto-initializing wallet...');
           await initializeWalletMutation.mutateAsync(entityId);
-          setWalletState('locked'); // Show biometric prompt after initialization
+
+          // ✅ PROFESSIONAL: Refetch eligibility to get fresh hasWallets=true from server
+          // This ensures state machine is driven by actual server data, not assumptions
+          logger.debug('[WalletDashboard] Refetching eligibility after wallet initialization...');
+          await refetchEligibility();
+
+          // ✅ Let the useEffect state machine (line 216-269) handle transition to 'locked'
+          // State is now data-driven based on server response (Stripe/Revolut pattern)
         } catch (error) {
           logger.error('[WalletDashboard] Wallet initialization failed:', error);
           setWalletState('no-access');
@@ -483,6 +491,15 @@ const WalletDashboard: React.FC = () => {
       // Clear selected wallet when wallet is locked
       setSelectedWallet(null);
       return;
+    }
+
+    // ✅ PROFESSIONAL: Refetch balances when wallet first unlocks to ensure fresh data
+    if (currencyBalances.length === 0 && !isLoadingBalances) {
+      logger.debug('[WalletDashboard] 🔄 Wallet unlocked but no balances loaded - fetching now...', "WalletDashboard");
+      refreshBalances().catch((error: any) => {
+        logger.error('[WalletDashboard] Failed to fetch balances after unlock:', error);
+      });
+      return; // Wait for refetch to complete
     }
 
     // 🚀 WHATSAPP-STYLE: Auto-select primary wallet from TanStack Query data

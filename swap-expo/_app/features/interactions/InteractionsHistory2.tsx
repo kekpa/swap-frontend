@@ -22,7 +22,9 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useAuthContext } from '../auth/context/AuthContext';
 import { useInteractions, InteractionItem } from '../../hooks-data/useInteractions';
 import { usePrefetchTimeline } from '../../hooks-data/useTimeline';
-import { useWebSocketQueryInvalidation } from '../../hooks/useWebSocketQueryInvalidation';
+// Removed old useWebSocketQueryInvalidation - now using professional CacheUpdateManager
+import { websocketService } from '../../services/websocketService';
+import { userStateManager } from '../../services/UserStateManager';
 // EntitySearchResult type - keeping for compatibility
 interface EntitySearchResult {
   id: string;
@@ -45,6 +47,7 @@ import ContactList, { DisplayableContact } from '../../components2/ContactList';
 import SearchOverlay from '../header/SearchOverlay';
 import { inviteContactViaSMS } from '../../utils/inviteUtils';
 import { networkService } from '../../services/NetworkService';
+import apiClient from '../../_api/apiClient';
 
 // Define navigation type more precisely for nested context
 // InteractionsHistory is a screen in InteractionsStack, which is inside a Tab in RootStack's App screen.
@@ -169,8 +172,8 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     isRefetching
   } = useInteractions({ enabled: !!user });
 
-  // 🚀 REAL-TIME: Listen for WebSocket events to update chat list in real-time
-  useWebSocketQueryInvalidation(); // No interactionId = listens to ALL interactions
+  // 🚀 PROFESSIONAL REAL-TIME: CacheUpdateManager handles all real-time updates automatically
+  // No manual hook needed - global listeners in CacheUpdateManager update interactions list
 
   // 🚀 PROFESSIONAL: Add intelligent conversation preloading
   const prefetchTimeline = usePrefetchTimeline();
@@ -433,6 +436,64 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
       // Debug route params
       logger.debug('[InteractionsHistory] Screen focused', "InteractionsHistory");
       
+      // 🚀 ENHANCED DEBUGGING: Log detailed WebSocket state for recipient device investigation
+      console.log('🔥🔥🔥 [InteractionsHistory] SCREEN FOCUS - WebSocket Status Check:', {
+        hasUser: !!user,
+        userEntityId: user?.entityId,
+        userProfileId: user?.profileId,
+        isSocketConnected: websocketService.isSocketConnected(),
+        isSocketAuthenticated: websocketService.isSocketAuthenticated(),
+        timestamp: new Date().toISOString(),
+        deviceType: 'DEBUGGING_RECIPIENT_ISSUE'
+      });
+      
+      // 🚀 PHASE 1.1: Join profile room for guaranteed message delivery
+      // 🔧 FIX: Use API client profile ID (from auth token) instead of user object profile ID for consistency
+      const apiProfileId = apiClient.getProfileId();
+      const userProfileId = user?.profileId;
+      
+      console.log('🔥🔥🔥 [InteractionsHistory] PROFILE ID COMPARISON:', {
+        apiProfileId,
+        userProfileId,
+        match: apiProfileId === userProfileId,
+        timestamp: new Date().toISOString()
+      });
+      
+      // 🔧 DATABASE-FIRST FIX: Use entity_id for messaging rooms (unified personal/business system)
+      // Handle async getEntityId call properly within the focus effect
+      apiClient.getEntityId().then((apiEntityId) => {
+        if (apiEntityId) {
+          logger.debug(`[InteractionsHistory] [WebSocket] Joining entity room: ${apiEntityId}`, "InteractionsHistory");
+          console.log('🔥🔥🔥 [InteractionsHistory] ATTEMPTING ENTITY ROOM JOIN (DATABASE-FIRST):', {
+            entityId: apiEntityId,
+            userEntityId: user?.entityId,
+            isSocketConnected: websocketService.isSocketConnected(),
+            isSocketAuthenticated: websocketService.isSocketAuthenticated(),
+            source: 'JWT_TOKEN_ENTITY_ID',
+            timestamp: new Date().toISOString()
+          });
+          websocketService.joinEntityRoom(apiEntityId);
+        } else {
+          console.log('🔥🔥🔥 [InteractionsHistory] CANNOT JOIN ENTITY ROOM (DATABASE-FIRST):', {
+            hasUser: !!user,
+            apiEntityId,
+            userEntityId: user?.entityId,
+            reason: !apiEntityId ? 'NO_API_ENTITY_ID' : 'UNKNOWN',
+            timestamp: new Date().toISOString()
+          });
+        }
+      }).catch((error) => {
+        logger.error('[InteractionsHistory] Error getting entity ID:', error);
+        console.log('🔥🔥🔥 [InteractionsHistory] ENTITY ID ERROR:', {
+          error: error.message,
+          timestamp: new Date().toISOString()
+        });
+      });
+
+      // 🚀 PHASE 2.1: Clear current chat state when on interactions list
+      logger.debug(`[UserState] User on interactions list - clearing current chat`, "InteractionsHistory");
+      userStateManager.setCurrentChat(null);
+      
       // Initialize contacts if needed
       if (!contactsSynced && !hasInitialContactsRun.current) { 
         if (hasContactsPermission === null) {
@@ -466,8 +527,10 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         
         return () => {
         logger.debug("[InteractionsHistory] Screen unfocused", "InteractionsHistory");
+        // Note: We don't leave profile room here since we want to receive messages
+        // even when navigating to other screens within the app
       };
-    }, [route.params?.navigateToContact, route.params?.navigateToNewChat, contactsSynced, hasContactsPermission, initializeContacts, navigation])
+    }, [route.params?.navigateToContact, route.params?.navigateToNewChat, contactsSynced, hasContactsPermission, initializeContacts, navigation, user?.profileId])
   );
 
   // Handle search activation

@@ -1,8 +1,9 @@
 /**
  * QueryProvider Component
- * 
+ *
  * Provides TanStack Query context to the entire app.
  * Handles QueryClient initialization and cleanup.
+ * Integrates professional error handling with Toast notifications.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -10,10 +11,35 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { queryClient, initializeQueryClient, cleanupQueryClient } from './queryClient';
 import { logger } from '../utils/logger';
+import { useQueryErrorHandler } from './errors/useQueryErrorHandler';
+import Toast from '../components/Toast';
 
 interface QueryProviderProps {
   children: React.ReactNode;
 }
+
+// PROFESSIONAL FIX: Error handler must be INSIDE QueryClientProvider context
+const QueryErrorHandlerWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // PROFESSIONAL INTEGRATION: Connect existing error handler to Toast system
+  // This completes the infrastructure that was built but never integrated
+  useQueryErrorHandler({
+    queryClient,
+    showNotification: (message, type) => {
+      Toast.show({
+        type: type as 'success' | 'error' | 'info' | 'warning',
+        text1: message,
+        duration: 4000,
+      });
+    },
+    showUserNotifications: true,
+    logErrors: true,
+    // Error-specific handlers can be added here in the future:
+    // onAuthError: () => navigate to login,
+    // onNetworkError: () => show offline banner,
+  });
+
+  return <>{children}</>;
+};
 
 export const QueryProvider: React.FC<QueryProviderProps> = ({ children }) => {
   const [isInitialized, setIsInitialized] = useState(false);
@@ -57,7 +83,9 @@ export const QueryProvider: React.FC<QueryProviderProps> = ({ children }) => {
   
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
+      <QueryErrorHandlerWrapper>
+        {children}
+      </QueryErrorHandlerWrapper>
       {/* TODO: Re-add DevTools after fixing web component issues */}
     </QueryClientProvider>
   );

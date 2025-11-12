@@ -118,8 +118,15 @@ export const initializeQueryClient = async (): Promise<void> => {
         persister,
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         buster: '1.0.0', // Increment to invalidate old cache
+        dehydrateOptions: {
+          // PROFESSIONAL FIX: Exclude pending queries from dehydration
+          // This prevents "dehydrated query as pending" warnings during navigation
+          shouldDehydrateQuery: (query) => {
+            return query.state.status !== 'pending';
+          },
+        },
       });
-      
+
       logger.info('[QueryClient] ✅ Cache persistence enabled with AsyncStorage');
     } else {
       logger.warn('[QueryClient] ⚠️  Cache persistence disabled - persister creation failed');

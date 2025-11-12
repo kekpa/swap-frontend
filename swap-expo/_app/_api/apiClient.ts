@@ -142,28 +142,6 @@ const apiClient = axios.create({
   },
 });
 
-
-// Add an advice function to help developers avoid the api prefix issue
-const logApiWarning = () => {
-  if (IS_DEVELOPMENT) {
-    console.warn(
-      `
-⚠️ API USAGE WARNING ⚠️
-Do not include '/api/' in your endpoint paths when using apiClient.
-The client already includes '/api/v1' in the baseURL.
-
-INCORRECT: apiClient.get('/api/users/profile')
-CORRECT:   apiClient.get('/users/profile')
-      `
-    );
-  }
-};
-
-// Log the warning once on application startup
-logApiWarning();
-
-
-
 // Add a request interceptor for URL debugging
 apiClient.interceptors.request.use(
   async (config) => {
@@ -770,6 +748,27 @@ const setProfileId = (profileId: string | null) => {
   }
 };
 
+// Function to get current profile ID from headers (for WebSocket consistency)
+const getProfileId = (): string | null => {
+  return apiClient.defaults.headers.common["X-Profile-ID"] as string || null;
+};
+
+// 🔧 DATABASE-FIRST FIX: Function to get entity_id from JWT token for unified messaging
+const getEntityId = async (): Promise<string | null> => {
+  try {
+    const token = await getAccessToken();
+    if (!token) {
+      return null;
+    }
+    
+    const decoded: any = jwtDecode(token);
+    return decoded.entity_id || null;
+  } catch (error) {
+    logger.error('Error extracting entity_id from token:', error);
+    return null;
+  }
+};
+
 // Update the post method with custom timeout
 const post = async (url: string, data?: any, config?: AxiosRequestConfig) => {
 
@@ -827,6 +826,8 @@ const enhancedApiClient = {
   clearUserCache,
   clearFinancialCache,
   setProfileId,
+  getProfileId,
+  getEntityId,
   
   // Add token management functions
   refreshToken: async () => {

@@ -29,6 +29,7 @@ import { Toast } from '../../components/Toast';
 import logger from '../../utils/logger';
 import API_PATHS from '../../_api/apiPaths';
 import { websocketService } from '../../services/websocketService';
+import { userStateManager } from '../../services/UserStateManager';
 import { useTheme } from '../../theme/ThemeContext';
 import { Theme } from '../../theme/theme';
 import { useTimelineInfinite } from '../../hooks-data/useTimeline';
@@ -36,7 +37,7 @@ import { queryKeys } from '../../tanstack-query/queryKeys';
 import { queryClient } from '../../tanstack-query/queryClient';
 // DataContext replaced with TanStack Query hooks
 import { useSendMessage } from '../../tanstack-query/mutations/useSendMessage';
-import { useWebSocketQueryInvalidation } from '../../hooks/useWebSocketQueryInvalidation';
+import { useRealtimeUpdates } from '../../hooks/useRealtimeUpdates';
 import { useGetOrCreateDirectInteraction } from '../../tanstack-query/mutations/useCreateInteraction';
 import { useCreateDirectInteraction } from '../../tanstack-query/mutations/useCreateDirectInteraction';
 import { SendMessageRequest, MessageType, Message as ApiMessage, MessageStatus } from '../../types/message.types';
@@ -285,9 +286,9 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     isFetchingNextPage,
   } = useTimelineInfinite(currentInteractionId || '', { enabled: !!currentInteractionId, pageSize: 50 });
 
-  // 🔔 Layer 3: WebSocket event listener for real-time message sync
-  // This connects WebSocket events → React Query invalidation
-  useWebSocketQueryInvalidation(currentInteractionId || undefined);
+  // 🔔 Professional Real-time Updates (WhatsApp/Slack pattern)
+  // Direct cache updates instead of query invalidation
+  useRealtimeUpdates({ interactionId: currentInteractionId || undefined });
 
   // Debug logging for timeline state
   useEffect(() => {
@@ -407,18 +408,24 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
       );
 
       // Scroll to bottom when screen regains focus (WhatsApp/Messenger UX)
+      // Defensive: Wait longer for FlashList layout to complete
       setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: false });
-      }, 100);
-
-      // Join WebSocket room for real-time updates
-      if (currentInteractionId) {
-        if (websocketService.isSocketAuthenticated()) {
-          logger.debug(`[WebSocket] Joining interaction room: ${currentInteractionId}`, "ContactInteractionHistory");
-          websocketService.joinInteraction(currentInteractionId);
-        } else {
-          logger.warn('[WebSocket] Socket not authenticated. Cannot join room.');
+        try {
+          if (flatListRef.current && filteredItems.length > 0) {
+            flatListRef.current.scrollToEnd({ animated: false });
+          }
+        } catch (error) {
+          // Silently fail - FlashList layout timing issue
+          logger.debug('[ContactInteractionHistory] scrollToEnd skipped (layout not ready)', 'ContactInteractionHistory');
         }
+      }, 300);
+
+      // 🚀 PHASE 2.1: Global subscription model - no room joining needed!
+      // User is already subscribed to their profile room globally
+      // Just update user state to track current chat for smart notifications
+      if (currentInteractionId) {
+        logger.debug(`[UserState] User viewing chat: ${currentInteractionId}`, "ContactInteractionHistory");
+        userStateManager.setCurrentChat(currentInteractionId);
       }
       
       return () => {
@@ -426,10 +433,10 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
           `[ContactInteractionHistory] Screen unfocused. contactId: ${contactId}`,
           "ContactInteractionHistory"
         );
-        if (currentInteractionId) {
-          logger.debug(`[WebSocket] Leaving interaction room: ${currentInteractionId}`, "ContactInteractionHistory");
-          websocketService.leaveInteraction(currentInteractionId);
-        }
+        
+        // 🚀 PHASE 2.1: Clear current chat state (for smart notifications)
+        logger.debug(`[UserState] User left chat: ${currentInteractionId}`, "ContactInteractionHistory");
+        userStateManager.setCurrentChat(null);
       };
     }, [contactId, currentInteractionId])
   );
@@ -533,8 +540,15 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
 
       // Auto-scroll to bottom to show the latest message (WhatsApp/Messenger UX)
       setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+        try {
+          if (flatListRef.current && filteredItems.length > 0) {
+            flatListRef.current.scrollToEnd({ animated: true });
+          }
+        } catch (error) {
+          // Silently fail - FlashList layout timing issue
+          logger.debug('[ContactInteractionHistory] scrollToEnd skipped (layout not ready)', 'ContactInteractionHistory');
+        }
+      }, 300);
     } catch (error) {
       logger.error('[ContactInteractionHistory] Error sending message', error);
       setMessageInput(messageToSend); // Restore message input
@@ -555,8 +569,15 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     if (timelineItems.length > previousTimelineLength.current) {
       // New message arrived, scroll to bottom
       setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+        try {
+          if (flatListRef.current && filteredItems.length > 0) {
+            flatListRef.current.scrollToEnd({ animated: true });
+          }
+        } catch (error) {
+          // Silently fail - FlashList layout timing issue
+          logger.debug('[ContactInteractionHistory] scrollToEnd skipped (layout not ready)', 'ContactInteractionHistory');
+        }
+      }, 300);
     }
     previousTimelineLength.current = timelineItems.length;
   }, [timelineItems.length]);
@@ -748,7 +769,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
         <FlashList
           ref={flatListRef}
           data={filteredItems}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => `${item.type || item.itemType || 'unknown'}-${item.id}-${index}`}
           renderItem={renderTimelineItem}
           estimatedItemSize={80}
           contentContainerStyle={[
@@ -759,6 +780,11 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
           ListEmptyComponent={renderEmptyState}
           showsVerticalScrollIndicator={false}
           onScroll={(event) => {
+            // Defensive check for FlashList layout timing issue
+            if (!event?.nativeEvent?.contentOffset) {
+              return;
+            }
+
             // Load older messages when scrolling UP to the TOP
             const yOffset = event.nativeEvent.contentOffset.y;
             const threshold = 100; // Trigger when within 100px of top
