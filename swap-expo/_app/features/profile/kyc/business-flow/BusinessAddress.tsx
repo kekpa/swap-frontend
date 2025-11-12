@@ -1,6 +1,7 @@
 // Created: BusinessAddress component for business location KYC - 2025-06-28
+// Updated: Added pre-fill logic to load existing address data - 2025-11-09
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +13,8 @@ import {
   Alert,
   StatusBar,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -19,6 +22,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { ProfileStackParamList } from '../../../../navigation/profileNavigator';
 import { useTheme } from '../../../../theme/ThemeContext';
 import apiClient from '../../../../_api/apiClient';
+import { useKycCompletion } from '../../../../hooks-actions/useKycCompletion';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -26,31 +30,70 @@ const BusinessAddress: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProp<ProfileStackParamList, 'BusinessAddress'>>();
   const { theme } = useTheme();
+  const { completeBusinessInfo } = useKycCompletion();
+
+  const selectedCountry = route.params?.selectedCountry || '';
 
   const [address, setAddress] = useState({
-    street: '',
+    addressLine1: '',
+    addressLine2: '',
     city: '',
-    country: '',
+    postalCode: '',
+    country: selectedCountry,
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
 
   const returnToTimeline = route.params?.returnToTimeline;
   const sourceRoute = route.params?.sourceRoute;
 
+  // Load existing address on component mount
+  useEffect(() => {
+    loadExistingAddress();
+  }, []);
+
+  const loadExistingAddress = async () => {
+    try {
+      console.log('[BusinessAddress] Loading existing address...');
+      const response = await apiClient.get('/kyc/address');
+
+      if (response.data && response.data.address) {
+        const existingAddress = response.data.address;
+        setAddress({
+          street: existingAddress.addressLine1 || '',
+          city: existingAddress.city || '',
+          country: existingAddress.countryCode || '',
+        });
+        console.log('[BusinessAddress] ✅ Loaded existing address');
+      }
+    } catch (error) {
+      console.log('[BusinessAddress] No existing address found or error loading:', error);
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
   const handleSave = async () => {
-    if (!address.street.trim() || !address.city.trim()) {
-      Alert.alert('Required Fields', 'Please fill in the address details.');
+    if (!address.addressLine1.trim() || !address.city.trim() || !address.country) {
+      Alert.alert('Required Fields', 'Please fill in all required address details.');
       return;
     }
 
     setIsLoading(true);
     try {
-      await apiClient.post('/kyc/business-address', address);
-      
-      if (returnToTimeline) {
-        navigation.navigate('VerifyYourIdentity', { sourceRoute });
+      console.log('[BusinessAddress] 🎯 Using KYC completion hook for instant cache update');
+
+      // Use professional hook for completion (handles cache invalidation automatically)
+      const result = await completeBusinessInfo(address, {
+        returnToTimeline,
+        sourceRoute,
+        showSuccessAlert: false, // Checkmark provides sufficient visual feedback
+      });
+
+      if (result.success) {
+        console.log('[BusinessAddress] ✅ Business address saved with automatic cache invalidation');
       } else {
-        navigation.goBack();
+        Alert.alert('Save Error', 'Unable to save address information.');
       }
     } catch (error) {
       Alert.alert('Save Error', 'Unable to save address information.');
@@ -91,6 +134,17 @@ const BusinessAddress: React.FC = () => {
       fontWeight: '600' 
     },
     content: { padding: theme.spacing.lg },
+    title: {
+      fontSize: theme.typography.fontSize.xl,
+      fontWeight: '600',
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.xs,
+    },
+    subtitle: {
+      fontSize: theme.typography.fontSize.md,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.xl,
+    },
     inputGroup: { marginBottom: theme.spacing.lg },
     label: {
       fontSize: theme.typography.fontSize.sm,
@@ -108,8 +162,17 @@ const BusinessAddress: React.FC = () => {
       color: theme.colors.textPrimary,
       backgroundColor: theme.colors.card,
     },
+    readOnlyInput: {
+      backgroundColor: theme.colors.background,
+      justifyContent: 'center',
+    },
+    readOnlyText: {
+      fontSize: theme.typography.fontSize.md,
+      color: theme.colors.textSecondary,
+    },
     continueButton: {
       ...theme.commonStyles.primaryButton,
+      paddingVertical: theme.spacing.md,
       marginTop: theme.spacing.xl,
     },
     continueButtonText: {
@@ -120,7 +183,11 @@ const BusinessAddress: React.FC = () => {
   }), [theme]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+    >
       <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} />
       
       <View style={styles.header}>
@@ -128,24 +195,34 @@ const BusinessAddress: React.FC = () => {
           <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Business Address</Text>
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={isLoading}>
-          {isLoading ? (
-            <ActivityIndicator size="small" color={theme.colors.primary} />
-          ) : (
-            <Text style={styles.saveButtonText}>Save</Text>
-          )}
-        </TouchableOpacity>
+        <View style={styles.backButton} />
       </View>
 
       <ScrollView style={{ flex: 1 }}>
         <View style={styles.content}>
+          <Text style={styles.title}>Business Address</Text>
+          <Text style={styles.subtitle}>
+            Enter the physical location where your business operates.
+          </Text>
+
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Street Address</Text>
+            <Text style={styles.label}>Address Line 1</Text>
             <TextInput
               style={styles.input}
-              value={address.street}
-              onChangeText={(text) => setAddress(prev => ({ ...prev, street: text }))}
-              placeholder="Enter business address"
+              value={address.addressLine1}
+              onChangeText={(text) => setAddress(prev => ({ ...prev, addressLine1: text }))}
+              placeholder="Street address, P.O. box"
+              placeholderTextColor={theme.colors.textSecondary}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Address Line 2</Text>
+            <TextInput
+              style={styles.input}
+              value={address.addressLine2}
+              onChangeText={(text) => setAddress(prev => ({ ...prev, addressLine2: text }))}
+              placeholder="Apartment, suite, building (optional)"
               placeholderTextColor={theme.colors.textSecondary}
             />
           </View>
@@ -162,14 +239,21 @@ const BusinessAddress: React.FC = () => {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Country</Text>
+            <Text style={styles.label}>Postal Code</Text>
             <TextInput
               style={styles.input}
-              value={address.country}
-              onChangeText={(text) => setAddress(prev => ({ ...prev, country: text }))}
-              placeholder="Enter country"
+              value={address.postalCode}
+              onChangeText={(text) => setAddress(prev => ({ ...prev, postalCode: text }))}
+              placeholder="Enter postal code (optional)"
               placeholderTextColor={theme.colors.textSecondary}
             />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Country</Text>
+            <View style={[styles.input, styles.readOnlyInput]}>
+              <Text style={styles.readOnlyText}>{address.country || 'Not selected'}</Text>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -185,7 +269,7 @@ const BusinessAddress: React.FC = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 };
 

@@ -21,6 +21,8 @@ import { useTheme } from '../../../../theme/ThemeContext';
 import { Theme } from '../../../../theme/theme';
 import { useAuthContext } from '../../../auth/context/AuthContext';
 import apiClient from '../../../../_api/apiClient';
+import { BUSINESS_TYPES, EMPLOYEE_COUNT_OPTIONS } from '../../../../constants/businessConstants';
+import { useKycCompletion } from '../../../../hooks-actions/useKycCompletion';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -33,53 +35,41 @@ interface BusinessInformation {
   businessName: string;
   businessType: string;
   description: string;
-  industry: string;
+  industryIds: string[]; // Changed from industry to support multi-select
+  industryOther?: string;
   registrationNumber?: string;
   legalName?: string;
+  employeeCount?: string;
 }
 
-// Business type options for informal economy
-const BUSINESS_TYPES = [
-  { value: 'sole_proprietorship', label: 'Individual Trader' },
-  { value: 'partnership', label: 'Partnership' },
-  { value: 'small_business', label: 'Small Business' },
-  { value: 'cooperative', label: 'Cooperative' },
-  { value: 'family_business', label: 'Family Business' },
-  { value: 'other', label: 'Other' },
-];
-
-// Industry options for informal economy
-const INDUSTRIES = [
-  { value: 'agriculture', label: 'Agriculture & Farming' },
-  { value: 'retail', label: 'Retail & Trading' },
-  { value: 'services', label: 'Services' },
-  { value: 'manufacturing', label: 'Manufacturing & Crafts' },
-  { value: 'food_beverage', label: 'Food & Beverage' },
-  { value: 'transport', label: 'Transportation' },
-  { value: 'construction', label: 'Construction' },
-  { value: 'textiles', label: 'Textiles & Clothing' },
-  { value: 'technology', label: 'Technology' },
-  { value: 'other', label: 'Other' },
-];
+// Business type options imported from shared constants
+// Industry options fetched from database
 
 const BusinessInfoFlow: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProp<ProfileStackParamList, 'BusinessInfoFlow'>>();
   const { theme } = useTheme();
   const { user } = useAuthContext();
+  const { completeBusinessInfo } = useKycCompletion();
 
   const [businessInfo, setBusinessInfo] = useState<BusinessInformation>({
     businessName: '',
     businessType: '',
     description: '',
-    industry: '',
+    industryIds: [], // Changed to array
+    industryOther: '',
     registrationNumber: '',
     legalName: '',
+    employeeCount: '',
   });
+  const [currentScreen, setCurrentScreen] = useState<1 | 2>(1); // Track which screen is shown
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [showBusinessTypes, setShowBusinessTypes] = useState(false);
   const [showIndustries, setShowIndustries] = useState(false);
+  const [showEmployeeCount, setShowEmployeeCount] = useState(false);
+  const [industries, setIndustries] = useState<Array<{value: string, label: string, code?: string}>>([]);
+  const [isLoadingIndustries, setIsLoadingIndustries] = useState(true);
 
   const returnToTimeline = route.params?.returnToTimeline;
   const sourceRoute = route.params?.sourceRoute;
@@ -89,22 +79,44 @@ const BusinessInfoFlow: React.FC = () => {
     loadExistingBusinessInfo();
   }, []);
 
+  // Load industries from database
+  useEffect(() => {
+    loadIndustries();
+  }, []);
+
+  const loadIndustries = async () => {
+    try {
+      console.log('[BusinessInfoFlow] Loading industries from database...');
+      const response = await apiClient.get('/kyc/industries');
+      setIndustries(response.data.result || []);
+      console.log('[BusinessInfoFlow] ✅ Loaded', response.data?.result?.length || 0, 'industries');
+    } catch (error) {
+      console.error('[BusinessInfoFlow] Failed to load industries:', error);
+      // Fallback to empty array
+      setIndustries([]);
+    } finally {
+      setIsLoadingIndustries(false);
+    }
+  };
+
   const loadExistingBusinessInfo = async () => {
     try {
       console.log('[BusinessInfoFlow] Loading existing business information...');
-      const response = await apiClient.get('/kyc/business-information');
-      
-      if (response.data && response.data.businessInfo) {
-        const existingInfo = response.data.businessInfo;
+      const response = await apiClient.get('/kyc/identity');
+
+      if (response.data) {
+        const existingInfo = response.data;
         setBusinessInfo({
-          businessName: existingInfo.business_name || '',
-          businessType: existingInfo.business_type || '',
+          businessName: existingInfo.businessName || '',
+          businessType: existingInfo.businessType || '',
           description: existingInfo.description || '',
-          industry: existingInfo.industry || '',
-          registrationNumber: existingInfo.registration_number || '',
-          legalName: existingInfo.legal_name || '',
+          industryIds: existingInfo.industryIds || [], // Changed to array
+          industryOther: existingInfo.industryOther || '',
+          registrationNumber: existingInfo.registrationNumber || '',
+          legalName: existingInfo.legalName || '',
+          employeeCount: existingInfo.employeeCount || '',
         });
-        console.log('[BusinessInfoFlow] ✅ Loaded existing business information');
+        console.log('[BusinessInfoFlow] ✅ Loaded existing business information with', existingInfo.industryIds?.length || 0, 'industries');
       }
     } catch (error) {
       console.log('[BusinessInfoFlow] No existing business information found or error loading:', error);
@@ -113,8 +125,9 @@ const BusinessInfoFlow: React.FC = () => {
     }
   };
 
-  const handleSave = async () => {
-    // Validation
+  // Validate and move to screen 2
+  const handleContinueToIndustries = () => {
+    // Validate screen 1 fields
     if (!businessInfo.businessName.trim()) {
       Alert.alert('Required Field', 'Please enter your business name.');
       return;
@@ -125,34 +138,71 @@ const BusinessInfoFlow: React.FC = () => {
       return;
     }
 
-    if (!businessInfo.industry) {
-      Alert.alert('Required Field', 'Please select your industry.');
+    if (!businessInfo.legalName?.trim()) {
+      Alert.alert('Required Field', 'Please enter your legal business name.');
+      return;
+    }
+
+    if (!businessInfo.employeeCount) {
+      Alert.alert('Required Field', 'Please select your employee count.');
+      return;
+    }
+
+    // Move to industries screen
+    setCurrentScreen(2);
+  };
+
+  const handleSave = async () => {
+    // Validate industries (1-3 required)
+    if (businessInfo.industryIds.length < 1 || businessInfo.industryIds.length > 3) {
+      Alert.alert('Industry Selection', 'Please select 1-3 industries that best describe your business.');
+      return;
+    }
+
+    // If "Other" is selected, require industryOther field
+    const hasOther = businessInfo.industryIds.some(id => {
+      const industry = industries.find(i => i.value === id);
+      return industry?.code === 'other';
+    });
+
+    if (hasOther && !businessInfo.industryOther?.trim()) {
+      Alert.alert('Required Field', 'Please specify your custom industry.');
       return;
     }
 
     setIsLoading(true);
 
     try {
-      console.log('[BusinessInfoFlow] Saving business information...');
-      
+      console.log('[BusinessInfoFlow] 🎯 Using KYC completion hook for instant cache update');
+      console.log('[BusinessInfoFlow] Saving business information with', businessInfo.industryIds.length, 'industries...');
+
       const payload = {
-        business_name: businessInfo.businessName.trim(),
-        business_type: businessInfo.businessType,
+        businessName: businessInfo.businessName.trim(),
+        businessType: businessInfo.businessType,
         description: businessInfo.description.trim(),
-        industry: businessInfo.industry,
-        registration_number: businessInfo.registrationNumber?.trim() || null,
-        legal_name: businessInfo.legalName?.trim() || null,
+        industryIds: businessInfo.industryIds,
+        industryOther: businessInfo.industryOther?.trim() || null,
+        registrationNumber: businessInfo.registrationNumber?.trim() || null,
+        legalName: businessInfo.legalName?.trim(),
+        employeeCount: businessInfo.employeeCount,
       };
 
-      await apiClient.post('/kyc/business-information', payload);
-      
-      console.log('[BusinessInfoFlow] ✅ Business information saved successfully');
-      
-      // Navigate back to timeline
-      if (returnToTimeline) {
-        navigation.navigate('VerifyYourIdentity', { sourceRoute });
+      // Use professional hook for completion (handles cache invalidation automatically)
+      const result = await completeBusinessInfo(payload, {
+        returnToTimeline,
+        sourceRoute,
+        showSuccessAlert: false, // Checkmark provides sufficient visual feedback
+      });
+
+      if (result.success) {
+        console.log('[BusinessInfoFlow] ✅ Business information saved with automatic cache invalidation');
       } else {
-        navigation.goBack();
+        // Error already handled by hook, just show alert
+        Alert.alert(
+          'Save Error',
+          'Unable to save business information. Please check your connection and try again.',
+          [{ text: 'OK' }]
+        );
       }
     } catch (error) {
       console.error('[BusinessInfoFlow] Error saving business information:', error);
@@ -179,10 +229,15 @@ const BusinessInfoFlow: React.FC = () => {
     return type ? type.label : value;
   };
 
-  const getIndustryLabel = (value: string) => {
-    const industry = INDUSTRIES.find(i => i.value === value);
-    return industry ? industry.label : value;
-  };
+  // Helper: Sort industries alphabetically, "Other" last (MUST be before early return)
+  const sortedIndustries = useMemo(() => {
+    if (!industries || industries.length === 0) return [];
+
+    const otherIndustry = industries.find(i => i.code === 'other');
+    const normalIndustries = industries.filter(i => i.code !== 'other').sort((a, b) => a.label.localeCompare(b.label));
+
+    return otherIndustry ? [...normalIndustries, otherIndustry] : normalIndustries;
+  }, [industries]);
 
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.background },
@@ -309,6 +364,35 @@ const BusinessInfoFlow: React.FC = () => {
       color: theme.colors.textSecondary,
       fontStyle: 'italic',
     },
+    chipContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: theme.spacing.sm,
+      marginTop: theme.spacing.md,
+    },
+    chip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      borderRadius: 999,
+      borderWidth: 1.5,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    chipSelected: {
+      backgroundColor: theme.colors.primary,
+      borderColor: theme.colors.primary,
+    },
+    chipText: {
+      fontSize: theme.typography.fontSize.sm,
+      fontWeight: '500',
+      color: theme.colors.text,
+    },
+    chipTextSelected: {
+      color: theme.colors.white,
+      fontWeight: '600',
+    },
   }), [theme]);
 
   if (isLoadingData) {
@@ -325,7 +409,33 @@ const BusinessInfoFlow: React.FC = () => {
     );
   }
 
-  const isFormValid = businessInfo.businessName.trim() && businessInfo.businessType && businessInfo.industry;
+  // Helper: Toggle industry selection
+  const toggleIndustry = (industryId: string) => {
+    setBusinessInfo(prev => {
+      const currentIds = prev.industryIds;
+
+      if (currentIds.includes(industryId)) {
+        // Deselect
+        return { ...prev, industryIds: currentIds.filter(id => id !== industryId) };
+      } else {
+        // Select (max 3)
+        if (currentIds.length >= 3) {
+          Alert.alert('Selection Limit', 'You can select up to 3 industries.');
+          return prev;
+        }
+        return { ...prev, industryIds: [...currentIds, industryId] };
+      }
+    });
+  };
+
+  // Screen 1 validation
+  const isScreen1Valid = businessInfo.businessName.trim() &&
+    businessInfo.businessType &&
+    businessInfo.legalName?.trim() &&
+    businessInfo.employeeCount;
+
+  // Screen 2 validation
+  const isScreen2Valid = businessInfo.industryIds.length >= 1 && businessInfo.industryIds.length <= 3;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -333,31 +443,26 @@ const BusinessInfoFlow: React.FC = () => {
       
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={currentScreen === 1 ? handleBack : () => setCurrentScreen(1)}
+        >
           <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Business Information</Text>
-        <TouchableOpacity 
-          style={styles.saveButton} 
-          onPress={handleSave}
-          disabled={!isFormValid || isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator size="small" color={theme.colors.primary} />
-          ) : (
-            <Text style={[styles.saveButtonText, !isFormValid && { color: theme.colors.textSecondary }]}>
-              Save
-            </Text>
-          )}
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>
+          {currentScreen === 1 ? 'Business Information' : 'Select Industries'}
+        </Text>
+        <View style={{ width: 60 }} />
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.content}>
-          <Text style={styles.sectionTitle}>Tell us about your business</Text>
-          <Text style={styles.sectionDescription}>
-            Provide basic information about your business. This helps us understand your trading activities and comply with financial regulations.
-          </Text>
+          {currentScreen === 1 ? (
+            <>
+              <Text style={styles.sectionTitle}>Tell us about your business</Text>
+              <Text style={styles.sectionDescription}>
+                Provide basic information about your business. This helps us understand your trading activities and comply with financial regulations.
+              </Text>
 
           {/* Business Name */}
           <View style={styles.inputGroup}>
@@ -374,10 +479,10 @@ const BusinessInfoFlow: React.FC = () => {
             />
           </View>
 
-          {/* Legal Name (Optional) */}
+          {/* Legal Name (REQUIRED) */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>
-              Legal Name <Text style={styles.optionalText}>(if different from business name)</Text>
+              Legal Name <Text style={styles.requiredLabel}>*</Text>
             </Text>
             <TextInput
               style={styles.input}
@@ -427,37 +532,37 @@ const BusinessInfoFlow: React.FC = () => {
             </View>
           </View>
 
-          {/* Industry */}
+          {/* Employee Count (REQUIRED) */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>
-              Industry <Text style={styles.requiredLabel}>*</Text>
+              Employee Count <Text style={styles.requiredLabel}>*</Text>
             </Text>
             <View style={{ position: 'relative' }}>
               <TouchableOpacity
                 style={styles.picker}
-                onPress={() => setShowIndustries(!showIndustries)}
+                onPress={() => setShowEmployeeCount(!showEmployeeCount)}
               >
                 <Text style={[
                   styles.pickerText,
-                  !businessInfo.industry && styles.pickerPlaceholder
+                  !businessInfo.employeeCount && styles.pickerPlaceholder
                 ]}>
-                  {businessInfo.industry ? getIndustryLabel(businessInfo.industry) : 'Select industry'}
+                  {businessInfo.employeeCount ? EMPLOYEE_COUNT_OPTIONS.find(opt => opt.value === businessInfo.employeeCount)?.label : 'Select employee count'}
                 </Text>
                 <Ionicons name="chevron-down" size={20} color={theme.colors.textSecondary} />
               </TouchableOpacity>
-              
-              {showIndustries && (
+
+              {showEmployeeCount && (
                 <ScrollView style={styles.dropdown} nestedScrollEnabled>
-                  {INDUSTRIES.map((industry) => (
+                  {EMPLOYEE_COUNT_OPTIONS.map((option) => (
                     <TouchableOpacity
-                      key={industry.value}
+                      key={option.value}
                       style={styles.dropdownItem}
                       onPress={() => {
-                        setBusinessInfo(prev => ({ ...prev, industry: industry.value }));
-                        setShowIndustries(false);
+                        setBusinessInfo(prev => ({ ...prev, employeeCount: option.value }));
+                        setShowEmployeeCount(false);
                       }}
                     >
-                      <Text style={styles.dropdownItemText}>{industry.label}</Text>
+                      <Text style={styles.dropdownItemText}>{option.label}</Text>
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
@@ -496,16 +601,90 @@ const BusinessInfoFlow: React.FC = () => {
 
           {/* Continue Button */}
           <TouchableOpacity
-            style={[styles.continueButton, !isFormValid && styles.continueButtonDisabled]}
-            onPress={handleSave}
-            disabled={!isFormValid || isLoading}
+            style={[styles.continueButton, !isScreen1Valid && styles.continueButtonDisabled]}
+            onPress={handleContinueToIndustries}
+            disabled={!isScreen1Valid}
           >
-            {isLoading ? (
-              <ActivityIndicator size="small" color={theme.colors.white} />
-            ) : (
-              <Text style={styles.continueButtonText}>Continue</Text>
-            )}
+            <Text style={styles.continueButtonText}>Continue</Text>
           </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              {/* Screen 2: Industry Selection with Chips */}
+              <Text style={styles.sectionDescription}>
+                Choose 1-3 industries that best describe your business activities.
+              </Text>
+
+              <Text style={[styles.label, { marginTop: theme.spacing.sm }]}>
+                Selected: {businessInfo.industryIds.length}/3
+              </Text>
+
+              <View style={styles.chipContainer}>
+                {sortedIndustries.map((industry) => {
+                  const isSelected = businessInfo.industryIds.includes(industry.value);
+
+                  return (
+                    <TouchableOpacity
+                      key={industry.value}
+                      style={[
+                        styles.chip,
+                        isSelected && styles.chipSelected
+                      ]}
+                      onPress={() => toggleIndustry(industry.value)}
+                    >
+                      <Text style={[
+                        styles.chipText,
+                        isSelected && styles.chipTextSelected
+                      ]}>
+                        {industry.label}
+                      </Text>
+                      {isSelected && (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={18}
+                          color={theme.colors.white}
+                          style={{ marginLeft: theme.spacing.xs }}
+                        />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Industry Other (Conditional - only if "Other" selected) */}
+              {businessInfo.industryIds.some(id => {
+                const industry = industries.find(i => i.value === id);
+                return industry?.code === 'other';
+              }) && (
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    Please specify your custom industry <Text style={styles.requiredLabel}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    value={businessInfo.industryOther}
+                    onChangeText={(text) => setBusinessInfo(prev => ({ ...prev, industryOther: text }))}
+                    placeholder="Enter your custom industry"
+                    placeholderTextColor={theme.colors.textSecondary}
+                    autoCapitalize="words"
+                  />
+                </View>
+              )}
+
+              {/* Save Button */}
+              <TouchableOpacity
+                style={[styles.continueButton, (!isScreen2Valid || isLoading) && styles.continueButtonDisabled]}
+                onPress={handleSave}
+                disabled={!isScreen2Valid || isLoading}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color={theme.colors.white} />
+                ) : (
+                  <Text style={styles.continueButtonText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
