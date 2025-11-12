@@ -38,23 +38,55 @@ const fetchCountries = async (): Promise<CountryOption[]> => {
   
   const response = await apiClient.get(API_PATHS.REFERENCE_DATA.COUNTRIES);
   
-  // Log the full response to debug the structure
-  logger.debug(`[useCountries] Full API response: ${JSON.stringify(response, null, 2)}`);
-  logger.debug(`[useCountries] Response data: ${JSON.stringify(response.data, null, 2)}`);
-  
+  // ENHANCED DEBUG LOGGING
+  logger.debug(`[useCountries] 🔍 DEBUGGING RESPONSE STRUCTURE`);
+  logger.debug(`[useCountries] response.data type: ${typeof response.data}, Is array: ${Array.isArray(response.data)}`);
+
+  if (Array.isArray(response.data)) {
+    logger.debug(`[useCountries] response.data.length: ${response.data.length}`);
+    logger.debug(`[useCountries] response.data[0] type: ${typeof response.data[0]}, Is array: ${Array.isArray(response.data[0])}`);
+    if (Array.isArray(response.data[0])) {
+      logger.debug(`[useCountries] response.data[0].length: ${response.data[0].length}`);
+    }
+  }
+
   // Handle different possible response structures
   let countriesData: Country[] = [];
 
-  if (Array.isArray(response.data)) {
-    // Direct array response
-    countriesData = response.data;
-  } else if (response.data && typeof response.data === 'object') {
-    // Handle case where response.data is an object with numbered keys
-    countriesData = Object.values(response.data);
+  // ROBUST DATA EXTRACTION LOGIC
+  if (response.data && typeof response.data === 'object') {
+    if (Array.isArray(response.data) && Array.isArray(response.data[0])) {
+      // Backend returns [[countries_array], meta_object]
+      logger.debug(`[useCountries] ✅ Extracting from response.data[0] (nested array structure)`);
+      countriesData = response.data[0];
+    } else if (Array.isArray(response.data)) {
+      // Direct array response
+      logger.debug(`[useCountries] ✅ Using response.data directly (flat array structure)`);
+      countriesData = response.data;
+    } else if (response.data.data && Array.isArray(response.data.data)) {
+      // Response wrapped in data property: { data: [...] }
+      logger.debug(`[useCountries] ✅ Extracting from response.data.data (wrapped structure)`);
+      countriesData = response.data.data;
+    } else {
+      // Object with numeric keys - convert to array
+      logger.debug(`[useCountries] ✅ Converting object to array (numeric keys structure)`);
+      const valuesArray = Object.values(response.data);
+      logger.debug(`[useCountries] valuesArray.length: ${valuesArray.length}`);
+
+      // Check if first value is the countries array (handles {"0": [countries], "1": {meta}})
+      if (Array.isArray(valuesArray[0])) {
+        logger.debug(`[useCountries] 📍 First value is array with length ${valuesArray[0].length}, extracting it`);
+        countriesData = valuesArray[0];
+      } else {
+        logger.debug(`[useCountries] 📍 Using valuesArray directly`);
+        countriesData = valuesArray;
+      }
+    }
   }
-  
-  logger.debug(`[useCountries] Parsed countries data: ${JSON.stringify(countriesData)}`);
-  logger.debug(`[useCountries] Countries data type: ${typeof countriesData}, Is array: ${Array.isArray(countriesData)}`);
+
+  logger.debug(`[useCountries] 📊 EXTRACTED DATA INFO:`);
+  logger.debug(`[useCountries] countriesData type: ${typeof countriesData}, Is array: ${Array.isArray(countriesData)}`);
+  logger.debug(`[useCountries] countriesData.length: ${countriesData.length}`);
   
   if (!Array.isArray(countriesData)) {
     throw new Error('Countries data is not an array');

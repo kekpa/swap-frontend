@@ -15,10 +15,13 @@ class WebSocketService {
   private isAuthenticated = false;
   private authToken: string | null = null;
   private reconnectAttempts = 0;
-  private readonly MAX_RECONNECT_ATTEMPTS = 3;
+  private readonly MAX_RECONNECT_ATTEMPTS = Infinity; // ✅ Never give up (Socket.IO handles this now)
   private reconnectTimer: NodeJS.Timeout | null = null;
   private connectionPromise: Promise<boolean> | null = null;
   private isOfflineMode = false;
+  // ✅ Track rooms to rejoin after reconnection (WhatsApp/Telegram pattern)
+  private currentEntityId: string | null = null;
+  private activeInteractionRooms: Set<string> = new Set();
 
   constructor() {
     // Monitor network state changes
@@ -130,6 +133,12 @@ class WebSocketService {
           upgrade: false,
           rememberUpgrade: false,
           forceNew: false,
+          // ✅ WhatsApp/Telegram pattern: Auto-reconnect with infinite retries
+          reconnection: true,              // Enable auto-reconnect
+          reconnectionDelay: 1000,         // Start with 1 second delay
+          reconnectionDelayMax: 5000,      // Max 5 seconds between attempts
+          reconnectionAttempts: Infinity,  // Never give up (like WhatsApp/Telegram)
+          randomizationFactor: 0.5,        // Add jitter to prevent thundering herd
         });
 
         // Set up timeout for connection
@@ -216,6 +225,10 @@ class WebSocketService {
             socketId: this.socket?.id,
             timestamp: new Date().toISOString()
           });
+
+          // ✅ WhatsApp/Telegram pattern: Auto-rejoin all rooms after reconnection
+          this.rejoinAllRooms();
+
           resolve(true); // NOW resolve after backend confirms authentication
         });
 
@@ -252,13 +265,13 @@ class WebSocketService {
     if (this.isOfflineMode) {
             return;
           }
-          
+
     if (this.reconnectAttempts < this.MAX_RECONNECT_ATTEMPTS) {
       this.reconnectAttempts++;
       const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 10000);
-      
+
       logger.debug(`[WebSocket] 🔄 Attempting reconnection ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS} in ${delay}ms`);
-      
+
       this.reconnectTimer = setTimeout(() => {
         if (this.authToken && !this.isOfflineMode) {
           this.connect(this.authToken);
@@ -268,6 +281,25 @@ class WebSocketService {
       logger.warn('[WebSocket] ❌ Max reconnection attempts reached');
               }
             }
+
+  // ✅ WhatsApp/Telegram pattern: Rejoin all rooms after reconnection
+  private rejoinAllRooms(): void {
+    logger.info('[WebSocket] 🔄 Rejoining all active rooms after reconnection...');
+
+    // Rejoin entity room if we have one
+    if (this.currentEntityId) {
+      logger.debug(`[WebSocket] 🏠 Rejoining entity room: ${this.currentEntityId}`);
+      this.joinEntityRoom(this.currentEntityId);
+    }
+
+    // Rejoin all interaction rooms
+    if (this.activeInteractionRooms.size > 0) {
+      logger.debug(`[WebSocket] 🏠 Rejoining ${this.activeInteractionRooms.size} interaction rooms`);
+      this.activeInteractionRooms.forEach(interactionId => {
+        this.joinInteraction(interactionId);
+      });
+    }
+  }
 
   // Enhanced methods with offline awareness
   joinInteraction(interactionId: string): void {
@@ -308,6 +340,8 @@ class WebSocketService {
 
     this.socket.emit('join_interaction', { interactionId }, (response: any) => {
       if (response?.success) {
+        // ✅ Track this room for auto-rejoin after reconnection
+        this.activeInteractionRooms.add(interactionId);
         logger.info(`[WebSocket] 🏠 Successfully joined interaction: ${interactionId}`);
         console.log('🔥🔥🔥 [websocketService] INTERACTION ROOM JOIN SUCCESS:', {
           interactionId,
@@ -345,39 +379,44 @@ class WebSocketService {
 
     if (this.isConnected && this.socket) {
       this.socket.emit('leave_interaction', { interactionId });
+      // ✅ Remove from tracking (won't rejoin after reconnection)
+      this.activeInteractionRooms.delete(interactionId);
       logger.debug(`[WebSocket] 🚪 Left interaction: ${interactionId}`);
     }
   }
 
-  joinProfileRoom(profileId: string): void {
+  // 🔧 DATABASE-FIRST FIX: Use entity_id for messaging rooms (unified personal/business system)
+  joinEntityRoom(entityId: string): void {
     if (this.isOfflineMode) {
-      logger.debug(`[WebSocket] 📱 OFFLINE MODE: Cannot join profile room ${profileId}`);
+      logger.debug(`[WebSocket] 📱 OFFLINE MODE: Cannot join entity room ${entityId}`);
       return;
     }
 
     if (!this.isConnected || !this.socket) {
-      logger.warn(`[WebSocket] ⚠️ Cannot join profile room ${profileId} - not connected`);
+      logger.warn(`[WebSocket] ⚠️ Cannot join entity room ${entityId} - not connected`);
       return;
     }
 
     if (!this.isAuthenticated) {
-      logger.warn(`[WebSocket] Socket not authenticated. Cannot join profile room.`);
+      logger.warn(`[WebSocket] Socket not authenticated. Cannot join entity room.`);
       return;
     }
 
-    this.socket.emit('join_profile_room', { profileId }, (response: any) => {
+    this.socket.emit('join_profile_room', { entityId }, (response: any) => {
       if (response?.success) {
-        logger.info(`[WebSocket] 🏠 Successfully joined profile room: ${profileId}`);
-        console.log('🔥🔥🔥 [websocketService] PROFILE ROOM JOIN SUCCESS:', {
-          profileId,
-          profileRoom: response.profileRoom,
+        // ✅ Track current entity room for auto-rejoin after reconnection
+        this.currentEntityId = entityId;
+        logger.info(`[WebSocket] 🏠 Successfully joined entity room: ${entityId}`);
+        console.log('🔥🔥🔥 [websocketService] ENTITY ROOM JOIN SUCCESS:', {
+          entityId,
+          entityRoom: response.entityRoom,
           socketId: this.socket?.id,
           timestamp: new Date().toISOString()
         });
       } else {
-        logger.error(`[WebSocket] 🚫 Failed to join profile room: ${profileId}`, response?.error);
-        console.log('🔥🔥🔥 [websocketService] PROFILE ROOM JOIN FAILED:', {
-          profileId,
+        logger.error(`[WebSocket] 🚫 Failed to join entity room: ${entityId}`, response?.error);
+        console.log('🔥🔥🔥 [websocketService] ENTITY ROOM JOIN FAILED:', {
+          entityId,
           error: response?.error,
           socketId: this.socket?.id,
           timestamp: new Date().toISOString()
@@ -386,16 +425,23 @@ class WebSocketService {
         // Retry once after a short delay if authentication failed
         if (response?.error === 'Not authenticated') {
           setTimeout(() => {
-            console.log('🔥🔥🔥 [websocketService] RETRYING PROFILE ROOM JOIN after authentication failure...');
+            console.log('🔥🔥🔥 [websocketService] RETRYING ENTITY ROOM JOIN after authentication failure...');
             if (this.isConnected && this.socket && this.isAuthenticated) {
-              this.joinProfileRoom(profileId);
+              this.joinEntityRoom(entityId);
             }
           }, 1000);
         }
       }
     });
     
-    logger.info(`[WebSocket] 🏠 Attempting to join profile room: ${profileId}`);
+    logger.info(`[WebSocket] 🏠 Attempting to join entity room: ${entityId}`);
+  }
+
+  // Legacy method for backward compatibility - will be removed after migration
+  joinProfileRoom(profileId: string): void {
+    logger.warn(`[WebSocket] ⚠️ DEPRECATED: joinProfileRoom() called with profileId: ${profileId}. Use joinEntityRoom() with entity_id instead.`);
+    // For now, assume profileId is actually entityId for backward compatibility
+    this.joinEntityRoom(profileId);
   }
 
   sendMessage(messageData: any): void {
@@ -415,6 +461,14 @@ class WebSocketService {
   onMessage(callback: (data: any) => void): () => void {
     if (!this.socket) {
       logger.warn('[WebSocket] ⚠️ Cannot listen for messages - socket not initialized');
+      console.warn('🔥🔥🔥 [websocketService] ❌ EVENT LISTENER ATTACHMENT FAILED:', {
+        reason: 'SOCKET_NOT_INITIALIZED',
+        isConnected: this.isConnected,
+        isAuthenticated: this.isAuthenticated,
+        hasSocket: !!this.socket,
+        timestamp: new Date().toISOString(),
+        hint: 'WebSocketHandler was initialized before WebSocket connection succeeded'
+      });
       return () => {};
     }
 
@@ -433,6 +487,14 @@ class WebSocketService {
     };
 
     this.socket.on('new_message', wrappedCallback);
+
+    console.log('🔥🔥🔥 [websocketService] ✅ EVENT LISTENER ATTACHED:', {
+      event: 'new_message',
+      socketId: this.socket.id,
+      isConnected: this.isConnected,
+      isAuthenticated: this.isAuthenticated,
+      timestamp: new Date().toISOString()
+    });
 
     return () => {
       if (this.socket) {
@@ -467,6 +529,26 @@ class WebSocketService {
     return () => {
       if (this.socket) {
         this.socket.off('kyc_status_update', callback);
+      }
+    };
+  }
+
+  /**
+   * Listen for reconnection events (authenticated event after reconnection)
+   * This allows external code to perform cache invalidation or refetch on reconnect
+   */
+  onReconnect(callback: () => void): () => void {
+    if (!this.socket) {
+      logger.warn('[WebSocket] ⚠️ Cannot listen for reconnect - socket not initialized');
+      return () => {};
+    }
+
+    // Listen to 'authenticated' event which fires after successful reconnection
+    this.socket.on('authenticated', callback);
+
+    return () => {
+      if (this.socket) {
+        this.socket.off('authenticated', callback);
       }
     };
   }

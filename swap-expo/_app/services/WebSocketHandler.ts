@@ -1,5 +1,6 @@
 // Created: WebSocketHandler for consistent message processing with idempotency - 2025-05-21
 // Updated: Migrated to use centralized repository instances - 2025-05-29
+// Updated: Professional architecture with direct cache updates - 2025-11-04
 
 import { websocketService } from './websocketService';
 import { messageManager } from './MessageManager';
@@ -7,6 +8,10 @@ import { messageRepository } from '../localdb/MessageRepository';
 import logger from '../utils/logger';
 import { MessageTimelineItem } from '../types/timeline.types';
 import { eventEmitter } from '../utils/eventEmitter';
+import { smartNotificationHandler } from './SmartNotificationHandler';
+import { deliveryConfirmationManager } from './DeliveryConfirmationManager';
+import { cacheUpdateManager } from './CacheUpdateManager';
+import { QueryClient } from '@tanstack/react-query';
 
 // Track processed message IDs to prevent duplicates
 const processedMessageIds = new Set<string>();
@@ -22,22 +27,36 @@ const MESSAGE_HISTORY_MAX_SIZE = 1000; // Limit memory usage
 class WebSocketHandler {
   private isInitialized = false;
   private messageIdTtl = 60 * 60 * 1000; // 1 hour TTL for processed message IDs
+  private queryClient: QueryClient | null = null;
   
   // Store cleanup functions for WebSocket event listeners
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
   private messageCleanup: (() => void) | null = null;
   private transactionCleanup: (() => void) | null = null;
+  private reconnectCleanup: (() => void) | null = null;
   
   /**
-   * Initialize WebSocket event handlers
+   * Initialize WebSocket event handlers with QueryClient
+   * @param queryClient - TanStack Query client for direct cache updates
+   * @param entityId - Entity ID for proper cache key scoping
    */
-  initialize(): void {
+  initialize(queryClient?: QueryClient, entityId?: string): void {
     if (this.isInitialized) {
       console.log('🔥 [WebSocketHandler] ⚠️ Already initialized, skipping...');
       return;
     }
-    
+
     console.log('🔥 [WebSocketHandler] 🚀 INITIALIZING WebSocketHandler...');
+
+    // Store QueryClient for direct cache updates
+    if (queryClient) {
+      this.queryClient = queryClient;
+      // Initialize the professional cache update manager with entityId for proper cache key matching
+      cacheUpdateManager.initialize(queryClient, entityId);
+      console.log('🔥 [WebSocketHandler] ✅ Professional cache updates enabled', {
+        hasEntityId: !!entityId
+      });
+    }
     
     // Check WebSocket connection status
     const isConnected = websocketService.isSocketConnected();
@@ -80,12 +99,17 @@ class WebSocketHandler {
       this.messageCleanup();
       this.messageCleanup = null;
     }
-    
+
     if (this.transactionCleanup) {
       this.transactionCleanup();
       this.transactionCleanup = null;
     }
-    
+
+    if (this.reconnectCleanup) {
+      this.reconnectCleanup();
+      this.reconnectCleanup = null;
+    }
+
     this.isInitialized = false;
     console.log('🔥 [WebSocketHandler] ✅ CLEANUP COMPLETE');
     logger.info('[WebSocketHandler] Cleaned up successfully');
@@ -115,11 +139,22 @@ class WebSocketHandler {
       console.log('🔥 [WebSocketHandler] 🎯 HANDLER CALLED for transaction_update:', data);
       this.handleTransactionUpdate(data);
     });
-    
+
+    // Handle reconnection events - invalidate transaction cache on reconnect
+    console.log('🔥 [WebSocketHandler] Registering reconnect handler...');
+    this.reconnectCleanup = websocketService.onReconnect(() => {
+      console.log('🔥 [WebSocketHandler] 🔄 RECONNECTED - Invalidating transaction cache');
+      if (this.queryClient) {
+        this.queryClient.invalidateQueries({ queryKey: ['transactions'] });
+        logger.info('[WebSocketHandler] ✅ Transaction cache invalidated on reconnect');
+      }
+    });
+
     console.log('🔥 [WebSocketHandler] ✅ ALL MESSAGE HANDLERS REGISTERED');
     console.log('🔥 [WebSocketHandler] Handler registration verification:', {
       messageCleanupExists: !!this.messageCleanup,
       transactionCleanupExists: !!this.transactionCleanup,
+      reconnectCleanupExists: !!this.reconnectCleanup,
       socketConnected: websocketService.isSocketConnected(),
       socketAuthenticated: websocketService.isSocketAuthenticated(),
       timestamp: new Date().toISOString()
@@ -178,7 +213,7 @@ class WebSocketHandler {
         return;
       }
       
-      // Mark message as processed
+      // Mark message as processed EARLY to prevent duplicate events
       processedMessageIds.add(messageId);
       logger.debug(`[WebSocketHandler] Processing new WebSocket message: ${messageId}`);
       
@@ -205,10 +240,36 @@ class WebSocketHandler {
           ));
       }
       
-      // 2. Emit event through the EventEmitter mechanism
-      // This will notify all listeners about the new message
-      console.log(`🔥 [WebSocketHandler] ✅ EMITTING message:new event`);
-      eventEmitter.emit('message:new', data);
+      // 2. 🚀 PHASE 2.2: Smart notification handling based on user state
+      smartNotificationHandler.handleMessageNotification(data);
+      
+      // 3. 🚀 PHASE 2.6: Confirm message delivery via WebSocket
+      if (data.id && data.interaction_id) {
+        deliveryConfirmationManager.confirmMessageDelivered(data.id, data.interaction_id);
+      }
+      
+      // 4. Professional Real-time Update (WhatsApp/Slack pattern)
+      console.log(`🔥 [WebSocketHandler] ✅ Processing real-time update`);
+      
+      // Create properly typed timeline item for cache update
+      const timelineItem: MessageTimelineItem = {
+        id: data.id,
+        interaction_id: data.interaction_id,
+        type: 'message',
+        itemType: 'message',
+        content: data.content || '',
+        message_type: data.message_type || 'text',
+        sender_entity_id: data.sender_entity_id || data.sender_id || 'unknown',
+        createdAt: data.created_at || data.createdAt || new Date().toISOString(),
+        timestamp: data.timestamp || data.created_at || new Date().toISOString(),
+        metadata: { ...data.metadata, isOptimistic: false },
+        status: data.status || 'delivered'
+      };
+      
+      // Emit for direct cache update (professional pattern)
+      eventEmitter.emit('message:new', timelineItem);
+      
+      logger.info(`[WebSocketHandler] ✅ Real-time message processed: ${messageId}`);
       
     } catch (error) {
       logger.error('[WebSocketHandler] Error handling new message', 

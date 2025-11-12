@@ -354,9 +354,16 @@ export const useTimeline = (
     // PROFESSIONAL: Add placeholderData for smoother transitions
     placeholderData: (previousData) => previousData,
     
-    // Conservative retry for timeline data
+    // Conservative retry for timeline data with CancelledError handling
     retry: (failureCount, error: any) => {
       if (!interactionId || !enabled) return false;
+      
+      // Don't retry for CancelledError - this is expected behavior
+      if (error?.name === 'CancelledError' || error?.message?.includes('CancelledError')) {
+        logger.debug(`[useTimeline] Ignoring CancelledError for ${interactionId} - query was superseded`, 'timeline_query');
+        return false;
+      }
+      
       if (error?.status >= 400 && error?.status < 500) return false;
       return failureCount < 1;
     },
@@ -722,6 +729,13 @@ export const useTimelineInfinite = (
     maxPages: 10, // Limit memory usage - keep max 10 pages (500 messages)
     retry: (failureCount, error: any) => {
       if (!interactionId || !enabled) return false;
+      
+      // Don't retry for CancelledError - this is expected behavior
+      if (error?.name === 'CancelledError' || error?.message?.includes('CancelledError')) {
+        logger.debug(`[useTimelineInfinite] Ignoring CancelledError for ${interactionId} - query was superseded`, 'timeline_query');
+        return false;
+      }
+      
       if (error?.status >= 400 && error?.status < 500) return false;
       return failureCount < 1;
     },

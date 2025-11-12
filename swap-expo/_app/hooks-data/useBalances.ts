@@ -81,8 +81,14 @@ const parseComplexBackendResponse = (data: any): WalletApiResponse[] => {
       logger.debug('[useBalances] ✅ Found data property, recursing');
       return parseComplexBackendResponse(result.data);
     }
+
+    // Check for result property (backend uses {result: [...], meta: {...}} format)
+    if (result.result) {
+      logger.debug('[useBalances] ✅ Found result property, recursing');
+      return parseComplexBackendResponse(result.result);
+    }
   }
-  
+
   logger.warn(`[useBalances] ⚠️ Unexpected response structure, returning empty array`);
   return [];
 };
