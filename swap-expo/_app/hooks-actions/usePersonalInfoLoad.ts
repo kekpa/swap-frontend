@@ -29,13 +29,13 @@ export const usePersonalInfoLoad = () => {
       setLoading(true);
       setError(null);
       
-      const response = await apiClient.get('/kyc/personal-information');
+      const response = await apiClient.get('/kyc/identity');
       
       console.log('[usePersonalInfoLoad] Full API Response:', response);
       console.log('[usePersonalInfoLoad] Parsed data:', response.data);
-      
-      // Extract the actual personal info data from the nested structure
-      const personalInfoData = response.data?.data;
+
+      // Extract the actual personal info data (API returns directly in response.data)
+      const personalInfoData = response.data;
       console.log('[usePersonalInfoLoad] Final personal info data:', personalInfoData);
       
       setPersonalInfo(personalInfoData || null);

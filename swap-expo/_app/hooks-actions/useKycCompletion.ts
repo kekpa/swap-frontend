@@ -65,12 +65,12 @@ export const useKycCompletion = () => {
   const getApiEndpoint = useCallback((stepType: KycStepType): string => {
     const endpointMap: Record<KycStepType, string> = {
       confirm_phone: '/kyc/phone-verify',
-      personal_info: '/kyc/personal-information',
+      personal_info: '/kyc/identity', // Universal endpoint for personal info
       // upload_id: removed - documents handle completion automatically via POST /kyc/documents
       take_selfie: '/kyc/selfie',
       setup_security: '/auth/store-passcode',
       biometric_setup: '/kyc/biometric-setup',
-      business_info: '/kyc/business-information',
+      business_info: '/kyc/identity', // Fixed: Backend uses /kyc/identity for business info
       business_verification: '/kyc/business-verification',
       business_security: '/kyc/business-security',
       business_address: '/kyc/business-address',

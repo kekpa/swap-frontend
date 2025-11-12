@@ -36,11 +36,19 @@ import PhoneEntryScreen from "../features/auth/signup/PhoneEntryScreen";
 import BiometricSetupScreen from "../features/profile/kyc/BiometricSetup";
 import VerificationCodeScreen from "../components2/VerificationCodeScreen";
 // Business KYC Components
-import { 
+import {
+  BusinessKycFlowStart,
   BusinessInfoFlow,
-  BusinessOwnerInfo,
+  BeneficialOwnersList,
+  BeneficialOwnerFlow,
+  BeneficialOwnerForm,
+  BeneficialOwnerAddress,
+  BeneficialOwnersReview,
+  BeneficialOwnersDocuments,
+  BusinessCountryOfResidence,
   BusinessAddress,
-  BusinessDocuments,
+  BusinessRegistrationDocuments,
+  BusinessReview,
   BusinessVerification,
 } from "../features/profile/kyc/business-flow";
 // import Support from "../features/profile/support";
@@ -115,19 +123,57 @@ export type ProfileStackParamList = {
     sourceRoute?: string;
   };
   // Business KYC Screens
+  BusinessKycFlowStart: {
+    returnToTimeline?: boolean;
+    sourceRoute?: string;
+  };
   BusinessInfoFlow: {
     returnToTimeline?: boolean;
     sourceRoute?: string;
   };
-  BusinessOwnerInfo: {
+  BeneficialOwnersList: {
+    returnToTimeline?: boolean;
+    sourceRoute?: string;
+  };
+  BeneficialOwnerFlow: {
+    mode?: 'add' | 'edit';
+    ownerId?: string;
+    returnToTimeline?: boolean;
+    sourceRoute?: string;
+  };
+  BeneficialOwnerForm: {
+    mode: 'add' | 'edit';
+    ownerId?: string;
+    returnToTimeline?: boolean;
+    sourceRoute?: string;
+  };
+  BeneficialOwnerAddress: {
+    ownerId: string;
+    returnToTimeline?: boolean;
+    sourceRoute?: string;
+  };
+  BeneficialOwnersReview: {
+    returnToTimeline?: boolean;
+    sourceRoute?: string;
+  };
+  BeneficialOwnersDocuments: {
+    returnToTimeline?: boolean;
+    sourceRoute?: string;
+  };
+  BusinessCountryOfResidence: {
     returnToTimeline?: boolean;
     sourceRoute?: string;
   };
   BusinessAddress: {
     returnToTimeline?: boolean;
     sourceRoute?: string;
+    selectedCountry?: string;
   };
-  BusinessDocuments: {
+  BusinessRegistrationDocuments: {
+    returnToTimeline?: boolean;
+    sourceRoute?: string;
+  };
+  BusinessReview: {
     returnToTimeline?: boolean;
     sourceRoute?: string;
   };
@@ -292,6 +338,15 @@ export default function ProfileNavigator() {
       />
       {/* Business KYC Screens */}
       <Stack.Screen
+        name="BusinessKycFlowStart"
+        component={BusinessKycFlowStart}
+        options={{
+          animation: "slide_from_right",
+          gestureEnabled: true,
+          gestureDirection: "horizontal"
+        }}
+      />
+      <Stack.Screen
         name="BusinessInfoFlow"
         component={BusinessInfoFlow}
         options={{
@@ -301,8 +356,62 @@ export default function ProfileNavigator() {
         }}
       />
       <Stack.Screen
-        name="BusinessOwnerInfo"
-        component={BusinessOwnerInfo}
+        name="BeneficialOwnersList"
+        component={BeneficialOwnersList}
+        options={{
+          animation: "slide_from_right",
+          gestureEnabled: true,
+          gestureDirection: "horizontal"
+        }}
+      />
+      <Stack.Screen
+        name="BeneficialOwnerFlow"
+        component={BeneficialOwnerFlow}
+        options={{
+          animation: "slide_from_right",
+          gestureEnabled: true,
+          gestureDirection: "horizontal"
+        }}
+      />
+      <Stack.Screen
+        name="BeneficialOwnerForm"
+        component={BeneficialOwnerForm}
+        options={{
+          animation: "slide_from_right",
+          gestureEnabled: true,
+          gestureDirection: "horizontal"
+        }}
+      />
+      <Stack.Screen
+        name="BeneficialOwnerAddress"
+        component={BeneficialOwnerAddress}
+        options={{
+          animation: "slide_from_right",
+          gestureEnabled: true,
+          gestureDirection: "horizontal"
+        }}
+      />
+      <Stack.Screen
+        name="BeneficialOwnersReview"
+        component={BeneficialOwnersReview}
+        options={{
+          animation: "slide_from_right",
+          gestureEnabled: true,
+          gestureDirection: "horizontal"
+        }}
+      />
+      <Stack.Screen
+        name="BeneficialOwnersDocuments"
+        component={BeneficialOwnersDocuments}
+        options={{
+          animation: "slide_from_right",
+          gestureEnabled: true,
+          gestureDirection: "horizontal"
+        }}
+      />
+      <Stack.Screen
+        name="BusinessCountryOfResidence"
+        component={BusinessCountryOfResidence}
         options={{
           animation: "slide_from_right",
           gestureEnabled: true,
@@ -319,8 +428,17 @@ export default function ProfileNavigator() {
         }}
       />
       <Stack.Screen
-        name="BusinessDocuments"
-        component={BusinessDocuments}
+        name="BusinessRegistrationDocuments"
+        component={BusinessRegistrationDocuments}
+        options={{
+          animation: "slide_from_right",
+          gestureEnabled: true,
+          gestureDirection: "horizontal"
+        }}
+      />
+      <Stack.Screen
+        name="BusinessReview"
+        component={BusinessReview}
         options={{
           animation: "slide_from_right",
           gestureEnabled: true,

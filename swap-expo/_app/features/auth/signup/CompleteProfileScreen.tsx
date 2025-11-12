@@ -25,6 +25,7 @@ import { useUsernameAvailability } from "../../../hooks/useUsernameAvailability"
 import { usePasswordStrength } from "../../../hooks/usePasswordStrength";
 import { PasswordStrengthMeter } from "../../../components/PasswordStrengthMeter";
 import { sanitizeName, sanitizeUsername, sanitizeBusinessName, sanitizeRegistrationNumber } from "../../../utils/inputSanitization";
+import { BUSINESS_TYPES, EMPLOYEE_COUNT_OPTIONS } from "../../../constants/businessConstants";
 
 // Define type for navigation
 type AuthStackParamList = {
@@ -88,22 +89,9 @@ const CompleteProfileScreen = () => {
   // Password strength validation
   const passwordStrength = usePasswordStrength(password);
 
-  // Options for dropdowns
-  const businessTypeOptions = [
-    { value: 'societe_anonyme', label: 'Société Anonyme' },
-    { value: 'entreprise_individuelle', label: 'Entreprise Individuelle' },
-    { value: 'association', label: 'Association' },
-    { value: 'autres', label: 'Autres' },
-  ];
-
-  const employeeCountOptions = [
-    { value: '0-1', label: '0-1 employees' },
-    { value: '2-5', label: '2-5 employees (Small team)' },
-    { value: '6-20', label: '6-20 employees (Medium team)' },
-    { value: '21-50', label: '21-50 employees (Large team)' },
-    { value: '51-200', label: '51-200 employees (Enterprise)' },
-    { value: '200+', label: '200+ employees (Large enterprise)' },
-  ];
+  // Dropdown options imported from shared constants
+  const businessTypeOptions = BUSINESS_TYPES;
+  const employeeCountOptions = EMPLOYEE_COUNT_OPTIONS;
 
   // Check if form is complete to enable/disable button
   const isUsernameValid = username.trim() !== "" &&
