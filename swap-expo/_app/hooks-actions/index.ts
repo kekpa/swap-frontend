@@ -17,6 +17,7 @@ export * from './useDocumentUpload';
 export * from './usePersonalInfoLoad';
 export * from './usePersonalInfoSave';
 export * from './useKycCompletion';
+export * from './useBeneficialOwners';
 
 /**
  * Quick reference for common hooks:

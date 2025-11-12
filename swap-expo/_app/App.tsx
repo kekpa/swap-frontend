@@ -21,16 +21,27 @@ import { AuthProvider } from "./features/auth/context/AuthContext";
 import { RefreshProvider } from "./contexts/RefreshContext";
 import { appLifecycleManager } from "./services/AppLifecycleManager";
 import { QueryProvider } from "./tanstack-query/QueryProvider";
+import { QueryErrorBoundary } from "./tanstack-query/errors/QueryErrorBoundary";
 import { useAuthContext } from "./features/auth/context/AuthContext";
 import { ToastContainer } from "./components/Toast";
 import { ThemeProvider } from './theme/ThemeContext';
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, Text } from 'react-native';
+import { View, ActivityIndicator, Text, TouchableOpacity, LogBox } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { databaseManager } from './localdb/DatabaseManager';
 import logger from './utils/logger';
 import { navigationStateManager } from './utils/NavigationStateManager';
+
+// PROFESSIONAL FIX: Suppress technical warnings that don't represent bugs
+// - TanStack Query: queries are intentionally cancelled during navigation
+// - React Native debugger: we don't use the RN debugger (use terminal/browser console instead)
+// - DevTools connection: React Native tries to connect to debugger tools we don't use
+LogBox.ignoreLogs([
+  'A query that was dehydrated as pending ended up rejecting',
+  'Failed to open debugger',
+  'Ignoring DevTools', // Suppresses "Ignoring DevTools app debug target" warnings
+]);
 
 // Configure logging based on environment
 if (__DEV__) {
@@ -69,10 +80,25 @@ const AppLifecycleHandler: React.FC<{ children: React.ReactNode }> = ({ children
     if (authContext.isAuthenticated && authContext.user && !authContext.isLoading) {
       console.log('🔥 [AppLifecycleHandler] ✅ ALL CONDITIONS MET - Calling initialize()');
 
+      console.log('🔥🔥🔥 [AppLifecycleHandler] INITIALIZING SERVICES FOR USER:', {
+        userEntityId: authContext.user?.entityId,
+        userProfileId: authContext.user?.profileId,
+        isAuthenticated: authContext.isAuthenticated,
+        isLoading: authContext.isLoading,
+        timestamp: new Date().toISOString(),
+        deviceType: 'DEBUGGING_APP_INIT'
+      });
+
       // Initialize services when user is authenticated
       appLifecycleManager.initialize(authContext).catch(error => {
         logger.error('[AppLifecycleHandler] Failed to initialize services:', error);
         console.error('🔥 [AppLifecycleHandler] ❌ Initialize failed:', error);
+        console.log('🔥🔥🔥 [AppLifecycleHandler] INITIALIZATION FAILED:', {
+          error: error.message,
+          userEntityId: authContext.user?.entityId,
+          userProfileId: authContext.user?.profileId,
+          timestamp: new Date().toISOString()
+        });
       });
     } else if (!authContext.isAuthenticated && !authContext.isLoading) {
       console.log('🔥 [AppLifecycleHandler] User logged out - cleaning up services');
@@ -160,22 +186,45 @@ const App: React.FC = () => {
     <SafeAreaProvider>
       <ThemeProvider>
         <QueryProvider>
-        <AuthProvider>
-          <RefreshProvider>
-            <AppLifecycleHandler>
-              <NavigationContainer
-                onStateChange={(state) => {
-                  // Professional navigation state tracking
-                  navigationStateManager.updateNavigationState(state);
-                }}
-              >
-                <RootNavigator />
-                <ToastContainer />
-                <StatusBar style="auto" />
-              </NavigationContainer>
-            </AppLifecycleHandler>
-          </RefreshProvider>
-        </AuthProvider>
+          {/* PROFESSIONAL ERROR HANDLING: Error Boundary catches React errors and provides recovery */}
+          <QueryErrorBoundary
+            fallback={(error, reset) => (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000', padding: 20 }}>
+                <Text style={{ color: '#EF4444', fontSize: 18, textAlign: 'center', marginBottom: 16 }}>
+                  Something went wrong
+                </Text>
+                <Text style={{ color: '#9CA3AF', fontSize: 14, textAlign: 'center', marginBottom: 24 }}>
+                  {error.message || 'An unexpected error occurred'}
+                </Text>
+                <TouchableOpacity
+                  onPress={reset}
+                  style={{ backgroundColor: '#6366F1', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+                >
+                  <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '600' }}>Try Again</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            onError={(error) => {
+              logger.error('[App] Error caught by boundary:', error);
+            }}
+          >
+            <AuthProvider>
+              <RefreshProvider>
+                <AppLifecycleHandler>
+                  <NavigationContainer
+                    onStateChange={(state) => {
+                      // Professional navigation state tracking
+                      navigationStateManager.updateNavigationState(state);
+                    }}
+                  >
+                    <RootNavigator />
+                    <ToastContainer />
+                    <StatusBar style="auto" />
+                  </NavigationContainer>
+                </AppLifecycleHandler>
+              </RefreshProvider>
+            </AuthProvider>
+          </QueryErrorBoundary>
         </QueryProvider>
       </ThemeProvider>
     </SafeAreaProvider>
