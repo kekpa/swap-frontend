@@ -15,8 +15,6 @@ import { ProfileStackParamList } from '../../../../navigation/profileNavigator';
 import { useTheme } from '../../../../theme/ThemeContext'; // Import useTheme
 import { usePersonalInfoLoad } from '../../../../hooks-actions/usePersonalInfoLoad'; // Import the new hook
 import { useKycCompletion } from '../../../../hooks-actions/useKycCompletion'; // Professional KYC completion system
-import { invalidateQueries } from '../../../../tanstack-query/queryClient'; // Professional cache invalidation
-import { eventCoordinator } from '../../../../utils/EventCoordinator'; // Professional event coordination
 
 import CountryOfResidence from './CountryOfResidence';
 import NameAsInId from './NameAsInId';
@@ -209,7 +207,7 @@ const PersonalInfoFlow: React.FC = () => {
 
   const handleReviewConfirm = async () => {
     try {
-      console.log(`🔬 [PersonalInfoFlow] PROFESSIONAL: Starting KYC completion with EventCoordinator`);
+      console.log('[PersonalInfoFlow] 🎯 Using KYC completion hook for instant cache update');
 
       // Prepare data for API
       const apiData = {
@@ -229,53 +227,21 @@ const PersonalInfoFlow: React.FC = () => {
         }
       };
 
-      // PROFESSIONAL: Use EventCoordinator for KYC operation coordination
-      console.log(`🔬 [PersonalInfoFlow] PROFESSIONAL: Coordinating KYC completion operation`);
-
+      // Use professional hook for completion (handles everything automatically)
       const result = await completePersonalInfo(apiData, {
-        skipNavigation: true, // We'll handle navigation ourselves
-        showSuccessAlert: false,
-        customSuccessMessage: 'Personal information saved successfully!'
+        returnToTimeline,
+        sourceRoute,
+        showSuccessAlert: false, // Checkmark provides sufficient visual feedback
       });
 
-      console.log(`🔬 [PersonalInfoFlow] PROFESSIONAL: KYC completion result:`, result.success);
-
       if (result.success) {
-        console.log(`🔬 [PersonalInfoFlow] PROFESSIONAL: KYC completion successful - triggering cache invalidation`);
-
-        // PROFESSIONAL CACHE INVALIDATION
-        invalidateQueries(['kyc']); // Invalidate all KYC-related queries
-        invalidateQueries(['profile']); // Also invalidate profile data
-
-        // PROFESSIONAL: Use EventCoordinator for data coordination
-        eventCoordinator.emitDataUpdated('kyc', apiData, {
-          source: 'PersonalInfoFlow.handleReviewConfirm',
-          action: 'personal_info_completed'
-        });
-
-        console.log(`🔬 [PersonalInfoFlow] PROFESSIONAL: Cache invalidation and event coordination triggered`);
-
-        // Brief delay for cache invalidation propagation
-        setTimeout(() => {
-          console.log(`🔬 [PersonalInfoFlow] PROFESSIONAL: Starting navigation`);
-
-          // PROFESSIONAL NAVIGATION
-          if (returnToTimeline) {
-            console.log(`🔬 [PersonalInfoFlow] PROFESSIONAL: Navigating to VerifyYourIdentity`);
-            navigation.navigate('VerifyYourIdentity', sourceRoute ? { sourceRoute } : undefined);
-          } else {
-            console.log(`🔬 [PersonalInfoFlow] PROFESSIONAL: Navigating to UploadId`);
-            navigation.navigate('UploadId', { sourceRoute });
-          }
-        }, 100); // Brief delay for cache invalidation
-
+        console.log('[PersonalInfoFlow] ✅ Personal information saved with automatic cache invalidation');
       } else {
-        console.log(`🔬 [PersonalInfoFlow] PROFESSIONAL: KYC completion failed`);
         const errorMessage = result.error?.message || 'Failed to save personal information. Please try again.';
         Alert.alert('Error', errorMessage);
       }
     } catch (error) {
-      console.error(`🔬 [PersonalInfoFlow] PROFESSIONAL: Error in handleReviewConfirm:`, error);
+      console.error('[PersonalInfoFlow] Error in handleReviewConfirm:', error);
       Alert.alert('Error', 'An error occurred while saving personal information. Please try again.');
     }
   };

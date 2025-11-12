@@ -37,16 +37,19 @@ const NameAsInId: React.FC<NameAsInIdProps> = ({
 
   // Pre-populate name fields when personal info is loaded
   useEffect(() => {
-    if (personalInfo && !firstName && !lastName) {
-      // Only pre-populate if no props were passed (not pre-filled)
-      if (personalInfo.firstName) {
+    if (personalInfo) {
+      // Pre-fill if input fields are still empty (user hasn't typed yet)
+      if (personalInfo.firstName && !firstNameInput) {
         setFirstNameInput(personalInfo.firstName);
       }
-      if (personalInfo.lastName) {
+      if (personalInfo.lastName && !lastNameInput) {
         setLastNameInput(personalInfo.lastName);
       }
+      if (personalInfo.middleName && !middleNameInput) {
+        setMiddleNameInput(personalInfo.middleName);
+      }
     }
-  }, [personalInfo, firstName, lastName]);
+  }, [personalInfo, firstNameInput, lastNameInput, middleNameInput]);
 
   const isFormValid = !!firstNameInput && !!lastNameInput;
 
@@ -171,7 +174,7 @@ const NameAsInId: React.FC<NameAsInIdProps> = ({
           </View>
           
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Middle name (optional)</Text>
+            <Text style={styles.label}>Middle name</Text>
             <TextInput
               style={styles.input}
               placeholder="Middle name"

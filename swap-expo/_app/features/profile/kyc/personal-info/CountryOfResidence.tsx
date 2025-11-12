@@ -32,10 +32,10 @@ const CountryOfResidence: React.FC<CountryOfResidenceProps> = ({
   
   // Pre-populate country when personal info is loaded
   useEffect(() => {
-    if (personalInfo?.countryOfResidence && !selectedCountry) {
+    if (personalInfo?.countryOfResidence && !country) {
       setCountry(personalInfo.countryOfResidence);
     }
-  }, [personalInfo, selectedCountry]);
+  }, [personalInfo, country]);
   
   const handleContinue = () => {
     if (country) {

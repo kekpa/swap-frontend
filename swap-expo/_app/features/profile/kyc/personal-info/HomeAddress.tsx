@@ -40,22 +40,22 @@ const HomeAddress: React.FC<HomeAddressProps> = ({
 
   // Pre-populate address fields when personal info is loaded
   useEffect(() => {
-    if (personalInfo?.address && !addressLine1 && !city && !postalCode) {
-      // Only pre-populate if no props were passed (not pre-filled)
-      if (personalInfo.address.addressLine1) {
+    if (personalInfo?.address) {
+      // Pre-fill if input fields are still empty (user hasn't typed yet)
+      if (personalInfo.address.addressLine1 && !line1) {
         setLine1(personalInfo.address.addressLine1);
       }
-      if (personalInfo.address.addressLine2) {
+      if (personalInfo.address.addressLine2 && !line2) {
         setLine2(personalInfo.address.addressLine2);
       }
-      if (personalInfo.address.city) {
+      if (personalInfo.address.city && !cityInput) {
         setCityInput(personalInfo.address.city);
       }
-      if (personalInfo.address.postalCode) {
+      if (personalInfo.address.postalCode && !postal) {
         setPostal(personalInfo.address.postalCode);
       }
     }
-  }, [personalInfo, addressLine1, city, postalCode]);
+  }, [personalInfo, line1, line2, cityInput, postal]);
 
   const isFormValid = !!line1 && !!cityInput && !!postal;
 

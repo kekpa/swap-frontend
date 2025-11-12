@@ -85,31 +85,63 @@ const BiometricSetup: React.FC = () => {
       try {
         const compatible = await LocalAuthentication.hasHardwareAsync();
         setHasHardware(compatible);
-        
+
         if (!compatible) {
           console.log('[BiometricSetup] Device does not have biometric hardware.');
           setIsBiometricAvailable(false);
+
+          // PROFESSIONAL FIX: Auto-complete KYC for devices without biometric hardware
+          try {
+            console.log('[BiometricSetup] Auto-completing KYC for non-biometric device...');
+            await apiClient.post('/kyc/complete-without-biometric', {});
+            console.log('[BiometricSetup] ✅ KYC marked as complete for non-biometric device');
+
+            // Navigate back to timeline/profile to show updated status
+            if (route.params?.returnToTimeline || route.params?.sourceRoute) {
+              navigation.navigate('VerifyYourIdentity', route.params?.sourceRoute ? { sourceRoute: route.params.sourceRoute } : undefined);
+            } else {
+              navigation.goBack();
+            }
+          } catch (error) {
+            console.error('[BiometricSetup] Error auto-completing KYC:', error);
+          }
           return;
         }
-        
+
         const savedBiometrics = await LocalAuthentication.isEnrolledAsync();
         setHasEnrolledBiometrics(savedBiometrics);
-        
+
         if (!savedBiometrics) {
           console.log('[BiometricSetup] No biometrics are enrolled on this device.');
           setIsBiometricAvailable(false);
+
+          // PROFESSIONAL FIX: Auto-complete KYC for devices without enrolled biometrics
+          try {
+            console.log('[BiometricSetup] Auto-completing KYC for device without enrolled biometrics...');
+            await apiClient.post('/kyc/complete-without-biometric', {});
+            console.log('[BiometricSetup] ✅ KYC marked as complete for non-biometric device');
+
+            // Navigate back to timeline/profile to show updated status
+            if (route.params?.returnToTimeline || route.params?.sourceRoute) {
+              navigation.navigate('VerifyYourIdentity', route.params?.sourceRoute ? { sourceRoute: route.params.sourceRoute } : undefined);
+            } else {
+              navigation.goBack();
+            }
+          } catch (error) {
+            console.error('[BiometricSetup] Error auto-completing KYC:', error);
+          }
           return;
         }
-        
+
         const supported = await LocalAuthentication.supportedAuthenticationTypesAsync();
         setAvailableBiometrics(supported);
         setIsBiometricAvailable(true);
-        
+
         // Auto-select the first available biometric
         if (supported.length > 0) {
           setSelectedBiometric(supported[0]);
         }
-        
+
         console.log('[BiometricSetup] Supported types:', supported.map(type => LocalAuthentication.AuthenticationType[type]).join(', '));
       } catch (error) {
         console.error('[BiometricSetup] Error checking biometric availability:', error);
@@ -207,8 +239,7 @@ const BiometricSetup: React.FC = () => {
       await completeBiometric({
         returnToTimeline,
         sourceRoute,
-        showSuccessAlert: true,
-        customSuccessMessage: 'You can now use biometric authentication to sign in to your account.'
+        showSuccessAlert: false, // Checkmark provides sufficient visual feedback
       });
 
       console.log('[BiometricSetup] ✅ Biometric setup completed with cache invalidation');

@@ -19,8 +19,10 @@ import { useKycStatusCritical, useKycStatus } from '../../../hooks-data/useKycQu
 import { useAuthContext } from '../../auth/context/AuthContext';
 import { useBiometricAvailability } from '../../../hooks-data/useBiometricAvailability';
 import * as LocalAuthentication from 'expo-local-authentication';
+import { getTimelineForEntityType } from '../../../config/kycTimelines';
 
 // Updated: Enhanced component to work with new KYC process structure and improved error handling - 2025-01-26
+// Updated: Refactored to use configuration-driven timeline system for scalability - 2025-11-10
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -28,18 +30,6 @@ type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 type VerifyYourIdentityRouteParams = {
   sourceRoute?: string;
 };
-
-// Step identification
-enum VerificationStep {
-  SETUP_ACCOUNT = 0,
-  CONFIRM_PHONE = 1,
-  // CONFIRM_EMAIL = 2, // Disabled for Haiti market - using phone + PIN instead
-  PERSONAL_INFO = 3,
-  VERIFY_ID = 4,
-  TAKE_SELFIE = 5,
-  SETUP_SECURITY = 6,
-  BIOMETRIC_SETUP = 7
-}
 
 // Timeline step component
 interface TimelineStepProps {
@@ -54,9 +44,9 @@ interface TimelineStepProps {
   stepStatus?: string;
 }
 
-const TimelineStep: React.FC<TimelineStepProps> = ({ 
-  title, 
-  description, 
+const TimelineStep: React.FC<TimelineStepProps> = ({
+  title,
+  description,
   isCompleted,
   isActive = false,
   isLast = false,
@@ -66,40 +56,54 @@ const TimelineStep: React.FC<TimelineStepProps> = ({
   stepStatus
 }) => {
   const componentStyles = useMemo(() => StyleSheet.create({
-    timelineItem: { 
-      flexDirection: 'row', 
-      alignItems: 'flex-start', 
-      marginBottom: theme.spacing.lg, 
-      position: 'relative', 
+    timelineItem: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginBottom: isLast ? 0 : theme.spacing.lg,
+      position: 'relative',
       zIndex: 1,
       opacity: canAccess ? 1 : 0.5,
     },
-    timelineStatus: { 
-      width: 30, 
-      height: 30, 
-      borderRadius: 15, 
-      backgroundColor: theme.colors.white, // Solid white prevents timeline line from showing through
-      borderWidth: 1, 
-      borderColor: theme.colors.border, 
-      marginRight: theme.spacing.md, 
-      alignItems: 'center', 
-      justifyContent: 'center', 
-      zIndex: 2 
+    timelineStatusContainer: {
+      position: 'relative',
+      alignItems: 'center',
+      marginRight: theme.spacing.md,
+    },
+    timelineStatus: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: theme.colors.white,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 2
     },
     completedStatus: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
     activeStatus: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
     inProgressStatus: { backgroundColor: theme.colors.warning, borderColor: theme.colors.warning },
     failedStatus: { backgroundColor: theme.colors.error, borderColor: theme.colors.error },
+    // PROFESSIONAL: Absolute positioned line that extends to next step
+    timelineLineSegment: {
+      position: 'absolute',
+      top: 30, // Start below circle
+      left: 14.5, // Center of 30px circle (15px) minus half line width (0.5px)
+      width: 1,
+      height: 62, // Extends to reach next circle, accounts for 2-line descriptions
+      backgroundColor: theme.colors.border,
+      zIndex: 0,
+    },
     timelineContent: { paddingTop: theme.spacing.xs, flex: 1 },
-    timelineTitle: { 
-      fontSize: theme.typography.fontSize.md, 
-      fontWeight: '500', 
+    timelineTitle: {
+      fontSize: theme.typography.fontSize.md,
+      fontWeight: '500',
       color: theme.colors.textPrimary,
-      marginBottom: theme.spacing.xs / 2 
+      marginBottom: theme.spacing.xs / 2
     },
     activeTitle: { color: theme.colors.primary, fontWeight: '600' },
-    timelineDescription: { 
-      fontSize: theme.typography.fontSize.sm, 
+    timelineDescription: {
+      fontSize: theme.typography.fontSize.sm,
       color: theme.colors.textSecondary
     },
     statusBadge: {
@@ -108,7 +112,7 @@ const TimelineStep: React.FC<TimelineStepProps> = ({
       marginTop: theme.spacing.xs / 2,
       fontStyle: 'italic',
     },
-  }), [theme, canAccess]);
+  }), [theme, canAccess, isLast]);
 
   let statusStyle = {};
   let statusIcon = null;
@@ -127,15 +131,22 @@ const TimelineStep: React.FC<TimelineStepProps> = ({
   }
   
   const titleStyle = isActive ? componentStyles.activeTitle : {};
-  
+
   return (
-    <TouchableOpacity 
-      style={[componentStyles.timelineItem, isLast && { marginBottom: 0 }]}
+    <TouchableOpacity
+      style={componentStyles.timelineItem}
       onPress={canAccess ? onPress : undefined}
       disabled={!onPress || !canAccess}
     >
-      <View style={[componentStyles.timelineStatus, statusStyle]}>
-        {statusIcon}
+      {/* PROFESSIONAL: Circle + line segment container for scalable timeline */}
+      <View style={componentStyles.timelineStatusContainer}>
+        <View style={[componentStyles.timelineStatus, statusStyle]}>
+          {statusIcon}
+        </View>
+        {/* Render line segment for all steps except the last */}
+        {!isLast && (
+          <View style={componentStyles.timelineLineSegment} />
+        )}
       </View>
       <View style={componentStyles.timelineContent}>
         <Text style={[componentStyles.timelineTitle, titleStyle]}>{title}</Text>
@@ -166,66 +177,58 @@ const VerifyYourIdentityScreen: React.FC = () => {
     isStale,
     lastUpdated
   } = useKycStatus(user?.entityId);
-  
-  // OPTIMISTIC UI: Instant verification status computation with defensive data access
-  const verificationStatus = useMemo(() => {
-    // DEFENSIVE: Try multiple data access patterns for robustness
-    const data = kycStatus?.data || kycStatus || {};
-    return {
-      setupAccount: {
-        isCompleted: data.setup_account_completed || false,
-        isActive: false,
-        canAccess: true
-      },
-      confirmPhone: {
-        isCompleted: data.phone_verification_completed || false,
-        isActive: false,
-        canAccess: true
-      },
-      // Email verification disabled for Haiti market
-      // confirmEmail: {
-      //   isCompleted: data.email_verification_completed || false,
-      //   isActive: false,
-      //   canAccess: true
-      // },
-      personalInfo: {
-        isCompleted: data.personal_info_completed || false,
-        isActive: false,
-        canAccess: true
-      },
-      verifyId: {
-        isCompleted: data.document_verification_completed || false,
-        isActive: false,
-        canAccess: true
-      },
-      takeSelfie: {
-        isCompleted: data.selfie_completed || false,
-        isActive: false,
-        canAccess: true
-      },
-      setupSecurity: {
-        isCompleted: data.security_setup_completed || false,
-        isActive: false,
-        canAccess: true
-      },
-      biometricSetup: {
-        isCompleted: data.biometric_setup_completed || false,
-        isActive: false,
-        canAccess: true
-      },
-    };
-  }, [kycStatus]);
-  
-  // Dynamic biometric availability check for iOS and Android
-  const { isAvailable: isBiometricAvailable, isLoading: isBiometricLoading } = useBiometricAvailability();
-  const [activeStep, setActiveStep] = useState<VerificationStep>(VerificationStep.PERSONAL_INFO);
-  
-  // OPTIMISTIC UI: Always show timeline instantly - no loading states, true local-first
-  // Data is always "ready" - we show defaults for missing data, update in background
 
-  // Determine profile type
+  // Determine profile type (must be before timeline loading)
   const isBusinessProfile = user?.profileType === 'business';
   const businessName = user?.businessName;
+
+  // Get entity type from backend response (single source of truth!)
+  const entityType = kycStatus?.entity_type || (isBusinessProfile ? 'business' : 'profile');
+
+  // PROFESSIONAL: Load timeline configuration dynamically based on entity type
+  const timelineConfig = useMemo(
+    () => getTimelineForEntityType(entityType),
+    [entityType]
+  );
+
+  // Dynamic biometric availability check for iOS and Android
+  const { isAvailable: isBiometricAvailable, isLoading: isBiometricLoading } = useBiometricAvailability();
+
+  // PROFESSIONAL: Dynamic verification status computation from timeline configuration
+  // This adapts automatically to entity type (personal vs business)
+  const verificationStatus = useMemo(() => {
+    const data = kycStatus || {};
+
+    // Map timeline steps to verification status with completion flags from backend
+    const allSteps = timelineConfig.steps.map((step, index) => ({
+      id: step.id,
+      title: step.title,
+      description: step.description,
+      isCompleted: (data as any)[step.completionFlag] || false,
+      isActive: false, // Will be computed based on first incomplete step
+      canAccess: true,
+      navigationRoute: step.navigationRoute,
+      navigationParams: step.navigationParams,
+      stepIndex: index,
+    }));
+
+    // PROFESSIONAL FIX: Filter out biometric_setup step for devices without biometric hardware
+    // This prevents users from seeing a step they can never complete
+    if (!isBiometricAvailable && !isBiometricLoading) {
+      return allSteps.filter(step => step.id !== 'biometric_setup');
+    }
+
+    return allSteps;
+  }, [kycStatus, timelineConfig, isBiometricAvailable, isBiometricLoading]);
+
+  // Find first incomplete step (active step)
+  const activeStepIndex = useMemo(() => {
+    const firstIncomplete = verificationStatus.findIndex(step => !step.isCompleted);
+    return firstIncomplete >= 0 ? firstIncomplete : verificationStatus.length - 1;
+  }, [verificationStatus]);
+
+  // OPTIMISTIC UI: Always show timeline instantly - no loading states, true local-first
+  // Data is always "ready" - we show defaults for missing data, update in background
 
   console.log('🔥 [VerifyYourIdentity] 📊 Component state (OPTIMISTIC UI - Professional KYC):', {
     hasKycStatus: !!kycStatus,
@@ -265,172 +268,63 @@ const VerifyYourIdentityScreen: React.FC = () => {
     }
   }, [route.params, sourceRoute, route.key, kycStatus, isStale, lastUpdated, isLoading]);
 
-  // Update active step based on verification status
+  // PROFESSIONAL FIX: Auto-complete KYC for devices without biometric hardware
+  // When all visible steps (excluding biometric) are completed, automatically call backend
   useEffect(() => {
-    if (verificationStatus) {
-      if (isBusinessProfile) {
-        // Business profile flow - check business-specific properties
-        if ((verificationStatus as any).businessInfo?.isActive) {
-          setActiveStep(VerificationStep.PERSONAL_INFO); // Maps to business info
-        } else if ((verificationStatus as any).businessVerification?.isActive) {
-          setActiveStep(VerificationStep.VERIFY_ID); // Maps to business verification
-        } else if ((verificationStatus as any).businessSecurity?.isActive) {
-          setActiveStep(VerificationStep.SETUP_SECURITY);
-        }
-      } else {
-        // Personal profile flow - check personal-specific properties
-        if (verificationStatus.personalInfo?.isActive) {
-          setActiveStep(VerificationStep.PERSONAL_INFO);
-        } else if (verificationStatus.verifyId?.isActive) {
-          setActiveStep(VerificationStep.VERIFY_ID);
-        } else if (verificationStatus.takeSelfie?.isActive) {
-          setActiveStep(VerificationStep.TAKE_SELFIE);
-        } else if (verificationStatus.setupSecurity?.isActive) {
-          setActiveStep(VerificationStep.SETUP_SECURITY);
-        }
-      }
-    }
-  }, [verificationStatus, isBusinessProfile]);
+    // Only process if biometric check is complete and not available
+    if (isBiometricLoading || isBiometricAvailable) return;
 
-  // Biometric availability is now handled by useKycStatus hook
+    // Check if all visible steps are completed
+    const allCompleted = verificationStatus.every(step => step.isCompleted);
+
+    // Check if backend status is not yet in_review or completed
+    const needsCompletion = kycStatus?.process?.overall_status === 'in_progress';
+
+    if (allCompleted && needsCompletion && !isLoading) {
+      console.log('[VerifyYourIdentity] 🎯 All non-biometric steps completed - auto-completing KYC...');
+
+      // Call backend to complete KYC without biometric
+      import('../../../_api/apiClient').then(({ default: apiClient }) => {
+        apiClient.post('/kyc/complete-without-biometric', {})
+          .then(() => {
+            console.log('[VerifyYourIdentity] ✅ KYC auto-completed for non-biometric device');
+            // Refresh status to show updated "Under Review" state
+            refreshStatus();
+          })
+          .catch(error => {
+            console.error('[VerifyYourIdentity] ❌ Error auto-completing KYC:', error);
+          });
+      });
+    }
+  }, [verificationStatus, isBiometricAvailable, isBiometricLoading, kycStatus?.process?.overall_status, isLoading]);
 
   const handleBack = () => {
     console.log(`[VerifyYourIdentityScreen] handleBack called. Navigating to Profile.`);
-    // Always navigate to Profile. ProfileScreen is responsible for its own back navigation 
-    // to the original sourceRoute it received.
     navigation.navigate('Profile');
   };
 
-  const handleStepPress = (step: VerificationStep) => {
-    // All steps return to timeline after completion - gives users full control
-    const navParams = { 
-      returnToTimeline: true,
-      sourceRoute,
-    };
-    console.log(`[VerifyYourIdentityScreen] handleStepPress for ${VerificationStep[step]} (Business: ${isBusinessProfile}). Navigating with params: ${JSON.stringify(navParams)}`);
+  // PROFESSIONAL: Simplified step press handler using timeline configuration
+  const handleStepPress = (stepData: typeof verificationStatus[number]) => {
+    console.log(`[VerifyYourIdentityScreen] handleStepPress for ${stepData.id}. Has navigation: ${!!stepData.navigationRoute}`);
 
-    if (step === VerificationStep.SETUP_SECURITY) {
-      navigation.navigate('Passcode', { isKycFlow: true, ...navParams });
-    } else if (step === VerificationStep.BIOMETRIC_SETUP) {
-      navigation.navigate('BiometricSetup', navParams);
-    } else if (step === VerificationStep.TAKE_SELFIE) {
-      if (isBusinessProfile) {
-        // For business profiles, "take selfie" step maps to business verification
-        navigation.navigate('BusinessVerification', navParams);
-      } else {
-        navigation.navigate('TakeSelfie', navParams);
-      }
-    } else if (step === VerificationStep.VERIFY_ID) {
-      if (isBusinessProfile) {
-        // For business profiles, "verify ID" step maps to business verification
-        navigation.navigate('BusinessVerification', navParams);
-      } else {
-        navigation.navigate('UploadId', navParams);
-      }
-    } else if (step === VerificationStep.PERSONAL_INFO) {
-      if (isBusinessProfile) {
-        // For business profiles, "personal info" step maps to business info
-        navigation.navigate('BusinessInfoFlow', navParams);
-      } else {
-        navigation.navigate('PersonalInfoFlow', navParams);
-      }
-    } else if (step === VerificationStep.CONFIRM_PHONE) {
-      navigation.navigate('PhoneEntry', { ...navParams, currentPhone: kycStatus?.phone });
-    // } else if (step === VerificationStep.CONFIRM_EMAIL) {
-    //   navigation.navigate('KycEmailEntry', { ...navParams, currentEmail: kycStatus?.email });
+    if (stepData.navigationRoute) {
+      const navParams = stepData.navigationParams || { returnToTimeline: true, sourceRoute };
+      navigation.navigate(stepData.navigationRoute as any, navParams);
     } else {
-      console.log(`[VerifyYourIdentityScreen] handleStepPress: No navigation defined for step ${VerificationStep[step]}`);
+      console.log(`[VerifyYourIdentityScreen] No navigation route configured for step: ${stepData.id}`);
     }
   };
 
+  // PROFESSIONAL: Simplified continue handler using array-based verification status
   const handleContinue = () => {
-    // If all applicable steps are completed, navigate back to Profile
-    if (allStepsCompleted) {
+    // Find first incomplete step
+    const nextIncompleteStep = verificationStatus.find(step => !step.isCompleted);
+
+    if (nextIncompleteStep) {
+      console.log(`[VerifyYourIdentityScreen] handleContinue to next incomplete step: ${nextIncompleteStep.id}`);
+      handleStepPress(nextIncompleteStep);
+    } else {
       console.log('[VerifyYourIdentityScreen] All steps completed, navigating back to Profile');
-      navigation.navigate('Profile');
-      return;
-    }
-
-    // Smart continue - find the next incomplete step in proper order
-    let nextStep: VerificationStep | null = null;
-    
-    if (!verificationStatus?.confirmPhone.isCompleted) {
-      nextStep = VerificationStep.CONFIRM_PHONE;
-    // Email verification disabled for Haiti market
-    // } else if (!verificationStatus?.confirmEmail.isCompleted) {
-    //   nextStep = VerificationStep.CONFIRM_EMAIL;
-    } else if (isBusinessProfile) {
-      // Business profile flow
-      if (!(verificationStatus as any)?.businessInfo?.isCompleted) {
-        nextStep = VerificationStep.PERSONAL_INFO; // Maps to BusinessInfoFlow
-      } else if (!(verificationStatus as any)?.businessVerification?.isCompleted) {
-        nextStep = VerificationStep.VERIFY_ID; // Maps to BusinessVerification
-      } else if (!(verificationStatus as any)?.businessSecurity?.isCompleted) {
-        nextStep = VerificationStep.SETUP_SECURITY;
-      } else if (isBiometricAvailable && !verificationStatus?.biometricSetup.isCompleted) {
-        nextStep = VerificationStep.BIOMETRIC_SETUP;
-      }
-    } else {
-      // Personal profile flow
-      if (!verificationStatus?.personalInfo.isCompleted) {
-        nextStep = VerificationStep.PERSONAL_INFO;
-      } else if (!verificationStatus?.verifyId.isCompleted) {
-        nextStep = VerificationStep.VERIFY_ID;
-      } else if (!verificationStatus?.takeSelfie.isCompleted) {
-        nextStep = VerificationStep.TAKE_SELFIE;
-      } else if (!verificationStatus?.setupSecurity.isCompleted) {
-        nextStep = VerificationStep.SETUP_SECURITY;
-      } else if (isBiometricAvailable && !verificationStatus?.biometricSetup.isCompleted) {
-        nextStep = VerificationStep.BIOMETRIC_SETUP;
-      }
-    }
-
-    const navParams = { 
-      returnToTimeline: true,
-      sourceRoute,
-    };
-    
-    if (nextStep !== null) {
-      console.log(`[VerifyYourIdentityScreen] handleContinue to next incomplete step: ${VerificationStep[nextStep]}. Navigating with params: ${JSON.stringify(navParams)}`);
-      
-      switch (nextStep) {
-        case VerificationStep.CONFIRM_PHONE:
-          navigation.navigate('PhoneEntry', { ...navParams, currentPhone: kycStatus?.phone });
-          break;
-        // Email verification disabled for Haiti market
-        // case VerificationStep.CONFIRM_EMAIL:
-        //   navigation.navigate('KycEmailEntry', { ...navParams, currentEmail: kycStatus?.email });
-        //   break;
-        case VerificationStep.SETUP_SECURITY:
-          navigation.navigate('Passcode', { isKycFlow: true, ...navParams });
-          break;
-        case VerificationStep.TAKE_SELFIE:
-          if (isBusinessProfile) {
-            navigation.navigate('BusinessVerification', navParams);
-          } else {
-            navigation.navigate('TakeSelfie', navParams);
-          }
-          break;
-        case VerificationStep.VERIFY_ID:
-          if (isBusinessProfile) {
-            navigation.navigate('BusinessVerification', navParams);
-          } else {
-            navigation.navigate('UploadId', navParams);
-          }
-          break;
-        case VerificationStep.PERSONAL_INFO:
-          if (isBusinessProfile) {
-            navigation.navigate('BusinessInfoFlow', navParams);
-          } else {
-            navigation.navigate('PersonalInfoFlow', navParams);
-          }
-          break;
-        case VerificationStep.BIOMETRIC_SETUP:
-          navigation.navigate('BiometricSetup', navParams);
-          break;
-      }
-    } else {
-      console.log('[VerifyYourIdentityScreen] handleContinue: All steps completed, navigating back to Profile');
       navigation.navigate('Profile');
     }
   };
@@ -445,26 +339,14 @@ const VerifyYourIdentityScreen: React.FC = () => {
     refreshStatus();
   };
 
-  // Determine if all steps are truly completed on the client-side
+  // PROFESSIONAL: Check if all steps are completed on the client-side
+  // Simple array check - verificationStatus is already filtered to only show relevant steps
   const allStepsCompleted = useMemo(() => {
-    if (!verificationStatus) return false;
-    
-    // Get required steps based on profile type (email verification removed for Haiti market)
-    const requiredSteps = isBusinessProfile
-      ? ['setupAccount', 'confirmPhone', 'businessInfo', 'businessVerification', 'businessSecurity']
-      : ['setupAccount', 'confirmPhone', 'personalInfo', 'verifyId', 'takeSelfie', 'setupSecurity'];
-    
-    // Add biometric step if device supports it (for both profile types)
-    if (isBiometricAvailable) {
-      requiredSteps.push('biometricSetup');
-    }
-    
-    // Check if all required steps are completed
-    return requiredSteps.every(stepKey => {
-      const stepStatus = (verificationStatus as any)[stepKey];
-      return stepStatus?.isCompleted || false;
-    });
-  }, [verificationStatus, isBiometricAvailable, isBusinessProfile]);
+    if (!verificationStatus || verificationStatus.length === 0) return false;
+
+    // Check if every step in the array has isCompleted: true
+    return verificationStatus.every(step => step.isCompleted);
+  }, [verificationStatus]);
 
   // Get overall process status message
   const getProcessStatusMessage = () => {
@@ -496,8 +378,7 @@ const VerifyYourIdentityScreen: React.FC = () => {
     scrollView: { flex: 1 },
     kycContainer: { padding: theme.spacing.lg },
     statusDescription: { fontSize: theme.typography.fontSize.sm, color: theme.colors.textSecondary, textAlign: 'center', marginBottom: theme.spacing.xl, marginTop: theme.spacing.sm, lineHeight: 22, paddingHorizontal: theme.spacing.sm },
-    timelineContainer: { padding: 0, paddingLeft: theme.spacing.md, marginBottom: theme.spacing.xl, position: 'relative' },
-    timelineMainLine: { position: 'absolute', top: 15, bottom: 15, left: 31, width: 1, backgroundColor: theme.colors.border, zIndex: 0 },
+    timelineContainer: { padding: 0, paddingLeft: theme.spacing.md, marginBottom: theme.spacing.xl },
     continueButton: { ...theme.commonStyles.primaryButton, marginTop: theme.spacing.lg },
     continueButtonText: {
       color: theme.colors.white,
@@ -605,14 +486,23 @@ const VerifyYourIdentityScreen: React.FC = () => {
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <View style={styles.kycContainer}>
-          {/* Process Status Badge - Render based on client-side completion check */}
-          {allStepsCompleted ? (
+          {/* PROFESSIONAL: 3-State Status Badge for Banking UX */}
+          {allStepsCompleted && kycStatus?.process?.overall_status === 'in_review' ? (
+            // State 1: Backend confirmed review - "Under Review" (Orange)
+            <View style={[styles.processStatusBadge, { backgroundColor: '#FEF3C7' }]}>
+              <Text style={[styles.processStatusText, { color: '#F59E0B' }]}>
+                Status: Under Review
+              </Text>
+            </View>
+          ) : allStepsCompleted ? (
+            // State 2: All steps done, can still edit - "Completed" (Green)
             <View style={[styles.processStatusBadge, { backgroundColor: '#D1FAE5' }]}>
-              <Text style={[styles.processStatusText, { color: theme.colors.success }]}>
+              <Text style={[styles.processStatusText, { color: '#10B981' }]}>
                 Status: Completed
               </Text>
             </View>
           ) : (
+            // State 3: Has steps to complete - "In Progress" (Purple)
             <View style={styles.processStatusBadge}>
               <Text style={styles.processStatusText}>
                 Status: In Progress
@@ -624,140 +514,26 @@ const VerifyYourIdentityScreen: React.FC = () => {
             {getProcessStatusMessage()}
           </Text>
           
-          {/* OPTIMISTIC UI: Always show timeline instantly - true local-first experience */}
+          {/* PROFESSIONAL: Dynamic timeline from configuration - adapts to entity type automatically */}
           <View style={styles.timelineContainer}>
-            {/* Main timeline vertical line */}
-            <View style={styles.timelineMainLine}></View>
+            {verificationStatus.map((step, index) => {
+              const isLast = index === verificationStatus.length - 1;
+              const isActive = index === activeStepIndex;
 
-            <TimelineStep
-              theme={theme}
-              title={isBusinessProfile ? "Set up business account" : "Set up Swap account"}
-              description={isBusinessProfile ? `${businessName || 'Business'} account created successfully` : "Account created successfully"}
-              isCompleted={verificationStatus?.setupAccount?.isCompleted || false}
-              canAccess={verificationStatus?.setupAccount?.canAccess || true}
-              onPress={() => handleStepPress(VerificationStep.SETUP_ACCOUNT)}
-            />
-
-          <TimelineStep
-            theme={theme}
-            title="Confirm your phone number"
-            description="Receive verification code"
-            isCompleted={verificationStatus?.confirmPhone?.isCompleted || false}
-            canAccess={verificationStatus?.confirmPhone?.canAccess || true}
-            onPress={() => handleStepPress(VerificationStep.CONFIRM_PHONE)}
-          />
-
-          {/* Email verification disabled for Haiti market - using phone + PIN instead */}
-          {/* <TimelineStep
-            theme={theme}
-            title="Confirm your email address"
-            description="Email confirmed"
-            isCompleted={verificationStatus?.confirmEmail?.isCompleted || false}
-            canAccess={verificationStatus?.confirmEmail?.canAccess || true}
-            onPress={() => handleStepPress(VerificationStep.CONFIRM_EMAIL)}
-          /> */}
-
-          {isBusinessProfile ? (
-            // Business Profile Steps
-            <>
-              <TimelineStep
-                theme={theme}
-                title="Your business information"
-                description="Business name, type, address, and registration details"
-                isCompleted={(verificationStatus as any)?.businessInfo?.isCompleted || false}
-                isActive={(verificationStatus as any)?.businessInfo?.isActive || false}
-                canAccess={(verificationStatus as any)?.businessInfo?.canAccess || true}
-                stepStatus={kycStatus?.steps?.business_info?.status}
-                onPress={() => handleStepPress(VerificationStep.PERSONAL_INFO)} // Reuse enum for navigation
-              />
-
-              <TimelineStep
-                theme={theme}
-                title="Verify your business"
-                description="Upload business documents or photos"
-                isCompleted={(verificationStatus as any)?.businessVerification?.isCompleted || false}
-                isActive={(verificationStatus as any)?.businessVerification?.isActive || false}
-                canAccess={(verificationStatus as any)?.businessVerification?.canAccess || true}
-                stepStatus={kycStatus?.steps?.business_verification?.status}
-                onPress={() => handleStepPress(VerificationStep.VERIFY_ID)} // Reuse enum for navigation
-              />
-
-              <TimelineStep
-                theme={theme}
-                title="Set up business security"
-                description="Create a 6-digit business passcode"
-                isCompleted={(verificationStatus as any)?.businessSecurity?.isCompleted || false}
-                isActive={(verificationStatus as any)?.businessSecurity?.isActive || false}
-                canAccess={(verificationStatus as any)?.businessSecurity?.canAccess || true}
-                stepStatus={kycStatus?.steps?.business_security?.status}
-                isLast={!isBiometricAvailable}
-                onPress={() => handleStepPress(VerificationStep.SETUP_SECURITY)}
-              />
-            </>
-          ) : (
-            // Personal Profile Steps
-            <>
-              <TimelineStep
-                theme={theme}
-                title="Your personal information"
-                description="Full name, Date of birth, Country of residence, Citizenship"
-                isCompleted={verificationStatus?.personalInfo?.isCompleted || false}
-                isActive={verificationStatus?.personalInfo?.isActive || false}
-                canAccess={verificationStatus?.personalInfo?.canAccess || true}
-                stepStatus={kycStatus?.steps?.personal_info?.status}
-                onPress={() => handleStepPress(VerificationStep.PERSONAL_INFO)}
-              />
-
-              <TimelineStep
-                theme={theme}
-                title="Verify your identity"
-                description="Upload ID document"
-                isCompleted={verificationStatus?.verifyId?.isCompleted || false}
-                isActive={verificationStatus?.verifyId?.isActive || false}
-                canAccess={verificationStatus?.verifyId?.canAccess || true}
-                stepStatus={kycStatus?.steps?.document_verification?.status}
-                onPress={() => handleStepPress(VerificationStep.VERIFY_ID)}
-              />
-
-              <TimelineStep
-                theme={theme}
-                title="Take a selfie"
-                description="Verify photo matches ID"
-                isCompleted={verificationStatus?.takeSelfie?.isCompleted || false}
-                isActive={verificationStatus?.takeSelfie?.isActive || false}
-                canAccess={verificationStatus?.takeSelfie?.canAccess || true}
-                stepStatus={kycStatus?.steps?.selfie?.status}
-                onPress={() => handleStepPress(VerificationStep.TAKE_SELFIE)}
-              />
-
-              <TimelineStep
-                theme={theme}
-                title="Set up security"
-                description="Create a 6-digit passcode"
-                isCompleted={verificationStatus?.setupSecurity?.isCompleted || false}
-                isActive={verificationStatus?.setupSecurity?.isActive || false}
-                canAccess={verificationStatus?.setupSecurity?.canAccess || true}
-                stepStatus={kycStatus?.steps?.security_setup?.status}
-                isLast={!isBiometricAvailable}
-                onPress={() => handleStepPress(VerificationStep.SETUP_SECURITY)}
-              />
-            </>
-          )}
-
-          {/* Only show biometric setup if device supports it */}
-          {isBiometricAvailable && (
-            <TimelineStep
-              theme={theme}
-              title="Set up biometric authentication"
-              description="Enable Face ID, Touch ID, or fingerprint login"
-              isCompleted={verificationStatus?.biometricSetup?.isCompleted || false}
-              isActive={verificationStatus?.biometricSetup?.isActive || false}
-              canAccess={verificationStatus?.biometricSetup?.canAccess || true}
-              stepStatus={kycStatus?.steps?.biometric_setup?.status}
-              isLast={true}
-              onPress={() => handleStepPress(VerificationStep.BIOMETRIC_SETUP)}
-            />
-          )}
+              return (
+                <TimelineStep
+                  key={step.id}
+                  theme={theme}
+                  title={step.title}
+                  description={step.description}
+                  isCompleted={step.isCompleted}
+                  isActive={isActive}
+                  canAccess={step.canAccess}
+                  isLast={isLast}
+                  onPress={() => handleStepPress(step)}
+                />
+              );
+            })}
           </View>
 
           {/* OPTIMISTIC UI: Always show continue button - true local-first experience */}
