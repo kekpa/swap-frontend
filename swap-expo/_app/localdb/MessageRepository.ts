@@ -407,6 +407,115 @@ export class MessageRepository {
   /**
    * Background sync: fetch from remote, update local, emit event
    */
+  /**
+   * Get the latest message for a specific interaction
+   * 🚀 PHASE 2.5: Message sync support
+   */
+  public async getLatestMessageForInteraction(interactionId: string): Promise<MessageTimelineItem | null> {
+    try {
+      const db = await this.getDatabase();
+      logger.debug(`[MessageRepository] Getting latest message for interaction: ${interactionId}`);
+
+      const result = await db.getFirstAsync<any>(
+        `SELECT * FROM messages 
+         WHERE interaction_id = ? 
+         ORDER BY created_at DESC 
+         LIMIT 1`,
+        [interactionId]
+      );
+
+      if (result) {
+        const message: MessageTimelineItem = {
+          id: result.id,
+          interaction_id: result.interaction_id,
+          type: 'message',
+          itemType: 'message',
+          content: result.content,
+          message_type: result.message_type || 'text',
+          sender_entity_id: result.sender_entity_id,
+          createdAt: result.created_at,
+          timestamp: result.created_at,
+          metadata: result.metadata ? JSON.parse(result.metadata) : {},
+          status: result.status || 'delivered'
+        };
+
+        logger.debug(`[MessageRepository] Latest message found: ${message.id}`);
+        return message;
+      }
+
+      logger.debug(`[MessageRepository] No messages found for interaction: ${interactionId}`);
+      return null;
+
+    } catch (error) {
+      logger.error(`[MessageRepository] Failed to get latest message for ${interactionId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Update message delivery status
+   * 🚀 PHASE 2.6: Delivery confirmation support
+   */
+  public async updateMessageStatus(messageId: string, status: 'sent' | 'delivered' | 'read'): Promise<void> {
+    try {
+      const db = await this.getDatabase();
+      logger.debug(`[MessageRepository] Updating message status: ${messageId} -> ${status}`);
+
+      await db.runAsync(
+        `UPDATE messages 
+         SET status = ?, 
+             updated_at = datetime('now') 
+         WHERE id = ?`,
+        [status, messageId]
+      );
+
+      logger.debug(`[MessageRepository] ✅ Message status updated: ${messageId}`);
+
+    } catch (error) {
+      logger.error(`[MessageRepository] Failed to update message status for ${messageId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get failed messages that need retry
+   * 🚀 PHASE 2.5: Message reliability support
+   */
+  public async getFailedMessages(): Promise<MessageTimelineItem[]> {
+    try {
+      const db = await this.getDatabase();
+      logger.debug('[MessageRepository] Getting failed messages for retry');
+
+      const results = await db.getAllAsync<any>(
+        `SELECT * FROM messages 
+         WHERE status = 'failed' 
+         ORDER BY created_at DESC 
+         LIMIT 50`
+      );
+
+      const messages: MessageTimelineItem[] = results.map(result => ({
+        id: result.id,
+        interaction_id: result.interaction_id,
+        type: 'message',
+        itemType: 'message',
+        content: result.content,
+        message_type: result.message_type || 'text',
+        sender_entity_id: result.sender_entity_id,
+        createdAt: result.created_at,
+        timestamp: result.created_at,
+        metadata: result.metadata ? JSON.parse(result.metadata) : {},
+        status: result.status || 'failed'
+      }));
+
+      logger.debug(`[MessageRepository] Found ${messages.length} failed messages`);
+      return messages;
+
+    } catch (error) {
+      logger.error('[MessageRepository] Failed to get failed messages:', error);
+      return [];
+    }
+  }
+
   public async syncMessagesFromRemote(fetchRemote: () => Promise<DatabaseMessage[]>): Promise<void> {
     try {
       const remoteMessages = await fetchRemote();
