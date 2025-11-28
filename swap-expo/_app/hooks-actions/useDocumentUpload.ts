@@ -1,5 +1,6 @@
 // Created: Added useDocumentUpload hook for KYC document uploads - 2025-06-03
 // Updated: Fixed document ID parsing from nested JSON response structure - 2025-01-08
+// Updated: Added endpoint configuration for flexible upload endpoints (personal vs business KYC) - 2025-01-22
 import { useState, useCallback } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
@@ -19,6 +20,27 @@ export interface DocumentUploadResult {
   error?: string;
 }
 
+export interface UseDocumentUploadConfig {
+  /**
+   * API endpoint for document upload
+   * @default API_PATHS.KYC.DOCUMENTS ('/kyc/documents')
+   * @example '/kyc/business/documents' for business KYC
+   */
+  endpoint?: string;
+
+  /**
+   * Custom form data field name for document type
+   * @default 'documentType'
+   */
+  documentTypeField?: string;
+
+  /**
+   * Custom form data field name for document side
+   * @default 'documentSide'
+   */
+  documentSideField?: string;
+}
+
 export interface UseDocumentUploadReturn {
   uploading: boolean;
   uploadProgress: number;
@@ -27,7 +49,11 @@ export interface UseDocumentUploadReturn {
   pickFromLibrary: (documentType: DocumentType) => Promise<ImagePicker.ImagePickerResult>;
 }
 
-export const useDocumentUpload = (): UseDocumentUploadReturn => {
+export const useDocumentUpload = (config?: UseDocumentUploadConfig): UseDocumentUploadReturn => {
+  // Default config values (backward compatible)
+  const uploadEndpoint = config?.endpoint || API_PATHS.KYC.DOCUMENTS;
+  const documentTypeField = config?.documentTypeField || 'documentType';
+  const documentSideField = config?.documentSideField || 'documentSide';
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -58,7 +84,7 @@ export const useDocumentUpload = (): UseDocumentUploadReturn => {
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
@@ -83,7 +109,7 @@ export const useDocumentUpload = (): UseDocumentUploadReturn => {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [4, 3],
         quality: 0.8,
@@ -129,16 +155,16 @@ export const useDocumentUpload = (): UseDocumentUploadReturn => {
         name: filename,
       } as any);
       
-      // Add document type and side
-      formData.append('documentType', documentType);
-      formData.append('documentSide', documentSide);
-      
+      // Add document type and side (using configurable field names)
+      formData.append(documentTypeField, documentType);
+      formData.append(documentSideField, documentSide);
+
       setUploadProgress(50);
-      
-      logger.debug(`[useDocumentUpload] Uploading to ${API_PATHS.KYC.DOCUMENTS}`);
-      
-      // Upload to backend using professional RESTful endpoint
-      const response = await apiClient.post(API_PATHS.KYC.DOCUMENTS, formData, {
+
+      logger.debug(`[useDocumentUpload] Uploading to ${uploadEndpoint}`);
+
+      // Upload to backend using professional RESTful endpoint (configurable)
+      const response = await apiClient.post(uploadEndpoint, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

@@ -14,7 +14,7 @@ export const BUSINESS_DOCUMENT_TYPES: DocumentTypeConfig[] = [
     id: 'registration_certificate',
     label: 'Business Registration Certificate',
     description: 'Official business registration document',
-    required: true,
+    required: false,
   },
   {
     id: 'tax_certificate',

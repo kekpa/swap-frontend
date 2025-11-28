@@ -15,11 +15,11 @@ import {
   SafeAreaView,
   TouchableOpacity,
   StatusBar,
-  Image,
   ScrollView,
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -31,6 +31,7 @@ import { invalidateQueries } from '../../../tanstack-query/queryClient';
 import { useKycStatus } from '../../../hooks-data/useKycQuery';
 import CameraCapture from '../../../components2/CameraCapture';
 import logger from '../../../utils/logger';
+import UploadOptionsSheet from '../../../components/UploadOptionsSheet';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 // type UploadIdRouteProp = RouteProp<ProfileStackParamList, 'UploadId'>; // For typed route params
@@ -59,7 +60,14 @@ const UploadIdScreen: React.FC = () => {
   const [currentSide, setCurrentSide] = useState<DocumentSide>('front');
   const [uploadedDocumentId, setUploadedDocumentId] = useState<string | null>(null);
   const [forceReupload, setForceReupload] = useState<boolean>(false);
-  
+  const [showUploadSheet, setShowUploadSheet] = useState(false);
+
+  // Enterprise-grade image loading states (expo-image)
+  const [frontImageLoading, setFrontImageLoading] = useState(false);
+  const [backImageLoading, setBackImageLoading] = useState(false);
+  const [frontImageError, setFrontImageError] = useState(false);
+  const [backImageError, setBackImageError] = useState(false);
+
   const { uploading, uploadProgress, captureDocument, uploadDocument, pickFromLibrary } = useDocumentUpload();
   const { data: kycStatus, isLoading: kycLoading } = useKycStatus();
 
@@ -99,15 +107,24 @@ const UploadIdScreen: React.FC = () => {
     return null;
   };
 
-  // Effect to pre-select the active document type
+  // Effect to pre-select the active document type AND auto-navigate to preview (enterprise UX)
   useEffect(() => {
     if (!kycLoading && kycStatus && uploadState === 'select_type' && !selectedDocType) {
       // Pre-select the active document if one exists
       const activeDocType = getActiveDocumentType();
-      
+
       if (activeDocType) {
+        const documentStatus = getDocumentStatus(activeDocType);
+
         setSelectedDocType(activeDocType as DocumentType);
         console.log(`[UploadIdScreen] Pre-selected active document: ${activeDocType}`);
+
+        // Enterprise UX: Auto-navigate to preview if document already uploaded
+        // This provides instant preview like Google/Stripe/Banking apps
+        if (documentStatus.isUploaded) {
+          setUploadState('upload_front');
+          console.log(`[UploadIdScreen] Auto-navigating to preview (document already uploaded)`);
+        }
       } else {
         // If no active document, don't pre-select anything (let user choose)
         console.log('[UploadIdScreen] No active document found, user can choose any document type');
@@ -201,15 +218,15 @@ const UploadIdScreen: React.FC = () => {
 
   const handlePickFromLibrary = async () => {
     if (!selectedDocType) return;
-    
+
     try {
       logger.debug(`[UploadIdScreen] Picking from library for ${selectedDocType} ${currentSide}`);
-      
+
       const result = await pickFromLibrary(selectedDocType);
-      
+
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const imageUri = result.assets[0].uri;
-        
+
         if (currentSide === 'front') {
           setFrontImageUri(imageUri);
           // If document needs both sides, go to back capture
@@ -225,7 +242,7 @@ const UploadIdScreen: React.FC = () => {
           setBackImageUri(imageUri);
     setUploadState('review');
         }
-        
+
         logger.debug(`[UploadIdScreen] ${currentSide} photo selected: ${imageUri}`);
       }
     } catch (error) {
@@ -233,6 +250,43 @@ const UploadIdScreen: React.FC = () => {
       Alert.alert(
         'Library Error',
         'Failed to pick photo from library. Please make sure library permissions are granted.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  const handleOpenUploadSheet = () => {
+    if (!selectedDocType) return;
+    setShowUploadSheet(true);
+  };
+
+  const handleFileSelected = async (file: any) => {
+    if (!selectedDocType) return;
+
+    try {
+      const imageUri = file.uri;
+      logger.debug(`[UploadIdScreen] File selected for ${selectedDocType} ${currentSide}: ${imageUri}`);
+
+      if (currentSide === 'front') {
+        setFrontImageUri(imageUri);
+        // If document needs both sides, go to back capture
+        if (needsBothSides(selectedDocType)) {
+          setCurrentSide('back');
+          setUploadState('upload_back');
+        } else {
+          // Single-sided document, go to review
+          setUploadState('review');
+        }
+      } else {
+        // Capturing back side
+        setBackImageUri(imageUri);
+        setUploadState('review');
+      }
+    } catch (error) {
+      logger.error('[UploadIdScreen] Error handling file selection:', error);
+      Alert.alert(
+        'File Selection Error',
+        'Failed to process selected file. Please try again.',
         [{ text: 'OK' }]
       );
     }
@@ -951,12 +1005,42 @@ const UploadIdScreen: React.FC = () => {
               {/* Show front image */}
               {documentUrls.front && (
                 <View style={styles.documentPreview}>
-                  <Image 
-                    source={{ uri: documentUrls.front }} 
-                    style={styles.documentImage} 
-                    resizeMode="contain"
+                  <Image
+                    source={{ uri: documentUrls.front }}
+                    style={styles.documentImage}
+                    contentFit="contain"
+                    transition={200}
+                    onLoadStart={() => setFrontImageLoading(true)}
+                    onLoad={() => {
+                      setFrontImageLoading(false);
+                      setFrontImageError(false);
+                    }}
+                    onError={() => {
+                      setFrontImageLoading(false);
+                      setFrontImageError(true);
+                      logger.error('[UploadIdScreen] Front image failed to load:', documentUrls.front);
+                    }}
                   />
-                  {needsBothSides(selectedDocType!) && (
+                  {frontImageLoading && (
+                    <View style={{ position: 'absolute', top: '50%', left: '50%', marginLeft: -20, marginTop: -20 }}>
+                      <ActivityIndicator size="large" color={theme.colors.primary} />
+                    </View>
+                  )}
+                  {frontImageError && (
+                    <View style={{ position: 'absolute', top: '50%', left: '50%', marginLeft: -80, marginTop: -40, alignItems: 'center' }}>
+                      <Text style={{ color: theme.colors.error, marginBottom: 8 }}>Failed to load image</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setFrontImageError(false);
+                          setFrontImageLoading(true);
+                        }}
+                        style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: theme.colors.primary, borderRadius: 8 }}
+                      >
+                        <Text style={{ color: 'white' }}>Retry</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  {needsBothSides(selectedDocType!) && !frontImageLoading && !frontImageError && (
                     <View style={{ position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(0,0,0,0.7)', padding: 4, borderRadius: 4 }}>
                       <Text style={{ color: 'white', fontSize: 12, fontWeight: '600' }}>Front</Text>
                     </View>
@@ -967,14 +1051,46 @@ const UploadIdScreen: React.FC = () => {
               {/* Show back image if it exists */}
               {documentUrls.back && needsBothSides(selectedDocType!) && (
                 <View style={[styles.documentPreview, { marginBottom: theme.spacing.lg }]}>
-                  <Image 
-                    source={{ uri: documentUrls.back }} 
-                    style={styles.documentImage} 
-                    resizeMode="contain"
+                  <Image
+                    source={{ uri: documentUrls.back }}
+                    style={styles.documentImage}
+                    contentFit="contain"
+                    transition={200}
+                    onLoadStart={() => setBackImageLoading(true)}
+                    onLoad={() => {
+                      setBackImageLoading(false);
+                      setBackImageError(false);
+                    }}
+                    onError={() => {
+                      setBackImageLoading(false);
+                      setBackImageError(true);
+                      logger.error('[UploadIdScreen] Back image failed to load:', documentUrls.back);
+                    }}
                   />
-                  <View style={{ position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(0,0,0,0.7)', padding: 4, borderRadius: 4 }}>
-                    <Text style={{ color: 'white', fontSize: 12, fontWeight: '600' }}>Back</Text>
-                  </View>
+                  {backImageLoading && (
+                    <View style={{ position: 'absolute', top: '50%', left: '50%', marginLeft: -20, marginTop: -20 }}>
+                      <ActivityIndicator size="large" color={theme.colors.primary} />
+                    </View>
+                  )}
+                  {backImageError && (
+                    <View style={{ position: 'absolute', top: '50%', left: '50%', marginLeft: -80, marginTop: -40, alignItems: 'center' }}>
+                      <Text style={{ color: theme.colors.error, marginBottom: 8 }}>Failed to load image</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setBackImageError(false);
+                          setBackImageLoading(true);
+                        }}
+                        style={{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: theme.colors.primary, borderRadius: 8 }}
+                      >
+                        <Text style={{ color: 'white' }}>Retry</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  {!backImageLoading && !backImageError && (
+                    <View style={{ position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(0,0,0,0.7)', padding: 4, borderRadius: 4 }}>
+                      <Text style={{ color: 'white', fontSize: 12, fontWeight: '600' }}>Back</Text>
+                    </View>
+                  )}
                 </View>
               )}
 
@@ -1043,10 +1159,11 @@ const UploadIdScreen: React.FC = () => {
               {currentImage ? (
                 // Show captured image preview
                 <View style={styles.documentPreview}>
-                  <Image 
-                    source={{ uri: currentImage }} 
-                    style={styles.documentImage} 
-                    resizeMode="contain"
+                  <Image
+                    source={{ uri: currentImage }}
+                    style={styles.documentImage}
+                    contentFit="contain"
+                    transition={200}
                   />
                 </View>
               ) : (
@@ -1098,22 +1215,13 @@ const UploadIdScreen: React.FC = () => {
               ) : (
                 // Actions for taking photo
                 <View style={styles.actionButtonsContainer}>
-                  <TouchableOpacity 
-                    style={[styles.actionButton, styles.primaryActionButton]} 
-                    onPress={handleTakePhoto}
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.primaryActionButton]}
+                    onPress={handleOpenUploadSheet}
                     disabled={uploading}
                   >
-                    <Ionicons name="camera-outline" size={20} color={theme.colors.white} style={styles.buttonIcon} />
-                    <Text style={styles.actionButtonText}>Take Photo</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity 
-                    style={[styles.actionButton, styles.secondaryActionButton]} 
-                    onPress={handlePickFromLibrary}
-                    disabled={uploading}
-                  >
-                    <Ionicons name="images-outline" size={20} color={theme.colors.textPrimary} style={styles.buttonIcon} />
-                    <Text style={styles.secondaryActionButtonText}>Upload Photo</Text>
+                    <Ionicons name="cloud-upload-outline" size={20} color={theme.colors.white} style={styles.buttonIcon} />
+                    <Text style={styles.actionButtonText}>Upload Document</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -1174,10 +1282,11 @@ const UploadIdScreen: React.FC = () => {
           {/* Show front image */}
           {frontImageUri && (
             <View style={[styles.documentPreview, { marginBottom: needsBothSides(selectedDocType!) ? theme.spacing.md : theme.spacing.lg }]}>
-              <Image 
-                source={{ uri: frontImageUri }} 
-                style={styles.documentImage} 
-                resizeMode="contain"
+              <Image
+                source={{ uri: frontImageUri }}
+                style={styles.documentImage}
+                contentFit="contain"
+                transition={200}
               />
               {needsBothSides(selectedDocType!) && (
                 <View style={{ position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(0,0,0,0.7)', padding: 4, borderRadius: 4 }}>
@@ -1190,15 +1299,16 @@ const UploadIdScreen: React.FC = () => {
           {/* Show back image if it exists */}
           {backImageUri && needsBothSides(selectedDocType!) && (
             <View style={[styles.documentPreview, { marginBottom: theme.spacing.lg }]}>
-            <Image 
-                source={{ uri: backImageUri }} 
-              style={styles.documentImage} 
-              resizeMode="contain"
-            />
+              <Image
+                source={{ uri: backImageUri }}
+                style={styles.documentImage}
+                contentFit="contain"
+                transition={200}
+              />
               <View style={{ position: 'absolute', top: 8, left: 8, backgroundColor: 'rgba(0,0,0,0.7)', padding: 4, borderRadius: 4 }}>
                 <Text style={{ color: 'white', fontSize: 12, fontWeight: '600' }}>Back</Text>
               </View>
-          </View>
+            </View>
           )}
 
           <View style={styles.previewActions}>
@@ -1241,9 +1351,9 @@ const UploadIdScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar 
-        barStyle={uploadState === 'camera' ? 'light-content' : (theme.name.includes('dark') ? 'light-content' : 'dark-content')} 
-        backgroundColor={uploadState === 'camera' ? '#000' : theme.colors.background} 
+      <StatusBar
+        hidden={uploadState === 'camera'}
+        barStyle={theme.isDark ? 'light-content' : 'dark-content'}
       />
       
       {/* Header - hidden during camera */}
@@ -1268,7 +1378,7 @@ const UploadIdScreen: React.FC = () => {
           </Text>
         </View>
       ) : (
-        <ScrollView 
+        <ScrollView
           style={styles.container}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
@@ -1277,6 +1387,19 @@ const UploadIdScreen: React.FC = () => {
           {renderContent()}
         </ScrollView>
       )}
+
+      {/* Upload Options Bottom Sheet */}
+      <UploadOptionsSheet
+        visible={showUploadSheet}
+        onClose={() => setShowUploadSheet(false)}
+        onFileSelected={handleFileSelected}
+        onCameraTap={() => {
+          setShowUploadSheet(false);
+          setUploadState('camera');
+        }}
+        title={`Upload ${currentSide === 'front' ? 'Front' : 'Back'} of ID`}
+        allowedTypes="images"
+      />
     </SafeAreaView>
   );
 };

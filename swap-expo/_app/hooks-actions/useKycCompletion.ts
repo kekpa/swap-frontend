@@ -25,19 +25,23 @@ type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
 /**
  * KYC Step Types mapped to API endpoints
+ *
+ * VERIFIED: These step types have confirmed backend endpoints.
+ * Removed unsupported types:
+ * - business_verification: No completion endpoint exists
+ * - business_security: Handled by setup_security step
+ * - business_documents: Handled by regular document upload
  */
 export type KycStepType =
+  // Personal KYC steps
   | 'confirm_phone'
   | 'personal_info'
-  // | 'upload_id' // Removed - documents handle completion automatically via POST /kyc/documents
   | 'take_selfie'
   | 'setup_security'
   | 'biometric_setup'
+  // Business KYC steps (verified with backend)
   | 'business_info'
-  | 'business_verification'
-  | 'business_security'
   | 'business_address'
-  | 'business_documents'
   | 'business_owner_info';
 
 /**
@@ -61,21 +65,29 @@ export const useKycCompletion = () => {
 
   /**
    * Get API endpoint for KYC step
+   *
+   * VERIFIED BACKEND ENDPOINTS (from backend/mono-backend/src/modules/compliance/kyc/kyc.controller.ts):
+   * - POST /kyc/identity (line 206): Universal for both personal_info AND business_info
+   * - POST /kyc/address (line 296): Universal for both personal AND business addresses
+   * - POST /kyc/team-members (line 1177): Add admin team member or beneficial owner
+   * - POST /kyc/phone-verify (line 396): Phone verification
+   * - POST /kyc/selfie (line 102): Selfie upload
+   * - POST /kyc/biometric-setup (line 464): Biometric setup
+   * - POST /auth/store-passcode: Security/passcode setup
    */
   const getApiEndpoint = useCallback((stepType: KycStepType): string => {
     const endpointMap: Record<KycStepType, string> = {
+      // Personal KYC endpoints
       confirm_phone: '/kyc/phone-verify',
-      personal_info: '/kyc/identity', // Universal endpoint for personal info
-      // upload_id: removed - documents handle completion automatically via POST /kyc/documents
+      personal_info: '/kyc/identity', // Universal endpoint
       take_selfie: '/kyc/selfie',
       setup_security: '/auth/store-passcode',
       biometric_setup: '/kyc/biometric-setup',
-      business_info: '/kyc/identity', // Fixed: Backend uses /kyc/identity for business info
-      business_verification: '/kyc/business-verification',
-      business_security: '/kyc/business-security',
-      business_address: '/kyc/business-address',
-      business_documents: '/kyc/business-documents',
-      business_owner_info: '/kyc/business-owner-info',
+
+      // Business KYC endpoints (use universal endpoints)
+      business_info: '/kyc/identity', // ✅ Same as personal - verified line 206
+      business_address: '/kyc/address', // ✅ FIXED: was /kyc/business-address - verified line 296
+      business_owner_info: '/kyc/team-members', // ✅ FIXED: was /kyc/business-owner-info - verified line 1177
     };
 
     return endpointMap[stepType];
@@ -113,8 +125,7 @@ export const useKycCompletion = () => {
   const getNextKycStep = useCallback((completedStep: KycStepType): string | null => {
     const stepFlow: Record<string, string | null> = {
       'confirm_phone': 'PersonalInfoFlow',
-      'personal_info': 'UploadId',
-      'upload_id': 'TakeSelfie',
+      'personal_info': 'UploadId', // Document upload
       'take_selfie': 'Passcode',
       'setup_security': isBiometricAvailable ? 'BiometricSetup' : null, // Skip biometric if not available
       'biometric_setup': null, // Final step
@@ -201,22 +212,18 @@ export const useKycCompletion = () => {
 
     const startTime = Date.now();
 
-    // PROFESSIONAL: Using EventCoordinator for KYC operation coordination
-    const flagSetStartTime = performance.now();
-    console.log(`🔬 [useKycCompletion] PROFESSIONAL: Starting KYC operation coordination at T+${flagSetStartTime.toFixed(3)}ms`);
-
-    logger.info(`[useKycCompletion] 🚀 Starting professional KYC completion: ${stepType}`, {
+    logger.info(`[useKycCompletion] 🚀 Starting KYC completion: ${stepType}`, {
       stepType,
       returnToTimeline,
       dataSize: JSON.stringify(data || {}).length,
-      atomicNavigation: true
     });
 
     try {
       // Phase 1: Save to local database immediately (local-first pattern)
-      if (user?.entityId) {
+      if (user?.entityId && user?.profileId) {
         const kycData = {
           id: user.entityId,
+          profile_id: user.profileId, // Required for multi-profile data isolation
           [`${stepType}_completed`]: true,
           [`${stepType}_data`]: data,
           [`${stepType}_completed_at`]: new Date().toISOString(),
@@ -252,9 +259,10 @@ export const useKycCompletion = () => {
         logger.debug(`[useKycCompletion] ✅ API call successful: ${response.status}`);
 
         // Phase 3: Mark as synced in local DB
-        if (user?.entityId) {
+        if (user?.entityId && user?.profileId) {
           const kycData = {
             id: user.entityId,
+            profile_id: user.profileId, // Required for multi-profile data isolation
             [`${stepType}_completed`]: true,
             [`${stepType}_data`]: data,
             [`${stepType}_completed_at`]: new Date().toISOString(),
@@ -279,33 +287,16 @@ export const useKycCompletion = () => {
       // Phase 4: Systematic cache invalidation for instant UI updates
       invalidateKycCache(stepType);
 
-      // Phase 3: Success feedback
+      // Success feedback
       if (showSuccessAlert) {
         const message = customSuccessMessage || `${stepType.replace('_', ' ')} completed successfully!`;
         Alert.alert('Success', message);
       }
 
-      // Phase 4: Professional atomic navigation with extended operation tracking
+      // Navigation (brief delay for cache invalidation to propagate)
       setTimeout(() => {
-        try {
-          const navigationStartTime = performance.now();
-          console.log(`🔬 [useKycCompletion] PROFESSIONAL NAVIGATION: Starting at T+${navigationStartTime.toFixed(3)}ms`);
-
-          handleNavigation(options, stepType);
-
-          // PROFESSIONAL FIX: Extended flag window to cover background sync
-          // PROFESSIONAL: EventCoordinator handles operation coordination automatically
-          setTimeout(() => {
-            const flagClearTime = performance.now();
-            console.log(`🔬 [useKycCompletion] PROFESSIONAL: KYC operation completed at T+${flagClearTime.toFixed(3)}ms`);
-            console.log(`🔬 [useKycCompletion] EventCoordinator handling professional coordination`);
-            logger.debug(`[useKycCompletion] ✅ Professional KYC operation coordination completed`);
-          }, 2000); // Extended delay to cover background sync (2 seconds)
-        } catch (navError) {
-          // PROFESSIONAL: EventCoordinator handles error coordination
-          logger.error(`[useKycCompletion] ❌ Navigation failed - EventCoordinator handling error coordination:`, navError);
-        }
-      }, 150); // Brief delay for cache invalidation to propagate
+        handleNavigation(options, stepType);
+      }, 150);
 
       // Phase 5: Success logging
       const duration = Date.now() - startTime;
@@ -344,25 +335,9 @@ export const useKycCompletion = () => {
           );
         }
 
-        // Navigate with extended atomic operation tracking
+        // Navigate (brief delay for cache invalidation to propagate)
         setTimeout(() => {
-          try {
-            const offlineNavStartTime = performance.now();
-            console.log(`🔬 [useKycCompletion] OFFLINE PROFESSIONAL NAVIGATION: Starting at T+${offlineNavStartTime.toFixed(3)}ms`);
-
-            handleNavigation(options, stepType);
-
-            // PROFESSIONAL FIX: Extended flag window for offline operations too
-            setTimeout(() => {
-              const offlineFlagClearTime = performance.now();
-              console.log(`🔬 [useKycCompletion] OFFLINE EXTENDED: Clearing KYC flag at T+${offlineFlagClearTime.toFixed(3)}ms`);
-              // PROFESSIONAL: EventCoordinator handles operation coordination
-              logger.debug(`[useKycCompletion] ✅ Extended offline navigation completed, KYC operation flag cleared`);
-            }, 2000); // Extended delay for offline operations too
-          } catch (navError) {
-            // PROFESSIONAL: EventCoordinator handles operation coordination
-            logger.error(`[useKycCompletion] ❌ Offline navigation failed, clearing KYC operation flag:`, navError);
-          }
+          handleNavigation(options, stepType);
         }, 150);
 
         return { success: true };
@@ -376,13 +351,10 @@ export const useKycCompletion = () => {
         status: error.response?.status
       });
 
-      // Professional error handling
+      // Error handling
       const errorMessage = error.response?.data?.message ||
                           error.message ||
                           'An error occurred while saving your information';
-
-      // Clear KYC operation flag on error
-      // PROFESSIONAL: EventCoordinator handles operation coordination
 
       Alert.alert(
         'Error',
@@ -404,36 +376,19 @@ export const useKycCompletion = () => {
   }, [getApiEndpoint, invalidateKycCache, handleNavigation, user]);
 
   /**
-   * Convenience methods for common KYC steps
+   * BEST PRACTICE: Single completeStep method (industry standard)
+   *
+   * Removed convenience method wrappers (completePersonalInfo, completeBiometric, etc.)
+   * Following industry patterns from React Hook Form, TanStack Query, Stripe SDK.
+   *
+   * Use directly:
+   *   await completeStep('personal_info', data, options);
+   *   await completeStep('business_address', address, options);
    */
-  const completePersonalInfo = useCallback((data: any, options?: KycCompletionOptions) =>
-    completeStep('personal_info', data, options), [completeStep]);
-
-  const completeSelfie = useCallback((options?: KycCompletionOptions) =>
-    completeStep('take_selfie', {}, options), [completeStep]);
-
-  const completePasscode = useCallback((passcode: string, options?: KycCompletionOptions) =>
-    completeStep('setup_security', { passcode }, options), [completeStep]);
-
-  // completeDocumentUpload: removed - documents handle completion automatically via POST /kyc/documents
-
-  const completeBiometric = useCallback((options?: KycCompletionOptions) =>
-    completeStep('biometric_setup', {}, options), [completeStep]);
-
-  const completeBusinessInfo = useCallback((data: any, options?: KycCompletionOptions) =>
-    completeStep('business_info', data, options), [completeStep]);
 
   return {
-    // Core completion method
+    // Core completion method (single entry point)
     completeStep,
-
-    // Convenience methods
-    completePersonalInfo,
-    completeSelfie,
-    completePasscode,
-    // completeDocumentUpload: removed - documents handle completion automatically
-    completeBiometric,
-    completeBusinessInfo,
 
     // Utility methods
     invalidateKycCache,

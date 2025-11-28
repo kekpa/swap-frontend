@@ -14,11 +14,11 @@ import {
   SafeAreaView,
   TouchableOpacity,
   StatusBar,
-  Image,
   ActivityIndicator,
   Alert,
   Dimensions
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -27,6 +27,7 @@ import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
 import CameraCapture from '../../../components2/CameraCapture';
 import apiClient from '../../../_api/apiClient';
+import { invalidateQueries } from '../../../tanstack-query/queryClient';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 type TakeSelfieRouteProp = RouteProp<ProfileStackParamList, 'TakeSelfie'>;
@@ -110,6 +111,14 @@ const TakeSelfieScreen: React.FC = () => {
         });
 
         console.log(`[TakeSelfieScreen] ✅ Selfie upload successful!`);
+
+        // PROFESSIONAL: Invalidate KYC cache for instant UI update (same pattern as UploadIdScreen)
+        console.log('[TakeSelfieScreen] 🔄 Triggering cache invalidation for selfie upload');
+
+        invalidateQueries(['kyc']);       // Primary KYC cache
+        invalidateQueries(['profile']);   // Profile cache
+
+        console.log('[TakeSelfieScreen] ✅ Cache invalidation completed');
 
         // Show success alert
         Alert.alert(
@@ -451,12 +460,12 @@ const TakeSelfieScreen: React.FC = () => {
               Make sure your features are clearly visible with good lighting.
             </Text>
 
-            <View style={styles.previewArea}>
+            <TouchableOpacity style={styles.previewArea} onPress={handleOpenCamera}>
               <Ionicons name="camera" size={64} color={theme.colors.textSecondary} />
               <Text style={styles.previewText}>
-                Tap camera button to start
+                Tap to start camera
               </Text>
-            </View>
+            </TouchableOpacity>
 
             <TouchableOpacity style={styles.openCameraButton} onPress={handleOpenCamera}>
               <Ionicons name="camera" size={24} color={theme.colors.white} />
@@ -484,10 +493,12 @@ const TakeSelfieScreen: React.FC = () => {
 
             <View style={styles.selfiePreview}>
               {selfieUri && (
-              <Image 
-                  source={{ uri: selfieUri }} 
-                style={styles.selfieImage} 
-              />
+                <Image
+                  source={{ uri: selfieUri }}
+                  style={styles.selfieImage}
+                  contentFit="cover"
+                  transition={200}
+                />
               )}
             </View>
 
@@ -537,9 +548,9 @@ const TakeSelfieScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar 
-        barStyle={selfieState === 'camera' ? 'light-content' : (theme.name.includes('dark') ? 'light-content' : 'dark-content')} 
-        backgroundColor={selfieState === 'camera' ? '#000' : theme.colors.background} 
+      <StatusBar
+        hidden={selfieState === 'camera'}
+        barStyle={theme.isDark ? 'light-content' : 'dark-content'}
       />
       
       {selfieState === 'camera' ? (

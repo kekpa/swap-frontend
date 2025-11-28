@@ -42,7 +42,7 @@ const BiometricSetup: React.FC = () => {
   const route = useRoute<BiometricSetupRouteProp>();
   const { theme } = useTheme();
   const authContext = useAuthContext();
-  const { completeBiometric } = useKycCompletion();
+  const { completeStep } = useKycCompletion(); // ✅ Updated to use completeStep (industry standard)
   const { data: kycStatus } = useKycStatus(authContext.user?.entityId);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -236,7 +236,7 @@ const BiometricSetup: React.FC = () => {
       // 2. Call backend API to mark as completed
       // 3. Invalidate queries for instant UI update
       // 4. Navigate automatically
-      await completeBiometric({
+      await completeStep('biometric_setup', {}, {
         returnToTimeline,
         sourceRoute,
         showSuccessAlert: false, // Checkmark provides sufficient visual feedback
@@ -415,7 +415,7 @@ const BiometricSetup: React.FC = () => {
   if (!hasHardware) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background} />
+        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background} />
         <KeyboardAvoidingView
           style={styles.container}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -461,7 +461,7 @@ const BiometricSetup: React.FC = () => {
   if (hasHardware && !hasEnrolledBiometrics) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background} />
+        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background} />
         <KeyboardAvoidingView
           style={styles.container}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -505,7 +505,7 @@ const BiometricSetup: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background} />
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

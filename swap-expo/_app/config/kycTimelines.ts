@@ -137,18 +137,10 @@ export const BUSINESS_TIMELINE: EntityTimelineConfig = {
     },
     {
       id: 'beneficial_owners',
-      title: 'Beneficial owners information',
-      description: 'Add all business owners and controllers',
-      completionFlag: 'beneficial_owners_completed',
+      title: 'Team members and owners',
+      description: 'Add team members (admins, managers) and legal owners',
+      completionFlag: 'business_owner_info_completed',
       navigationRoute: 'BeneficialOwnersList',
-      navigationParams: { returnToTimeline: true },
-    },
-    {
-      id: 'beneficial_owners_documents',
-      title: 'Owner identification documents',
-      description: 'Upload ID documents for all owners',
-      completionFlag: 'beneficial_owners_documents_completed',
-      navigationRoute: 'BeneficialOwnersDocuments',
       navigationParams: { returnToTimeline: true },
     },
     {
@@ -171,15 +163,15 @@ export const BUSINESS_TIMELINE: EntityTimelineConfig = {
       id: 'business_documents',
       title: 'Business registration documents',
       description: 'Upload business registration and licenses',
-      completionFlag: 'business_documents_completed',
+      completionFlag: 'business_documents_completed', // ✅ Updated to match simplified backend naming (2025-11-23)
       navigationRoute: 'BusinessRegistrationDocuments',
       navigationParams: { returnToTimeline: true },
     },
     {
-      id: 'business_security',
-      title: 'Setup business security',
-      description: 'Create a secure passcode for business account',
-      completionFlag: 'business_security_completed',
+      id: 'setup_security',
+      title: 'Security setup',
+      description: 'Set up passcode for your business account',
+      completionFlag: 'setup_security_completed', // ✅ Added missing security step (2025-11-23)
       navigationRoute: 'Passcode',
       navigationParams: { isKycFlow: true, isBusiness: true, returnToTimeline: true },
     },

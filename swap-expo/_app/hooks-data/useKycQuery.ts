@@ -14,6 +14,7 @@ import apiClient from '../_api/apiClient';
 import { getStaleTimeForQuery, staleTimeManager } from '../tanstack-query/config/staleTimeConfig';
 import { useOptimisticUpdates } from '../tanstack-query/optimistic/useOptimisticUpdates';
 import { userRepository } from '../localdb/UserRepository';
+import { useCurrentProfileId } from '../hooks/useCurrentProfileId';
 
 // KYC status types based on actual backend response
 export type KycLevel = 'not_started' | 'pending' | 'approved' | 'rejected' | 'in_review';
@@ -123,12 +124,13 @@ interface KycQueryConfig {
 export const useKycQuery = (config: KycQueryConfig) => {
   const queryClient = useQueryClient();
   const { addOptimisticUpdate, removeOptimisticUpdate } = useOptimisticUpdates();
+  const profileId = useCurrentProfileId();
 
   // Generate smart query key with dependency mapping
-  const queryKey = React.useMemo(() =>
-    queryKeys.kycStatus(config.entityId),
-    [config.entityId]
-  );
+  // Let the 'enabled' check handle null profileId gracefully (TanStack Query best practice)
+  const queryKey = React.useMemo(() => {
+    return queryKeys.kycStatus(profileId || '');
+  }, [profileId]);
 
   // Calculate stale time based on context
   const staleTime = React.useMemo(() => {
@@ -147,9 +149,9 @@ export const useKycQuery = (config: KycQueryConfig) => {
 
       try {
         // STEP 1: Check local database first (local-first pattern)
-        const localKycStatus = await userRepository.getKycStatus();
+        const localKycStatus = await userRepository.getKycStatus(profileId!);
         if (localKycStatus) {
-          logger.debug('[useKycQuery] 💾 Returning cached KYC status from local DB');
+          logger.debug('[useKycQuery] 💾 Returning cached KYC status from local DB (profileId:', profileId, ')');
 
           // PROFESSIONAL FIX: Parse local database format to match API response format
           let parsedLocalData;
@@ -178,6 +180,7 @@ export const useKycQuery = (config: KycQueryConfig) => {
                 await userRepository.saveKycStatus({
                   ...response.data,
                   id: config.entityId,
+                  profile_id: profileId!,
                   is_synced: true
                 });
 
@@ -200,7 +203,7 @@ export const useKycQuery = (config: KycQueryConfig) => {
         }
 
         // STEP 3: No local cache - fetch from API (first time only)
-        logger.debug('[useKycQuery] 🌐 No local cache, fetching from API');
+        logger.debug('[useKycQuery] 🌐 No local cache, fetching from API (profileId:', profileId, ')');
         const response = await apiClient.get('/kyc/verification-status');
 
         if (response.data) {
@@ -208,18 +211,19 @@ export const useKycQuery = (config: KycQueryConfig) => {
           await userRepository.saveKycStatus({
             ...response.data,
             id: config.entityId,
+            profile_id: profileId!,
             is_synced: true
           });
-          logger.debug('[useKycQuery] ✅ KYC status fetched and saved to local DB');
+          logger.debug('[useKycQuery] ✅ KYC status fetched and saved to local DB (profileId:', profileId, ')');
           return response.data;
         } else {
           throw new Error('No KYC status data received');
         }
       } catch (error) {
         // Check if we have local data as fallback
-        const localKycStatus = await userRepository.getKycStatus();
+        const localKycStatus = await userRepository.getKycStatus(profileId!);
         if (localKycStatus) {
-          logger.debug('[useKycQuery] 📱 Using local cache as fallback due to error');
+          logger.debug('[useKycQuery] 📱 Using local cache as fallback due to error (profileId:', profileId, ')');
 
           // PROFESSIONAL FIX: Apply same parsing logic for fallback data
           let parsedLocalData;
@@ -242,7 +246,7 @@ export const useKycQuery = (config: KycQueryConfig) => {
         throw error;
       }
     },
-    enabled: !!config.entityId,
+    enabled: !!config.entityId && !!profileId,
     staleTime,
     gcTime: 30 * 60 * 1000, // 30 minutes cache time
 

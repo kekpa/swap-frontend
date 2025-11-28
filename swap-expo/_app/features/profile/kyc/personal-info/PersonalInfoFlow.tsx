@@ -50,7 +50,7 @@ const PersonalInfoFlow: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProp<ProfileStackParamList, 'PersonalInfoFlow'>>();
   const { theme } = useTheme();
-  const { completePersonalInfo } = useKycCompletion();
+  const { completeStep } = useKycCompletion(); // ✅ Updated to use completeStep (industry standard)
   const { personalInfo: savedPersonalInfo, loading } = usePersonalInfoLoad();
   // PROFESSIONAL: No more old reactive KYC operation tracking
   
@@ -228,7 +228,7 @@ const PersonalInfoFlow: React.FC = () => {
       };
 
       // Use professional hook for completion (handles everything automatically)
-      const result = await completePersonalInfo(apiData, {
+      const result = await completeStep('personal_info', apiData, {
         returnToTimeline,
         sourceRoute,
         showSuccessAlert: false, // Checkmark provides sufficient visual feedback
