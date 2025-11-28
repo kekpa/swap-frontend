@@ -34,6 +34,7 @@ type BusinessInfoFlowRouteParams = {
 interface BusinessInformation {
   businessName: string;
   businessType: string;
+  businessPhone?: string;
   description: string;
   industryIds: string[]; // Changed from industry to support multi-select
   industryOther?: string;
@@ -50,11 +51,12 @@ const BusinessInfoFlow: React.FC = () => {
   const route = useRoute<RouteProp<ProfileStackParamList, 'BusinessInfoFlow'>>();
   const { theme } = useTheme();
   const { user } = useAuthContext();
-  const { completeBusinessInfo } = useKycCompletion();
+  const { completeStep } = useKycCompletion(); // ✅ Updated to use completeStep (industry standard)
 
   const [businessInfo, setBusinessInfo] = useState<BusinessInformation>({
     businessName: '',
     businessType: '',
+    businessPhone: '',
     description: '',
     industryIds: [], // Changed to array
     industryOther: '',
@@ -109,6 +111,7 @@ const BusinessInfoFlow: React.FC = () => {
         setBusinessInfo({
           businessName: existingInfo.businessName || '',
           businessType: existingInfo.businessType || '',
+          businessPhone: existingInfo.businessPhone || '',
           description: existingInfo.description || '',
           industryIds: existingInfo.industryIds || [], // Changed to array
           industryOther: existingInfo.industryOther || '',
@@ -179,6 +182,7 @@ const BusinessInfoFlow: React.FC = () => {
       const payload = {
         businessName: businessInfo.businessName.trim(),
         businessType: businessInfo.businessType,
+        businessPhone: businessInfo.businessPhone?.trim() || null,
         description: businessInfo.description.trim(),
         industryIds: businessInfo.industryIds,
         industryOther: businessInfo.industryOther?.trim() || null,
@@ -188,7 +192,7 @@ const BusinessInfoFlow: React.FC = () => {
       };
 
       // Use professional hook for completion (handles cache invalidation automatically)
-      const result = await completeBusinessInfo(payload, {
+      const result = await completeStep('business_info', payload, {
         returnToTimeline,
         sourceRoute,
         showSuccessAlert: false, // Checkmark provides sufficient visual feedback
@@ -398,7 +402,7 @@ const BusinessInfoFlow: React.FC = () => {
   if (isLoadingData) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} />
+        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={[styles.sectionDescription, { marginTop: theme.spacing.md }]}>
@@ -439,7 +443,7 @@ const BusinessInfoFlow: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
       
       {/* Header */}
       <View style={styles.header}>
@@ -492,6 +496,20 @@ const BusinessInfoFlow: React.FC = () => {
               placeholderTextColor={theme.colors.textSecondary}
               autoCapitalize="words"
             />
+          </View>
+
+          {/* Business Phone */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Business Phone</Text>
+            <TextInput
+              style={styles.input}
+              value={businessInfo.businessPhone}
+              onChangeText={(text) => setBusinessInfo(prev => ({ ...prev, businessPhone: text }))}
+              placeholder="+509 1234 5678"
+              placeholderTextColor={theme.colors.textSecondary}
+              keyboardType="phone-pad"
+            />
+            <Text style={styles.helperText}>Contact number for business inquiries</Text>
           </View>
 
           {/* Business Type */}

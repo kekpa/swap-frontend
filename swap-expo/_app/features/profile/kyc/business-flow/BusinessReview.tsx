@@ -22,6 +22,8 @@ interface BusinessInfo {
   businessName: string;
   legalName: string;
   businessType: string;
+  businessPhone?: string;
+  businessEmail?: string;
   industry: string;
   registrationNumber?: string;
   description?: string;
@@ -162,7 +164,7 @@ const BusinessReview: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
@@ -209,6 +211,24 @@ const BusinessReview: React.FC = () => {
                 {businessInfo?.businessType?.replace('_', ' ').toUpperCase() || 'Not provided'}
               </Text>
             </View>
+
+            {businessInfo?.businessPhone && (
+              <View style={styles.infoBox}>
+                <Text style={styles.infoLabel}>Business Phone</Text>
+                <Text style={styles.infoValue}>
+                  {businessInfo.businessPhone}
+                </Text>
+              </View>
+            )}
+
+            {businessInfo?.businessEmail && (
+              <View style={styles.infoBox}>
+                <Text style={styles.infoLabel}>Business Email</Text>
+                <Text style={styles.infoValue}>
+                  {businessInfo.businessEmail}
+                </Text>
+              </View>
+            )}
 
             <View style={styles.infoBox}>
               <Text style={styles.infoLabel}>Industry</Text>

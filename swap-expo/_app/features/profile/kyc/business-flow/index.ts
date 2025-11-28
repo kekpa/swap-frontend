@@ -12,7 +12,6 @@ export { default as BeneficialOwnerFlow } from './BeneficialOwnerFlow';
 export { default as BeneficialOwnerForm } from './BeneficialOwnerForm';
 export { default as BeneficialOwnerAddress } from './BeneficialOwnerAddress';
 export { default as BeneficialOwnersReview } from './BeneficialOwnersReview';
-export { default as BeneficialOwnersDocuments } from './BeneficialOwnersDocuments';
 export { default as BusinessCountryOfResidence } from './BusinessCountryOfResidence';
 export { default as BusinessAddress } from './BusinessAddress';
 export { default as BusinessRegistrationDocuments } from './BusinessRegistrationDocuments';

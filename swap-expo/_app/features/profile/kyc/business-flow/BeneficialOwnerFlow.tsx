@@ -14,6 +14,7 @@ import { ProfileStackParamList } from '../../../../navigation/profileNavigator';
 import { useTheme } from '../../../../theme/ThemeContext';
 import apiClient from '../../../../_api/apiClient';
 
+import TeamMemberRoleSelection from './TeamMemberRoleSelection';
 import BeneficialOwnerBasicInfo from './BeneficialOwnerBasicInfo';
 import BeneficialOwnerNationality from './BeneficialOwnerNationality';
 import BeneficialOwnerRole from './BeneficialOwnerRole';
@@ -22,12 +23,18 @@ import BeneficialOwnerContact from './BeneficialOwnerContact';
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
 export type BeneficialOwnerStep =
+  | 'roleSelection'
   | 'basicInfo'
   | 'nationality'
   | 'role'
   | 'contact';
 
 export interface BeneficialOwnerData {
+  // Role selection
+  isAdminTeam?: boolean;
+  isBeneficialOwner?: boolean;
+  adminRole?: string; // OWNER, ADMIN, MANAGER
+  // Basic info
   firstName?: string;
   middleName?: string;
   lastName?: string;
@@ -35,9 +42,11 @@ export interface BeneficialOwnerData {
   birthDay?: number;
   birthMonth?: number;
   birthYear?: number;
+  // Beneficial owner specific
   nationality?: string;
   position?: string;
   ownershipPercentage?: string;
+  // Contact info
   email?: string;
   phone?: string;
 }
@@ -52,9 +61,11 @@ const BeneficialOwnerFlow: React.FC = () => {
   const returnToTimeline = route.params?.returnToTimeline;
   const sourceRoute = route.params?.sourceRoute;
 
-  const [step, setStep] = useState<BeneficialOwnerStep>('basicInfo');
+  const [step, setStep] = useState<BeneficialOwnerStep>('roleSelection');
   const [ownerData, setOwnerData] = useState<BeneficialOwnerData>({
     nationality: 'HT', // Default to Haiti
+    isAdminTeam: false,
+    isBeneficialOwner: false,
   });
   const [isLoading, setIsLoading] = useState(false);
 
@@ -70,37 +81,45 @@ const BeneficialOwnerFlow: React.FC = () => {
   const fetchOwnerData = async () => {
     setIsLoading(true);
     try {
-      const response = await apiClient.get(`/kyc/beneficial-owners/${ownerId}`);
-      const owner = response.data;
+      // NEW: Use unified team-members endpoint
+      const response = await apiClient.get(`/kyc/team-members/${ownerId}`);
+      const member = response.data;
 
       // Convert API format to form format
       const convertedData: BeneficialOwnerData = {
-        firstName: owner.first_name || '',
-        middleName: owner.middle_name || '',
-        lastName: owner.last_name || '',
-        nationality: owner.nationality || 'HT',
-        position: owner.position || '',
-        ownershipPercentage: owner.ownership_percentage?.toString() || '',
-        email: owner.email || '',
-        phone: owner.phone || '',
+        // Role selection
+        isAdminTeam: member.isAdminTeam || false,
+        isBeneficialOwner: member.isBeneficialOwner || false,
+        adminRole: member.role || 'ADMIN',
+        // Basic info
+        firstName: member.firstName || '',
+        middleName: member.middleName || '',
+        lastName: member.lastName || '',
+        // Beneficial owner specific
+        nationality: member.nationality || 'HT',
+        position: member.position || '',
+        ownershipPercentage: member.ownershipPercentage?.toString() || '',
+        // Contact info
+        email: member.email || '',
+        phone: member.phone || '',
       };
 
       // Parse birth date
-      if (owner.date_of_birth) {
-        const birthDate = new Date(owner.date_of_birth);
+      if (member.dateOfBirth) {
+        const birthDate = new Date(member.dateOfBirth);
         if (!isNaN(birthDate.getTime())) {
           convertedData.birthDay = birthDate.getDate();
           convertedData.birthMonth = birthDate.getMonth() + 1;
           convertedData.birthYear = birthDate.getFullYear();
-          convertedData.dateOfBirth = owner.date_of_birth;
+          convertedData.dateOfBirth = member.dateOfBirth;
         }
       }
 
       setOwnerData(convertedData);
-      console.log('[BeneficialOwnerFlow] Loaded owner data:', convertedData);
+      console.log('[TeamMemberFlow] Loaded team member data:', convertedData);
     } catch (error) {
-      console.error('[BeneficialOwnerFlow] Failed to load owner:', error);
-      Alert.alert('Error', 'Failed to load owner information.');
+      console.error('[TeamMemberFlow] Failed to load team member:', error);
+      Alert.alert('Error', 'Failed to load team member information.');
     } finally {
       setIsLoading(false);
     }
@@ -119,18 +138,31 @@ const BeneficialOwnerFlow: React.FC = () => {
   );
 
   const handleBack = () => {
-    console.log(`[BeneficialOwnerFlow] handleBack from step: ${step}`);
+    console.log(`[TeamMemberFlow] handleBack from step: ${step}`);
     switch (step) {
+      case 'basicInfo':
+        setStep('roleSelection');
+        break;
       case 'nationality':
         setStep('basicInfo');
         break;
       case 'role':
-        setStep('nationality');
+        // Skip nationality if only admin team
+        if (ownerData.isAdminTeam && !ownerData.isBeneficialOwner) {
+          setStep('basicInfo');
+        } else {
+          setStep('nationality');
+        }
         break;
       case 'contact':
-        setStep('role');
+        // Skip role/ownership if only admin team
+        if (ownerData.isAdminTeam && !ownerData.isBeneficialOwner) {
+          setStep('basicInfo');
+        } else {
+          setStep('role');
+        }
         break;
-      default: // 'basicInfo'
+      default: // 'roleSelection'
         // Return to list
         navigation.navigate('BeneficialOwnersList', {
           returnToTimeline,
@@ -146,10 +178,18 @@ const BeneficialOwnerFlow: React.FC = () => {
   };
 
   const moveToNextStep = () => {
-    console.log(`[BeneficialOwnerFlow] Moving from ${step} to next step`);
+    console.log(`[TeamMemberFlow] Moving from ${step} to next step`);
     switch (step) {
+      case 'roleSelection':
+        setStep('basicInfo');
+        break;
       case 'basicInfo':
-        setStep('nationality');
+        // Skip nationality if only admin team
+        if (ownerData.isAdminTeam && !ownerData.isBeneficialOwner) {
+          setStep('contact');
+        } else {
+          setStep('nationality');
+        }
         break;
       case 'nationality':
         setStep('role');
@@ -173,26 +213,36 @@ const BeneficialOwnerFlow: React.FC = () => {
         dateOfBirth = `${ownerData.birthYear}-${String(ownerData.birthMonth).padStart(2, '0')}-${String(ownerData.birthDay).padStart(2, '0')}`;
       }
 
+      // NEW: Use unified team-members payload format (camelCase)
       const payload = {
-        first_name: ownerData.firstName?.trim() || '',
-        middle_name: ownerData.middleName?.trim() || null,
-        last_name: ownerData.lastName?.trim() || '',
-        date_of_birth: dateOfBirth,
-        nationality: ownerData.nationality || 'HT',
-        position: ownerData.position?.trim() || '',
-        ownership_percentage: ownerData.ownershipPercentage ? parseFloat(ownerData.ownershipPercentage) : null,
+        // Role selection
+        isAdminTeam: ownerData.isAdminTeam || false,
+        isBeneficialOwner: ownerData.isBeneficialOwner || false,
+        role: ownerData.isAdminTeam ? (ownerData.adminRole || 'ADMIN') : undefined,
+        // Basic info
+        firstName: ownerData.firstName?.trim() || '',
+        middleName: ownerData.middleName?.trim() || null,
+        lastName: ownerData.lastName?.trim() || '',
+        dateOfBirth: dateOfBirth || null,
+        // Beneficial owner specific
+        nationality: ownerData.isBeneficialOwner ? (ownerData.nationality || 'HT') : undefined,
+        position: ownerData.isBeneficialOwner ? (ownerData.position?.trim() || null) : undefined,
+        ownershipPercentage: ownerData.isBeneficialOwner && ownerData.ownershipPercentage
+          ? parseFloat(ownerData.ownershipPercentage)
+          : undefined,
+        // Contact info
         email: ownerData.email?.trim() || null,
         phone: ownerData.phone?.trim() || null,
       };
 
-      console.log('[BeneficialOwnerFlow] Saving owner:', payload);
+      console.log('[TeamMemberFlow] Saving team member:', payload);
 
       if (mode === 'edit' && ownerId) {
-        await apiClient.put(`/kyc/beneficial-owners/${ownerId}`, payload);
-        Alert.alert('Success', 'Beneficial owner updated successfully');
+        await apiClient.put(`/kyc/team-members/${ownerId}`, payload);
+        Alert.alert('Success', 'Team member updated successfully');
       } else {
-        await apiClient.post('/kyc/beneficial-owners', payload);
-        Alert.alert('Success', 'Beneficial owner added successfully');
+        await apiClient.post('/kyc/team-members', payload);
+        Alert.alert('Success', 'Team member added successfully');
       }
 
       // Navigate back to list
@@ -201,8 +251,8 @@ const BeneficialOwnerFlow: React.FC = () => {
         sourceRoute,
       });
     } catch (error: any) {
-      console.error('[BeneficialOwnerFlow] Failed to save owner:', error);
-      Alert.alert('Error', error.response?.data?.message || 'Failed to save beneficial owner. Please try again.');
+      console.error('[TeamMemberFlow] Failed to save team member:', error);
+      Alert.alert('Error', error.response?.data?.message || 'Failed to save team member. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -222,6 +272,20 @@ const BeneficialOwnerFlow: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      {step === 'roleSelection' && (
+        <TeamMemberRoleSelection
+          onBack={handleBack}
+          onContinue={(data) => {
+            updateOwnerData(data);
+            moveToNextStep();
+          }}
+          initialData={{
+            isAdminTeam: ownerData.isAdminTeam,
+            isBeneficialOwner: ownerData.isBeneficialOwner,
+            adminRole: ownerData.adminRole,
+          }}
+        />
+      )}
       {step === 'basicInfo' && (
         <BeneficialOwnerBasicInfo
           onBack={handleBack}

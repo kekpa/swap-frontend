@@ -36,19 +36,20 @@ const BeneficialOwnerContact: React.FC<BeneficialOwnerContactProps> = ({
   const [email, setEmail] = useState(initialData.email || '');
   const [phone, setPhone] = useState(initialData.phone || '');
 
-  // Basic email validation
+  // Basic email validation (only if provided)
   const isValidEmail = (email: string) => {
+    if (!email.trim()) return true; // Empty is valid (optional)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
   };
 
-  // Both email and phone are required for owner login
-  const isFormValid = !!email.trim() && isValidEmail(email.trim()) && !!phone.trim();
+  // Only phone is required, email is optional
+  const isFormValid = !!phone.trim() && isValidEmail(email);
 
   const handleContinue = () => {
     if (isFormValid && !isLoading) {
       onContinue({
-        email: email.trim(),
+        email: email.trim() || undefined, // Only send if provided
         phone: phone.trim(),
       });
     }
@@ -215,32 +216,11 @@ const BeneficialOwnerContact: React.FC<BeneficialOwnerContactProps> = ({
             style={styles.infoIcon}
           />
           <Text style={styles.infoText}>
-            Email and phone number are required. They will be used to create this beneficial owner's
-            account for accessing the platform.
+            Phone number is required for login. Email is optional - they can add it to their profile later.
           </Text>
         </View>
 
-        <View style={styles.formGroup}>
-          <View style={styles.labelRow}>
-            <Text style={styles.label}>Email Address</Text>
-            <View style={styles.requiredBadge}>
-              <Text style={styles.requiredText}>REQUIRED</Text>
-            </View>
-          </View>
-          <TextInput
-            style={styles.input}
-            placeholder="owner@example.com"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholderTextColor={theme.colors.textTertiary}
-            editable={!isLoading}
-          />
-          <Text style={styles.helperText}>Will be used for account login</Text>
-        </View>
-
+        {/* Phone Number - FIRST (Required) */}
         <View style={styles.formGroup}>
           <View style={styles.labelRow}>
             <Text style={styles.label}>Phone Number</Text>
@@ -257,7 +237,29 @@ const BeneficialOwnerContact: React.FC<BeneficialOwnerContactProps> = ({
             placeholderTextColor={theme.colors.textTertiary}
             editable={!isLoading}
           />
-          <Text style={styles.helperText}>Will be used for verification and account recovery</Text>
+          <Text style={styles.helperText}>Will be used for login and account verification</Text>
+        </View>
+
+        {/* Email Address - SECOND (Optional) */}
+        <View style={styles.formGroup}>
+          <View style={styles.labelRow}>
+            <Text style={styles.label}>Email Address</Text>
+            <View style={[styles.requiredBadge, { backgroundColor: theme.colors.background }]}>
+              <Text style={[styles.requiredText, { color: theme.colors.textSecondary }]}>OPTIONAL</Text>
+            </View>
+          </View>
+          <TextInput
+            style={styles.input}
+            placeholder="owner@example.com (optional)"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholderTextColor={theme.colors.textTertiary}
+            editable={!isLoading}
+          />
+          <Text style={styles.helperText}>Can be added later by the team member</Text>
         </View>
 
         <TouchableOpacity

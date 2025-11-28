@@ -226,7 +226,7 @@ const BusinessCountryOfResidence: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>

@@ -220,7 +220,7 @@ const BeneficialOwnerForm: React.FC = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
     >
-      <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>

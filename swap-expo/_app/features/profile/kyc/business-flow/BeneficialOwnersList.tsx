@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   StatusBar,
   Alert,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
@@ -17,23 +18,33 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { ProfileStackParamList } from '../../../../navigation/profileNavigator';
 import { useTheme } from '../../../../theme/ThemeContext';
 import apiClient from '../../../../_api/apiClient';
+import contactsService, { ContactMatch } from '../../../../services/ContactsService';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
-interface BeneficialOwner {
+interface TeamMember {
   id: string;
   firstName: string;
   middleName?: string;
   lastName: string;
-  position: string;
+  email?: string;
+  phone?: string;
+  // Admin team fields
+  isAdminTeam: boolean;
+  role?: string; // OWNER, ADMIN, MANAGER
+  adminStatus?: string;
+  // Beneficial owner fields
+  isBeneficialOwner: boolean;
   ownershipPercentage?: number;
+  position?: string;
+  verificationStatus?: string;
   dateOfBirth?: string;
   nationality?: string;
   idType?: string;
   idNumber?: string;
-  email?: string;
-  phone?: string;
   address?: any;
+  // Metadata
+  autoPopulated?: boolean;
 }
 
 const BeneficialOwnersList: React.FC = () => {
@@ -44,8 +55,11 @@ const BeneficialOwnersList: React.FC = () => {
   const returnToTimeline = route.params?.returnToTimeline;
   const sourceRoute = route.params?.sourceRoute;
 
-  const [owners, setOwners] = useState<BeneficialOwner[]>([]);
+  const [owners, setOwners] = useState<TeamMember[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showContactPicker, setShowContactPicker] = useState(false);
+  const [contacts, setContacts] = useState<ContactMatch[]>([]);
 
   // Fetch owners from API on mount and when screen comes into focus
   useFocusEffect(
@@ -57,33 +71,43 @@ const BeneficialOwnersList: React.FC = () => {
   const fetchOwners = async () => {
     setIsLoading(true);
     try {
-      const response = await apiClient.get('/kyc/beneficial-owners');
-      console.log('[BeneficialOwnersList] API Response:', response);
+      // NEW: Use unified team-members endpoint
+      const response = await apiClient.get('/kyc/team-members');
+      console.log('[TeamMembers] API Response:', response);
 
-      // Ensure ownersData is an array
-      const ownersData = Array.isArray(response.data) ? response.data : [];
+      // BUGFIX: API returns { result: [...], meta: {...} }, not direct array
+      const membersData = Array.isArray(response.data.result) ? response.data.result : (Array.isArray(response.data) ? response.data : []);
 
-      // Map API response to component interface
-      const mappedOwners: BeneficialOwner[] = ownersData.map((owner: any) => ({
-        id: owner.id,
-        firstName: owner.first_name,
-        middleName: owner.middle_name,
-        lastName: owner.last_name,
-        position: owner.position,
-        ownershipPercentage: owner.ownership_percentage,
-        dateOfBirth: owner.date_of_birth,
-        nationality: owner.nationality,
-        idType: owner.id_type,
-        idNumber: owner.id_number,
-        email: owner.email,
-        phone: owner.phone,
-        address: owner.address,
+      // Map API response to component interface (camelCase)
+      const mappedMembers: TeamMember[] = membersData.map((member: any) => ({
+        id: member.id,
+        firstName: member.firstName,
+        middleName: member.middleName,
+        lastName: member.lastName,
+        email: member.email,
+        phone: member.phone,
+        // Admin team fields
+        isAdminTeam: member.isAdminTeam || false,
+        role: member.role,
+        adminStatus: member.adminStatus,
+        // Beneficial owner fields
+        isBeneficialOwner: member.isBeneficialOwner || false,
+        ownershipPercentage: member.ownershipPercentage,
+        position: member.position,
+        verificationStatus: member.verificationStatus,
+        dateOfBirth: member.dateOfBirth,
+        nationality: member.nationality,
+        idType: member.idType,
+        idNumber: member.idNumber,
+        address: member.address,
+        // Metadata
+        autoPopulated: member.autoPopulated,
       }));
 
-      setOwners(mappedOwners);
-      console.log('[BeneficialOwnersList] Fetched owners:', mappedOwners.length);
+      setOwners(mappedMembers);
+      console.log('[TeamMembers] Fetched members:', mappedMembers.length);
     } catch (error) {
-      console.error('[BeneficialOwnersList] Failed to fetch owners:', error);
+      console.error('[TeamMembers] Failed to fetch members:', error);
       // Don't show alert on fetch error, just log it
     } finally {
       setIsLoading(false);
@@ -98,7 +122,7 @@ const BeneficialOwnersList: React.FC = () => {
     });
   };
 
-  const handleEditOwner = (owner: BeneficialOwner) => {
+  const handleEditOwner = (owner: TeamMember) => {
     navigation.navigate('BeneficialOwnerFlow', {
       mode: 'edit',
       ownerId: owner.id,
@@ -108,9 +132,19 @@ const BeneficialOwnersList: React.FC = () => {
   };
 
   const handleRemoveOwner = (ownerId: string) => {
+    // BUSINESS LOGIC: Prevent deleting the only team member (account lockout protection)
+    if (owners.length === 1) {
+      Alert.alert(
+        'Cannot Remove Last Member',
+        'You cannot remove the only team member. Add another admin before removing yourself to prevent account lockout.',
+        [{ text: 'OK', style: 'default' }]
+      );
+      return;
+    }
+
     Alert.alert(
-      'Remove Owner',
-      'Are you sure you want to remove this beneficial owner?',
+      'Remove Team Member',
+      'Are you sure you want to remove this team member?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -118,12 +152,12 @@ const BeneficialOwnersList: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await apiClient.delete(`/kyc/beneficial-owners/${ownerId}`);
+              await apiClient.delete(`/kyc/team-members/${ownerId}`);
               setOwners(prev => prev.filter(o => o.id !== ownerId));
-              console.log('[BeneficialOwnersList] Owner removed:', ownerId);
+              console.log('[TeamMembers] Team member removed:', ownerId);
             } catch (error) {
-              console.error('[BeneficialOwnersList] Failed to remove owner:', error);
-              Alert.alert('Error', 'Failed to remove owner. Please try again.');
+              console.error('[TeamMembers] Failed to remove team member:', error);
+              Alert.alert('Error', 'Failed to remove team member. Please try again.');
             }
           },
         },
@@ -133,7 +167,7 @@ const BeneficialOwnersList: React.FC = () => {
 
   const handleContinue = () => {
     if (owners.length === 0) {
-      Alert.alert('Required', 'Please add at least one beneficial owner before continuing.');
+      Alert.alert('Required', 'Please add at least one team member before continuing.');
       return;
     }
 
@@ -150,6 +184,35 @@ const BeneficialOwnersList: React.FC = () => {
     } else {
       navigation.goBack();
     }
+  };
+
+  const handleSelectFromContacts = async () => {
+    try {
+      // Load contacts from device
+      const platformContacts = await contactsService.getMatchedPlatformContacts();
+      setContacts(platformContacts);
+      setShowContactPicker(true);
+    } catch (error) {
+      console.error('[TeamMembers] Error loading contacts:', error);
+      Alert.alert('Error', 'Failed to load contacts. Please try again.');
+    }
+  };
+
+  const handleContactSelect = (contact: ContactMatch) => {
+    setShowContactPicker(false);
+
+    // Navigate to add flow with pre-filled contact data
+    navigation.navigate('BeneficialOwnerFlow', {
+      mode: 'add',
+      prefillData: {
+        firstName: contact.contact.firstName || contact.matchedUser?.displayName?.split(' ')[0] || '',
+        lastName: contact.contact.lastName || contact.matchedUser?.displayName?.split(' ')[1] || '',
+        email: contact.contact.email,
+        phone: contact.contact.phoneNumber,
+      },
+      returnToTimeline,
+      sourceRoute,
+    });
   };
 
   const styles = useMemo(() => StyleSheet.create({
@@ -182,7 +245,7 @@ const BeneficialOwnersList: React.FC = () => {
     emptyState: {
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: theme.spacing.xl * 2,
+      paddingVertical: theme.spacing.md,
     },
     emptyIcon: {
       marginBottom: theme.spacing.md,
@@ -242,17 +305,33 @@ const BeneficialOwnersList: React.FC = () => {
     addButton: {
       backgroundColor: theme.colors.card,
       borderWidth: 2,
-      borderColor: theme.colors.primary,
+      borderColor: theme.colors.border,
+      borderStyle: 'dashed',
+      borderRadius: theme.borderRadius.md,
+      paddingVertical: theme.spacing.md,
+      alignItems: 'center',
+      marginBottom: theme.spacing.md,
+    },
+    addButtonText: {
+      fontSize: theme.typography.fontSize.md,
+      fontWeight: '600',
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.xs,
+    },
+    contactsButton: {
+      backgroundColor: theme.colors.card,
+      borderWidth: 2,
+      borderColor: theme.colors.success,
       borderStyle: 'dashed',
       borderRadius: theme.borderRadius.md,
       paddingVertical: theme.spacing.lg,
       alignItems: 'center',
       marginBottom: theme.spacing.xl,
     },
-    addButtonText: {
+    contactsButtonText: {
       fontSize: theme.typography.fontSize.md,
       fontWeight: '600',
-      color: theme.colors.primary,
+      color: theme.colors.success,
       marginTop: theme.spacing.xs,
     },
     continueButton: {
@@ -271,19 +350,200 @@ const BeneficialOwnersList: React.FC = () => {
       fontSize: theme.typography.fontSize.md,
       fontWeight: '600',
     },
+    roleBadgesContainer: {
+      flexDirection: 'row',
+      gap: theme.spacing.xs,
+      marginTop: theme.spacing.xs / 2,
+      flexWrap: 'wrap',
+    },
+    roleBadge: {
+      backgroundColor: theme.colors.primary + '20',
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: theme.spacing.xs / 2,
+      borderRadius: theme.borderRadius.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.primary,
+    },
+    roleBadgeText: {
+      fontSize: theme.typography.fontSize.xs,
+      fontWeight: '600',
+      color: theme.colors.primary,
+    },
+    ownershipBadge: {
+      backgroundColor: theme.colors.success + '20',
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: theme.spacing.xs / 2,
+      borderRadius: theme.borderRadius.sm,
+      borderWidth: 1,
+      borderColor: theme.colors.success,
+    },
+    ownershipBadgeText: {
+      fontSize: theme.typography.fontSize.xs,
+      fontWeight: '600',
+      color: theme.colors.success,
+    },
+    helperText: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.textSecondary,
+      lineHeight: 20,
+      marginBottom: theme.spacing.lg,
+      backgroundColor: theme.colors.background,
+      padding: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
+    // Modal styles
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: theme.spacing.lg,
+    },
+    modalContent: {
+      backgroundColor: theme.colors.card,
+      borderRadius: theme.borderRadius.lg,
+      width: '100%',
+      maxWidth: 400,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+      elevation: 5,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: theme.spacing.lg,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    modalTitle: {
+      fontSize: theme.typography.fontSize.lg,
+      fontWeight: '600',
+      color: theme.colors.textPrimary,
+    },
+    modalBody: {
+      padding: theme.spacing.lg,
+    },
+    infoRow: {
+      flexDirection: 'row',
+      marginBottom: theme.spacing.md,
+      alignItems: 'flex-start',
+    },
+    infoIcon: {
+      fontSize: 24,
+      marginRight: theme.spacing.sm,
+    },
+    infoTextContainer: {
+      flex: 1,
+    },
+    infoTitle: {
+      fontSize: theme.typography.fontSize.md,
+      fontWeight: '600',
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.xs / 2,
+    },
+    infoDescription: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.textSecondary,
+      lineHeight: 20,
+    },
+    // Contact picker modal styles
+    contactPickerOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'flex-end',
+    },
+    contactPickerContainer: {
+      backgroundColor: theme.colors.card,
+      borderTopLeftRadius: theme.borderRadius.xl,
+      borderTopRightRadius: theme.borderRadius.xl,
+      maxHeight: '70%',
+    },
+    contactPickerHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: theme.spacing.lg,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    contactPickerTitle: {
+      fontSize: theme.typography.fontSize.lg,
+      fontWeight: '600',
+      color: theme.colors.textPrimary,
+    },
+    contactItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: theme.spacing.md,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+    },
+    contactAvatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: theme.colors.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: theme.spacing.sm,
+    },
+    contactAvatarText: {
+      color: theme.colors.white,
+      fontSize: theme.typography.fontSize.md,
+      fontWeight: '600',
+    },
+    contactName: {
+      fontSize: theme.typography.fontSize.md,
+      fontWeight: '500',
+      color: theme.colors.textPrimary,
+    },
+    contactPhone: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.textSecondary,
+    },
   }), [theme]);
 
-  const renderOwnerCard = (owner: BeneficialOwner) => (
+  const renderOwnerCard = (owner: TeamMember) => (
     <View key={owner.id} style={styles.ownerCard}>
       <View style={styles.ownerHeader}>
         <View style={styles.ownerInfo}>
           <Text style={styles.ownerName}>
             {owner.firstName} {owner.middleName ? `${owner.middleName} ` : ''}{owner.lastName}
           </Text>
-          <Text style={styles.ownerDetails}>
-            {owner.position}
-            {owner.ownershipPercentage ? ` • ${owner.ownershipPercentage}% ownership` : ''}
-          </Text>
+
+          {/* Role badges */}
+          <View style={styles.roleBadgesContainer}>
+            {owner.isAdminTeam && (
+              <View style={styles.roleBadge}>
+                <Text style={styles.roleBadgeText}>
+                  {owner.role || 'ADMIN'}
+                </Text>
+              </View>
+            )}
+            {owner.isBeneficialOwner && owner.ownershipPercentage && (
+              <View style={styles.ownershipBadge}>
+                <Text style={styles.ownershipBadgeText}>
+                  {owner.ownershipPercentage}% Owner
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Additional details */}
+          {owner.email && (
+            <Text style={styles.ownerDetails}>{owner.email}</Text>
+          )}
+          {owner.phone && (
+            <Text style={styles.ownerDetails}>{owner.phone}</Text>
+          )}
+          {owner.position && (
+            <Text style={styles.ownerDetails}>{owner.position}</Text>
+          )}
           {owner.nationality && (
             <Text style={styles.ownerDetails}>Nationality: {owner.nationality}</Text>
           )}
@@ -308,34 +568,29 @@ const BeneficialOwnersList: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
           <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Beneficial Owners</Text>
-        <View style={styles.backButton} />
+        <Text style={styles.headerTitle}>Team & Ownership</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => setShowHelpModal(true)}>
+          <Ionicons name="help-circle-outline" size={24} color={theme.colors.primary} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={{ flex: 1 }}>
         <View style={styles.content}>
-          <Text style={styles.title}>Beneficial Owners</Text>
           <Text style={styles.subtitle}>
-            Add all individuals who own or control 25% or more of the business.
+            Add your business team members (admins, managers, employees) and legal owners (25%+ ownership).
           </Text>
 
           {owners.length === 0 ? (
             <View style={styles.emptyState}>
-              <Ionicons
-                name="people-outline"
-                size={64}
-                color={theme.colors.textTertiary}
-                style={styles.emptyIcon}
-              />
-              <Text style={styles.emptyTitle}>No owners added yet</Text>
+              <Text style={styles.emptyTitle}>No team members added yet</Text>
               <Text style={styles.emptyDescription}>
-                Add at least one beneficial owner to continue with your business verification.
+                Add employees, admins, managers, and legal owners to your business.
               </Text>
             </View>
           ) : (
@@ -343,9 +598,9 @@ const BeneficialOwnersList: React.FC = () => {
           )}
 
           <TouchableOpacity style={styles.addButton} onPress={handleAddOwner}>
-            <Ionicons name="add-circle-outline" size={32} color={theme.colors.primary} />
+            <Ionicons name="add-circle-outline" size={28} color={theme.colors.textSecondary} />
             <Text style={styles.addButtonText}>
-              {owners.length === 0 ? 'Add First Owner' : 'Add Another Owner'}
+              {owners.length === 0 ? 'Add Manually' : 'Add Another Team Member'}
             </Text>
           </TouchableOpacity>
 
@@ -355,11 +610,96 @@ const BeneficialOwnersList: React.FC = () => {
             disabled={owners.length === 0}
           >
             <Text style={styles.continueButtonText}>
-              Continue to Review ({owners.length} {owners.length === 1 ? 'owner' : 'owners'})
+              Continue to Review ({owners.length} {owners.length === 1 ? 'member' : 'members'})
             </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Help Modal */}
+      <Modal
+        visible={showHelpModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowHelpModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowHelpModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Team & Ownership Info</Text>
+              <TouchableOpacity onPress={() => setShowHelpModal(false)}>
+                <Ionicons name="close" size={24} color={theme.colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalBody}>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoIcon}>💡</Text>
+                <View style={styles.infoTextContainer}>
+                  <Text style={styles.infoTitle}>Admin Team</Text>
+                  <Text style={styles.infoDescription}>
+                    Platform access and management permissions
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoIcon}>💡</Text>
+                <View style={styles.infoTextContainer}>
+                  <Text style={styles.infoTitle}>Beneficial Owner</Text>
+                  <Text style={styles.infoDescription}>
+                    Regulatory ownership for compliance (KYC/AML)
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Contact Picker Modal */}
+      <Modal
+        visible={showContactPicker}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowContactPicker(false)}
+      >
+        <View style={styles.contactPickerOverlay}>
+          <View style={styles.contactPickerContainer}>
+            <View style={styles.contactPickerHeader}>
+              <Text style={styles.contactPickerTitle}>Select Contact</Text>
+              <TouchableOpacity onPress={() => setShowContactPicker(false)}>
+                <Ionicons name="close" size={24} color={theme.colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView>
+              {contacts.map((contact, index) => {
+                const displayName = contact.matchedUser?.displayName || contact.contact.displayName;
+                const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+
+                return (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.contactItem}
+                    onPress={() => handleContactSelect(contact)}
+                  >
+                    <View style={styles.contactAvatar}>
+                      <Text style={styles.contactAvatarText}>{initials}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.contactName}>{displayName}</Text>
+                      <Text style={styles.contactPhone}>{contact.contact.phoneNumber}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };

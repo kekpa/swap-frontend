@@ -21,8 +21,8 @@ type NavigationProp = StackNavigationProp<ProfileStackParamList>;
  *
  * Orchestrates the business KYC verification flow:
  * 1. Beneficial Owners Management (add/edit/remove)
- * 2. Review Beneficial Owners
- * 3. Upload Beneficial Owner Documents
+ * 2. Review Beneficial Owners (owners complete KYC on their personal profiles)
+ * 3. Business Information (name, legal name, type, industry)
  * 4. Business Country Selection
  * 5. Business Address Entry
  * 6. Review Business Information
@@ -51,7 +51,6 @@ const BusinessKycFlowStart: React.FC = () => {
     try {
       // TODO: Check KYC progress from API
       // - Check if beneficial owners exist
-      // - Check if beneficial owner documents uploaded
       // - Check if business info completed
       // - Check if business documents uploaded
       // - Determine which step to start from
@@ -103,7 +102,7 @@ const BusinessKycFlowStart: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
 
       <View style={styles.content}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -132,42 +131,38 @@ export default BusinessKycFlowStart;
  * Step 2: BeneficialOwnersReview
  *   - Review all beneficial owners
  *   - Edit if needed
- *   - "Continue" navigates to BeneficialOwnersDocuments
- *   ↓
- * Step 3: BeneficialOwnersDocuments
- *   - Upload ID for each beneficial owner
- *   - Based on their id_type (national_id, passport, drivers_license)
+ *   - Owners complete their own KYC on personal profiles
  *   - "Continue" navigates to BusinessInfoFlow
  *   ↓
- * Step 4: BusinessInfoFlow
+ * Step 3: BusinessInfoFlow
  *   - Business name, legal name, type, industry
  *   - "Continue" navigates to BusinessCountryOfResidence
  *   ↓
- * Step 5: BusinessCountryOfResidence
+ * Step 4: BusinessCountryOfResidence
  *   - Select country (defaults to Haiti)
  *   - "Continue" navigates to BusinessAddress with selectedCountry
  *   ↓
- * Step 6: BusinessAddress
+ * Step 5: BusinessAddress
  *   - Address line 1, line 2, city, postal code
  *   - Country pre-filled from previous step
  *   - "Continue" navigates to BusinessReview
  *   ↓
- * Step 7: BusinessReview
+ * Step 6: BusinessReview
  *   - Review all business information
  *   - Edit sections if needed
  *   - "Continue" navigates to BusinessRegistrationDocuments
  *   ↓
- * Step 8: BusinessRegistrationDocuments
+ * Step 7: BusinessRegistrationDocuments
  *   - Upload business registration certificate (required)
  *   - Upload tax certificate (optional)
  *   - Upload operating license (optional)
  *   - "Continue" navigates to Passcode
  *   ↓
- * Step 9: Passcode
+ * Step 8: Passcode
  *   - Set up security passcode
  *   - "Continue" navigates to BiometricSetup
  *   ↓
- * Step 10: BiometricSetup
+ * Step 9: BiometricSetup
  *   - Enable Face ID/Touch ID (optional)
  *   - "Continue" navigates to VerificationComplete
  *   ↓

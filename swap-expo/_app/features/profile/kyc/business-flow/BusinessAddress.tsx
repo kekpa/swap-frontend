@@ -30,7 +30,7 @@ const BusinessAddress: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RouteProp<ProfileStackParamList, 'BusinessAddress'>>();
   const { theme } = useTheme();
-  const { completeBusinessInfo } = useKycCompletion();
+  const { completeStep } = useKycCompletion(); // ✅ FIXED: Use completeStep directly (industry standard)
 
   const selectedCountry = route.params?.selectedCountry || '';
 
@@ -39,7 +39,7 @@ const BusinessAddress: React.FC = () => {
     addressLine2: '',
     city: '',
     postalCode: '',
-    country: selectedCountry,
+    countryCode: selectedCountry,
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -60,9 +60,11 @@ const BusinessAddress: React.FC = () => {
       if (response.data && response.data.address) {
         const existingAddress = response.data.address;
         setAddress({
-          street: existingAddress.addressLine1 || '',
+          addressLine1: existingAddress.addressLine1 || '',
+          addressLine2: existingAddress.addressLine2 || '',
           city: existingAddress.city || '',
-          country: existingAddress.countryCode || '',
+          postalCode: existingAddress.postalCode || '',
+          countryCode: existingAddress.countryCode || '',
         });
         console.log('[BusinessAddress] ✅ Loaded existing address');
       }
@@ -74,7 +76,7 @@ const BusinessAddress: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!address.addressLine1.trim() || !address.city.trim() || !address.country) {
+    if (!address.addressLine1.trim() || !address.city.trim() || !address.countryCode) {
       Alert.alert('Required Fields', 'Please fill in all required address details.');
       return;
     }
@@ -83,8 +85,9 @@ const BusinessAddress: React.FC = () => {
     try {
       console.log('[BusinessAddress] 🎯 Using KYC completion hook for instant cache update');
 
-      // Use professional hook for completion (handles cache invalidation automatically)
-      const result = await completeBusinessInfo(address, {
+      // ✅ FIXED: Use completeStep with correct step type 'business_address'
+      // Previously called completeBusinessInfo which completed wrong step (business_info instead of business_address)
+      const result = await completeStep('business_address', address, {
         returnToTimeline,
         sourceRoute,
         showSuccessAlert: false, // Checkmark provides sufficient visual feedback
@@ -188,7 +191,7 @@ const BusinessAddress: React.FC = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
     >
-      <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
       
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
@@ -252,7 +255,7 @@ const BusinessAddress: React.FC = () => {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Country</Text>
             <View style={[styles.input, styles.readOnlyInput]}>
-              <Text style={styles.readOnlyText}>{address.country || 'Not selected'}</Text>
+              <Text style={styles.readOnlyText}>{address.countryCode || 'Not selected'}</Text>
             </View>
           </View>
 

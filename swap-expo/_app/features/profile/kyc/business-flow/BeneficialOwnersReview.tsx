@@ -118,8 +118,8 @@ const BeneficialOwnersReview: React.FC = () => {
 
       console.log('[BeneficialOwnersReview] KYC step completed: beneficial_owners');
 
-      // Navigate to documents upload
-      navigation.navigate('BeneficialOwnersDocuments', {
+      // Navigate back to business info flow
+      navigation.navigate('BusinessInfoFlow', {
         returnToTimeline,
         sourceRoute,
       });
@@ -289,7 +289,7 @@ const BeneficialOwnersReview: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
