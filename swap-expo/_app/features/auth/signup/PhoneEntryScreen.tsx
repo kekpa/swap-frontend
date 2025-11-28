@@ -28,20 +28,22 @@ import { normalizePhoneNumber, parseInternationalPhoneNumber, combinePhoneNumber
 // Define type for navigation
 type AuthStackParamList = {
   SignUpScreen: undefined;
-  PhoneEntry: { 
+  PhoneEntry: {
     openCountryPicker?: boolean;
     returnToTimeline?: boolean;
     sourceRoute?: string;
     currentPhone?: string;
     accountType?: 'personal' | 'business';
+    isAddingAccount?: boolean;
   };
-  VerificationCode: { 
+  VerificationCode: {
     type: 'phone' | 'email';
     contact: string;
     channel?: 'sms' | 'whatsapp';
     returnToTimeline?: boolean;
     sourceRoute?: string;
     accountType?: 'personal' | 'business';
+    isAddingAccount?: boolean;
   };
   CompleteProfile: undefined;
   BusinessProfile: undefined;
@@ -61,13 +63,14 @@ const PhoneEntryScreen: React.FC = () => {
   const route = useRoute<PhoneEntryRouteProp>();
   const { theme } = useTheme();
   
-  // Extract parameters including accountType
-  const { 
-    returnToTimeline, 
-    sourceRoute, 
+  // Extract parameters including accountType and isAddingAccount
+  const {
+    returnToTimeline,
+    sourceRoute,
     currentPhone,
     openCountryPicker,
-    accountType = 'personal'
+    accountType = 'personal',
+    isAddingAccount = false,
   } = route.params || {};
   const isKycFlow = returnToTimeline === true;
   const isBusinessSignup = accountType === 'business';
@@ -172,9 +175,20 @@ const PhoneEntryScreen: React.FC = () => {
       Alert.alert("Error", "Please enter a valid phone number");
       return;
     }
-    
+
     const normalizedNumber = normalizePhoneNumber(phoneNumber, countryCode);
     const formattedPhone = combinePhoneNumber(countryCode, normalizedNumber);
+
+    // Validate E.164 format: +[country code][subscriber number], max 15 digits total
+    const e164Regex = /^\+[1-9]\d{6,14}$/;
+    if (!e164Regex.test(formattedPhone)) {
+      Alert.alert(
+        "Invalid Phone Number",
+        "Please enter a valid phone number with the correct format."
+      );
+      return;
+    }
+
     setIsLoading(true);
     
     try {
@@ -241,21 +255,36 @@ const PhoneEntryScreen: React.FC = () => {
         console.log(`${isBusinessSignup ? 'Business' : 'Personal'} signup OTP requested successfully`);
       }
       
-      // Navigate to verification screen with account type
-      navigation.navigate("VerificationCode", { 
+      // Navigate to verification screen with account type and isAddingAccount flag
+      navigation.navigate("VerificationCode", {
         type: 'phone',
         contact: formattedPhone,
         channel: otpChannel,
         returnToTimeline,
         sourceRoute,
-        accountType
+        accountType,
+        isAddingAccount,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error requesting OTP:", error);
-      Alert.alert(
-        "Error", 
-        "Failed to send verification code. Please check your phone number and try again."
-      );
+
+      // Check for rate limit error (HTTP 429)
+      if (error?.response?.status === 429) {
+        Alert.alert(
+          "Too Many Requests",
+          "You've requested too many verification codes. Please wait a few minutes before trying again."
+        );
+      } else if (error?.response?.status === 400) {
+        Alert.alert(
+          "Invalid Phone Number",
+          "The phone number format is not valid. Please check and try again."
+        );
+      } else {
+        Alert.alert(
+          "Error",
+          "Failed to send verification code. Please check your phone number and try again."
+        );
+      }
     } finally {
       setIsLoading(false);
     }
@@ -339,7 +368,7 @@ const PhoneEntryScreen: React.FC = () => {
       borderRadius: theme.borderRadius.md,
       fontSize: theme.typography.fontSize.md,
       color: theme.colors.textPrimary,
-      backgroundColor: theme.colors.inputBackground,
+      backgroundColor: theme.colors.card,  // White background for visibility
     },
     channelContainer: {
       marginBottom: theme.spacing.md,
@@ -359,7 +388,7 @@ const PhoneEntryScreen: React.FC = () => {
       borderColor: theme.colors.border,
       borderRadius: theme.borderRadius.md,
       paddingHorizontal: theme.spacing.md,
-      backgroundColor: theme.colors.inputBackground,
+      backgroundColor: theme.colors.card,  // White background for visibility
       marginBottom: theme.spacing.sm,
     },
     channelOptionSelected: {

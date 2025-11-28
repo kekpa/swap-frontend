@@ -377,7 +377,7 @@ export function useAuth() {
   };
 
   // Add a method to get the current user profile ID
-  const getCurrentUserProfile = async () => {
+  const getCurrentUserProfile = async (options?: { skipCache?: boolean }) => {
     let profileUrl = AUTH_PATHS.ME;
     try {
       const token = await getAccessToken();
@@ -387,8 +387,10 @@ export function useAuth() {
       }
 
       try {
-        logger.debug(`[useAuth] Fetching clean profile from URL: ${profileUrl}`, 'auth'); 
-        const response = await apiClient.get(profileUrl); 
+        logger.debug(`[useAuth] Fetching clean profile from URL: ${profileUrl}${options?.skipCache ? ' (skipping cache)' : ''}`, 'auth');
+        const response = await apiClient.get(profileUrl, {
+          headers: options?.skipCache ? { 'Cache-Control': 'no-cache' } : {}
+        }); 
         
         logger.debug(`[useAuth] Raw response: ${JSON.stringify(response.data)}`, 'auth');
 

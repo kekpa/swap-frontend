@@ -13,7 +13,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../../theme/ThemeContext";
@@ -23,18 +23,25 @@ import defaultTheme from "../../../theme/theme";
 type AuthStackParamList = {
   Launch: undefined;
   Walkthrough: undefined;
-  PhoneEntry: { 
+  PhoneEntry: {
     openCountryPicker?: boolean;
     accountType?: 'personal' | 'business';
+    isAddingAccount?: boolean;
   };
-  VerificationCode: { 
-    phoneNumber: string; 
+  VerificationCode: {
+    phoneNumber: string;
     channel?: string;
     accountType?: 'personal' | 'business';
+    isAddingAccount?: boolean;
   };
-  CompleteProfile: undefined;
+  CompleteProfile: {
+    isAddingAccount?: boolean;
+  };
   EmailVerification: { email: string };
   SignIn: undefined;
+  SignUpScreen: {
+    isAddingAccount?: boolean;
+  };
 };
 
 type NavigationProp = NativeStackNavigationProp<AuthStackParamList>;
@@ -44,9 +51,13 @@ type AccountType = 'personal' | 'business';
 
 const SignUpScreen = () => {
   const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<RouteProp<AuthStackParamList, 'SignUpScreen'>>();
   const themeContext = useTheme();
   const theme = themeContext?.theme || defaultTheme;
-  
+
+  // Get isAddingAccount flag from route params (Instagram-style add account)
+  const isAddingAccount = route.params?.isAddingAccount || false;
+
   // State for account type selection
   const [accountType, setAccountType] = useState<AccountType>('personal');
   
@@ -60,16 +71,18 @@ const SignUpScreen = () => {
   }
 
   const navigateToPhoneEntry = () => {
-    navigation.navigate("PhoneEntry", { 
+    navigation.navigate("PhoneEntry", {
       openCountryPicker: false,
-      accountType: accountType
+      accountType: accountType,
+      isAddingAccount: isAddingAccount,
     });
   };
-  
+
   const navigateToPhoneEntryWithCountryPicker = () => {
-    navigation.navigate("PhoneEntry", { 
+    navigation.navigate("PhoneEntry", {
       openCountryPicker: true,
-      accountType: accountType
+      accountType: accountType,
+      isAddingAccount: isAddingAccount,
     });
   };
   
@@ -82,7 +95,7 @@ const SignUpScreen = () => {
       <View style={styles.content}>
         {/* Account Type Toggle */}
         <View style={styles.toggleContainer}>
-          <View style={[styles.toggleWrapper, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border }]}>
+          <View style={[styles.toggleWrapper, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
             <TouchableOpacity 
               style={[
                 styles.toggleOption,
@@ -150,8 +163,8 @@ const SignUpScreen = () => {
         <View style={styles.inputContainer}>
           <View style={styles.phoneInputContainer}>
             {/* Country Code Placeholder - Clicking this opens CountryPicker directly */}
-            <TouchableOpacity 
-              style={[styles.countryCodeContainer, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border }]}
+            <TouchableOpacity
+              style={[styles.countryCodeContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
               onPress={navigateToPhoneEntryWithCountryPicker}
               activeOpacity={0.7}
             >
@@ -162,12 +175,12 @@ const SignUpScreen = () => {
             </TouchableOpacity>
             
             {/* Phone Number Input Placeholder */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.phoneInputWrapper}
               onPress={navigateToPhoneEntry}
               activeOpacity={0.7}
             >
-              <View style={[styles.inputPlaceholder, { backgroundColor: theme.colors.inputBackground, borderColor: theme.colors.border }]}>
+              <View style={[styles.inputPlaceholder, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
                 <Text style={[styles.placeholderText, { color: theme.colors.textSecondary }]}>
                   Phone number
                 </Text>
@@ -186,11 +199,11 @@ const SignUpScreen = () => {
       
       {/* Bottom Button */}
       <View style={styles.bottomContainer}>
-        <TouchableOpacity 
-          style={[styles.secondaryButton, { 
-            backgroundColor: theme.colors.inputBackground, 
-            borderColor: theme.colors.border 
-          }]} 
+        <TouchableOpacity
+          style={[styles.secondaryButton, {
+            backgroundColor: theme.colors.card,
+            borderColor: theme.colors.border
+          }]}
           onPress={handleLoginPress}
         >
           <Text style={[styles.secondaryButtonText, { color: theme.colors.textPrimary }]}>

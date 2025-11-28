@@ -183,7 +183,7 @@ const ResetPasswordScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background}/>
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background}/>
       <View style={styles.content}>
         {/* Back Button */}
         <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>

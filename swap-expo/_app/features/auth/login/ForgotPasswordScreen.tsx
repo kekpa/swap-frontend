@@ -149,7 +149,7 @@ const ForgotPasswordScreen = () => {
   if (requestSent) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background}/>
+        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background}/>
         <View style={styles.content}>
           <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
             <Ionicons name="checkmark-circle-outline" size={80} color={theme.colors.success} style={{marginBottom: theme.spacing.lg}} />
@@ -174,7 +174,7 @@ const ForgotPasswordScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background}/>
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background}/>
       <View style={styles.content}>
         {/* Back Button */}
         <TouchableOpacity style={styles.backButton} onPress={handleGoBack}>

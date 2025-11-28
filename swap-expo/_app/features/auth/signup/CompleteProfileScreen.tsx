@@ -31,7 +31,10 @@ import { BUSINESS_TYPES, EMPLOYEE_COUNT_OPTIONS } from "../../../constants/busin
 type AuthStackParamList = {
   PhoneEntry: undefined;
   VerificationCode: { phoneNumber: string };
-  CompleteProfile: { accountType?: 'personal' | 'business' };
+  CompleteProfile: {
+    accountType?: 'personal' | 'business';
+    isAddingAccount?: boolean;
+  };
   EmailVerification: { email: string };
 };
 
@@ -47,8 +50,8 @@ const CompleteProfileScreen = () => {
   // Use a default theme if the theme context isn't ready yet
   const theme = themeContext?.theme || defaultTheme;
   
-  // Get account type from route params or default to personal
-  const { accountType = 'personal' } = route.params || {};
+  // Get account type and isAddingAccount from route params
+  const { accountType = 'personal', isAddingAccount = false } = route.params || {};
   const isBusinessAccount = accountType === 'business';
   const isFromPhoneVerification = !!authContext.phoneVerification;
 
@@ -58,6 +61,7 @@ const CompleteProfileScreen = () => {
 
   // Personal form state
   const [firstName, setFirstName] = useState("");
+  const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -224,6 +228,7 @@ const CompleteProfileScreen = () => {
           const completeBusinessData = {
             // Admin user data (for auth.users metadata)
             first_name: firstName.trim(),
+            middle_name: middleName.trim() || undefined,
             last_name: lastName.trim(),
             username: username.trim(),
             password: password,
@@ -238,7 +243,8 @@ const CompleteProfileScreen = () => {
 
           // Single API call to complete business registration
           // This will: update auth.users, create business_profiles, create business_admin_team
-          response = await apiClient.put(`${API_PATHS.AUTH.COMPLETE_BUSINESS_PROFILE}/${profileId}`, completeBusinessData, {
+          // Note: Backend /auth/complete-profile supports both personal and business profiles
+          response = await apiClient.put(`${API_PATHS.AUTH.COMPLETE_PROFILE}/${profileId}`, completeBusinessData, {
             headers: {
               Authorization: `Bearer ${accessToken}`
             }
@@ -247,6 +253,7 @@ const CompleteProfileScreen = () => {
           // Personal profile completion
           const profileData = {
             first_name: firstName.trim(),
+            middle_name: middleName.trim() || undefined,
             last_name: lastName.trim(),
             username: username.trim(),
             password: password,
@@ -261,17 +268,38 @@ const CompleteProfileScreen = () => {
         }
         
         if (response.data) {
-          
+
           // Profile updated successfully, set authenticated
           authContext.setIsAuthenticated(true);
-          
+
           // Update user data in context
           if (profileId) {
             apiClient.setProfileId(profileId);
           }
-          
-          // Redirect to main app (handled by AuthContext)
-          await authContext.checkSession();
+
+          // Check if this is adding a new account (Instagram-style multi-account)
+          if (isAddingAccount) {
+            try {
+              // Save new account to AccountsManager
+              await authContext.saveCurrentAccountToManager();
+              await authContext.loadAvailableAccounts();
+
+              // Redirect to main app - user will land on appropriate screen
+              await authContext.checkSession();
+            } catch (accountError: any) {
+              // Handle max accounts limit or other errors
+              if (accountError.message?.includes('Maximum 5 accounts')) {
+                // Alert already shown by AuthContext, just return
+                return;
+              }
+              // For other errors, show generic message
+              Alert.alert('Error', 'Failed to add account. Please try again.');
+              return;
+            }
+          } else {
+            // Normal signup - redirect to main app (handled by AuthContext)
+            await authContext.checkSession();
+          }
         } else {
           throw new Error("Failed to update profile");
         }
@@ -370,7 +398,7 @@ const CompleteProfileScreen = () => {
                     <Text style={[styles.label, { color: theme.colors.textPrimary }]}>First Name</Text>
                     <TextInput
                       style={[styles.input, {
-                        backgroundColor: theme.colors.inputBackground,
+                        backgroundColor: theme.colors.card,  // White background for visibility
                         borderColor: theme.colors.border,
                         color: theme.colors.textPrimary
                       }]}
@@ -382,10 +410,25 @@ const CompleteProfileScreen = () => {
                   </View>
 
                   <View style={styles.formField}>
+                    <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Middle Name (Optional)</Text>
+                    <TextInput
+                      style={[styles.input, {
+                        backgroundColor: theme.colors.card,  // White background for visibility
+                        borderColor: theme.colors.border,
+                        color: theme.colors.textPrimary
+                      }]}
+                      placeholder="Enter your middle name (optional)"
+                      placeholderTextColor={theme.colors.textSecondary}
+                      value={middleName}
+                      onChangeText={(text) => setMiddleName(sanitizeName(text))}
+                    />
+                  </View>
+
+                  <View style={styles.formField}>
                     <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Last Name</Text>
                     <TextInput
                       style={[styles.input, {
-                        backgroundColor: theme.colors.inputBackground,
+                        backgroundColor: theme.colors.card,  // White background for visibility
                         borderColor: theme.colors.border,
                         color: theme.colors.textPrimary
                       }]}
@@ -401,7 +444,7 @@ const CompleteProfileScreen = () => {
                     <View style={styles.inputContainer}>
                       <TextInput
                         style={[styles.input, styles.inputWithIcon, {
-                          backgroundColor: theme.colors.inputBackground,
+                          backgroundColor: theme.colors.card,  // White background for visibility
                           borderColor: usernameAvailability.result?.available === true
                             ? '#4CAF50'
                             : usernameAvailability.result?.available === false
@@ -443,7 +486,7 @@ const CompleteProfileScreen = () => {
                     <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Password</Text>
                     <TextInput
                       style={[styles.input, {
-                        backgroundColor: theme.colors.inputBackground,
+                        backgroundColor: theme.colors.card,  // White background for visibility
                         borderColor: theme.colors.border,
                         color: theme.colors.textPrimary
                       }]}
@@ -463,7 +506,7 @@ const CompleteProfileScreen = () => {
                     <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Business Name</Text>
                     <TextInput
                       style={[styles.input, {
-                        backgroundColor: theme.colors.inputBackground,
+                        backgroundColor: theme.colors.card,  // White background for visibility
                         borderColor: theme.colors.border,
                         color: theme.colors.textPrimary
                       }]}
@@ -478,7 +521,7 @@ const CompleteProfileScreen = () => {
                     <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Business Type</Text>
                     <TouchableOpacity
                       style={[styles.input, styles.dropdownButton, {
-                        backgroundColor: theme.colors.inputBackground,
+                        backgroundColor: theme.colors.card,  // White background for visibility
                         borderColor: theme.colors.border
                       }]}
                       onPress={() => setBusinessTypeDropdownVisible(!businessTypeDropdownVisible)}
@@ -497,7 +540,7 @@ const CompleteProfileScreen = () => {
 
                     {businessTypeDropdownVisible && (
                       <View style={[styles.dropdownOptions, {
-                        backgroundColor: theme.colors.inputBackground,
+                        backgroundColor: theme.colors.card,  // White background for visibility
                         borderColor: theme.colors.border
                       }]}>
                         <ScrollView
@@ -528,7 +571,7 @@ const CompleteProfileScreen = () => {
                     <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Registration Number (Optional)</Text>
                     <TextInput
                       style={[styles.input, {
-                        backgroundColor: theme.colors.inputBackground,
+                        backgroundColor: theme.colors.card,  // White background for visibility
                         borderColor: theme.colors.border,
                         color: theme.colors.textPrimary
                       }]}
@@ -543,7 +586,7 @@ const CompleteProfileScreen = () => {
                     <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Employee Count</Text>
                     <TouchableOpacity
                       style={[styles.input, styles.dropdownButton, {
-                        backgroundColor: theme.colors.inputBackground,
+                        backgroundColor: theme.colors.card,  // White background for visibility
                         borderColor: theme.colors.border
                       }]}
                       onPress={() => setEmployeeCountDropdownVisible(!employeeCountDropdownVisible)}
@@ -562,7 +605,7 @@ const CompleteProfileScreen = () => {
 
                     {employeeCountDropdownVisible && (
                       <View style={[styles.dropdownOptions, {
-                        backgroundColor: theme.colors.inputBackground,
+                        backgroundColor: theme.colors.card,  // White background for visibility
                         borderColor: theme.colors.border
                       }]}>
                         <ScrollView
@@ -597,14 +640,29 @@ const CompleteProfileScreen = () => {
                   <Text style={[styles.label, { color: theme.colors.textPrimary }]}>First Name</Text>
                   <TextInput
                     style={[styles.input, {
-                      backgroundColor: theme.colors.inputBackground,
+                      backgroundColor: theme.colors.card,  // White background for visibility
                       borderColor: theme.colors.border,
                       color: theme.colors.textPrimary
                     }]}
                     placeholder="Enter your first name"
                     placeholderTextColor={theme.colors.textSecondary}
                     value={firstName}
-                    onChangeText={setFirstName}
+                    onChangeText={(text) => setFirstName(sanitizeName(text))}
+                  />
+                </View>
+
+                <View style={styles.formField}>
+                  <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Middle Name (Optional)</Text>
+                  <TextInput
+                    style={[styles.input, {
+                      backgroundColor: theme.colors.card,  // White background for visibility
+                      borderColor: theme.colors.border,
+                      color: theme.colors.textPrimary
+                    }]}
+                    placeholder="Enter your middle name (optional)"
+                    placeholderTextColor={theme.colors.textSecondary}
+                    value={middleName}
+                    onChangeText={(text) => setMiddleName(sanitizeName(text))}
                   />
                 </View>
 
@@ -612,14 +670,14 @@ const CompleteProfileScreen = () => {
                   <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Last Name</Text>
                   <TextInput
                     style={[styles.input, {
-                      backgroundColor: theme.colors.inputBackground,
+                      backgroundColor: theme.colors.card,  // White background for visibility
                       borderColor: theme.colors.border,
                       color: theme.colors.textPrimary
                     }]}
                     placeholder="Enter your last name"
                     placeholderTextColor={theme.colors.textSecondary}
                     value={lastName}
-                    onChangeText={setLastName}
+                    onChangeText={(text) => setLastName(sanitizeName(text))}
                   />
                 </View>
 
@@ -628,7 +686,7 @@ const CompleteProfileScreen = () => {
                   <View style={styles.inputContainer}>
                     <TextInput
                       style={[styles.input, styles.inputWithIcon, {
-                        backgroundColor: theme.colors.inputBackground,
+                        backgroundColor: theme.colors.card,  // White background for visibility
                         borderColor: usernameAvailability.result?.available === true
                           ? '#4CAF50'
                           : usernameAvailability.result?.available === false
@@ -670,7 +728,7 @@ const CompleteProfileScreen = () => {
                   <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Password</Text>
                   <TextInput
                     style={[styles.input, {
-                      backgroundColor: theme.colors.inputBackground,
+                      backgroundColor: theme.colors.card,  // White background for visibility
                       borderColor: theme.colors.border,
                       color: theme.colors.textPrimary
                     }]}

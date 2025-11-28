@@ -230,7 +230,7 @@ const LoadingScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background} />
       
       <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
         {/* Logo and Branding */}

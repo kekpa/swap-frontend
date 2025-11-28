@@ -28,6 +28,12 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { useAuthContext } from "../context/AuthContext";
 import { useTheme } from "../../../theme/ThemeContext";
 import { Theme } from "../../../theme/theme";
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from "../../../tanstack-query/queryKeys";
+import apiClient from "../../../_api/apiClient";
+import { AUTH_PATHS } from "../../../_api/apiPaths";
+import { saveAccessToken, saveRefreshToken } from "../../../utils/tokenStorage";
+import { useAvailableProfiles } from "../../../hooks-data/useAvailableProfiles";
 
 // Define type for navigation
 type AuthStackParamList = {
@@ -43,10 +49,20 @@ type AuthStackParamList = {
 
 type NavigationProp = NativeStackNavigationProp<AuthStackParamList>;
 
-const SignInScreen = () => {
+const SignInScreen = ({ route }: any) => {
   const navigation = useNavigation<NavigationProp>();
   const authContext = useAuthContext();
   const { theme } = useTheme();
+  const queryClient = useQueryClient();
+  const { data: availableProfiles } = useAvailableProfiles(); // For optimistic profile switching
+
+  // Profile switch mode detection
+  const mode = route?.params?.mode; // 'login' (default) | 'profileSwitch'
+  const targetProfileId = route?.params?.targetProfileId;
+  const targetEntityId = route?.params?.targetEntityId;
+  const sourceRoute = route?.params?.sourceRoute;
+  const sourceUserId = route?.params?.sourceUserId; // User who initiated the profile switch
+  const isProfileSwitchMode = mode === 'profileSwitch';
 
   // Helper functions for biometric prompt tracking
   const shouldShowBiometricPrompt = async (): Promise<boolean> => {
@@ -187,9 +203,17 @@ const SignInScreen = () => {
       if (result.success) {
         // Biometric authentication successful, now login with stored credentials
         const loginResult = await authContext.loginWithBiometric();
-        
+
         if (loginResult.success) {
           console.log('Biometric login successful, RootNavigator will handle LoadingScreen');
+
+          // If in profile switch mode, switch profile after auth
+          if (isProfileSwitchMode && targetProfileId) {
+            console.log('[SignInScreen] Profile switch mode detected (Biometric), switching profile...');
+            await handleProfileSwitch();
+            return; // Exit early
+          }
+
           // RootNavigator automatically shows LoadingScreen when authenticated but data loading
         } else {
           Alert.alert(
@@ -237,8 +261,16 @@ const SignInScreen = () => {
 
         if (response && response.success) {
           console.log(`🚀 [SignInScreen] ${loginType} sign in successful, RootNavigator will handle LoadingScreen`);
+
+          // If in profile switch mode, switch profile after auth
+          if (isProfileSwitchMode && targetProfileId) {
+            console.log('[SignInScreen] Profile switch mode detected, switching profile...');
+            await handleProfileSwitch();
+            return; // Exit early, don't do normal login flow
+          }
+
           // RootNavigator automatically shows LoadingScreen when authenticated but data loading
-          
+
           // Handle biometric setup after navigation (optional, non-blocking)
           const shouldPromptBiometric = await shouldShowBiometricPrompt();
           if (shouldPromptBiometric) {
@@ -315,6 +347,14 @@ const SignInScreen = () => {
         const response = await authContext.loginWithPin(pinUserIdentifier, currentPin);
         if (response && response.success) {
           console.log("PIN sign in successful, RootNavigator will handle LoadingScreen");
+
+          // If in profile switch mode, switch profile after auth
+          if (isProfileSwitchMode && targetProfileId) {
+            console.log('[SignInScreen] Profile switch mode detected (PIN), switching profile...');
+            await handleProfileSwitch();
+            return; // Exit early
+          }
+
           // RootNavigator automatically shows LoadingScreen when authenticated but data loading
         } else {
           Alert.alert("PIN Login Failed", response?.message || "Invalid PIN or PIN not set up for this account.");
@@ -326,6 +366,62 @@ const SignInScreen = () => {
     setIsLoading(false);
   };
   
+  const handleProfileSwitch = async () => {
+    try {
+      // SECURITY: Validate that the logged-in user matches the original user who initiated the switch
+      const currentUserId = authContext?.user?.user_id;
+
+      if (sourceUserId && currentUserId && currentUserId !== sourceUserId) {
+        console.warn('[SignInScreen] ⚠️ Profile switch aborted: Different user logged in', {
+          expected: sourceUserId,
+          actual: currentUserId,
+        });
+
+        Alert.alert(
+          'Different User Detected',
+          'You logged in as a different user. The profile switch has been cancelled. You will continue using your current account.',
+          [{ text: 'OK' }]
+        );
+
+        // Don't proceed with profile switch - user stays on their own account
+        return;
+      }
+
+      console.log('[SignInScreen] 🔄 Starting PROFESSIONAL profile switch with orchestrator...', { targetProfileId });
+
+      // PROFESSIONAL: Use ProfileSwitchOrchestrator (state machine pattern)
+      const { profileSwitchOrchestrator } = await import('../../../services/ProfileSwitchOrchestrator');
+
+      // Set progress callback for UI feedback (optional)
+      profileSwitchOrchestrator.setProgressCallback((state, message) => {
+        console.log(`[ProfileSwitch] State: ${state}, Message: ${message}`);
+        // TODO: Show progress UI here if needed
+      });
+
+      // Execute professional profile switch with optimistic updates (Phases 3 & 4)
+      const result = await profileSwitchOrchestrator.switchProfile({
+        targetProfileId: targetProfileId!,
+        requireBiometric: true, // Biometric required for security
+        apiClient,
+        authContext,
+        queryClient,
+        availableProfiles: availableProfiles || [], // For instant UI updates (WhatsApp-level)
+      });
+
+      if (result.success) {
+        console.log('[SignInScreen] ✅ PROFESSIONAL profile switch completed successfully!');
+        console.log('[SignInScreen] ✅ User will land on default screen with new profile.');
+      } else {
+        console.error('[SignInScreen] ❌ Profile switch failed:', result.error);
+        // Error already shown by orchestrator
+      }
+    } catch (error: any) {
+      console.error('[SignInScreen] ❌ Profile switch orchestrator error:', error);
+      // Orchestrator handles its own error alerts, but catch unexpected errors
+      Alert.alert('Unexpected Error', error.message || 'An unexpected error occurred. Please try again.');
+    }
+  };
+
   const handleUseOtherAccount = () => {
     setIdentifier("");
     setPassword("");
@@ -485,7 +581,7 @@ const SignInScreen = () => {
     pinTabContent: { marginBottom: theme.spacing.lg },
     passwordTabContent: { marginBottom: theme.spacing.md },
     pinContainer: { flexDirection: "row", justifyContent: "center", marginBottom: theme.spacing.md },
-    pinInput: { width: 45, height: 45, borderWidth: 1, borderColor: theme.colors.inputBorder, borderRadius: theme.borderRadius.md, backgroundColor: theme.colors.inputBackground, textAlign: "center", fontSize: theme.typography.fontSize.lg, marginHorizontal: theme.spacing.xs, color: theme.colors.inputText },
+    pinInput: { width: 45, height: 45, borderWidth: 1, borderColor: theme.colors.inputBorder, borderRadius: theme.borderRadius.md, backgroundColor: theme.colors.card, textAlign: "center", fontSize: theme.typography.fontSize.lg, marginHorizontal: theme.spacing.xs, color: theme.colors.inputText },
     identifierInput: { ...theme.commonStyles.input, marginBottom: theme.spacing.sm, height: 50 },
     passwordInput: { ...theme.commonStyles.input, marginBottom: theme.spacing.sm, height: 50 },
     rememberMeContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.md, justifyContent: 'space-between' },
@@ -493,7 +589,7 @@ const SignInScreen = () => {
     forgotText: { textAlign: "center", color: theme.colors.primary, fontSize: theme.typography.fontSize.sm, fontWeight: '500' as const, marginTop: theme.spacing.xs },
     biometricContainer: { alignItems: "center", marginTop: theme.spacing.md, marginBottom: theme.spacing.md },
     biometricText: { fontSize: theme.typography.fontSize.sm, color: theme.colors.textSecondary, marginBottom: theme.spacing.sm },
-    biometricButton: { width: 50, height: 50, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.inputBackground, justifyContent: "center", alignItems: "center", marginBottom: theme.spacing.xs },
+    biometricButton: { width: 50, height: 50, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.colors.border, backgroundColor: theme.colors.card, justifyContent: "center", alignItems: "center", marginBottom: theme.spacing.xs },
     biometricLabel: { fontSize: theme.typography.fontSize.xs, color: theme.colors.textSecondary },
     signInButton: { ...theme.commonStyles.primaryButton, height: 50, marginBottom: theme.spacing.md },
     signInButtonText: { ...theme.commonStyles.primaryButtonText } as any,
@@ -508,7 +604,7 @@ const SignInScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? "light-content" : "dark-content"} backgroundColor={theme.colors.background}/>
+      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.background}/>
       <ScrollView 
         style={{flex: 1}} 
         contentContainerStyle={{flexGrow: 1, justifyContent: 'center'}}
@@ -517,9 +613,11 @@ const SignInScreen = () => {
       >
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>Welcome back</Text>
+            <Text style={styles.title}>
+              {isProfileSwitchMode ? 'Switch Profile' : 'Welcome back'}
+            </Text>
             <Text style={styles.subtitle}>
-              Sign in to your account
+              {isProfileSwitchMode ? 'Authenticate to switch accounts' : 'Sign in to your account'}
             </Text>
           </View>
           
