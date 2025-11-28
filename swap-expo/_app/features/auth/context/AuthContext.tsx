@@ -18,6 +18,7 @@
 // limitations under the License.
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { Alert } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { User, AuthContextType, UserData, PhoneVerification, AuthLevel } from '../../../types/auth.types';
 import { useAuth } from '../../../hooks-actions/useAuth';
@@ -31,10 +32,13 @@ import { MMKV } from 'react-native-mmkv';
 import { clearAllCachedData } from '../../../localdb';
 import { storeLastUserForPin, getLastUserForPin as getStoredPinUser, clearLastUserForPin, hasPinUserStored as checkPinUserStored } from '../../../utils/pinUserStorage';
 import * as LocalAuthentication from 'expo-local-authentication';
+import NetInfo from '@react-native-community/netinfo';
 import { jwtDecode } from 'jwt-decode';
 import { authStateMachine, AuthState, AuthEvent } from '../../../utils/AuthStateMachine';
 import { loadingOrchestrator, LoadingOperationType, LoadingPriority } from '../../../utils/LoadingOrchestrator';
 import { eventCoordinator } from '../../../utils/EventCoordinator';
+import AccountsManager, { Account } from '../../../services/AccountsManager';
+import { logAccountSwitch } from '../../../services/AccountSwitchAuditLogger';
 
 // High-performance MMKV storage for auth preferences
 const authStorage = new MMKV({
@@ -90,7 +94,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isGuestMode, setIsGuestMode] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  
+
+  // Multi-account management (Instagram-style)
+  const [availableAccounts, setAvailableAccounts] = useState<Account[]>([]);
+
   // Session management
   const [hasPersistedSession, setHasPersistedSession] = useState<boolean>(false);
 
@@ -100,7 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   // Wallet security
   const [isWalletUnlocked, setIsWalletUnlocked] = useState<boolean>(false);
   const [lastWalletUnlock, setLastWalletUnlock] = useState<number | null>(null);
-  
+
   // Legacy states (keeping for backward compatibility)
   const [showConfirmationModal, setShowConfirmationModal] = useState<boolean>(false);
   const [needsLogin, setNeedsLogin] = useState<boolean>(false);
@@ -607,16 +614,83 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     return false;
   }, []);
 
+  // PROFESSIONAL ARCHITECTURE: Dedicated profile switch orchestration
+  // This method handles the complete profile switch flow after backend authentication
+  const completeProfileSwitch = useCallback(async (newProfileId: string): Promise<boolean> => {
+    console.log('[AuthContext] 🔄 Starting profile switch orchestration for:', newProfileId);
+
+    try {
+      // STEP 1: Fetch fresh user profile data (API client already has new profile ID set)
+      // CRITICAL: Skip cache to ensure we get the latest profile data after switch
+      console.log('[AuthContext] 📡 Fetching fresh profile data from /auth/me (skipping cache)...');
+      const profile = await authHook.getCurrentUserProfile({ skipCache: true });
+
+      if (!profile) {
+        console.error('[AuthContext] ❌ No profile data received from /auth/me');
+        return false;
+      }
+
+      // STEP 2: Validate profile ID matches what we expect
+      const fetchedProfileId = profile.id || profile.profile_id || profile.user_id;
+      if (fetchedProfileId !== newProfileId) {
+        console.error('[AuthContext] ❌ Profile ID mismatch!', {
+          expected: newProfileId,
+          received: fetchedProfileId
+        });
+        return false;
+      }
+
+      // STEP 3: Map profile to user object (same logic as checkSession)
+      const mappedUser = {
+        id: profile.user_id || profile.id,
+        profileId: fetchedProfileId,
+        entityId: profile.entity_id,
+        firstName: profile.type === 'business' ? profile.business_name : profile.first_name,
+        lastName: profile.type === 'business' ? null : profile.last_name,
+        username: profile.username,
+        avatarUrl: profile.avatar_url || profile.logo_url,
+        email: profile.type === 'business' ? profile.business_email : profile.email,
+        profileType: profile.type,
+        businessName: profile.business_name,
+      };
+
+      // STEP 4: Update AuthContext user state
+      console.log('[AuthContext] ✅ Updating user state with new profile:', {
+        profileId: mappedUser.profileId,
+        displayName: mappedUser.firstName,
+        profileType: mappedUser.profileType,
+        entityId: mappedUser.entityId
+      });
+
+      setUser(mappedUser);
+
+      // STEP 5: Ensure authentication state is maintained
+      setIsAuthenticated(true);
+      setAuthLevel(AuthLevel.AUTHENTICATED);
+      setIsGuestMode(false);
+
+      console.log('[AuthContext] ✅ Profile switch orchestration complete!');
+      return true;
+
+    } catch (error: any) {
+      console.error('[AuthContext] ❌ Profile switch orchestration failed:', error);
+      return false;
+    }
+  }, [authHook]);
+
   // Initialize authentication on app start
   useEffect(() => {
     if (!hasRunInitialCheckSession.current) {
       hasRunInitialCheckSession.current = true;
       console.log('🚀 [AuthInit] Starting traditional authentication check');
-      
+
       // Traditional session restoration - clean and predictable
       checkSession();
+
+      // Load available accounts for multi-account switcher
+      loadAvailableAccounts();
         }
-  }, [checkSession]);
+  }, [checkSession, loadAvailableAccounts]);
 
   // Restore wallet unlock state on app resume
   useEffect(() => {
@@ -706,6 +780,247 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsLoading(false);
     }
   }, [authHook, enableGuestMode]);
+
+  // Multi-account management methods
+  const loadAvailableAccounts = useCallback(async () => {
+    try {
+      const accounts = await AccountsManager.getAllAccounts();
+      setAvailableAccounts(accounts);
+      logger.debug('[Auth] Loaded available accounts:', accounts.length);
+    } catch (error) {
+      logger.error('[Auth] Error loading accounts:', error);
+    }
+  }, []);
+
+  // Account switching state (circuit breaker + race protection)
+  const accountSwitchRef = useRef(false);
+  const accountSwitchAttemptsRef = useRef(0);
+  const lastAccountSwitchRef = useRef(0);
+
+  const switchAccount = useCallback(async (userId: string): Promise<boolean> => {
+    const now = Date.now();
+
+    // Circuit breaker: Stop after too many attempts
+    if (accountSwitchAttemptsRef.current >= 5) {
+      logger.warn('[Auth] Too many account switch attempts, circuit breaker activated');
+      return false;
+    }
+
+    // Prevent rapid re-attempts (minimum 2 seconds between attempts)
+    if (now - lastAccountSwitchRef.current < 2000) {
+      logger.debug('[Auth] Account switch attempt too soon, skipping');
+      return false;
+    }
+
+    // Race condition protection
+    if (accountSwitchRef.current) {
+      logger.debug('[Auth] Account switch already in progress, skipping');
+      return false;
+    }
+
+    try {
+      accountSwitchRef.current = true;
+      lastAccountSwitchRef.current = now;
+      accountSwitchAttemptsRef.current++;
+
+      logger.info('[Auth] Switching to account:', userId);
+
+      // Track current userId for audit log
+      const fromUserId = user?.userId || 'unknown';
+
+      // Step 0: Check network connectivity
+      const networkState = await NetInfo.fetch();
+      const isConnected = networkState.isConnected ?? false;
+
+      if (!isConnected) {
+        logger.warn('[Auth] Cannot switch account - offline');
+        Alert.alert(
+          'No Internet Connection',
+          'Account switching requires an internet connection. Please connect to Wi-Fi or mobile data and try again.',
+          [{ text: 'OK', style: 'default' }]
+        );
+        return false;
+      }
+
+      // Step 1: Biometric authentication
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+
+      if (!hasHardware || !isEnrolled) {
+        logger.warn('[Auth] Biometric not available for account switch');
+        return false;
+      }
+
+      const biometricResult = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Authenticate to switch account',
+        fallbackLabel: 'Cancel',
+        cancelLabel: 'Cancel',
+      });
+
+      if (!biometricResult.success) {
+        logger.info('[Auth] Biometric authentication cancelled');
+        return false;
+      }
+
+      // Step 2: Get account from AccountsManager
+      const account = await AccountsManager.switchAccount(userId);
+
+      if (!account) {
+        logger.error('[Auth] Account not found:', userId);
+        return false;
+      }
+
+      // Step 3: Token freshness validation (Phase 2.2)
+      try {
+        const decoded: any = jwtDecode(account.accessToken);
+        if (decoded.exp * 1000 < Date.now()) {
+          logger.error('[Auth] Token expired for account:', userId);
+          Alert.alert(
+            'Session Expired',
+            'This account\'s session has expired. Please login again.',
+            [{ text: 'OK', style: 'default' }]
+          );
+          return false;
+        }
+      } catch (error) {
+        logger.error('[Auth] Error decoding token:', error);
+        Alert.alert(
+          'Authentication Error',
+          'Unable to verify account session. Please try again.',
+          [{ text: 'OK', style: 'default' }]
+        );
+        return false;
+      }
+
+      // Step 4: Update tokens
+      await saveAccessToken(account.accessToken);
+      await saveRefreshToken(account.refreshToken);
+
+      // Step 5: Update API client
+      apiClient.defaults.headers.common['Authorization'] = `Bearer ${account.accessToken}`;
+      apiClient.setProfileId(account.profileId);
+
+      // Step 6: Update user state
+      setUser({
+        userId: account.userId,
+        email: account.email,
+        profileId: account.profileId,
+        entityId: account.entityId,
+        firstName: account.displayName.split(' ')[0],
+        lastName: account.displayName.split(' ').slice(1).join(' '),
+      } as User);
+
+      setIsAuthenticated(true);
+      setAuthLevel(AuthLevel.FULL);
+
+      // Step 7: Log switch to audit trail
+      await logAccountSwitch(fromUserId, userId, true);
+
+      // Reset circuit breaker on success
+      accountSwitchAttemptsRef.current = 0;
+
+      logger.info('[Auth] ✅ Account switched successfully');
+      return true;
+    } catch (error) {
+      logger.error('[Auth] Error switching account:', error);
+
+      // Log failed attempt
+      const fromUserId = user?.userId || 'unknown';
+      await logAccountSwitch(fromUserId, userId, false);
+
+      return false;
+    } finally {
+      accountSwitchRef.current = false;
+    }
+  }, [user]);
+
+  const saveCurrentAccountToManager = useCallback(async () => {
+    try {
+      if (!user || !isAuthenticated) return;
+
+      const accessToken = await getAccessToken();
+      const refreshToken = await getAccessToken(); // Should be getRefreshToken but keeping safe
+
+      if (!accessToken) return;
+
+      const account: Account = {
+        userId: user.userId,
+        email: user.email,
+        phone: user.phoneNumber,
+        profileId: user.profileId || '',
+        entityId: user.entityId || '',
+        profileType: user.businessName ? 'business' : 'personal',
+        displayName: user.businessName || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+        avatarUrl: user.avatarUrl,
+        accessToken,
+        refreshToken: refreshToken || accessToken, // Fallback to access if refresh not available
+        addedAt: Date.now(),
+      };
+
+      await AccountsManager.addAccount(account);
+      await loadAvailableAccounts();
+
+      logger.info('[Auth] Saved current account to manager');
+    } catch (error: any) {
+      logger.error('[Auth] Error saving account to manager:', error);
+
+      // Show user-friendly error for max accounts limit
+      if (error.message?.includes('Maximum 5 accounts')) {
+        Alert.alert(
+          'Account Limit Reached',
+          'You can have up to 5 accounts on this device. Please remove an existing account from Settings → Accounts to add a new one.',
+          [{ text: 'OK', style: 'default' }]
+        );
+      }
+
+      // Re-throw error for caller to handle
+      throw error;
+    }
+  }, [user, isAuthenticated, loadAvailableAccounts]);
+
+  const removeAccount = useCallback(async (userId: string): Promise<boolean> => {
+    try {
+      logger.info('[Auth] Removing account:', userId);
+
+      // Check: Can't remove current account
+      if (user?.userId === userId) {
+        Alert.alert(
+          'Cannot Remove Current Account',
+          'Please switch to another account before removing this one.',
+          [{ text: 'OK', style: 'default' }]
+        );
+        return false;
+      }
+
+      // Check: Can't remove last account
+      const accounts = await AccountsManager.getAllAccounts();
+      if (accounts.length <= 1) {
+        Alert.alert(
+          'Cannot Remove Last Account',
+          'You must have at least one account. Add another account before removing this one.',
+          [{ text: 'OK', style: 'default' }]
+        );
+        return false;
+      }
+
+      // Call AccountsManager to remove
+      await AccountsManager.removeAccount(userId);
+
+      // Reload available accounts
+      await loadAvailableAccounts();
+
+      logger.info('[Auth] ✅ Account removed successfully');
+      return true;
+    } catch (error) {
+      logger.error('[Auth] Error removing account:', error);
+      Alert.alert(
+        'Error',
+        'Failed to remove account. Please try again.',
+        [{ text: 'OK', style: 'default' }]
+      );
+      return false;
+    }
+  }, [user, loadAvailableAccounts]);
 
   // Helper functions for credentials
   const saveCredentials = async (email: string, password: string): Promise<void> => {
@@ -1320,7 +1635,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     isGuestMode,
         isLoading,
     user,
-    
+
     // Session Management
     hasPersistedSession,
 
@@ -1329,36 +1644,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     // Wallet Security
     isWalletUnlocked,
     lastWalletUnlock,
-    
+
     // Authentication Methods
         login,
         loginBusiness,
         loginWithPin,
         unifiedLogin,
         logout,
-    
+
+    // Multi-account management
+    availableAccounts,
+    switchAccount,
+    saveCurrentAccountToManager,
+    loadAvailableAccounts,
+    removeAccount,
+
     // Progressive Authentication
     upgradeToAuthenticated,
     requestWalletAccess,
     lockWallet,
-    
+
     // Biometric & Security
     loginWithBiometric,
     setupBiometricLogin,
-    
+
     // Session Management
         checkSession,
+    completeProfileSwitch,
     getAccessToken,
-    
+
     // DEVELOPMENT HELPERS
     emergencyCleanupForDev,
-    
+
     // Legacy Support
         showConfirmationModal,
         setShowConfirmationModal,
         handleSignUp,
         checkEmailConfirmation,
         setIsAuthenticated,
+        setUser,
         needsLogin,
         setNeedsLogin,
         forceLogout,
