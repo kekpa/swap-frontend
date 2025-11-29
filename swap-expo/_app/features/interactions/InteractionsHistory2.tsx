@@ -12,6 +12,7 @@ import {
   Alert,
   InteractionManager,
   Platform,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
@@ -161,7 +162,10 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
   const authContext = useAuthContext();
   const user = authContext.user;
   const isAuthenticated = authContext.isAuthenticated;
-  
+
+  // Scroll tracking for SearchHeader blur effect
+  const scrollY = useRef(new Animated.Value(0)).current;
+
   // 🚀 SIMPLIFIED TanStack Query usage - no complex loading state management
   const {
     interactions: interactionsList,
@@ -711,6 +715,11 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     },
     mainContent: {
       flex: 1,
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
     },
     searchContainer: {
       flexDirection: 'row',
@@ -744,6 +753,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     },
     scrollView: {
       flex: 1,
+      paddingTop: 78,
     },
     chatItem: {
       flexDirection: 'row',
@@ -820,13 +830,13 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
       justifyContent: 'space-between',
       paddingHorizontal: theme.spacing.md,
       paddingVertical: theme.spacing.sm,
-      backgroundColor: theme.colors.grayUltraLight,
+      backgroundColor: theme.isDark ? theme.colors.grayUltraLight : theme.colors.card,  // White background in light mode
       alignItems: 'center',
     },
     sectionTitle: {
       fontSize: theme.typography.fontSize.sm,
       fontWeight: '500',
-      color: theme.colors.textSecondary,
+      color: theme.colors.textSecondary,  // Gray text for visibility on white header bars
       textTransform: 'uppercase',
     },
     sectionAction: {
@@ -1211,7 +1221,8 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     if (user?.email) {
       return user.email.charAt(0).toUpperCase();
     }
-    return "UA";
+    // PROFESSIONAL: Use '??' fallback (matches avatarUtils.ts standard)
+    return "??";
   };
 
   // Render empty state
@@ -1262,7 +1273,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
   if (shouldShowLoadingScreen) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={theme.name.includes('dark') ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
+        <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
          <SearchHeader
           onSearchPress={handleSearchPress}
             onNewChat={handleNewChat}
@@ -1286,7 +1297,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
+      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
       
       {/* Search Header - Always visible, transforms based on search state */}
       <SearchHeader
@@ -1303,7 +1314,9 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         searchQuery={searchQuery}
         onSearchQueryChange={handleSearchQueryChange}
         onSearchCancel={handleSearchCancel}
-            />
+        transparent={true}
+        scrollY={scrollY}
+      />
       
       {/* Content Area - Either normal content or search overlay */}
       <View style={styles.contentContainer}>
@@ -1317,11 +1330,16 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
           // Normal content
           <View style={styles.mainContent}>
       {/* Chat List */}
-      <ScrollView 
+      <Animated.ScrollView
         style={styles.scrollView}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
-            refreshing={isRefreshing || isRefetching} 
+            refreshing={isRefreshing || isRefetching}
             onRefresh={onRefresh}
             colors={[theme.colors.primary]}
             tintColor={theme.colors.primary}
@@ -1352,7 +1370,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
                   onInviteContact={handleInviteContact}
                 />
         )}
-      </ScrollView>
+      </Animated.ScrollView>
           </View>
         )}
       </View>

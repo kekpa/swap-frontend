@@ -448,7 +448,7 @@ const TransactionListScreen: React.FC = () => {
   if (isLoadingBalances || (isLoadingTransactions && !targetAccount)) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={theme.name.includes('dark') ? "light-content" : "dark-content"} />
+        <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} />
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
@@ -465,7 +465,7 @@ const TransactionListScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? "light-content" : "dark-content"} />
+      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} />
       
       {/* Header */}
       <View style={styles.header}>

@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, StatusBar,
-  Image, RefreshControl, FlatList, Animated, Easing,
+  RefreshControl, FlatList, Animated, Easing,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -50,6 +51,9 @@ const OffersDiscoveryRedesignedScreen: React.FC = () => {
   const { theme } = useTheme();
   const authContext = useAuthContext();
   const user = authContext.user;
+
+  // Scroll tracking for SearchHeader blur effect
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -299,7 +303,12 @@ const OffersDiscoveryRedesignedScreen: React.FC = () => {
       activeOpacity={0.85}
     >
       <View style={styles.featuredImageBackground}>
-        <Image source={{ uri: merchant.logo }} style={styles.featuredBackgroundImage} resizeMode="cover" />
+        <Image
+          source={{ uri: merchant.logo }}
+          style={styles.featuredBackgroundImage}
+          contentFit="cover"
+          transition={200}
+        />
         <View style={styles.featuredOverlay}>
           {merchant.discount && (
             <View style={styles.featuredDiscountBadge}>
@@ -413,7 +422,12 @@ const OffersDiscoveryRedesignedScreen: React.FC = () => {
           activeOpacity={0.85}
         >
           <View style={styles.cardImageBackground}>
-            <Image source={{ uri: merchant.logo }} style={styles.cardBackgroundImage} resizeMode="cover" />
+            <Image
+              source={{ uri: merchant.logo }}
+              style={styles.cardBackgroundImage}
+              contentFit="cover"
+              transition={200}
+            />
             <View style={styles.cardOverlay}>
               {merchant.discount && (
                 <View style={styles.discountBadge}>
@@ -475,7 +489,14 @@ const OffersDiscoveryRedesignedScreen: React.FC = () => {
 
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.background },
-    scrollView: { flex: 1 },
+    scrollView: {
+      flex: 1,
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+    },
 
 
 
@@ -832,7 +853,7 @@ const OffersDiscoveryRedesignedScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
+      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
       <SearchHeader
         onSearch={handleSearch}
         placeholder="Search offers"
@@ -845,9 +866,17 @@ const OffersDiscoveryRedesignedScreen: React.FC = () => {
           console.log(`[OffersDiscoveryRedesigned] Navigating to ProfileModal, sourceRoute: ${source}`);
           navigation.navigate("ProfileModal" as any, { sourceRoute: source });
         }}
+        transparent={true}
+        scrollY={scrollY}
       />
-      <ScrollView
+      <Animated.ScrollView
         style={styles.scrollView}
+        contentContainerStyle={{ paddingTop: 78 }}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} colors={[theme.colors.primary]} />}
       >
         <StatsCards />
@@ -880,7 +909,7 @@ const OffersDiscoveryRedesignedScreen: React.FC = () => {
         {filteredMerchants.map((merchant) => (
           <HorizontalOfferCard key={merchant.id} merchant={merchant} />
         ))}
-      </ScrollView>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 };

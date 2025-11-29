@@ -2,8 +2,9 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, StatusBar,
-  Image, RefreshControl,
+  RefreshControl,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -121,7 +122,7 @@ const OffersDiscoveryScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
+      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
       <SearchHeader
         onSearch={handleSearch}
         placeholder="Search offers"
@@ -158,7 +159,12 @@ const OffersDiscoveryScreen: React.FC = () => {
           {merchants.map((merchant) => (
             <TouchableOpacity key={merchant.id} style={styles.merchantCard} onPress={() => handleMerchantPress(merchant)}>
               <View style={[styles.merchantLogoContainer, merchant.backgroundColor && { backgroundColor: merchant.backgroundColor } ]}>
-                <Image source={{ uri: merchant.logo }} style={styles.logoImage} resizeMode="contain" />
+                <Image
+                  source={{ uri: merchant.logo }}
+                  style={styles.logoImage}
+                  contentFit="contain"
+                  transition={200}
+                />
               </View>
               <View style={styles.merchantDetails}>
                 <Text style={styles.merchantName}>{merchant.name}</Text>

@@ -1023,7 +1023,7 @@ const TransactionSearchScreen: React.FC<TransactionSearchScreenProps> = ({
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background} />
       
       <View style={styles.header}>
         <TouchableOpacity 

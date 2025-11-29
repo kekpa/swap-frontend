@@ -15,13 +15,14 @@ import {
   StatusBar,
   RefreshControl,
   Alert,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import SearchHeader from '../header/SearchHeader';
 import { useAuthContext } from '../auth/context/AuthContext';
-import { useBalances, useSetPrimaryWallet, useWalletEligibility, useInitializeWallet } from '../../hooks-data/useBalances';
+import { useBalances, useSetPrimaryWallet, useWalletEligibility } from '../../hooks-data/useBalances';
 import { useInteractions } from '../../hooks-data/useInteractions';
 import { useTheme } from '../../theme/ThemeContext';
 import { RootStackParamList } from '../../navigation/rootNavigator';
@@ -71,7 +72,10 @@ const WalletDashboard: React.FC = () => {
   
   // TanStack Query hooks replacing useData()
   const entityId = user?.entityId || '';
-  
+
+  // Scroll tracking for SearchHeader blur effect
+  const scrollY = useRef(new Animated.Value(0)).current;
+
   // Debug logging for entityId
   useEffect(() => {
     logger.debug(`[WalletDashboard] 🔍 ENTITY DEBUG: user=${!!user}, entityId="${entityId}", userEntityId="${user?.entityId}"`);
@@ -167,9 +171,6 @@ const WalletDashboard: React.FC = () => {
     refetch: refetchEligibility,
   } = useWalletEligibility(entityId, { enabled: !!entityId });
 
-  // NEW: Hook for wallet initialization
-  const initializeWalletMutation = useInitializeWallet();
-
   // Professional wallet-specific transaction loading
   const { 
     transactions: allAccountTransactions = [], 
@@ -245,27 +246,11 @@ const WalletDashboard: React.FC = () => {
         return;
       }
 
-      // User is eligible - check if they have wallets
+      // User is eligible - trust that Kafka created wallet after KYC
+      // If hasWallets is false, wallet is being created (show loading state)
       if (!eligibility.hasWallets) {
-        logger.debug('[WalletDashboard] User eligible but has no wallets, needs initialization');
-        setWalletState('needs-init');
-
-        // Auto-initialize wallet for eligible users
-        try {
-          logger.debug('[WalletDashboard] Auto-initializing wallet...');
-          await initializeWalletMutation.mutateAsync(entityId);
-
-          // ✅ PROFESSIONAL: Refetch eligibility to get fresh hasWallets=true from server
-          // This ensures state machine is driven by actual server data, not assumptions
-          logger.debug('[WalletDashboard] Refetching eligibility after wallet initialization...');
-          await refetchEligibility();
-
-          // ✅ Let the useEffect state machine (line 216-269) handle transition to 'locked'
-          // State is now data-driven based on server response (Stripe/Revolut pattern)
-        } catch (error) {
-          logger.error('[WalletDashboard] Wallet initialization failed:', error);
-          setWalletState('no-access');
-        }
+        logger.debug('[WalletDashboard] User eligible but wallet not yet available - Kafka creating wallet');
+        setWalletState('needs-init'); // Will show "Setting up wallet" message (rare edge case)
         return;
       }
 
@@ -274,7 +259,7 @@ const WalletDashboard: React.FC = () => {
     };
 
     checkWalletAccess();
-  }, [entityId, user, eligibility, isLoadingEligibility, eligibilityError, initializeWalletMutation]);
+  }, [entityId, user, eligibility, isLoadingEligibility, eligibilityError]);
 
   const [isWalletUnlocked, setIsWalletUnlocked] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -744,8 +729,14 @@ const WalletDashboard: React.FC = () => {
     },
     scrollView: {
       flex: 1,
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
     },
     scrollViewContent: {
+      paddingTop: 78,
       paddingBottom: theme.spacing.lg,
     },
     greeting: {
@@ -1029,8 +1020,8 @@ const WalletDashboard: React.FC = () => {
   }, [navigation]);
   
   const handleAddMoney = useCallback(() => {
-    (navigation as any).navigate("Wallet", { 
-      screen: "TempAddMoney" 
+    (navigation as any).navigate("Wallet", {
+      screen: "TempAddMoney"
     });
   }, [navigation]);
 
@@ -1070,7 +1061,7 @@ const WalletDashboard: React.FC = () => {
   if (walletState === 'loading') {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={theme.name.includes('dark') ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
+        <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
         <View style={styles.loadingContainer}>
           <Text style={styles.loadingText}>Loading wallet...</Text>
         </View>
@@ -1091,10 +1082,16 @@ const WalletDashboard: React.FC = () => {
   if (walletState === 'needs-init') {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={theme.name.includes('dark') ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
+        <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
         <View style={styles.loadingContainer}>
           <Ionicons name="wallet-outline" size={64} color={theme.colors.primary} />
-          <Text style={styles.loadingText}>Creating your wallet...</Text>
+          <Text style={styles.loadingText}>Setting up your wallet</Text>
+          <Text style={[styles.subtitle, { marginTop: 8, fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', paddingHorizontal: 20 }]}>
+            Your wallet is being created. This usually takes just a moment.
+          </Text>
+          <Text style={[styles.subtitle, { marginTop: 16, fontSize: 13, color: theme.colors.textSecondary, textAlign: 'center', paddingHorizontal: 20 }]}>
+            If this persists, please contact support.
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -1104,7 +1101,7 @@ const WalletDashboard: React.FC = () => {
   if (walletState === 'locked' && !isWalletUnlocked) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={theme.name.includes('dark') ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
+        <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
         <View style={styles.authRequiredContainer}>
           <View style={styles.authRequiredContent}>
             <View style={styles.lockIconContainer}>
@@ -1162,7 +1159,7 @@ const WalletDashboard: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
+      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
       
       <SearchHeader
         onSearch={handleSearch}
@@ -1174,12 +1171,19 @@ const WalletDashboard: React.FC = () => {
         initials={getHeaderInitials()}
         showSearch={false}
         brandName="Swap"
+        transparent={true}
+        scrollY={scrollY}
       />
 
-      <ScrollView 
+      <Animated.ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={false}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -1254,7 +1258,7 @@ const WalletDashboard: React.FC = () => {
             )}
           </View>
         </View>
-      </ScrollView>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 };

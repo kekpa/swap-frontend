@@ -9,8 +9,8 @@ import {
   ScrollView,
   Alert,
   Platform,
-  Image,
 } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect, useRoute, RouteProp, CommonActions } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -23,6 +23,8 @@ import { Theme } from "../../theme/theme";
 import { useKycStatus } from '../../hooks-data/useKycQuery';
 import { useUserProfile } from '../../hooks-data/useUserProfile';
 import { useBiometricAvailability } from '../../hooks-data/useBiometricAvailability';
+import useAvailableProfiles from '../auth/hooks/useAvailableProfiles';
+import ProfileSwitcherModal from '../../components/ProfileSwitcherModal';
 
 // Define a type for the route params ProfileScreen might receive when opened as ProfileModal
 // These params are passed to ProfileModal, not ProfileStackParamList for the 'Profile' screen itself.
@@ -187,7 +189,22 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const { data: kycStatus, isLoading: isKycLoading, refetch: refetchKyc } = useKycStatus(authContext.user?.entityId);
   const { data: userProfile, isLoading: isLoadingUserProfile, refetch: refetchProfile } = useUserProfile(authContext.user?.entityId);
   const { isAvailable: isBiometricAvailable } = useBiometricAvailability();
-  
+
+  // Multi-profile switching hooks
+  const { data: availableProfiles, isLoading: isLoadingProfiles } = useAvailableProfiles();
+  const [isProfileSwitcherVisible, setIsProfileSwitcherVisible] = React.useState(false);
+
+  // Debug logging for profile switcher
+  React.useEffect(() => {
+    console.log('🔍 [ProfileScreen] Available profiles data:', {
+      profiles: availableProfiles,
+      count: availableProfiles?.length,
+      isLoading: isLoadingProfiles,
+      currentProfileId: user?.profileId,
+      showChevron: availableProfiles && availableProfiles.length > 1,
+    });
+  }, [availableProfiles, isLoadingProfiles, user?.profileId]);
+
   // Determine if initial load is complete based on both KYC and profile data
   const isInitialLoadComplete = !isKycLoading && !isLoadingUserProfile;
   const isLoadingUserData = isLoadingUserProfile;
@@ -560,6 +577,69 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     navigation.navigate("VerifyYourIdentity", { sourceRoute: sourceRouteFromParams });
   };
 
+  // Profile switching handlers
+  const handleProfileSwitcherOpen = () => {
+    logger.debug('[ProfileScreen] Opening profile switcher modal');
+    setIsProfileSwitcherVisible(true);
+  };
+
+  const handleProfileSwitcherClose = () => {
+    logger.debug('[ProfileScreen] Closing profile switcher modal');
+    setIsProfileSwitcherVisible(false);
+  };
+
+  const handleProfileSelect = (profile: any) => {
+    logger.info('[ProfileScreen] Profile selected for switching:', {
+      targetProfileId: profile.profileId,
+      displayName: profile.displayName,
+    });
+
+    // Close modal first
+    setIsProfileSwitcherVisible(false);
+
+    // Navigate to SignIn screen with profile switch mode using root navigator
+    if (rootNavigation) {
+      rootNavigation.navigate('Auth', {
+        screen: 'SignIn',
+        params: {
+          mode: 'profileSwitch',
+          targetProfileId: profile.profileId,
+          targetEntityId: profile.entityId,
+          sourceRoute: 'Profile',
+          sourceUserId: user?.user_id, // Pass source user ID for validation
+        },
+      });
+    } else {
+      logger.error('[ProfileScreen] Root navigator not available for profile switching');
+    }
+  };
+
+  const handleAddAccount = () => {
+    logger.debug('[ProfileScreen] Add Account button pressed');
+    setIsProfileSwitcherVisible(false);
+    // Navigate to AddAccountScreen
+    navigation.navigate('AddAccount');
+  };
+
+  const handleRemoveAccount = async (profile: any) => {
+    logger.info('[ProfileScreen] Remove account requested:', {
+      profileId: profile.profileId,
+      displayName: profile.displayName,
+    });
+
+    // Close modal first
+    setIsProfileSwitcherVisible(false);
+
+    // Call auth context removeAccount method
+    const success = await authContext.removeAccount(profile.entityId || profile.userId);
+
+    if (success) {
+      logger.info('[ProfileScreen] ✅ Account removed successfully');
+      // Reload available profiles
+      refetchProfiles();
+    }
+  };
+
   const handleMenuItemPress = (item: string) => {
     if (onMenuItemPress) {
       onMenuItemPress(item);
@@ -685,7 +765,22 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     if (email) {
       return email.charAt(0).toUpperCase();
     }
-    return "UA"; // User Account / Unknown Account
+
+    // FALLBACK: Use current profile from availableProfiles (prevents "UA" flickering during profile switch)
+    if (availableProfiles && user?.profileId) {
+      const currentProfile = availableProfiles.find(p => p.profileId === user.profileId);
+      if (currentProfile?.displayName) {
+        const words = currentProfile.displayName.split(' ').filter(word => word.length > 0);
+        if (words.length >= 2) {
+          return `${words[0].charAt(0)}${words[1].charAt(0)}`.toUpperCase();
+        }
+        if (words.length === 1) {
+          return words[0].substring(0, 2).toUpperCase();
+        }
+      }
+    }
+
+    return "..."; // Loading state (better than "UA")
   };
 
   return (
@@ -701,18 +796,27 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </View>
 
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-          {/* Profile Header */}
-          <View style={[styles.profileHeader, { borderBottomColor: theme.colors.border }]}>
+          {/* Profile Header - Tappable for profile switching */}
+          <TouchableOpacity
+            style={[styles.profileHeader, { borderBottomColor: theme.colors.border }]}
+            onPress={handleProfileSwitcherOpen}
+            activeOpacity={0.7}
+          >
             <View style={[styles.avatar, { backgroundColor: user?.avatarUrl ? 'transparent' : theme.colors.primary }]}>
               {user?.avatarUrl ? (
-                <Image source={{ uri: user.avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 35 }} />
+                <Image
+                  source={{ uri: user.avatarUrl }}
+                  style={{ width: '100%', height: '100%', borderRadius: 35 }}
+                  contentFit="cover"
+                  transition={200}
+                />
               ) : (
                 <Text style={[styles.avatarText, { color: theme.colors.white }]}>
                   {getInitials(user?.firstName, user?.lastName, user?.email, user?.businessName)}
                 </Text>
               )}
             </View>
-            <View>
+            <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
                 <Text style={[styles.userName, { color: theme.colors.textPrimary, marginBottom: 0 }]}>
                 {user?.businessName ? user.businessName : (user?.firstName || user?.lastName ? `${user?.firstName || ''} ${user?.lastName || ''}`.trim() : (user?.email || 'User'))}
@@ -735,7 +839,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 )}
               </View>
             </View>
-          </View>
+            {/* Chevron indicator for profile switching (always visible) */}
+            <Ionicons name="chevron-down" size={20} color={theme.colors.textSecondary} style={{ marginLeft: 8 }} />
+          </TouchableOpacity>
 
           {/* KYC Banner: shows different content based on completion status */}
           {actualOverallStatus === 'completed' ? (
@@ -779,18 +885,17 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </View>
           )}
 
-          {/* Menu Section 1 */}
+          {/* HIDDEN FOR APPLE REVIEW - Uncomment when features are ready
           <View style={styles.menuSectionContainer}>
             {renderMenuItem("person-outline", "Account", () => handleMenuItemPress("Account"))}
-            {/* {renderMenuItem("document-text-outline", "Documents and Statements", () => handleMenuItemPress("Documents and Statements"))} */}
             {renderMenuItem("cash-outline", "Fees and Rates", () => handleMenuItemPress("Fees and Rates"))}
             {renderMenuItem("reader-outline", "Terms and conditions", () => handleMenuItemPress("Terms and conditions"), true)}
           </View>
 
-          {/* Menu Section 2 */}
           <View style={styles.menuSectionContainer}>
             {renderMenuItem("shield-checkmark-outline", "Security & Privacy", () => handleMenuItemPress("Security & Privacy"), true)}
           </View>
+          */}
 
           {/* Theme Selection Section - Moved below Security & Privacy section */}
           <View style={styles.menuSectionContainer}>
@@ -816,11 +921,24 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <Text style={[styles.logoutText, { color: theme.colors.textPrimary }]}>Log out</Text>
           </TouchableOpacity>
 
-          {/* Delete Account Link */}
+          {/* HIDDEN FOR APPLE REVIEW - Uncomment when feature is ready
           <TouchableOpacity style={styles.deleteAccountContainer} onPress={handleDeleteAccount}>
             <Text style={[styles.deleteAccountText, { color: theme.colors.error }]}>Delete account</Text>
           </TouchableOpacity>
+          */}
         </ScrollView>
+
+        {/* Profile Switcher Modal */}
+        <ProfileSwitcherModal
+          visible={isProfileSwitcherVisible}
+          profiles={availableProfiles || []}
+          currentProfileId={user?.profileId || ''}
+          onSelectProfile={handleProfileSelect}
+          onClose={handleProfileSwitcherClose}
+          onAddAccount={handleAddAccount}
+          onRemoveAccount={handleRemoveAccount}
+          isLoading={isLoadingProfiles}
+        />
       </SafeAreaView>
     </View>
   );

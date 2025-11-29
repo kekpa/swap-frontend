@@ -291,7 +291,7 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background}/>
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background}/>
       <View style={styles.header}>
         <TouchableOpacity onPress={handleClose}><Ionicons name="close" size={24} color={theme.colors.textPrimary} /></TouchableOpacity>
         <Text style={styles.headerTitle}>Send money</Text>

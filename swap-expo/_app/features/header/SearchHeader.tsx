@@ -20,10 +20,11 @@ import {
   TouchableOpacity,
   ViewStyle,
   TextStyle,
-  Image,
   Platform,
   StatusBar,
+  Animated,
 } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../theme/ThemeContext";
 
@@ -53,6 +54,7 @@ interface SearchHeaderProps {
   onSearchQueryChange?: (text: string) => void;
   onSearchCancel?: () => void;
   transparent?: boolean;
+  scrollY?: Animated.Value;
 }
 
 const SearchHeader: React.FC<SearchHeaderProps> = ({
@@ -77,6 +79,7 @@ const SearchHeader: React.FC<SearchHeaderProps> = ({
   onSearchQueryChange,
   onSearchCancel,
   transparent = false,
+  scrollY,
 }) => {
   const { theme } = useTheme();
   const searchInputRef = useRef<TextInput>(null);
@@ -87,25 +90,38 @@ const SearchHeader: React.FC<SearchHeaderProps> = ({
     }
   }, [isSearchActive]);
 
+  // Scroll-based blur effect interpolation (Revolut-style)
+  const blurOpacity = scrollY ? scrollY.interpolate({
+    inputRange: [0, 20, 40],
+    outputRange: [0, 0.72, 0.96],  // Goldilocks zone - not too strong, not too weak
+    extrapolate: 'clamp',
+  }) : new Animated.Value(0);
+
+  const borderOpacity = scrollY ? scrollY.interpolate({
+    inputRange: [0, 20, 40],
+    outputRange: [0, 0.05, 0.1],
+    extrapolate: 'clamp',
+  }) : new Animated.Value(0);
+
   const styles = useMemo(() => StyleSheet.create({
     header: {
       flexDirection: "row",
       alignItems: "center",
       paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.md,
+      paddingBottom: 6,
       // Add Android status bar padding
-      paddingTop: Platform.OS === 'android' ? 
-        (StatusBar.currentHeight || 0) + theme.spacing.md : 
-        theme.spacing.md,
-      borderBottomWidth: transparent ? 0 : 1,
+      paddingTop: Platform.OS === 'android' ?
+        (StatusBar.currentHeight || 0) + 4 :
+        4,
+      borderBottomWidth: 0,
       backgroundColor: transparent ? "transparent" : theme.colors.card,
-      borderBottomColor: transparent ? "transparent" : theme.colors.border,
+      borderBottomColor: "transparent",
       // Only apply shadow on iOS when transparent
       ...(transparent && Platform.OS === 'ios' && {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.03,
+        shadowRadius: 2,
       }),
       // No elevation on Android when transparent to avoid shadow borders
       ...(transparent && Platform.OS === 'android' && {
@@ -211,6 +227,22 @@ const SearchHeader: React.FC<SearchHeaderProps> = ({
       borderColor: theme.colors.inputBorder,
       backgroundColor: theme.colors.inputBackground,
     },
+    blurBackground: {
+      position: 'absolute',
+      top: Platform.OS === 'ios' ? -44 : -(StatusBar.currentHeight || 0),
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: theme.colors.background,  // Semantic background color
+    },
+    blurBorder: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: 1,
+      backgroundColor: theme.colors.border,
+    },
   }), [theme, containerStyle, isSearchActive, transparent]);
 
   const handleAddPressInternal = () => {
@@ -229,6 +261,18 @@ const SearchHeader: React.FC<SearchHeaderProps> = ({
 
   return (
     <View style={styles.header}>
+      {/* Animated blur background - Revolut-style */}
+      {transparent && scrollY && (
+        <>
+          <Animated.View
+            style={[styles.blurBackground, { opacity: blurOpacity }]}
+          />
+          <Animated.View
+            style={[styles.blurBorder, { opacity: borderOpacity }]}
+          />
+        </>
+      )}
+
       {title ? (
         <Text style={styles.headerTitle}>{title}</Text>
       ) : (
@@ -241,7 +285,12 @@ const SearchHeader: React.FC<SearchHeaderProps> = ({
           <View style={styles.profilePic}>
             {profileImage ? profileImage :
               avatarUrl ? (
-                <Image source={{ uri: avatarUrl }} style={{ width: '100%', height: '100%', borderRadius: 20 }} />
+                <Image
+                  source={{ uri: avatarUrl }}
+                  style={{ width: '100%', height: '100%', borderRadius: 20 }}
+                  contentFit="cover"
+                  transition={200}
+                />
               ) : (
                 <Text style={styles.profileText}>{initials || 'UA'}</Text>
               )}
@@ -283,7 +332,7 @@ const SearchHeader: React.FC<SearchHeaderProps> = ({
               
               {isSearchActive && searchQuery.length > 0 && (
                 <TouchableOpacity onPress={handleClearSearch} style={styles.clearButton}>
-                  <Ionicons name="close" size={14} color="#FFFFFF" />
+                  <Ionicons name="close" size={14} color={theme.colors.white} />
                 </TouchableOpacity>
               )}
       </View>

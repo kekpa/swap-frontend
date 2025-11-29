@@ -197,7 +197,7 @@ const SearchOverlay: React.FC<SearchOverlayProps> = React.memo(({
       justifyContent: 'space-between',
       paddingHorizontal: 20,
       paddingVertical: 12,
-      backgroundColor: theme.colors.grayUltraLight,
+      backgroundColor: theme.isDark ? theme.colors.grayUltraLight : theme.colors.card,  // White background in light mode
       alignItems: 'center',
     },
     sectionTitle: {

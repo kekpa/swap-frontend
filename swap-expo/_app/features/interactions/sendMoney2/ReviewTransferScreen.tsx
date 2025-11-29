@@ -289,7 +289,7 @@ const ReviewTransferScreen: React.FC<ReviewTransferScreenProps> = ({ route }) =>
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background}/>
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background}/>
       
       {/* Header */}
       <View style={styles.header}>
