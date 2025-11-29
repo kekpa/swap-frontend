@@ -10,11 +10,8 @@ import logger from '../../utils/logger';
  */
 export async function initializeUserContactsSchema(db: SQLiteDatabase): Promise<void> {
   try {
-    // Drop table if it exists to ensure a fresh schema (for development)
-    await db.runAsync(`DROP TABLE IF EXISTS user_contacts;`);
-    logger.info('[Database] Dropped old user_contacts table (if it existed).');
-    
     // Create user_contacts table - matches Supabase schema exactly
+    // Using CREATE IF NOT EXISTS for idempotency (safe for both first install and updates)
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS user_contacts (
         id TEXT PRIMARY KEY NOT NULL,

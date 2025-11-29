@@ -10,13 +10,8 @@ import logger from '../../utils/logger';
  */
 export async function initializeUserSchema(db: SQLiteDatabase): Promise<void> {
   try {
-    // Drop tables if they exist to ensure a fresh schema (for development)
-    await db.runAsync(`DROP TABLE IF EXISTS profiles;`);
-    await db.runAsync(`DROP TABLE IF EXISTS users;`);
-    await db.runAsync(`DROP TABLE IF EXISTS kyc_status;`);
-    logger.info('[Database] Dropped old user tables (if they existed).');
-    
     // Create profiles table - matches Supabase schema exactly
+    // Using CREATE IF NOT EXISTS for idempotency (safe for both first install and updates)
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS profiles (
         id TEXT PRIMARY KEY NOT NULL,
@@ -45,6 +40,7 @@ export async function initializeUserSchema(db: SQLiteDatabase): Promise<void> {
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY NOT NULL,
+        profile_id TEXT,
         data TEXT NOT NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -56,6 +52,7 @@ export async function initializeUserSchema(db: SQLiteDatabase): Promise<void> {
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS kyc_status (
         id TEXT PRIMARY KEY NOT NULL,
+        profile_id TEXT,
         data TEXT NOT NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,

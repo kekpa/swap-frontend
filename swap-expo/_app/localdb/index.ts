@@ -17,17 +17,17 @@ export {
 export const clearAllCachedData = async (): Promise<void> => {
   const logger = require('../utils/logger').default;
   const { databaseManager } = require('./DatabaseManager');
-  
+
   try {
     logger.debug('[LocalDB] Starting clearAllCachedData - clearing all local database tables', 'localdb');
-    
+
     // Ensure database is initialized and get instance
     const initialized = await databaseManager.initialize();
     if (!initialized) {
       logger.warn('[LocalDB] Database not available for clearing', 'localdb');
       return;
     }
-    
+
     const db = databaseManager.getDatabase();
     if (!db) {
       logger.warn('[LocalDB] Database instance not available for clearing', 'localdb');
@@ -37,7 +37,7 @@ export const clearAllCachedData = async (): Promise<void> => {
     // Clear all tables safely - handle missing tables gracefully
     const tablesToClear = [
       'messages',
-      'transactions', 
+      'transactions',
       'interactions',
       'interaction_members',
       'account_balances',
@@ -59,12 +59,78 @@ export const clearAllCachedData = async (): Promise<void> => {
         }
       }
     }
-    
+
     logger.debug('[LocalDB] Successfully completed clearing all available local database tables', 'localdb');
   } catch (error) {
     logger.error('[LocalDB] Error clearing local database tables', error, 'localdb');
     // Don't re-throw the error to prevent auth flow interruption
     logger.warn('[LocalDB] Continuing with auth flow despite cache clearing error', 'localdb');
+  }
+};
+
+/**
+ * Clear all cached data for a specific profile (PROFILE-ISOLATED)
+ * Used during profile switching for privacy and data isolation
+ */
+export const clearProfileLocalDB = async (profileId: string): Promise<void> => {
+  const logger = require('../utils/logger').default;
+  const { databaseManager } = require('./DatabaseManager');
+
+  try {
+    logger.info(`[LocalDB] Clearing all local data for profile: ${profileId}`, 'localdb');
+
+    // Ensure database is initialized and get instance
+    const initialized = await databaseManager.initialize();
+    if (!initialized) {
+      logger.warn('[LocalDB] Database not available for clearing', 'localdb');
+      return;
+    }
+
+    const db = databaseManager.getDatabase();
+    if (!db) {
+      logger.warn('[LocalDB] Database instance not available for clearing', 'localdb');
+      return;
+    }
+
+    // Clear all profile-scoped tables (PROFILE-ISOLATED DELETE)
+    const tablesToClear = [
+      'users',
+      'kyc_status',
+      'messages',
+      'transactions',
+      'interactions',
+      'interaction_members',
+      'currency_wallets',
+      'timeline',
+      'notifications',
+      'user_contacts'
+    ];
+
+    let clearedCount = 0;
+    for (const table of tablesToClear) {
+      try {
+        // Delete only rows for this profile
+        const result = await db.runAsync(`DELETE FROM ${table} WHERE profile_id = ?`, [profileId]);
+        logger.debug(`[LocalDB] Cleared ${result.changes || 0} rows from ${table} for profile ${profileId}`, 'localdb');
+        clearedCount++;
+      } catch (tableError: any) {
+        // Check if it's a "no such table" error
+        if (tableError.message && tableError.message.includes('no such table')) {
+          logger.debug(`[LocalDB] Table ${table} doesn't exist, skipping`, 'localdb');
+        } else if (tableError.message && tableError.message.includes('no such column')) {
+          logger.debug(`[LocalDB] Table ${table} doesn't have profile_id column, skipping`, 'localdb');
+        } else {
+          logger.warn(`[LocalDB] Error clearing table ${table} for profile ${profileId}:`, tableError, 'localdb');
+          // Don't throw, continue with other tables
+        }
+      }
+    }
+
+    logger.info(`[LocalDB] Successfully cleared ${clearedCount} tables for profile ${profileId}`, 'localdb');
+  } catch (error) {
+    logger.error(`[LocalDB] Error clearing profile ${profileId} from local database`, error, 'localdb');
+    // Don't re-throw the error to prevent profile switch flow interruption
+    logger.warn('[LocalDB] Continuing with profile switch despite cache clearing error', 'localdb');
   }
 };
 

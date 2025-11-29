@@ -8,10 +8,7 @@ import logger from '../../utils/logger'; // Import logger
  */
 export async function initializeTimelineSchema(db: SQLiteDatabase): Promise<void> {
   try {
-    // Drop view if it exists to ensure a fresh schema (for development)
-    await db.runAsync(`DROP VIEW IF EXISTS timeline_items;`);
-    logger.info('[Database] Dropped old timeline_items view (if it existed).');
-
+    // Create timeline view - using CREATE IF NOT EXISTS for idempotency
     await db.runAsync(`
       CREATE VIEW IF NOT EXISTS timeline_items AS
       SELECT 

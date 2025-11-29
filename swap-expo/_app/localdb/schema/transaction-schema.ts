@@ -10,11 +10,8 @@ import logger from '../../utils/logger'; // Import logger
  */
 export async function initializeTransactionSchema(db: SQLiteDatabase): Promise<void> {
   try {
-    // Drop table if it exists to ensure a fresh schema (for development)
-    await db.runAsync(`DROP TABLE IF EXISTS transactions;`);
-    logger.info('[Database] Dropped old transactions table (if it existed).');
-
     // Create transactions table - matches Supabase transaction_ledger schema exactly
+    // Using CREATE IF NOT EXISTS for idempotency (safe for both first install and updates)
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS transactions (
         id TEXT PRIMARY KEY NOT NULL,
@@ -37,6 +34,7 @@ export async function initializeTransactionSchema(db: SQLiteDatabase): Promise<v
         from_wallet_id TEXT,
         to_wallet_id TEXT,
         status TEXT DEFAULT 'COMPLETED',
+        profile_id TEXT,
         is_synced INTEGER DEFAULT 0,
         client_generated_id TEXT,
         FOREIGN KEY (interaction_id) REFERENCES interactions(id) ON DELETE CASCADE

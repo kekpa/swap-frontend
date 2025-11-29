@@ -10,11 +10,8 @@ import logger from '../../utils/logger';
  */
 export async function initializeNotificationsSchema(db: SQLiteDatabase): Promise<void> {
   try {
-    // Drop table if it exists to ensure a fresh schema (for development)
-    await db.runAsync(`DROP TABLE IF EXISTS notifications;`);
-    logger.info('[Database] Dropped old notifications table (if it existed).');
-    
     // Create notifications table - matches Supabase schema exactly
+    // Using CREATE IF NOT EXISTS for idempotency (safe for both first install and updates)
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS notifications (
         id TEXT PRIMARY KEY NOT NULL,

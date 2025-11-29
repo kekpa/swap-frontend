@@ -100,55 +100,55 @@ export class InteractionRepository {
   }
 
   /**
-   * Save multiple interactions to local database
+   * Save multiple interactions to local database (PROFILE-ISOLATED)
    */
-  public async saveInteractions(interactions: LocalInteraction[]): Promise<void> {
+  public async saveInteractions(interactions: LocalInteraction[], profileId: string): Promise<void> {
     if (!interactions || interactions.length === 0) {
       logger.debug('[InteractionRepository] No interactions to save');
       return;
     }
-    
-    logger.debug(`[InteractionRepository] Saving ${interactions.length} interactions`);
-    
+
+    logger.debug(`[InteractionRepository] Saving ${interactions.length} interactions (profileId: ${profileId})`);
+
     if (!(await this.isDatabaseAvailable())) {
       logger.warn('[InteractionRepository] Database not available for saveInteractions');
       return;
     }
-    
+
     try {
       for (const interaction of interactions) {
-        await this.insertInteraction(interaction);
+        await this.insertInteraction(interaction, profileId);
       }
-      logger.info(`[InteractionRepository] Successfully saved ${interactions.length} interactions`);
+      logger.info(`[InteractionRepository] Successfully saved ${interactions.length} interactions (profileId: ${profileId})`);
     } catch (error) {
       logger.error('[InteractionRepository] Error saving interactions:', error instanceof Error ? error.message : String(error));
     }
   }
 
   /**
-   * Insert or update a single interaction
+   * Insert or update a single interaction (PROFILE-ISOLATED)
    */
-  public async insertInteraction(interaction: LocalInteraction): Promise<void> {
+  public async insertInteraction(interaction: LocalInteraction, profileId: string): Promise<void> {
     if (!(await this.isDatabaseAvailable())) {
       logger.warn('[InteractionRepository] Database not available for insertInteraction');
       return;
     }
-    
+
     if (!interaction || !interaction.id) {
       logger.warn('[InteractionRepository] Invalid interaction object:', JSON.stringify(interaction));
       return;
     }
-    
+
     try {
       const db = await this.getDatabase();
       const statement = await db.prepareAsync(`
         INSERT OR REPLACE INTO interactions (
           id, name, is_group, relationship_id, created_by_entity_id, is_active,
-          created_at, updated_at, last_message_snippet, last_message_at, 
-          unread_count, icon_url, metadata
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          created_at, updated_at, last_message_snippet, last_message_at,
+          unread_count, icon_url, metadata, profile_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
-      
+
       await statement.executeAsync(
         interaction.id,
         interaction.name || null,
@@ -162,31 +162,32 @@ export class InteractionRepository {
         interaction.last_message_at || null,
         interaction.unread_count || 0,
         interaction.icon_url || null,
-        interaction.metadata ? JSON.stringify(interaction.metadata) : null
+        interaction.metadata ? JSON.stringify(interaction.metadata) : null,
+        profileId
       );
-      
+
       await statement.finalizeAsync();
-      logger.debug(`[InteractionRepository] Saved interaction: ${interaction.id}`);
-      await eventCoordinator.emitDataUpdated('user', interaction, { source: 'InteractionRepository' });
-      
+      logger.debug(`[InteractionRepository] Saved interaction: ${interaction.id} (profileId: ${profileId})`);
+      await eventCoordinator.emitDataUpdated('user', interaction, { source: 'InteractionRepository', profileId });
+
     } catch (error) {
       logger.error(`[InteractionRepository] Error inserting interaction ${interaction.id}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   /**
-   * Add or update an interaction in local database
+   * Add or update an interaction in local database (PROFILE-ISOLATED)
    */
-  public async upsertInteraction(interaction: LocalInteraction): Promise<void> {
+  public async upsertInteraction(interaction: LocalInteraction, profileId: string): Promise<void> {
     if (!(await this.isDatabaseAvailable())) return;
     try {
       const db = await this.getDatabase();
       await db.runAsync(
         `INSERT OR REPLACE INTO interactions (
           id, name, is_group, relationship_id, created_by_entity_id, is_active,
-          created_at, updated_at, last_message_snippet, last_message_at, 
-          unread_count, icon_url, metadata
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          created_at, updated_at, last_message_snippet, last_message_at,
+          unread_count, icon_url, metadata, profile_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           interaction.id,
           interaction.name ?? null,
@@ -200,42 +201,43 @@ export class InteractionRepository {
           interaction.last_message_at ?? null,
           interaction.unread_count ?? 0,
           interaction.icon_url ?? null,
-          JSON.stringify(interaction.metadata ?? {})
+          JSON.stringify(interaction.metadata ?? {}),
+          profileId
         ]
       );
-      await eventCoordinator.emitDataUpdated('user', interaction, { source: 'InteractionRepository' });
+      await eventCoordinator.emitDataUpdated('user', interaction, { source: 'InteractionRepository', profileId });
     } catch (error) {
       logger.error('[InteractionRepository] Error upserting interaction:', error instanceof Error ? error.message : String(error));
     }
   }
 
   /**
-   * Delete an interaction from local database
+   * Delete an interaction from local database (PROFILE-ISOLATED)
    */
-  public async deleteInteraction(id: string): Promise<void> {
+  public async deleteInteraction(id: string, profileId: string): Promise<void> {
     if (!(await this.isDatabaseAvailable())) return;
     try {
       const db = await this.getDatabase();
-      await db.runAsync('DELETE FROM interactions WHERE id = ?', [id]);
-      await eventCoordinator.emitDataUpdated('user', { id, removed: true }, { source: 'InteractionRepository.delete' });
+      await db.runAsync('DELETE FROM interactions WHERE id = ? AND profile_id = ?', [id, profileId]);
+      await eventCoordinator.emitDataUpdated('user', { id, removed: true, profileId }, { source: 'InteractionRepository.delete' });
     } catch (error) {
       logger.error('[InteractionRepository] Error deleting interaction:', error instanceof Error ? error.message : String(error));
     }
   }
 
   /**
-   * Delete multiple interactions by IDs (for sync reconciliation - Option B pattern)
+   * Delete multiple interactions by IDs (for sync reconciliation - Option B pattern) (PROFILE-ISOLATED)
    * Called when backend indicates interactions were deleted
    *
    * @param ids - Array of interaction IDs to delete
    */
-  public async deleteInteractions(ids: string[]): Promise<void> {
+  public async deleteInteractions(ids: string[], profileId: string): Promise<void> {
     if (!ids || ids.length === 0) {
       logger.debug('[InteractionRepository] No interaction IDs to delete');
       return;
     }
 
-    logger.debug(`[InteractionRepository] Deleting ${ids.length} interactions from sync`);
+    logger.debug(`[InteractionRepository] Deleting ${ids.length} interactions from sync (profileId: ${profileId})`);
 
     if (!(await this.isDatabaseAvailable())) {
       logger.warn('[InteractionRepository] Database not available for deleteInteractions');
@@ -247,16 +249,16 @@ export class InteractionRepository {
 
       for (const id of ids) {
         // Delete members first (foreign key constraint)
-        await db.runAsync('DELETE FROM interaction_members WHERE interaction_id = ?', [id]);
-        logger.debug(`[InteractionRepository] Deleted members for interaction: ${id}`);
+        await db.runAsync('DELETE FROM interaction_members WHERE interaction_id = ? AND profile_id = ?', [id, profileId]);
+        logger.debug(`[InteractionRepository] Deleted members for interaction: ${id} (profileId: ${profileId})`);
 
         // Delete interaction
-        await db.runAsync('DELETE FROM interactions WHERE id = ?', [id]);
-        logger.debug(`[InteractionRepository] Deleted interaction: ${id}`);
+        await db.runAsync('DELETE FROM interactions WHERE id = ? AND profile_id = ?', [id, profileId]);
+        logger.debug(`[InteractionRepository] Deleted interaction: ${id} (profileId: ${profileId})`);
       }
 
-      logger.info(`[InteractionRepository] ✅ Deleted ${ids.length} interactions from sync reconciliation`);
-      await eventCoordinator.emitDataUpdated('user', { deletedIds: ids }, { source: 'InteractionRepository.deleteInteractions' });
+      logger.info(`[InteractionRepository] ✅ Deleted ${ids.length} interactions from sync reconciliation (profileId: ${profileId})`);
+      await eventCoordinator.emitDataUpdated('user', { deletedIds: ids, profileId }, { source: 'InteractionRepository.deleteInteractions' });
 
     } catch (error) {
       logger.error('[InteractionRepository] Error deleting interactions:', error instanceof Error ? error.message : String(error));
@@ -264,48 +266,48 @@ export class InteractionRepository {
   }
 
   /**
-   * Background sync: fetch from remote, update local, emit event
+   * Background sync: fetch from remote, update local, emit event (PROFILE-ISOLATED)
    */
-  public async syncInteractionsFromRemote(fetchRemote: () => Promise<LocalInteraction[]>): Promise<void> {
+  public async syncInteractionsFromRemote(fetchRemote: () => Promise<LocalInteraction[]>, profileId: string): Promise<void> {
     if (!(await this.isDatabaseAvailable())) return;
     try {
       const remoteInteractions = await fetchRemote();
       for (const interaction of remoteInteractions) {
-        await this.upsertInteraction(interaction);
+        await this.upsertInteraction(interaction, profileId);
       }
-      await eventCoordinator.emitDataUpdated('user', remoteInteractions, { source: 'InteractionRepository.sync' });
+      await eventCoordinator.emitDataUpdated('user', remoteInteractions, { source: 'InteractionRepository.sync', profileId });
     } catch (error) {
       logger.error('[InteractionRepository] Error syncing interactions from remote:', error instanceof Error ? error.message : String(error));
     }
   }
 
   /**
-   * Save interaction members to local database
+   * Save interaction members to local database (PROFILE-ISOLATED)
    */
-  public async saveInteractionMembers(members: LocalInteractionMember[]): Promise<void> {
+  public async saveInteractionMembers(members: LocalInteractionMember[], profileId: string): Promise<void> {
     if (!members || members.length === 0) {
       logger.debug('[InteractionRepository] No interaction members to save');
       return;
     }
-    
-    logger.debug(`[InteractionRepository] Saving ${members.length} interaction members`);
-    
+
+    logger.debug(`[InteractionRepository] Saving ${members.length} interaction members (profileId: ${profileId})`);
+
     if (!(await this.isDatabaseAvailable())) {
       logger.warn('[InteractionRepository] Database not available for saveInteractionMembers');
       return;
     }
-    
+
     try {
       const db = await this.getDatabase();
-      
+
       for (const member of members) {
         const statement = await db.prepareAsync(`
           INSERT OR REPLACE INTO interaction_members (
-            id, interaction_id, entity_id, role, display_name, 
-            avatar_url, entity_type, joined_at, last_read_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            id, interaction_id, entity_id, role, display_name,
+            avatar_url, entity_type, joined_at, last_read_at, profile_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
-        
+
         await statement.executeAsync(
           member.id || this.generateUUID(), // Generate ID if not provided
           member.interaction_id,
@@ -315,45 +317,47 @@ export class InteractionRepository {
           member.avatar_url || null,
           member.entity_type,
           member.joined_at || new Date().toISOString(),
-          member.last_read_at || new Date().toISOString()
+          member.last_read_at || new Date().toISOString(),
+          profileId
         );
-        
+
         await statement.finalizeAsync();
       }
-      
-      logger.info(`[InteractionRepository] Successfully saved ${members.length} interaction members`);
-      
+
+      logger.info(`[InteractionRepository] Successfully saved ${members.length} interaction members (profileId: ${profileId})`);
+
     } catch (error) {
       logger.error('[InteractionRepository] Error saving interaction members:', error instanceof Error ? error.message : String(error));
     }
   }
 
   /**
-   * Get interactions from local database
+   * Get interactions from local database (PROFILE-ISOLATED)
    */
-  public async getInteractions(limit = 100): Promise<LocalInteraction[]> {
-    logger.debug(`[InteractionRepository] Getting interactions, limit: ${limit}`);
-    
+  public async getInteractions(profileId: string, limit = 100): Promise<LocalInteraction[]> {
+    logger.debug(`[InteractionRepository] Getting interactions (profileId: ${profileId}), limit: ${limit}`);
+
     if (!(await this.isDatabaseAvailable())) {
       logger.warn('[InteractionRepository] Database not available for getInteractions');
       return [];
     }
-    
+
     try {
       const db = await this.getDatabase();
       const statement = await db.prepareAsync(`
         SELECT * FROM interactions
+        WHERE profile_id = ?
         ORDER BY datetime(last_message_at) DESC, datetime(updated_at) DESC
         LIMIT ?
       `);
-      
-      const result = await statement.executeAsync(limit);
+
+      const result = await statement.executeAsync(profileId, limit);
       const results = await result.getAllAsync() as LocalInteraction[];
       await statement.finalizeAsync();
-      
-      logger.info(`[InteractionRepository] Retrieved ${results.length} interactions`);
+
+      logger.info(`[InteractionRepository] Retrieved ${results.length} interactions (profileId: ${profileId})`);
       return results || [];
-      
+
     } catch (error) {
       logger.error('[InteractionRepository] Error getting interactions:', error instanceof Error ? error.message : String(error));
       return [];
@@ -361,30 +365,30 @@ export class InteractionRepository {
   }
 
   /**
-   * Get interaction members for a specific interaction
+   * Get interaction members for a specific interaction (PROFILE-ISOLATED)
    */
-  public async getInteractionMembers(interactionId: string): Promise<LocalInteractionMember[]> {
-    logger.debug(`[InteractionRepository] Getting members for interaction: ${interactionId}`);
-    
+  public async getInteractionMembers(interactionId: string, profileId: string): Promise<LocalInteractionMember[]> {
+    logger.debug(`[InteractionRepository] Getting members for interaction: ${interactionId} (profileId: ${profileId})`);
+
     if (!(await this.isDatabaseAvailable())) {
       logger.warn('[InteractionRepository] Database not available for getInteractionMembers');
       return [];
     }
-    
+
     try {
       const db = await this.getDatabase();
       const statement = await db.prepareAsync(`
         SELECT * FROM interaction_members
-        WHERE interaction_id = ?
+        WHERE interaction_id = ? AND profile_id = ?
       `);
-      
-      const result = await statement.executeAsync(interactionId);
+
+      const result = await statement.executeAsync(interactionId, profileId);
       const results = await result.getAllAsync() as LocalInteractionMember[];
       await statement.finalizeAsync();
-      
-      logger.info(`[InteractionRepository] Retrieved ${results.length} members for interaction: ${interactionId}`);
+
+      logger.info(`[InteractionRepository] Retrieved ${results.length} members for interaction: ${interactionId} (profileId: ${profileId})`);
       return results || [];
-      
+
     } catch (error) {
       logger.error(`[InteractionRepository] Error getting members for interaction ${interactionId}: ${error instanceof Error ? error.message : String(error)}`);
       return [];
@@ -392,48 +396,49 @@ export class InteractionRepository {
   }
 
   /**
-   * OPTIMIZED: Get interactions with their members in a single query to prevent visual glitches
+   * OPTIMIZED: Get interactions with their members in a single query to prevent visual glitches (PROFILE-ISOLATED)
    * This prevents the "magazine sliding" effect by loading all data at once
    */
-  public async getInteractionsWithMembers(limit = 100): Promise<Array<LocalInteraction & { members: LocalInteractionMember[] }>> {
-    logger.debug(`[InteractionRepository] Getting interactions with members, limit: ${limit}`);
-    
+  public async getInteractionsWithMembers(profileId: string, limit = 100): Promise<Array<LocalInteraction & { members: LocalInteractionMember[] }>> {
+    logger.debug(`[InteractionRepository] Getting interactions with members (profileId: ${profileId}), limit: ${limit}`);
+
     if (!(await this.isDatabaseAvailable())) {
       logger.warn('[InteractionRepository] Database not available for getInteractionsWithMembers');
       return [];
     }
-    
+
     try {
       const db = await this.getDatabase();
-      
+
       // First, get all interactions
       const interactionsStatement = await db.prepareAsync(`
         SELECT * FROM interactions
+        WHERE profile_id = ?
         ORDER BY datetime(last_message_at) DESC, datetime(updated_at) DESC
         LIMIT ?
       `);
-      
-      const interactionsResult = await interactionsStatement.executeAsync(limit);
+
+      const interactionsResult = await interactionsStatement.executeAsync(profileId, limit);
       const interactions = await interactionsResult.getAllAsync() as LocalInteraction[];
       await interactionsStatement.finalizeAsync();
-      
+
       if (interactions.length === 0) {
         logger.info('[InteractionRepository] No interactions found');
         return [];
       }
-      
+
       // Get all interaction IDs for member lookup
       const interactionIds = interactions.map(i => i.id);
       const placeholders = interactionIds.map(() => '?').join(',');
-      
+
       // Get all members for these interactions in a single query
       const membersStatement = await db.prepareAsync(`
         SELECT * FROM interaction_members
-        WHERE interaction_id IN (${placeholders})
+        WHERE interaction_id IN (${placeholders}) AND profile_id = ?
         ORDER BY interaction_id, entity_id
       `);
-      
-      const membersResult = await membersStatement.executeAsync(...interactionIds);
+
+      const membersResult = await membersStatement.executeAsync(...interactionIds, profileId);
       const allMembers = await membersResult.getAllAsync() as LocalInteractionMember[];
       await membersStatement.finalizeAsync();
       
@@ -462,27 +467,27 @@ export class InteractionRepository {
   }
 
   /**
-   * Check if we have any local interactions
+   * Check if we have any local interactions (PROFILE-ISOLATED)
    */
-  public async hasLocalInteractions(): Promise<boolean> {
-    logger.debug('[InteractionRepository] Checking for local interactions');
-    
+  public async hasLocalInteractions(profileId: string): Promise<boolean> {
+    logger.debug(`[InteractionRepository] Checking for local interactions (profileId: ${profileId})`);
+
     if (!(await this.isDatabaseAvailable())) {
       logger.warn('[InteractionRepository] Database not available for hasLocalInteractions');
       return false;
     }
-    
+
     try {
       const db = await this.getDatabase();
-      const statement = await db.prepareAsync('SELECT COUNT(*) as count FROM interactions');
-      const result = await statement.executeAsync();
+      const statement = await db.prepareAsync('SELECT COUNT(*) as count FROM interactions WHERE profile_id = ?');
+      const result = await statement.executeAsync(profileId);
       const row = await result.getFirstAsync() as { count: number };
       await statement.finalizeAsync();
-      
+
       const hasInteractions = row.count > 0;
-      logger.debug(`[InteractionRepository] Has local interactions: ${hasInteractions} (count: ${row.count})`);
+      logger.debug(`[InteractionRepository] Has local interactions (profileId: ${profileId}): ${hasInteractions} (count: ${row.count})`);
       return hasInteractions;
-      
+
     } catch (error) {
       logger.error('[InteractionRepository] Error checking for local interactions:', error instanceof Error ? error.message : String(error));
       return false;
@@ -490,38 +495,40 @@ export class InteractionRepository {
   }
 
   /**
-   * Update interaction's last message info
+   * Update interaction's last message info (PROFILE-ISOLATED)
    */
   public async updateInteractionLastMessage(
-    interactionId: string, 
-    messageSnippet: string, 
+    interactionId: string,
+    profileId: string,
+    messageSnippet: string,
     messageTimestamp: string
   ): Promise<void> {
-    logger.debug(`[InteractionRepository] Updating last message for interaction: ${interactionId}`);
-    
+    logger.debug(`[InteractionRepository] Updating last message for interaction: ${interactionId} (profileId: ${profileId})`);
+
     if (!(await this.isDatabaseAvailable())) {
       logger.warn('[InteractionRepository] Database not available for updateInteractionLastMessage');
       return;
     }
-    
+
     try {
       const db = await this.getDatabase();
       const statement = await db.prepareAsync(`
-        UPDATE interactions 
+        UPDATE interactions
         SET last_message_snippet = ?, last_message_at = ?, updated_at = ?
-        WHERE id = ?
+        WHERE id = ? AND profile_id = ?
       `);
-      
+
       await statement.executeAsync(
         messageSnippet,
         messageTimestamp,
         new Date().toISOString(),
-        interactionId
+        interactionId,
+        profileId
       );
-      
+
       await statement.finalizeAsync();
-      logger.debug(`[InteractionRepository] Updated last message for interaction: ${interactionId}`);
-      
+      logger.debug(`[InteractionRepository] Updated last message for interaction: ${interactionId} (profileId: ${profileId})`);
+
     } catch (error) {
       logger.error(`[InteractionRepository] Error updating last message for interaction ${interactionId}: ${error instanceof Error ? error.message : String(error)}`);
     }

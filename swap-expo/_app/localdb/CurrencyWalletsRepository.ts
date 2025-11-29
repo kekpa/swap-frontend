@@ -77,33 +77,33 @@ export class CurrencyWalletsRepository {
   }
 
   /**
-   * Insert or update a currency wallet with optimistic UI updates
+   * Insert or update a currency wallet with optimistic UI updates (PROFILE-ISOLATED)
    */
-  public async insertCurrencyWallet(wallet: CurrencyWallet): Promise<void> {
-    logger.debug(`[CurrencyWalletsRepository] Inserting currency wallet: ${wallet.id}`);
+  public async insertCurrencyWallet(wallet: CurrencyWallet, profileId: string): Promise<void> {
+    logger.debug(`[CurrencyWalletsRepository] Inserting currency wallet: ${wallet.id} (profileId: ${profileId})`);
     logger.debug(`[CurrencyWalletsRepository] 🔍 WALLET DATA DEBUG:`, JSON.stringify(wallet, null, 2));
-    
+
     if (!(await this.isSQLiteAvailable())) {
       logger.warn(`[CurrencyWalletsRepository] SQLite not available, aborting save for: ${wallet.id}`);
       return;
     }
-    
+
     if (!wallet.id || !wallet.account_id || !wallet.currency_id) {
       logger.warn('[CurrencyWalletsRepository] Missing required fields (id, account_id, currency_id), aborting save');
       logger.warn(`[CurrencyWalletsRepository] 🔍 MISSING FIELDS DEBUG: id=${wallet.id}, account_id=${wallet.account_id}, currency_id=${wallet.currency_id}`);
       return;
     }
-    
+
     try {
       const db = await this.getDatabase();
       const statement = await db.prepareAsync(`
         INSERT OR REPLACE INTO currency_wallets (
           id, account_id, currency_id, currency_code, currency_symbol, currency_name,
           balance, reserved_balance, available_balance, balance_last_updated,
-          is_active, is_primary, created_at, updated_at, is_synced
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          is_active, is_primary, created_at, updated_at, is_synced, profile_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
-      
+
       await statement.executeAsync(
         wallet.id,
         wallet.account_id,
@@ -119,39 +119,40 @@ export class CurrencyWalletsRepository {
         wallet.is_primary ? 1 : 0,
         wallet.created_at || new Date().toISOString(),
         wallet.updated_at || new Date().toISOString(),
-        1 // Mark as synced since it came from API
+        1, // Mark as synced since it came from API
+        profileId
       );
-      
+
       await statement.finalizeAsync();
-      logger.info(`[CurrencyWalletsRepository] Successfully saved currency wallet: ${wallet.id}`);
-      
+      logger.info(`[CurrencyWalletsRepository] Successfully saved currency wallet: ${wallet.id} (profileId: ${profileId})`);
+
       // Emit event for real-time UI updates
-      eventEmitter.emit('data_updated', { type: 'wallets', data: wallet });
-      
+      eventEmitter.emit('data_updated', { type: 'wallets', data: wallet, profileId });
+
     } catch (error) {
       logger.error(`[CurrencyWalletsRepository] Error saving currency wallet ${wallet.id}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   /**
-   * Get all currency wallets from local database
+   * Get all currency wallets from local database (PROFILE-ISOLATED)
    */
-  public async getAllCurrencyWallets(): Promise<CurrencyWallet[]> {
-    logger.debug('[CurrencyWalletsRepository] Getting all currency wallets from local database');
-    
+  public async getAllCurrencyWallets(profileId: string): Promise<CurrencyWallet[]> {
+    logger.debug(`[CurrencyWalletsRepository] Getting all currency wallets from local database (profileId: ${profileId})`);
+
     if (!(await this.isSQLiteAvailable())) {
       logger.debug('[CurrencyWalletsRepository] SQLite not available, returning empty array');
       return [];
     }
-    
+
     try {
       const db = await this.getDatabase();
       const result = await db.getAllAsync(`
-        SELECT * FROM currency_wallets 
-        WHERE is_active = 1 
+        SELECT * FROM currency_wallets
+        WHERE is_active = 1 AND profile_id = ?
         ORDER BY is_primary DESC, currency_code ASC
-      `);
-      
+      `, [profileId]);
+
       const wallets = result.map((row: any) => ({
         id: row.id as string,
         account_id: row.account_id as string,
@@ -169,8 +170,8 @@ export class CurrencyWalletsRepository {
         updated_at: row.updated_at as string,
         is_synced: Boolean(row.is_synced),
       }));
-      
-      logger.debug(`[CurrencyWalletsRepository] Retrieved ${wallets.length} currency wallets from local database`);
+
+      logger.debug(`[CurrencyWalletsRepository] Retrieved ${wallets.length} currency wallets from local database (profileId: ${profileId})`);
       return wallets;
     } catch (error) {
       logger.error('[CurrencyWalletsRepository] Error getting currency wallets:', error instanceof Error ? error.message : String(error));
@@ -179,21 +180,21 @@ export class CurrencyWalletsRepository {
   }
 
   /**
-   * Save multiple currency wallets with deduplication and batch processing
+   * Save multiple currency wallets with deduplication and batch processing (PROFILE-ISOLATED)
    */
-  public async saveCurrencyWallets(walletsToSave: CurrencyWallet[]): Promise<void> {
-    logger.debug(`[CurrencyWalletsRepository] Saving ${walletsToSave?.length || 0} currency wallets`);
-    
+  public async saveCurrencyWallets(walletsToSave: CurrencyWallet[], profileId: string): Promise<void> {
+    logger.debug(`[CurrencyWalletsRepository] Saving ${walletsToSave?.length || 0} currency wallets (profileId: ${profileId})`);
+
     if (!(await this.isSQLiteAvailable())) {
       logger.warn('[CurrencyWalletsRepository] SQLite not available, aborting save');
       return;
     }
-    
+
     if (!walletsToSave || walletsToSave.length === 0) {
       logger.debug('[CurrencyWalletsRepository] No wallets to save');
       return;
     }
-    
+
     // Deduplicate wallets by ID
     const uniqueWallets = new Map<string, CurrencyWallet>();
     walletsToSave.forEach(wallet => {
@@ -201,21 +202,21 @@ export class CurrencyWalletsRepository {
         uniqueWallets.set(wallet.id, wallet);
       }
     });
-    
+
     const deduplicatedWallets = Array.from(uniqueWallets.values());
     logger.info(`[CurrencyWalletsRepository] Deduplication removed ${walletsToSave.length - deduplicatedWallets.length} duplicates`);
-    
+
     let successfulSaves = 0;
     let failedSaves = 0;
-    
+
     // Process in batches for better performance
     const batchSize = 10;
     for (let i = 0; i < deduplicatedWallets.length; i += batchSize) {
       const batch = deduplicatedWallets.slice(i, i + batchSize);
-      
+
       await Promise.all(batch.map(async (wallet) => {
         try {
-          await this.insertCurrencyWallet(wallet);
+          await this.insertCurrencyWallet(wallet, profileId);
           successfulSaves++;
         } catch (error) {
           failedSaves++;
@@ -223,92 +224,92 @@ export class CurrencyWalletsRepository {
         }
       }));
     }
-    
-    logger.info(`[CurrencyWalletsRepository] Save batch complete. Successful: ${successfulSaves}, Failed: ${failedSaves}`);
+
+    logger.info(`[CurrencyWalletsRepository] Save batch complete (profileId: ${profileId}). Successful: ${successfulSaves}, Failed: ${failedSaves}`);
   }
 
   /**
-   * Alias for saveCurrencyWallets - for compatibility with BalanceManager
+   * Alias for saveCurrencyWallets - for compatibility with BalanceManager (PROFILE-ISOLATED)
    */
-  public async saveWalletBalances(walletsToSave: CurrencyWallet[]): Promise<void> {
-    return this.saveCurrencyWallets(walletsToSave);
+  public async saveWalletBalances(walletsToSave: CurrencyWallet[], profileId: string): Promise<void> {
+    return this.saveCurrencyWallets(walletsToSave, profileId);
   }
 
   /**
-   * Clear all currency wallets from local database
+   * Clear all currency wallets from local database (PROFILE-ISOLATED)
    */
-  public async clearAllCurrencyWallets(): Promise<void> {
-    logger.debug('[CurrencyWalletsRepository] Clearing all currency wallets');
-    
+  public async clearAllCurrencyWallets(profileId: string): Promise<void> {
+    logger.debug(`[CurrencyWalletsRepository] Clearing all currency wallets (profileId: ${profileId})`);
+
     if (!(await this.isSQLiteAvailable())) {
       logger.warn('[CurrencyWalletsRepository] SQLite not available, aborting clear');
       return;
     }
-    
+
     try {
       const db = await this.getDatabase();
-      const statement = await db.prepareAsync('DELETE FROM currency_wallets');
-      await statement.executeAsync();
+      const statement = await db.prepareAsync('DELETE FROM currency_wallets WHERE profile_id = ?');
+      await statement.executeAsync(profileId);
       await statement.finalizeAsync();
-      
-      logger.info('[CurrencyWalletsRepository] Successfully cleared all currency wallets');
+
+      logger.info(`[CurrencyWalletsRepository] Successfully cleared all currency wallets (profileId: ${profileId})`);
     } catch (error) {
       logger.error('[CurrencyWalletsRepository] Error clearing currency wallets:', error instanceof Error ? error.message : String(error));
     }
   }
 
   /**
-   * Update primary wallet status
+   * Update primary wallet status (PROFILE-ISOLATED)
    */
-  public async updatePrimaryWallet(walletId: string): Promise<void> {
-    logger.debug(`[CurrencyWalletsRepository] Setting wallet ${walletId} as primary`);
-    
+  public async updatePrimaryWallet(walletId: string, profileId: string): Promise<void> {
+    logger.debug(`[CurrencyWalletsRepository] Setting wallet ${walletId} as primary (profileId: ${profileId})`);
+
     if (!(await this.isSQLiteAvailable())) {
       logger.warn('[CurrencyWalletsRepository] SQLite not available, aborting update');
       return;
     }
-    
+
     try {
       const db = await this.getDatabase();
-      
-      // First, set all wallets to non-primary
-      await db.runAsync('UPDATE currency_wallets SET is_primary = 0, updated_at = ?', [new Date().toISOString()]);
-      
+
+      // First, set all wallets to non-primary (only for this profile)
+      await db.runAsync('UPDATE currency_wallets SET is_primary = 0, updated_at = ? WHERE profile_id = ?', [new Date().toISOString(), profileId]);
+
       // Then set the selected wallet as primary
-      await db.runAsync('UPDATE currency_wallets SET is_primary = 1, updated_at = ? WHERE id = ?', [new Date().toISOString(), walletId]);
-      
-      logger.info(`[CurrencyWalletsRepository] Successfully updated primary wallet to: ${walletId}`);
-      
+      await db.runAsync('UPDATE currency_wallets SET is_primary = 1, updated_at = ? WHERE id = ? AND profile_id = ?', [new Date().toISOString(), walletId, profileId]);
+
+      logger.info(`[CurrencyWalletsRepository] Successfully updated primary wallet to: ${walletId} (profileId: ${profileId})`);
+
       // Emit event for real-time UI updates
-      eventEmitter.emit('data_updated', { type: 'primary_wallet_changed', data: { walletId } });
-      
+      eventEmitter.emit('data_updated', { type: 'primary_wallet_changed', data: { walletId, profileId } });
+
     } catch (error) {
       logger.error(`[CurrencyWalletsRepository] Error updating primary wallet: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   /**
-   * Get wallet by currency code
+   * Get wallet by currency code (PROFILE-ISOLATED)
    */
-  public async getWalletByCurrencyCode(currencyCode: string): Promise<CurrencyWallet | null> {
-    logger.debug(`[CurrencyWalletsRepository] Getting wallet for currency: ${currencyCode}`);
-    
+  public async getWalletByCurrencyCode(currencyCode: string, profileId: string): Promise<CurrencyWallet | null> {
+    logger.debug(`[CurrencyWalletsRepository] Getting wallet for currency: ${currencyCode} (profileId: ${profileId})`);
+
     if (!(await this.isSQLiteAvailable())) {
       logger.debug('[CurrencyWalletsRepository] SQLite not available, returning null');
       return null;
     }
-    
+
     try {
       const db = await this.getDatabase();
       const result = await db.getFirstAsync(`
-        SELECT * FROM currency_wallets 
-        WHERE currency_code = ? AND is_active = 1
-      `, [currencyCode]);
-      
+        SELECT * FROM currency_wallets
+        WHERE currency_code = ? AND is_active = 1 AND profile_id = ?
+      `, [currencyCode, profileId]);
+
       if (!result) {
         return null;
       }
-      
+
       const row = result as any;
       return {
         id: row.id as string,
@@ -334,15 +335,15 @@ export class CurrencyWalletsRepository {
   }
 
   /**
-   * Background sync: fetch from remote, update local, emit event
+   * Background sync: fetch from remote, update local, emit event (PROFILE-ISOLATED)
    */
-  public async syncWalletsFromRemote(fetchRemote: () => Promise<any[]>): Promise<void> {
+  public async syncWalletsFromRemote(fetchRemote: () => Promise<any[]>, profileId: string): Promise<void> {
     try {
       const remoteWallets = await fetchRemote();
       for (const wallet of remoteWallets) {
-        await this.insertCurrencyWallet(wallet);
+        await this.insertCurrencyWallet(wallet, profileId);
       }
-      eventEmitter.emit('data_updated', { type: 'wallets', data: remoteWallets });
+      eventEmitter.emit('data_updated', { type: 'wallets', data: remoteWallets, profileId });
     } catch (error) {
       logger.error('Background wallet sync failed', error);
       // Fail silently to not disrupt user experience

@@ -121,21 +121,21 @@ export class TransactionRepository {
   }
 
   /**
-   * Insert a single transaction into the database
+   * Insert a single transaction into the database (PROFILE-ISOLATED)
    */
-  private async insertTransaction(db: SQLite.SQLiteDatabase, transaction: DatabaseTransaction): Promise<void> {
+  private async insertTransaction(db: SQLite.SQLiteDatabase, transaction: DatabaseTransaction, profileId: string): Promise<void> {
     // Ensure the interaction exists first
     await this.ensureInteractionExists(db, transaction.interaction_id);
-    
-    logger.debug(`[TransactionRepository] Inserting transaction: ${transaction.id}`);
-    
+
+    logger.debug(`[TransactionRepository] Inserting transaction: ${transaction.id} (profileId: ${profileId})`);
+
     await db.runAsync(
       `INSERT OR REPLACE INTO transactions (
-        id, interaction_id, from_account_id, to_account_id, amount, currency_id, 
-        status, created_at, exchange_rate, business_location_id, transaction_type, 
-        description, metadata, reversing_transaction_id, from_entity_id, to_entity_id, 
-        entry_type
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, interaction_id, from_account_id, to_account_id, amount, currency_id,
+        status, created_at, exchange_rate, business_location_id, transaction_type,
+        description, metadata, reversing_transaction_id, from_entity_id, to_entity_id,
+        entry_type, profile_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
       transaction.id,
       transaction.interaction_id,
@@ -153,36 +153,38 @@ export class TransactionRepository {
       transaction.reversing_transaction_id || null,
         transaction.from_entity_id || null,
         transaction.to_entity_id || null,
-        transaction.entry_type || null
+        transaction.entry_type || null,
+        profileId
       ]
     );
-    
-    logger.info(`[TransactionRepository] Successfully saved transaction: ${transaction.id}`);
+
+    logger.info(`[TransactionRepository] Successfully saved transaction: ${transaction.id} (profileId: ${profileId})`);
   }
 
 /**
- * Get transactions for an interaction with optional user perspective filtering
+ * Get transactions for an interaction with optional user perspective filtering (PROFILE-ISOLATED)
    */
   public async getTransactionsForInteraction(
   interactionId: string,
+  profileId: string,
   limit = 100,
     currentUserEntityId?: string
   ): Promise<TransactionTimelineItem[]> {
-    logger.debug(`[TransactionRepository] Getting transactions for interaction: ${interactionId}, limit: ${limit}, userEntityId: ${currentUserEntityId || 'none'}`);
-    
+    logger.debug(`[TransactionRepository] Getting transactions for interaction: ${interactionId}, profileId: ${profileId}, limit: ${limit}, userEntityId: ${currentUserEntityId || 'none'}`);
+
     if (!(await this.isSQLiteAvailable())) {
       logger.warn(`[TransactionRepository] SQLite not available, returning empty array for: ${interactionId}`);
     return [];
   }
-  
+
   try {
       const db = await this.getDatabase();
-      
+
     let sql = `
-      SELECT * FROM transactions 
-      WHERE interaction_id = ? 
+      SELECT * FROM transactions
+      WHERE interaction_id = ? AND profile_id = ?
     `;
-    let params: any[] = [interactionId];
+    let params: any[] = [interactionId, profileId];
     
       // Apply user perspective filtering for double-entry transactions
     if (currentUserEntityId) {
@@ -244,29 +246,30 @@ export class TransactionRepository {
   }
 
   /**
-   * Get transactions for a specific account (WhatsApp-style local-first)
+   * Get transactions for a specific account (WhatsApp-style local-first) (PROFILE-ISOLATED)
    */
   public async getTransactionsByAccount(
+    profileId: string,
     accountId: string,
     limit = 20
   ): Promise<Transaction[]> {
-    logger.debug(`[TransactionRepository] Getting transactions for account: ${accountId}, limit: ${limit}`);
-    
+    logger.debug(`[TransactionRepository] Getting transactions for account: ${accountId}, profileId: ${profileId}, limit: ${limit}`);
+
     if (!(await this.isSQLiteAvailable())) {
       logger.warn(`[TransactionRepository] SQLite not available, returning empty array for account: ${accountId}`);
       return [];
     }
-    
+
     try {
       const db = await this.getDatabase();
-      
+
       const sql = `
-        SELECT * FROM transactions 
-        WHERE (from_account_id = ? OR to_account_id = ?)
-        ORDER BY datetime(created_at) DESC 
+        SELECT * FROM transactions
+        WHERE (from_account_id = ? OR to_account_id = ?) AND profile_id = ?
+        ORDER BY datetime(created_at) DESC
         LIMIT ?
       `;
-      const params = [accountId, accountId, limit];
+      const params = [accountId, accountId, profileId, limit];
       
       logger.debug(`[TransactionRepository] Database ready: ${databaseManager.isDatabaseReady()}`);
       
@@ -310,21 +313,21 @@ export class TransactionRepository {
   }
 
   /**
-   * Save multiple transactions with deduplication
+   * Save multiple transactions with deduplication (PROFILE-ISOLATED)
    */
-  public async saveTransactions(transactionsToSave: Transaction[]): Promise<void> {
-    logger.debug(`[TransactionRepository] Saving ${transactionsToSave?.length || 0} transactions`);
-    
+  public async saveTransactions(transactionsToSave: Transaction[], profileId: string): Promise<void> {
+    logger.debug(`[TransactionRepository] Saving ${transactionsToSave?.length || 0} transactions (profileId: ${profileId})`);
+
     if (!(await this.isSQLiteAvailable())) {
       logger.warn('[TransactionRepository] SQLite not available, aborting save');
     return;
   }
-  
+
   if (!transactionsToSave || transactionsToSave.length === 0) {
       logger.debug('[TransactionRepository] No transactions to save');
     return;
   }
-  
+
     // Deduplicate transactions by ID
   const uniqueTransactions = new Map<string, Transaction>();
   transactionsToSave.forEach(tx => {
@@ -336,13 +339,13 @@ export class TransactionRepository {
         }
     }
   });
-  
+
   const deduplicatedTransactions = Array.from(uniqueTransactions.values());
     logger.info(`[TransactionRepository] Deduplication removed ${transactionsToSave.length - deduplicatedTransactions.length} duplicates`);
-  
+
   let successfulSaves = 0;
   let failedSaves = 0;
-  
+
   for (const tx of deduplicatedTransactions) {
     try {
         // Convert Transaction to DatabaseTransaction format
@@ -365,58 +368,58 @@ export class TransactionRepository {
           to_entity_id: (tx as any).to_entity_id,
           entry_type: (tx as any).entry_type
         };
-        
+
         const db = await this.getDatabase();
-        await this.insertTransaction(db, dbTransaction);
+        await this.insertTransaction(db, dbTransaction, profileId);
       successfulSaves++;
     } catch (error) {
       failedSaves++;
         logger.warn(`[TransactionRepository] Failed to save transaction ${tx.id}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  
-  logger.info(`[TransactionRepository] Save batch complete. Successful: ${successfulSaves}, Failed: ${failedSaves}`);
+
+  logger.info(`[TransactionRepository] Save batch complete (profileId: ${profileId}). Successful: ${successfulSaves}, Failed: ${failedSaves}`);
   }
 
 /**
- * Update transaction status
+ * Update transaction status (PROFILE-ISOLATED)
  */
-  public async updateTransactionStatus(transactionId: string, status: string): Promise<void> {
-    logger.debug(`[TransactionRepository] Updating status for transaction: ${transactionId} to ${status}`);
-    
+  public async updateTransactionStatus(transactionId: string, profileId: string, status: string): Promise<void> {
+    logger.debug(`[TransactionRepository] Updating status for transaction: ${transactionId} to ${status} (profileId: ${profileId})`);
+
     if (!(await this.isSQLiteAvailable())) {
       logger.warn(`[TransactionRepository] SQLite not available for status update: ${transactionId}`);
     return;
   }
-  
+
   try {
       const db = await this.getDatabase();
-      const statement = await db.prepareAsync('UPDATE transactions SET status = ? WHERE id = ?');
-      const result = await statement.executeAsync(status, transactionId);
+      const statement = await db.prepareAsync('UPDATE transactions SET status = ? WHERE id = ? AND profile_id = ?');
+      const result = await statement.executeAsync(status, transactionId, profileId);
       await statement.finalizeAsync();
-      
-      logger.info(`[TransactionRepository] Updated status for transaction ${transactionId} to ${status}. Changes: ${result.changes}`);
-      
+
+      logger.info(`[TransactionRepository] Updated status for transaction ${transactionId} to ${status} (profileId: ${profileId}). Changes: ${result.changes}`);
+
     } catch (error) {
       logger.error(`[TransactionRepository] Error updating status for transaction ${transactionId}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   /**
-   * Check if we have local transactions for an interaction
+   * Check if we have local transactions for an interaction (PROFILE-ISOLATED)
    */
-  public async hasLocalTransactions(interactionId: string): Promise<boolean> {
-    logger.debug(`[TransactionRepository] Checking for local transactions: ${interactionId}`);
-    
+  public async hasLocalTransactions(interactionId: string, profileId: string): Promise<boolean> {
+    logger.debug(`[TransactionRepository] Checking for local transactions: ${interactionId} (profileId: ${profileId})`);
+
     if (!(await this.isSQLiteAvailable())) {
       logger.warn(`[TransactionRepository] SQLite not available for hasLocalTransactions: ${interactionId}`);
     return false;
   }
-  
+
   try {
-      const transactions = await this.getTransactionsForInteraction(interactionId, 1);
+      const transactions = await this.getTransactionsForInteraction(interactionId, profileId, 1);
     const found = transactions.length > 0;
-      logger.info(`[TransactionRepository] Local transactions for ${interactionId}: ${found ? 'FOUND' : 'NOT FOUND'}`);
+      logger.info(`[TransactionRepository] Local transactions for ${interactionId} (profileId: ${profileId}): ${found ? 'FOUND' : 'NOT FOUND'}`);
     return found;
   } catch (error) {
       logger.error(`[TransactionRepository] Error checking local transactions for ${interactionId}: ${error instanceof Error ? error.message : String(error)}`);
@@ -425,13 +428,13 @@ export class TransactionRepository {
   }
 
   /**
-   * Add or update a transaction in local database
+   * Add or update a transaction in local database (PROFILE-ISOLATED)
    */
-  public async upsertTransaction(transaction: any): Promise<void> { // TODO: type
+  public async upsertTransaction(transaction: any, profileId: string): Promise<void> { // TODO: type
     try {
       const db = await this.getDatabase();
       await db.runAsync(
-        `INSERT OR REPLACE INTO transactions (id, from_account_id, to_account_id, amount, currency_id, status, created_at, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR REPLACE INTO transactions (id, from_account_id, to_account_id, amount, currency_id, status, created_at, metadata, profile_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           transaction.id,
           transaction.from_account_id ?? '',
@@ -440,49 +443,51 @@ export class TransactionRepository {
           transaction.currency_id ?? '',
           transaction.status ?? '',
           transaction.created_at ?? '',
-          JSON.stringify(transaction.metadata ?? {})
+          JSON.stringify(transaction.metadata ?? {}),
+          profileId
         ]
       );
-      eventEmitter.emit('data_updated', { type: 'transactions', data: transaction });
+      eventEmitter.emit('data_updated', { type: 'transactions', data: transaction, profileId });
     } catch (error) {
       // handle error
     }
   }
 
   /**
-   * Delete a transaction from local database
+   * Delete a transaction from local database (PROFILE-ISOLATED)
    */
-  public async deleteTransaction(id: string): Promise<void> {
+  public async deleteTransaction(id: string, profileId: string): Promise<void> {
     try {
       const db = await this.getDatabase();
-      await db.runAsync('DELETE FROM transactions WHERE id = ?', [id]);
-      eventEmitter.emit('data_updated', { type: 'transactions', data: { id, removed: true } });
+      await db.runAsync('DELETE FROM transactions WHERE id = ? AND profile_id = ?', [id, profileId]);
+      eventEmitter.emit('data_updated', { type: 'transactions', data: { id, removed: true, profileId } });
     } catch (error) {
       // handle error
     }
   }
 
   /**
-   * Get recent transactions across all interactions
+   * Get recent transactions across all interactions (PROFILE-ISOLATED)
    */
-  public async getRecentTransactions(limit = 5): Promise<TransactionTimelineItem[]> {
-    logger.debug(`[TransactionRepository] Getting ${limit} recent transactions`);
-    
+  public async getRecentTransactions(profileId: string, limit = 5): Promise<TransactionTimelineItem[]> {
+    logger.debug(`[TransactionRepository] Getting ${limit} recent transactions (profileId: ${profileId})`);
+
     if (!(await this.isSQLiteAvailable())) {
       logger.warn('[TransactionRepository] SQLite not available, returning empty array for recent transactions');
       return [];
     }
-    
+
     try {
       const db = await this.getDatabase();
-      
+
       const sql = `
-        SELECT * FROM transactions 
-        ORDER BY datetime(created_at) DESC 
+        SELECT * FROM transactions
+        WHERE profile_id = ?
+        ORDER BY datetime(created_at) DESC
         LIMIT ?
       `;
-      
-      const rows = await db.getAllAsync(sql, [limit]);
+
+      const rows = await db.getAllAsync(sql, [profileId, limit]);
       
       if (!rows || rows.length === 0) {
         logger.debug('[TransactionRepository] No recent transactions found in local database');
@@ -527,15 +532,15 @@ export class TransactionRepository {
   }
 
   /**
-   * Background sync: fetch from remote, update local, emit event
+   * Background sync: fetch from remote, update local, emit event (PROFILE-ISOLATED)
    */
-  public async syncTransactionsFromRemote(fetchRemote: () => Promise<any[]>): Promise<void> { // TODO: type
+  public async syncTransactionsFromRemote(fetchRemote: () => Promise<any[]>, profileId: string): Promise<void> { // TODO: type
     try {
       const remoteTransactions = await fetchRemote();
       for (const transaction of remoteTransactions) {
-        await this.upsertTransaction(transaction);
+        await this.upsertTransaction(transaction, profileId);
       }
-      eventEmitter.emit('data_updated', { type: 'transactions', data: remoteTransactions });
+      eventEmitter.emit('data_updated', { type: 'transactions', data: remoteTransactions, profileId });
     } catch (error) {
       // handle error
     }

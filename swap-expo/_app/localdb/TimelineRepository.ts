@@ -45,10 +45,11 @@ export class TimelineRepository {
   }
 
   /**
-   * Get unified timeline items for an interaction, combining messages and transactions
+   * Get unified timeline items for an interaction, combining messages and transactions (PROFILE-ISOLATED)
    */
   public async getTimelineForInteraction(
     interactionId: string,
+    profileId: string,
     limit = 100,
     options: {
       includeMessages?: boolean;
@@ -57,26 +58,26 @@ export class TimelineRepository {
       currentUserEntityId?: string;
     } = { includeMessages: true, includeTransactions: true, filter: 'all' }
   ): Promise<TimelineItem[]> {
-    logger.debug(`[TimelineRepository] Getting timeline for interaction: ${interactionId}, limit: ${limit}, filter: ${options.filter}, userEntityId: ${options.currentUserEntityId || 'none'}`);
-    
+    logger.debug(`[TimelineRepository] Getting timeline for interaction: ${interactionId}, profileId: ${profileId}, limit: ${limit}, filter: ${options.filter}, userEntityId: ${options.currentUserEntityId || 'none'}`);
+
     if (!(await this.isSQLiteAvailable())) {
       logger.warn(`[TimelineRepository] SQLite not available, returning empty array for: ${interactionId}`);
       return [];
     }
-    
+
     try {
       // Determine what to include based on options
       const includeMessages = options.includeMessages !== false && (options.filter === 'all' || options.filter === 'messages');
       const includeTransactions = options.includeTransactions !== false && (options.filter === 'all' || options.filter === 'transactions');
-      
-      // Get messages and transactions in parallel for efficiency
+
+      // Get messages and transactions in parallel for efficiency (PROFILE-ISOLATED)
       const [messages, transactions] = await Promise.all([
-        includeMessages ? messageRepository.getMessagesForInteraction(interactionId, limit) : Promise.resolve<MessageTimelineItem[]>([]),
-        includeTransactions ? transactionRepository.getTransactionsForInteraction(interactionId, limit, options.currentUserEntityId) : Promise.resolve<TransactionTimelineItem[]>([])
+        includeMessages ? messageRepository.getMessagesForInteraction(interactionId, profileId, limit) : Promise.resolve<MessageTimelineItem[]>([]),
+        includeTransactions ? transactionRepository.getTransactionsForInteraction(interactionId, profileId, limit, options.currentUserEntityId) : Promise.resolve<TransactionTimelineItem[]>([])
       ]);
-      
-      logger.debug(`[TimelineRepository] Retrieved ${messages.length} messages and ${transactions.length} transactions for timeline${options.currentUserEntityId ? ` (user-filtered)` : ''}`);
-      
+
+      logger.debug(`[TimelineRepository] Retrieved ${messages.length} messages and ${transactions.length} transactions for timeline (profileId: ${profileId})${options.currentUserEntityId ? ` (user-filtered)` : ''}`);
+
       // Combine and sort by timestamp (descending - newest first)
       const combinedTimeline: TimelineItem[] = [
         ...messages,
@@ -86,50 +87,51 @@ export class TimelineRepository {
         const dateB = new Date(b.timestamp || b.createdAt || '');
         return dateB.getTime() - dateA.getTime(); // Sort descending (newest first)
       });
-      
+
       // Apply limit after combining and sorting
       const limitedTimeline = combinedTimeline.slice(0, limit);
-      
-      logger.info(`[TimelineRepository] Combined timeline for interaction ${interactionId} has ${limitedTimeline.length} items (${messages.length} messages, ${transactions.length} transactions)${options.currentUserEntityId ? ` - user-filtered for ${options.currentUserEntityId}` : ''}`);
+
+      logger.info(`[TimelineRepository] Combined timeline for interaction ${interactionId} (profileId: ${profileId}) has ${limitedTimeline.length} items (${messages.length} messages, ${transactions.length} transactions)${options.currentUserEntityId ? ` - user-filtered for ${options.currentUserEntityId}` : ''}`);
       return limitedTimeline;
-      
+
     } catch (error) {
-      logger.error(`[TimelineRepository] Error getting timeline for interaction ${interactionId}: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(`[TimelineRepository] Error getting timeline for interaction ${interactionId} (profileId: ${profileId}): ${error instanceof Error ? error.message : String(error)}`);
       return [];
     }
   }
 
   /**
-   * Check if an interaction has any local timeline items
+   * Check if an interaction has any local timeline items (PROFILE-ISOLATED)
    */
   public async hasLocalTimelineItems(
     interactionId: string,
+    profileId: string,
     options: {
       checkMessages?: boolean;
       checkTransactions?: boolean;
     } = { checkMessages: true, checkTransactions: true }
   ): Promise<boolean> {
-    logger.debug(`[TimelineRepository] Checking for local timeline items: ${interactionId}`);
-    
+    logger.debug(`[TimelineRepository] Checking for local timeline items: ${interactionId} (profileId: ${profileId})`);
+
     if (!(await this.isSQLiteAvailable())) {
       logger.warn(`[TimelineRepository] SQLite not available for hasLocalTimelineItems: ${interactionId}`);
       return false;
     }
-    
+
     try {
-      // Check for at least one item of any type
-      const timeline = await this.getTimelineForInteraction(interactionId, 1, {
+      // Check for at least one item of any type (PROFILE-ISOLATED)
+      const timeline = await this.getTimelineForInteraction(interactionId, profileId, 1, {
         includeMessages: options.checkMessages !== false,
         includeTransactions: options.checkTransactions !== false,
         filter: 'all'
       });
-      
+
       const hasItems = timeline.length > 0;
-      logger.info(`[TimelineRepository] Local timeline items for ${interactionId}: ${hasItems ? 'FOUND' : 'NOT FOUND'}`);
+      logger.info(`[TimelineRepository] Local timeline items for ${interactionId} (profileId: ${profileId}): ${hasItems ? 'FOUND' : 'NOT FOUND'}`);
       return hasItems;
-      
+
     } catch (error) {
-      logger.error(`[TimelineRepository] Error checking for local timeline items for ${interactionId}: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(`[TimelineRepository] Error checking for local timeline items for ${interactionId} (profileId: ${profileId}): ${error instanceof Error ? error.message : String(error)}`);
       return false;
     }
   }
@@ -217,48 +219,49 @@ export class TimelineRepository {
   }
 
   /**
-   * Get the last timeline item for an interaction (message or transaction)
+   * Get the last timeline item for an interaction (message or transaction) (PROFILE-ISOLATED)
    * This is used for generating proper interaction previews in the chat list
    */
   public async getLastTimelineItemForInteraction(
-    interactionId: string, 
+    interactionId: string,
+    profileId: string,
     currentUserEntityId?: string
   ): Promise<TimelineItem | null> {
-    logger.debug(`[TimelineRepository] Getting last timeline item for: ${interactionId}, userEntityId: ${currentUserEntityId || 'none'}`);
-    
+    logger.debug(`[TimelineRepository] Getting last timeline item for: ${interactionId}, profileId: ${profileId}, userEntityId: ${currentUserEntityId || 'none'}`);
+
     try {
-      // Use existing function with limit of 1 to get the most recent item
-      const timeline = await this.getTimelineForInteraction(interactionId, 1, {
+      // Use existing function with limit of 1 to get the most recent item (PROFILE-ISOLATED)
+      const timeline = await this.getTimelineForInteraction(interactionId, profileId, 1, {
         includeMessages: true,
         includeTransactions: true,
         currentUserEntityId // Pass user perspective filtering
       });
-      
+
       logger.debug(`[TimelineRepository] Retrieved ${timeline.length} timeline items`);
-      
+
       if (timeline.length === 0) {
-        logger.debug(`[TimelineRepository] No timeline items found for: ${interactionId}`);
+        logger.debug(`[TimelineRepository] No timeline items found for: ${interactionId} (profileId: ${profileId})`);
         return null;
       }
-      
+
       // Filter out any date separators (just in case)
       const actualItems = timeline.filter(item => item.type !== 'date');
       logger.debug(`[TimelineRepository] After filtering date separators: ${actualItems.length} items`);
-      
+
       if (actualItems.length === 0) {
-        logger.debug(`[TimelineRepository] No actual timeline items (only date separators) for: ${interactionId}`);
+        logger.debug(`[TimelineRepository] No actual timeline items (only date separators) for: ${interactionId} (profileId: ${profileId})`);
         return null;
       }
-      
+
       // Sort by timestamp to get the most recent (should already be sorted by getTimelineForInteraction)
-      const sortedItems = actualItems.sort((a, b) => 
-        new Date(b.timestamp || b.createdAt || 0).getTime() - 
+      const sortedItems = actualItems.sort((a, b) =>
+        new Date(b.timestamp || b.createdAt || 0).getTime() -
         new Date(a.timestamp || a.createdAt || 0).getTime()
       );
-      
+
       const mostRecent = sortedItems[0];
       logger.debug(`[TimelineRepository] Most recent item: type=${mostRecent.itemType}, id=${mostRecent.id}, time=${mostRecent.timestamp || mostRecent.createdAt}`);
-      
+
       if (mostRecent.itemType === 'transaction') {
         const txItem = mostRecent as TransactionTimelineItem;
         logger.debug(`[TimelineRepository] Transaction: amount=${txItem.amount}, description="${txItem.description}"`);
@@ -266,11 +269,11 @@ export class TimelineRepository {
         const msgItem = mostRecent as MessageTimelineItem;
         logger.debug(`[TimelineRepository] Message: content="${msgItem.content}"`);
       }
-      
+
       return mostRecent;
-      
+
     } catch (error) {
-      logger.error(`[TimelineRepository] Error getting last timeline item for ${interactionId}: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(`[TimelineRepository] Error getting last timeline item for ${interactionId} (profileId: ${profileId}): ${error instanceof Error ? error.message : String(error)}`);
       return null;
     }
   }

@@ -3,7 +3,7 @@
 import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
 import logger from '../utils/logger';
-import { 
+import {
   initializeUserSchema,
   initializeInteractionSchema,
   initializeMessageSchema,
@@ -16,6 +16,12 @@ import {
   initializeNotificationsSchema,
   initializeUserContactsSchema
 } from './schema';
+import {
+  runMigration as runProfileIdMigration,
+  isMigrationApplied,
+  MIGRATION_VERSION,
+  MIGRATION_NAME
+} from './migrations/add-profile-id-columns';
 
 // Database configuration
 const getDatabaseName = (): string => {
@@ -120,6 +126,9 @@ class DatabaseManager {
 
       // Initialize all schemas in correct order
       await this.initializeSchemas();
+
+      // Run database migrations
+      await this.runMigrations();
 
       // Perform maintenance tasks
       await this.performMaintenance();
@@ -236,6 +245,36 @@ class DatabaseManager {
     }
 
     logger.debug('[DatabaseManager] All schemas initialized successfully');
+  }
+
+  /**
+   * Run database migrations
+   */
+  private async runMigrations(): Promise<void> {
+    logger.debug('[DatabaseManager] Checking for pending migrations');
+
+    if (!this.database) {
+      throw new Error('Database not opened');
+    }
+
+    try {
+      // Check if profile_id migration is already applied
+      const alreadyApplied = await isMigrationApplied(this.database);
+
+      if (alreadyApplied) {
+        logger.debug(`[DatabaseManager] Migration ${MIGRATION_NAME} (v${MIGRATION_VERSION}) already applied, skipping`);
+        return;
+      }
+
+      // Run the migration
+      logger.info(`[DatabaseManager] Running migration ${MIGRATION_NAME} (v${MIGRATION_VERSION})`);
+      await runProfileIdMigration(this.database);
+      logger.info(`[DatabaseManager] ✅ Migration ${MIGRATION_NAME} completed successfully`);
+
+    } catch (error) {
+      logger.error('[DatabaseManager] ❌ Migration failed:', error instanceof Error ? error.message : String(error));
+      throw error;
+    }
   }
 
   /**

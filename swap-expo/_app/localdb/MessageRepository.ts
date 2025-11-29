@@ -75,23 +75,23 @@ export class MessageRepository {
   }
 
   /**
-   * Get messages for an interaction
+   * Get messages for an interaction (PROFILE-ISOLATED)
    */
-  public async getMessagesForInteraction(interactionId: string, limit = 100): Promise<MessageTimelineItem[]> {
-    logger.debug(`[MessageRepository] Getting messages for interaction: ${interactionId}, limit: ${limit}`);
-    
+  public async getMessagesForInteraction(interactionId: string, profileId: string, limit = 100): Promise<MessageTimelineItem[]> {
+    logger.debug(`[MessageRepository] Getting messages for interaction: ${interactionId}, profileId: ${profileId}, limit: ${limit}`);
+
     if (!(await this.isSQLiteAvailable())) {
       logger.warn(`[MessageRepository] SQLite not available, returning empty array for: ${interactionId}`);
       return [];
     }
-    
+
     try {
       const db = await this.getDatabase();
       const statement = await db.prepareAsync(
-        'SELECT * FROM messages WHERE interaction_id = ? ORDER BY created_at DESC LIMIT ?'
+        'SELECT * FROM messages WHERE interaction_id = ? AND profile_id = ? ORDER BY created_at DESC LIMIT ?'
       );
-      
-      const result = await statement.executeAsync(interactionId, limit);
+
+      const result = await statement.executeAsync(interactionId, profileId, limit);
       const rows = await result.getAllAsync() as Record<string, any>[];
       await statement.finalizeAsync();
       
@@ -124,21 +124,21 @@ export class MessageRepository {
   }
 
   /**
-   * Save a batch of messages with deduplication
+   * Save a batch of messages with deduplication (PROFILE-ISOLATED)
    */
-  public async saveMessages(messagesToSave: MessageTimelineItem[]): Promise<void> {
-    logger.debug(`[MessageRepository] Saving ${messagesToSave?.length || 0} messages`);
-    
+  public async saveMessages(messagesToSave: MessageTimelineItem[], profileId: string): Promise<void> {
+    logger.debug(`[MessageRepository] Saving ${messagesToSave?.length || 0} messages (profileId: ${profileId})`);
+
     if (!(await this.isSQLiteAvailable())) {
       logger.warn('[MessageRepository] SQLite not available, aborting save');
       return;
     }
-    
+
     if (!messagesToSave || messagesToSave.length === 0) {
       logger.debug('[MessageRepository] No messages to save');
       return;
     }
-    
+
     // Deduplicate messages by ID
     const uniqueMessages = new Map<string, MessageTimelineItem>();
     messagesToSave.forEach(msg => {
@@ -150,23 +150,23 @@ export class MessageRepository {
         }
       }
     });
-    
+
     const deduplicatedMessages = Array.from(uniqueMessages.values());
     logger.info(`[MessageRepository] Deduplication removed ${messagesToSave.length - deduplicatedMessages.length} duplicates`);
-    
+
     let successfulSaves = 0;
     let failedSaves = 0;
-    
+
     try {
       const db = await this.getDatabase();
-      
+
       for (const msg of deduplicatedMessages) {
         if (!msg.id || !msg.interaction_id) {
           logger.warn(`[MessageRepository] Skipping message with missing ID or interaction_id: ${msg.id || 'N/A'}`);
           failedSaves++;
           continue;
         }
-        
+
         try {
           await this.insertMessage(db, {
             id: msg.id,
@@ -176,36 +176,36 @@ export class MessageRepository {
             message_type: msg.message_type,
             created_at: typeof msg.timestamp === 'string' ? msg.timestamp : (msg.createdAt ? String(msg.createdAt) : new Date().toISOString()),
             metadata: msg.metadata
-          });
+          }, profileId);
           successfulSaves++;
         } catch (insertError) {
           logger.warn(`[MessageRepository] Failed to save message ${msg.id}: ${insertError instanceof Error ? insertError.message : String(insertError)}`);
           failedSaves++;
         }
       }
-      
-      logger.info(`[MessageRepository] Save complete. Successful: ${successfulSaves}, Failed: ${failedSaves}`);
-      
+
+      logger.info(`[MessageRepository] Save complete (profileId: ${profileId}). Successful: ${successfulSaves}, Failed: ${failedSaves}`);
+
     } catch (error) {
       logger.error(`[MessageRepository] Error during batch save: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   /**
-   * Check if we have local messages for an interaction
+   * Check if we have local messages for an interaction (PROFILE-ISOLATED)
    */
-  public async hasLocalMessages(interactionId: string): Promise<boolean> {
-    logger.debug(`[MessageRepository] Checking for local messages: ${interactionId}`);
-    
+  public async hasLocalMessages(interactionId: string, profileId: string): Promise<boolean> {
+    logger.debug(`[MessageRepository] Checking for local messages: ${interactionId} (profileId: ${profileId})`);
+
     if (!(await this.isSQLiteAvailable())) {
       logger.warn(`[MessageRepository] SQLite not available for hasLocalMessages: ${interactionId}`);
       return false;
     }
-    
+
     try {
-      const messages = await this.getMessagesForInteraction(interactionId, 1);
+      const messages = await this.getMessagesForInteraction(interactionId, profileId, 1);
       const found = messages.length > 0;
-      logger.info(`[MessageRepository] Local messages for ${interactionId}: ${found ? 'FOUND' : 'NOT FOUND'}`);
+      logger.info(`[MessageRepository] Local messages for ${interactionId} (profileId: ${profileId}): ${found ? 'FOUND' : 'NOT FOUND'}`);
       return found;
     } catch (error) {
       logger.error(`[MessageRepository] Error checking local messages for ${interactionId}: ${error instanceof Error ? error.message : String(error)}`);
@@ -214,18 +214,18 @@ export class MessageRepository {
   }
 
   /**
-   * Clean up duplicate messages for an interaction
+   * Clean up duplicate messages for an interaction (PROFILE-ISOLATED)
    */
-  public async cleanupDuplicateMessages(interactionId: string): Promise<number> {
-    logger.debug(`[MessageRepository] Cleaning up duplicates for: ${interactionId}`);
-    
+  public async cleanupDuplicateMessages(interactionId: string, profileId: string): Promise<number> {
+    logger.debug(`[MessageRepository] Cleaning up duplicates for: ${interactionId} (profileId: ${profileId})`);
+
     if (!(await this.isSQLiteAvailable())) {
       logger.warn(`[MessageRepository] SQLite not available for cleanup: ${interactionId}`);
       return 0;
     }
-    
+
     try {
-      const messages = await this.getMessagesForInteraction(interactionId, 1000);
+      const messages = await this.getMessagesForInteraction(interactionId, profileId, 1000);
       logger.debug(`[MessageRepository] Found ${messages.length} messages to check for duplicates`);
       
       if (messages.length <= 1) {
@@ -284,11 +284,11 @@ export class MessageRepository {
             sender_entity_id: bestMessage.sender_entity_id || 'system_or_unknown',
             content: bestMessage.content || '',
             message_type: bestMessage.message_type,
-            created_at: typeof bestMessage.timestamp === 'string' ? bestMessage.timestamp : 
+            created_at: typeof bestMessage.timestamp === 'string' ? bestMessage.timestamp :
               (bestMessage.createdAt ? String(bestMessage.createdAt) : new Date().toISOString()),
             metadata: bestMessage.metadata
-          });
-          
+          }, profileId);
+
           deletedCount += duplicates.length - 1;
         } catch (error) {
           logger.warn(`[MessageRepository] Error cleaning duplicate ${msgId}: ${error instanceof Error ? error.message : String(error)}`);
@@ -341,16 +341,16 @@ export class MessageRepository {
   }
 
   /**
-   * Insert a single message into the database
+   * Insert a single message into the database (PROFILE-ISOLATED)
    */
-  private async insertMessage(db: SQLite.SQLiteDatabase, message: DatabaseMessage): Promise<void> {
+  private async insertMessage(db: SQLite.SQLiteDatabase, message: DatabaseMessage, profileId: string): Promise<void> {
     // Ensure the interaction exists first
     await this.ensureInteractionExists(db, message.interaction_id);
-    
+
     await db.runAsync(
       `INSERT OR REPLACE INTO messages (
-        id, topic, extension, interaction_id, sender_entity_id, content, message_type, created_at, metadata
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, topic, extension, interaction_id, sender_entity_id, content, message_type, created_at, metadata, profile_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         message.id,
         'chat', // CRITICAL FIX: Provide default topic value
@@ -360,19 +360,20 @@ export class MessageRepository {
         message.content,
         message.message_type || 'text',
         message.created_at,
-        message.metadata ? JSON.stringify(message.metadata) : null
+        message.metadata ? JSON.stringify(message.metadata) : null,
+        profileId
       ]
     );
   }
 
   /**
-   * Add or update a message in local database
+   * Add or update a message in local database (PROFILE-ISOLATED)
    */
-  public async upsertMessage(message: DatabaseMessage): Promise<void> {
+  public async upsertMessage(message: DatabaseMessage, profileId: string): Promise<void> {
     try {
       const db = await this.getDatabase();
       await db.runAsync(
-        `INSERT OR REPLACE INTO messages (id, topic, extension, interaction_id, sender_entity_id, content, message_type, created_at, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR REPLACE INTO messages (id, topic, extension, interaction_id, sender_entity_id, content, message_type, created_at, metadata, profile_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           message.id,
           'chat', // CRITICAL FIX: Provide default topic value
@@ -382,23 +383,24 @@ export class MessageRepository {
           message.content ?? '',
           message.message_type ?? '',
           message.created_at ?? '',
-          JSON.stringify(message.metadata ?? {})
+          JSON.stringify(message.metadata ?? {}),
+          profileId
         ]
       );
-      eventEmitter.emit('data_updated', { type: 'messages', data: message });
+      eventEmitter.emit('data_updated', { type: 'messages', data: message, profileId });
     } catch (error) {
       logger.error('[MessageRepository] Error upserting message:', error instanceof Error ? error.message : String(error));
     }
   }
 
   /**
-   * Delete a message from local database
+   * Delete a message from local database (PROFILE-ISOLATED)
    */
-  public async deleteMessage(id: string): Promise<void> {
+  public async deleteMessage(id: string, profileId: string): Promise<void> {
     try {
       const db = await this.getDatabase();
-      await db.runAsync('DELETE FROM messages WHERE id = ?', [id]);
-      eventEmitter.emit('data_updated', { type: 'messages', data: { id, removed: true } });
+      await db.runAsync('DELETE FROM messages WHERE id = ? AND profile_id = ?', [id, profileId]);
+      eventEmitter.emit('data_updated', { type: 'messages', data: { id, removed: true, profileId } });
     } catch (error) {
       logger.error('[MessageRepository] Error deleting message:', error instanceof Error ? error.message : String(error));
     }
@@ -408,20 +410,20 @@ export class MessageRepository {
    * Background sync: fetch from remote, update local, emit event
    */
   /**
-   * Get the latest message for a specific interaction
+   * Get the latest message for a specific interaction (PROFILE-ISOLATED)
    * 🚀 PHASE 2.5: Message sync support
    */
-  public async getLatestMessageForInteraction(interactionId: string): Promise<MessageTimelineItem | null> {
+  public async getLatestMessageForInteraction(interactionId: string, profileId: string): Promise<MessageTimelineItem | null> {
     try {
       const db = await this.getDatabase();
-      logger.debug(`[MessageRepository] Getting latest message for interaction: ${interactionId}`);
+      logger.debug(`[MessageRepository] Getting latest message for interaction: ${interactionId} (profileId: ${profileId})`);
 
       const result = await db.getFirstAsync<any>(
-        `SELECT * FROM messages 
-         WHERE interaction_id = ? 
-         ORDER BY created_at DESC 
+        `SELECT * FROM messages
+         WHERE interaction_id = ? AND profile_id = ?
+         ORDER BY created_at DESC
          LIMIT 1`,
-        [interactionId]
+        [interactionId, profileId]
       );
 
       if (result) {
@@ -453,23 +455,23 @@ export class MessageRepository {
   }
 
   /**
-   * Update message delivery status
+   * Update message delivery status (PROFILE-ISOLATED)
    * 🚀 PHASE 2.6: Delivery confirmation support
    */
-  public async updateMessageStatus(messageId: string, status: 'sent' | 'delivered' | 'read'): Promise<void> {
+  public async updateMessageStatus(messageId: string, profileId: string, status: 'sent' | 'delivered' | 'read'): Promise<void> {
     try {
       const db = await this.getDatabase();
-      logger.debug(`[MessageRepository] Updating message status: ${messageId} -> ${status}`);
+      logger.debug(`[MessageRepository] Updating message status: ${messageId} -> ${status} (profileId: ${profileId})`);
 
       await db.runAsync(
-        `UPDATE messages 
-         SET status = ?, 
-             updated_at = datetime('now') 
-         WHERE id = ?`,
-        [status, messageId]
+        `UPDATE messages
+         SET status = ?,
+             updated_at = datetime('now')
+         WHERE id = ? AND profile_id = ?`,
+        [status, messageId, profileId]
       );
 
-      logger.debug(`[MessageRepository] ✅ Message status updated: ${messageId}`);
+      logger.debug(`[MessageRepository] ✅ Message status updated: ${messageId} (profileId: ${profileId})`);
 
     } catch (error) {
       logger.error(`[MessageRepository] Failed to update message status for ${messageId}:`, error);
@@ -478,19 +480,20 @@ export class MessageRepository {
   }
 
   /**
-   * Get failed messages that need retry
+   * Get failed messages that need retry (PROFILE-ISOLATED)
    * 🚀 PHASE 2.5: Message reliability support
    */
-  public async getFailedMessages(): Promise<MessageTimelineItem[]> {
+  public async getFailedMessages(profileId: string): Promise<MessageTimelineItem[]> {
     try {
       const db = await this.getDatabase();
-      logger.debug('[MessageRepository] Getting failed messages for retry');
+      logger.debug(`[MessageRepository] Getting failed messages for retry (profileId: ${profileId})`);
 
       const results = await db.getAllAsync<any>(
-        `SELECT * FROM messages 
-         WHERE status = 'failed' 
-         ORDER BY created_at DESC 
-         LIMIT 50`
+        `SELECT * FROM messages
+         WHERE status = 'failed' AND profile_id = ?
+         ORDER BY created_at DESC
+         LIMIT 50`,
+        [profileId]
       );
 
       const messages: MessageTimelineItem[] = results.map(result => ({
@@ -516,13 +519,13 @@ export class MessageRepository {
     }
   }
 
-  public async syncMessagesFromRemote(fetchRemote: () => Promise<DatabaseMessage[]>): Promise<void> {
+  public async syncMessagesFromRemote(fetchRemote: () => Promise<DatabaseMessage[]>, profileId: string): Promise<void> {
     try {
       const remoteMessages = await fetchRemote();
       for (const message of remoteMessages) {
-        await this.upsertMessage(message);
+        await this.upsertMessage(message, profileId);
       }
-      eventEmitter.emit('data_updated', { type: 'messages', data: remoteMessages });
+      eventEmitter.emit('data_updated', { type: 'messages', data: remoteMessages, profileId });
     } catch (error) {
       logger.error('[MessageRepository] Error syncing messages from remote:', error instanceof Error ? error.message : String(error));
     }

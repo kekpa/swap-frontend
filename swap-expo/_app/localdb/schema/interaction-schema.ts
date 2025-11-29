@@ -8,13 +8,8 @@ import { SQLiteDatabase } from 'expo-sqlite';
  */
 export async function initializeInteractionSchema(db: SQLiteDatabase): Promise<void> {
   try {
-    // Drop tables if they exist to ensure a fresh schema (for development)
-    // Drop interaction_members first due to foreign key constraint
-    await db.runAsync(`DROP TABLE IF EXISTS interaction_members;`);
-    await db.runAsync(`DROP TABLE IF EXISTS interactions;`);
-    console.log('[Database] Dropped old interaction tables (if they existed).');
-
     // Create interactions table - matches Supabase schema exactly
+    // Using CREATE IF NOT EXISTS for idempotency (safe for both first install and updates)
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS interactions (
         id TEXT PRIMARY KEY NOT NULL,
@@ -29,7 +24,8 @@ export async function initializeInteractionSchema(db: SQLiteDatabase): Promise<v
         last_message_at TEXT,
         unread_count INTEGER DEFAULT 0,
         icon_url TEXT,
-        metadata TEXT
+        metadata TEXT,
+        profile_id TEXT
       );
     `);
     
@@ -45,6 +41,7 @@ export async function initializeInteractionSchema(db: SQLiteDatabase): Promise<v
         display_name TEXT,
         avatar_url TEXT,
         entity_type TEXT NOT NULL,
+        profile_id TEXT,
         FOREIGN KEY (interaction_id) REFERENCES interactions(id) ON DELETE CASCADE
       );
     `);

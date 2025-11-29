@@ -10,11 +10,8 @@ import logger from '../../utils/logger'; // Import logger
  */
 export async function initializeMessageSchema(db: SQLiteDatabase): Promise<void> {
   try {
-    // Drop table if it exists to ensure a fresh schema (for development)
-    await db.runAsync(`DROP TABLE IF EXISTS messages;`);
-    logger.info('[Database] Dropped old messages table (if it existed).');
-
     // Create messages table - matches Supabase schema exactly
+    // Using CREATE IF NOT EXISTS for idempotency (safe for both first install and updates)
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS messages (
         id TEXT PRIMARY KEY NOT NULL,
@@ -38,6 +35,7 @@ export async function initializeMessageSchema(db: SQLiteDatabase): Promise<void>
         metadata TEXT DEFAULT '{}',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         sender_entity_id TEXT NOT NULL,
+        profile_id TEXT,
         status TEXT,
         message_status TEXT DEFAULT 'sent',
         client_generated_id TEXT,

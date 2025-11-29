@@ -10,13 +10,10 @@ import logger from '../../utils/logger';
  */
 export const initializeCurrencyWalletsSchema = async (database: SQLite.SQLiteDatabase): Promise<void> => {
   logger.debug('[CurrencyWalletsSchema] Initializing currency wallets schema...');
-  
-  try {
-    // Drop table if it exists to ensure a fresh schema (for development)
-    await database.runAsync(`DROP TABLE IF EXISTS currency_wallets;`);
-    logger.info('[Database] Dropped old currency_wallets table (if it existed).');
 
+  try {
     // Create currency_wallets table - matches Supabase schema exactly
+    // Using CREATE IF NOT EXISTS for idempotency (safe for both first install and updates)
     await database.execAsync(`
       CREATE TABLE IF NOT EXISTS currency_wallets (
         id TEXT PRIMARY KEY,
