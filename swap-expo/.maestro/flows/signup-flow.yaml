@@ -1,0 +1,107 @@
+# Signup Flow E2E Test
+# Tests: Phone entry → OTP verification → Profile completion
+# Priority: CRITICAL
+
+appId: com.swap.mobile
+tags:
+  - smoke
+  - critical
+  - auth
+
+---
+
+# Flow: Complete Account Signup
+- launchApp:
+    clearState: true
+
+# Step 1: Welcome Screen
+- assertVisible: "Welcome to Swap"
+- tapOn: "Get Started"
+
+# Step 2: Phone Number Entry
+- assertVisible: "Enter your phone number"
+- tapOn:
+    id: "phone-input"
+- inputText: ${TEST_PHONE}
+- tapOn: "Continue"
+
+# Step 3: OTP Verification
+- assertVisible: "Enter verification code"
+- assertVisible: "We sent a code to"
+
+# Enter OTP digits (6 digits)
+- tapOn:
+    id: "otp-input-0"
+- inputText: "1"
+- tapOn:
+    id: "otp-input-1"
+- inputText: "2"
+- tapOn:
+    id: "otp-input-2"
+- inputText: "3"
+- tapOn:
+    id: "otp-input-3"
+- inputText: "4"
+- tapOn:
+    id: "otp-input-4"
+- inputText: "5"
+- tapOn:
+    id: "otp-input-5"
+- inputText: "6"
+
+# Wait for OTP verification
+- extendedWaitUntil:
+    visible: "Create your profile"
+    timeout: 10000
+
+# Step 4: Profile Creation (for new users)
+- assertVisible: "Create your profile"
+
+# First name
+- tapOn:
+    id: "first-name-input"
+- inputText: "E2E"
+
+# Last name
+- tapOn:
+    id: "last-name-input"
+- inputText: "TestUser"
+
+# Username
+- tapOn:
+    id: "username-input"
+- inputText: "e2etestuser"
+
+# Password (optional, depending on flow)
+- runFlow:
+    when:
+      visible: "Create password"
+    commands:
+      - tapOn:
+          id: "password-input"
+      - inputText: ${TEST_PASSWORD}
+      - tapOn:
+          id: "confirm-password-input"
+      - inputText: ${TEST_PASSWORD}
+
+# Submit profile
+- tapOn: "Create Account"
+
+# Step 5: Verify Success - Should reach home screen
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - "Home"
+        - "Welcome, E2E"
+        - id: "home-screen"
+    timeout: 15000
+
+# Verify wallet is initialized
+- assertVisible:
+    anyOf:
+      - "G 0.00"
+      - "Balance"
+      - id: "wallet-balance"
+
+# Success!
+- takeScreenshot: "signup_complete"

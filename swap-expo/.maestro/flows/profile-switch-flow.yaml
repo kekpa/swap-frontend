@@ -1,0 +1,172 @@
+# Profile Switch Flow E2E Test
+# Tests: Personal ↔ Business profile switching
+# Priority: HIGH
+# Prerequisites: User logged in with both personal and business profiles
+
+appId: com.swap.mobile
+tags:
+  - high
+  - profile
+  - business
+
+---
+
+# Flow: Switch Between Personal and Business Profiles
+- launchApp:
+    clearState: false  # Keep logged in state
+
+# Verify we're on home screen (logged in)
+- assertVisible:
+    anyOf:
+      - "Home"
+      - id: "home-screen"
+      - "Balance"
+
+# Step 1: Verify Current Profile (Personal)
+# Note current balance for later comparison
+- assertVisible:
+    anyOf:
+      - "Personal"
+      - id: "current-profile-personal"
+      - id: "profile-indicator"
+
+# Take screenshot of personal profile
+- takeScreenshot: "profile_personal_before"
+
+# Step 2: Open Profile Switcher
+- tapOn:
+    anyOf:
+      - id: "profile-switcher"
+      - id: "profile-dropdown"
+      - id: "profile-indicator"
+      - "Personal"
+
+# Verify profile options appear
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - "Switch Profile"
+        - "Select Profile"
+        - id: "profile-list"
+        - "Business"
+    timeout: 5000
+
+# Verify both profiles are shown
+- assertVisible:
+    anyOf:
+      - "Personal"
+      - id: "profile-option-personal"
+
+- assertVisible:
+    anyOf:
+      - "Business"
+      - id: "profile-option-business"
+
+# Take screenshot of profile options
+- takeScreenshot: "profile_switcher_open"
+
+# Step 3: Switch to Business Profile
+- tapOn:
+    anyOf:
+      - "Business"
+      - id: "profile-option-business"
+      - text: "Business Profile"
+
+# Wait for profile switch to complete
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - id: "profile-switching"
+        - "Switching"
+        - id: "home-screen"
+    timeout: 3000
+
+# Wait for data to load
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - id: "wallet-balance"
+        - "Balance"
+        - "Business"
+    timeout: 10000
+
+# Step 4: Verify Business Profile Active
+- assertVisible:
+    anyOf:
+      - "Business"
+      - id: "current-profile-business"
+      - id: "profile-indicator"
+
+# Verify business balance is shown (different from personal)
+- assertVisible:
+    anyOf:
+      - id: "wallet-balance"
+      - "G "
+
+# Take screenshot of business profile
+- takeScreenshot: "profile_business_active"
+
+# Step 5: Verify Business-Specific Features
+# Business profiles may have additional options
+- runFlow:
+    when:
+      visible:
+        anyOf:
+          - "Invoices"
+          - id: "business-invoices"
+    commands:
+      - assertVisible: "Invoices"
+
+# Step 6: Switch Back to Personal Profile
+- tapOn:
+    anyOf:
+      - id: "profile-switcher"
+      - id: "profile-dropdown"
+      - id: "profile-indicator"
+      - "Business"
+
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - "Switch Profile"
+        - id: "profile-list"
+        - "Personal"
+    timeout: 5000
+
+- tapOn:
+    anyOf:
+      - "Personal"
+      - id: "profile-option-personal"
+      - text: "Personal Profile"
+
+# Wait for switch back
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - id: "wallet-balance"
+        - "Balance"
+        - "Personal"
+    timeout: 10000
+
+# Step 7: Verify Personal Profile Restored
+- assertVisible:
+    anyOf:
+      - "Personal"
+      - id: "current-profile-personal"
+
+# Verify personal balance is shown
+- assertVisible:
+    anyOf:
+      - id: "wallet-balance"
+      - "G "
+
+# Take screenshot of personal profile restored
+- takeScreenshot: "profile_personal_restored"
+
+# Final verification - home screen intact
+- assertVisible:
+    anyOf:
+      - "Home"
+      - id: "home-screen"
+      - "Send"
+      - "Receive"

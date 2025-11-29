@@ -1,0 +1,162 @@
+# Send Money P2P Flow E2E Test
+# Tests: Select recipient → Enter amount → Confirm → Success
+# Priority: HIGH
+# Prerequisites: User must be logged in with balance
+
+appId: com.swap.mobile
+tags:
+  - critical
+  - payments
+  - p2p
+
+---
+
+# Flow: Send Money to Another User
+- launchApp:
+    clearState: false  # Keep logged in state
+
+# Verify we're on home screen (logged in)
+- assertVisible:
+    anyOf:
+      - "Home"
+      - id: "home-screen"
+      - "Balance"
+
+# Step 1: Navigate to Send Money
+- tapOn:
+    anyOf:
+      - "Send"
+      - id: "send-money-button"
+      - text: "Send Money"
+
+# Step 2: Select Recipient
+- assertVisible:
+    anyOf:
+      - "Send to"
+      - "Select recipient"
+      - "Who do you want to send to"
+
+# Search for recipient by phone
+- tapOn:
+    id: "recipient-search-input"
+- inputText: ${TEST_RECIPIENT_PHONE}
+
+# Wait for search results
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - id: "recipient-result-0"
+        - "Test Recipient"
+    timeout: 5000
+
+# Select recipient from results
+- tapOn:
+    anyOf:
+      - id: "recipient-result-0"
+      - "Test Recipient"
+      - text: "+50937000002"
+
+# Step 3: Enter Amount
+- assertVisible:
+    anyOf:
+      - "Enter amount"
+      - "How much"
+      - id: "amount-screen"
+
+# Tap amount input and enter amount
+- tapOn:
+    id: "amount-input"
+- inputText: "10"
+
+# Optional: Add description
+- runFlow:
+    when:
+      visible:
+        anyOf:
+          - "Add note"
+          - id: "description-input"
+    commands:
+      - tapOn:
+          anyOf:
+            - "Add note"
+            - id: "description-input"
+      - inputText: "E2E test transfer"
+
+# Continue to confirmation
+- tapOn:
+    anyOf:
+      - "Continue"
+      - "Review"
+      - id: "continue-button"
+
+# Step 4: Review & Confirm
+- assertVisible:
+    anyOf:
+      - "Confirm"
+      - "Review transfer"
+      - id: "confirm-screen"
+
+# Verify amount shown
+- assertVisible: "G 10"
+
+# Verify recipient shown
+- assertVisible:
+    anyOf:
+      - "Test Recipient"
+      - ${TEST_RECIPIENT_PHONE}
+
+# Confirm the transaction
+- tapOn:
+    anyOf:
+      - "Send"
+      - "Confirm"
+      - id: "confirm-send-button"
+
+# Step 5: Handle PIN/Biometric (if required)
+- runFlow:
+    when:
+      visible:
+        anyOf:
+          - "Enter PIN"
+          - id: "pin-screen"
+    commands:
+      - tapOn:
+          id: "pin-digit-1"
+      - tapOn:
+          id: "pin-digit-2"
+      - tapOn:
+          id: "pin-digit-3"
+      - tapOn:
+          id: "pin-digit-4"
+
+# Step 6: Verify Success
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - "Sent!"
+        - "Success"
+        - "Transfer complete"
+        - id: "success-screen"
+    timeout: 15000
+
+# Verify success details
+- assertVisible:
+    anyOf:
+      - "G 10"
+      - "sent to"
+
+# Take screenshot of success
+- takeScreenshot: "send_money_success"
+
+# Return to home
+- tapOn:
+    anyOf:
+      - "Done"
+      - "Back to Home"
+      - id: "done-button"
+
+# Verify back on home screen
+- assertVisible:
+    anyOf:
+      - "Home"
+      - id: "home-screen"

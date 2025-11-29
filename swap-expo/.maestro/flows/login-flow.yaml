@@ -1,0 +1,94 @@
+# Login Flow E2E Test
+# Tests: Phone login → OTP verification → Home screen
+# Priority: CRITICAL
+
+appId: com.swap.mobile
+tags:
+  - smoke
+  - critical
+  - auth
+
+---
+
+# Flow: Login with Phone OTP
+- launchApp:
+    clearState: true
+
+# Step 1: Welcome Screen
+- assertVisible:
+    anyOf:
+      - "Welcome to Swap"
+      - "Sign in"
+      - id: "welcome-screen"
+
+# Tap login/sign in
+- tapOn:
+    anyOf:
+      - "Sign In"
+      - "Log In"
+      - "I have an account"
+      - id: "login-button"
+
+# Step 2: Phone Number Entry
+- assertVisible:
+    anyOf:
+      - "Enter your phone number"
+      - "Phone number"
+      - id: "phone-screen"
+
+- tapOn:
+    id: "phone-input"
+- inputText: ${TEST_PHONE}
+- tapOn:
+    anyOf:
+      - "Continue"
+      - "Send Code"
+      - id: "continue-button"
+
+# Step 3: OTP Verification
+- assertVisible:
+    anyOf:
+      - "Enter verification code"
+      - "Enter code"
+      - id: "otp-screen"
+
+# Enter 6-digit OTP
+- tapOn:
+    id: "otp-input-0"
+- inputText: "1"
+- tapOn:
+    id: "otp-input-1"
+- inputText: "2"
+- tapOn:
+    id: "otp-input-2"
+- inputText: "3"
+- tapOn:
+    id: "otp-input-3"
+- inputText: "4"
+- tapOn:
+    id: "otp-input-4"
+- inputText: "5"
+- tapOn:
+    id: "otp-input-5"
+- inputText: "6"
+
+# Wait for verification and navigation
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - "Home"
+        - id: "home-screen"
+        - "Balance"
+        - "Welcome back"
+    timeout: 15000
+
+# Step 4: Verify Home Screen
+- assertVisible:
+    anyOf:
+      - id: "wallet-balance"
+      - "G "
+      - "Send"
+      - "Receive"
+
+# Take screenshot
+- takeScreenshot: "login_success"

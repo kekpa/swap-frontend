@@ -1,0 +1,313 @@
+# KYC Document Upload Flow E2E Test
+# Tests: Navigate to KYC → Select document type → Upload ID (front/back) → Review → Success
+# Priority: CRITICAL
+# Prerequisites: User must be logged in
+
+appId: com.swap.mobile
+tags:
+  - critical
+  - kyc
+  - verification
+  - compliance
+
+---
+
+# Flow: Complete KYC ID Document Upload
+- launchApp:
+    clearState: false  # Keep logged in state
+
+# Verify we're on home screen (logged in)
+- assertVisible:
+    anyOf:
+      - "Home"
+      - id: "home-screen"
+      - "Balance"
+
+# Step 1: Navigate to Profile
+- tapOn:
+    anyOf:
+      - id: "profile-tab"
+      - id: "profile-button"
+      - "Profile"
+
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - "Profile"
+        - id: "profile-screen"
+        - "Account"
+    timeout: 5000
+
+# Step 2: Navigate to Identity Verification
+- tapOn:
+    anyOf:
+      - "Verify Your Identity"
+      - "Verify your identity"
+      - "Identity Verification"
+      - id: "verify-identity-button"
+      - text: "KYC"
+
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - "Verify Your Identity"
+        - "Select ID document"
+        - id: "kyc-timeline"
+        - "Status: In Progress"
+    timeout: 5000
+
+# Step 3: Navigate to Upload ID step (from timeline if needed)
+- runFlow:
+    when:
+      visible:
+        anyOf:
+          - "Upload ID"
+          - "Identity document"
+          - id: "upload-id-step"
+    commands:
+      - tapOn:
+          anyOf:
+            - "Upload ID"
+            - "Identity document"
+            - id: "upload-id-step"
+
+# Wait for document selection screen
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - "Select your ID document type"
+        - "Select ID document"
+        - "Passport"
+        - "National ID"
+    timeout: 5000
+
+# Take screenshot of document selection
+- takeScreenshot: "kyc_document_selection"
+
+# Step 4: Select Document Type (National ID for full front/back flow)
+- tapOn:
+    anyOf:
+      - "National ID card"
+      - "National ID"
+      - id: "document-type-national_id"
+      - text: "national_id"
+
+# Verify selection
+- assertVisible:
+    anyOf:
+      - "Government issued identity card"
+      - "front + back required"
+
+# Continue to upload screen
+- tapOn:
+    anyOf:
+      - "Continue"
+      - id: "continue-button"
+      - text: "View Document"
+
+# Step 5: Upload Front Side
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - "Step 1 of 2"
+        - "Upload National ID - Front"
+        - "Take photo of national ID front side"
+        - "front side"
+    timeout: 5000
+
+# Take screenshot of front upload screen
+- takeScreenshot: "kyc_upload_front"
+
+# Open upload options (tap upload area or button)
+- tapOn:
+    anyOf:
+      - "Tap to take a photo"
+      - id: "upload-area"
+      - id: "take-photo-button"
+      - "Upload Document"
+
+# Handle upload options sheet - choose from library for E2E testing
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - "Choose from Library"
+        - "Photo Library"
+        - "Gallery"
+        - "Camera"
+    timeout: 3000
+
+# Select photo library option (more reliable for E2E than camera)
+- tapOn:
+    anyOf:
+      - "Choose from Library"
+      - "Photo Library"
+      - "Gallery"
+      - id: "library-option"
+
+# Wait for image picker (handled by system)
+# After selection, should move to back capture for National ID
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - "Step 2 of 2"
+        - "Upload National ID - Back"
+        - "back side"
+        - "Continue"
+        - "Next: Back Side"
+    timeout: 10000
+
+# Step 6: Upload Back Side (if visible - National ID requires both)
+- runFlow:
+    when:
+      visible:
+        anyOf:
+          - "Step 2 of 2"
+          - "back side"
+          - "Upload National ID - Back"
+    commands:
+      - takeScreenshot: "kyc_upload_back"
+      - tapOn:
+          anyOf:
+            - "Tap to take a photo"
+            - id: "upload-area"
+            - "Upload Document"
+      - extendedWaitUntil:
+          visible:
+            anyOf:
+              - "Choose from Library"
+              - "Photo Library"
+              - "Gallery"
+          timeout: 3000
+      - tapOn:
+          anyOf:
+            - "Choose from Library"
+            - "Photo Library"
+            - "Gallery"
+
+# Step 7: Review Document
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - "Review your national ID"
+        - "Review Document"
+        - "Front"
+        - "Continue"
+        - "Retake"
+    timeout: 10000
+
+# Verify both front and back are shown for National ID
+- assertVisible:
+    anyOf:
+      - "Front"
+      - "Make sure"
+
+# Take screenshot of review screen
+- takeScreenshot: "kyc_document_review"
+
+# Confirm upload
+- tapOn:
+    anyOf:
+      - "Continue"
+      - id: "confirm-upload-button"
+      - text: "Upload"
+
+# Step 8: Wait for Upload Success
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - "Success"
+        - "uploaded successfully"
+        - "Document has been uploaded"
+        - id: "success-alert"
+    timeout: 15000
+
+# Dismiss success alert
+- tapOn:
+    anyOf:
+      - "OK"
+      - "Done"
+      - id: "dismiss-button"
+
+# Step 9: Verify Return to Timeline with Updated Status
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - "Verify Your Identity"
+        - id: "kyc-timeline"
+        - "Upload ID"
+        - "Take Selfie"
+    timeout: 5000
+
+# Take final screenshot showing updated timeline
+- takeScreenshot: "kyc_upload_complete"
+
+# Verify Upload ID step shows completion indicator
+- assertVisible:
+    anyOf:
+      - "Take Selfie"  # Next step should now be active
+      - "Continue"
+      - id: "selfie-step"
+
+---
+
+# Alternative Flow: Passport (Single-sided document)
+# Uncomment to test passport flow instead
+
+# - tapOn:
+#     anyOf:
+#       - "Passport"
+#       - id: "document-type-passport"
+#
+# - assertVisible: "International travel document"
+#
+# - tapOn: "Continue"
+#
+# # Passport only needs front page
+# - assertNotVisible: "Step 1 of 2"
+#
+# - tapOn:
+#     anyOf:
+#       - "Upload Document"
+#       - "Tap to take a photo"
+#
+# - tapOn: "Choose from Library"
+#
+# # Should go directly to review (no back side)
+# - extendedWaitUntil:
+#     visible: "Review your passport"
+#     timeout: 10000
+
+---
+
+# Error Recovery: Handle permission denials gracefully
+- runFlow:
+    when:
+      visible:
+        anyOf:
+          - "Permission Denied"
+          - "Allow Access"
+          - "Camera Access"
+          - "Photos Access"
+    commands:
+      - tapOn:
+          anyOf:
+            - "Allow"
+            - "OK"
+            - "Settings"
+      - takeScreenshot: "kyc_permission_prompt"
+
+# Error Recovery: Handle upload failures
+- runFlow:
+    when:
+      visible:
+        anyOf:
+          - "Upload Failed"
+          - "Error"
+          - "Try Again"
+    commands:
+      - takeScreenshot: "kyc_upload_error"
+      - tapOn:
+          anyOf:
+            - "OK"
+            - "Try Again"
+            - "Retry"

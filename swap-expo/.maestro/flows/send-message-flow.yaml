@@ -1,0 +1,176 @@
+# Send Message Flow E2E Test
+# Tests: Navigate to conversation → Send message → Verify delivery
+# Priority: HIGH
+# Prerequisites: User logged in with existing conversation
+
+appId: com.swap.mobile
+tags:
+  - high
+  - messages
+  - chat
+
+---
+
+# Flow: Send Message in Conversation
+- launchApp:
+    clearState: false  # Keep logged in state
+
+# Verify we're on home screen (logged in)
+- assertVisible:
+    anyOf:
+      - "Home"
+      - id: "home-screen"
+      - "Balance"
+
+# Step 1: Navigate to Messages Tab
+- tapOn:
+    anyOf:
+      - id: "messages-tab"
+      - id: "chat-tab"
+      - "Messages"
+      - "Chat"
+
+# Verify messages screen loaded
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - "Messages"
+        - "Conversations"
+        - id: "messages-screen"
+        - id: "conversation-list"
+    timeout: 5000
+
+# Take screenshot of messages list
+- takeScreenshot: "messages_list"
+
+# Step 2: Select a Conversation
+# Either tap existing conversation or start new one
+- runFlow:
+    when:
+      visible:
+        anyOf:
+          - id: "conversation-item-0"
+          - "Test Recipient"
+    commands:
+      - tapOn:
+          anyOf:
+            - id: "conversation-item-0"
+            - "Test Recipient"
+
+# If no conversations, start new one
+- runFlow:
+    when:
+      visible:
+        anyOf:
+          - "No conversations"
+          - "Start a conversation"
+          - id: "empty-messages"
+    commands:
+      - tapOn:
+          anyOf:
+            - "New Message"
+            - id: "new-message-button"
+            - "+"
+      - tapOn:
+          id: "recipient-search-input"
+      - inputText: ${TEST_RECIPIENT_PHONE}
+      - extendedWaitUntil:
+          visible:
+            anyOf:
+              - id: "recipient-result-0"
+              - "Test Recipient"
+          timeout: 5000
+      - tapOn:
+          anyOf:
+            - id: "recipient-result-0"
+            - "Test Recipient"
+
+# Step 3: Verify Conversation Screen
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - id: "conversation-screen"
+        - id: "message-input"
+        - "Type a message"
+    timeout: 5000
+
+# Take screenshot of conversation
+- takeScreenshot: "conversation_open"
+
+# Step 4: Compose and Send Message
+- tapOn:
+    anyOf:
+      - id: "message-input"
+      - "Type a message"
+      - "Write a message"
+
+# Type test message with timestamp for uniqueness
+- inputText: "E2E test message sent at ${TIMESTAMP}"
+
+# Verify send button is enabled
+- assertVisible:
+    anyOf:
+      - id: "send-message-button"
+      - "Send"
+
+# Send the message
+- tapOn:
+    anyOf:
+      - id: "send-message-button"
+      - "Send"
+
+# Step 5: Verify Message Sent
+# Wait for message to appear in conversation
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - "E2E test message"
+        - id: "message-sent"
+    timeout: 10000
+
+# Verify message status (sent indicator)
+- assertVisible:
+    anyOf:
+      - id: "message-status-sent"
+      - id: "message-status-delivered"
+      - "Sent"
+      - "✓"
+
+# Take screenshot of sent message
+- takeScreenshot: "message_sent_success"
+
+# Step 6: Verify Message Appears in List
+- tapOn:
+    anyOf:
+      - id: "back-button"
+      - "Back"
+      - "<"
+
+# Verify conversation list shows recent message
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - id: "messages-screen"
+        - "Messages"
+    timeout: 5000
+
+# Verify conversation preview updated
+- assertVisible:
+    anyOf:
+      - "E2E test message"
+      - id: "conversation-item-0"
+
+# Take screenshot of updated messages list
+- takeScreenshot: "messages_list_after_send"
+
+# Return to home
+- tapOn:
+    anyOf:
+      - id: "home-tab"
+      - "Home"
+
+# Final verification
+- assertVisible:
+    anyOf:
+      - id: "home-screen"
+      - "Balance"

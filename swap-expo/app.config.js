@@ -32,7 +32,7 @@ export default {
       CFBundleDisplayName: "Swap",
       LSApplicationCategoryType: "public.app-category.finance",
       UIRequiredDeviceCapabilities: ["arm64"],
-      UIStatusBarHidden: true,
+      UIStatusBarHidden: false,
       UIViewControllerBasedStatusBarAppearance: false,
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoads: true,
@@ -66,7 +66,6 @@ export default {
       "expo-build-properties",
       {
         ios: {
-          useFrameworks: "static",
           deploymentTarget: "15.1",
           xcodeProps: {
             SUPPORTS_MACCATALYST: "NO",
@@ -78,6 +77,7 @@ export default {
         },
       },
     ],
+    "react-native-maps",
     "@maplibre/maplibre-react-native",
     "expo-secure-store",
     "expo-sqlite",

@@ -1,0 +1,154 @@
+# Wallet Initialization Flow E2E Test
+# Tests: First login → Wallet creation → Initial balance display
+# Priority: HIGH
+# Prerequisites: New user account (no existing wallet)
+
+appId: com.swap.mobile
+tags:
+  - high
+  - wallet
+  - onboarding
+
+---
+
+# Flow: First-Time Wallet Setup
+- launchApp:
+    clearState: true
+
+# Step 1: Complete Login (assume first-time user)
+- assertVisible:
+    anyOf:
+      - "Welcome to Swap"
+      - "Sign in"
+      - id: "welcome-screen"
+
+# Tap login/sign in
+- tapOn:
+    anyOf:
+      - "Sign In"
+      - "Log In"
+      - "I have an account"
+      - id: "login-button"
+
+# Enter phone number
+- assertVisible:
+    anyOf:
+      - "Enter your phone number"
+      - "Phone number"
+      - id: "phone-screen"
+
+- tapOn:
+    id: "phone-input"
+- inputText: ${TEST_NEW_USER_PHONE}
+- tapOn:
+    anyOf:
+      - "Continue"
+      - "Send Code"
+      - id: "continue-button"
+
+# OTP Verification
+- assertVisible:
+    anyOf:
+      - "Enter verification code"
+      - "Enter code"
+      - id: "otp-screen"
+
+# Enter 6-digit OTP
+- tapOn:
+    id: "otp-input-0"
+- inputText: "1"
+- tapOn:
+    id: "otp-input-1"
+- inputText: "2"
+- tapOn:
+    id: "otp-input-2"
+- inputText: "3"
+- tapOn:
+    id: "otp-input-3"
+- inputText: "4"
+- tapOn:
+    id: "otp-input-4"
+- inputText: "5"
+- tapOn:
+    id: "otp-input-5"
+- inputText: "6"
+
+# Step 2: Wallet Initialization Screen
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - "Setting up your wallet"
+        - "Creating your wallet"
+        - "Initializing"
+        - id: "wallet-init-screen"
+    timeout: 10000
+
+# Wait for wallet creation to complete
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - "Wallet ready"
+        - "Your wallet is ready"
+        - "Setup complete"
+        - id: "wallet-ready-screen"
+        - id: "home-screen"
+    timeout: 20000
+
+# Take screenshot of initialization success
+- takeScreenshot: "wallet_init_complete"
+
+# Step 3: Verify Initial Wallet State
+- assertVisible:
+    anyOf:
+      - id: "wallet-balance"
+      - "G 0"
+      - "Balance"
+
+# Verify wallet actions are available
+- assertVisible:
+    anyOf:
+      - "Send"
+      - id: "send-money-button"
+
+- assertVisible:
+    anyOf:
+      - "Receive"
+      - id: "receive-money-button"
+
+# Step 4: Verify Profile Created
+- tapOn:
+    anyOf:
+      - id: "profile-tab"
+      - id: "settings-tab"
+      - "Profile"
+      - "Settings"
+
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - id: "profile-screen"
+        - "Account"
+        - "My Profile"
+    timeout: 5000
+
+# Verify user info displayed
+- assertVisible:
+    anyOf:
+      - ${TEST_NEW_USER_PHONE}
+      - "Personal"
+      - id: "profile-type"
+
+# Take screenshot of profile
+- takeScreenshot: "wallet_init_profile"
+
+# Return to home
+- tapOn:
+    anyOf:
+      - id: "home-tab"
+      - "Home"
+
+# Final verification
+- assertVisible:
+    anyOf:
+      - id: "home-screen"
+      - "Balance"

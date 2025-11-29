@@ -1,0 +1,193 @@
+# Network Status Flow E2E Test
+# Tests: Network status banner (offline/online indicator, connection type)
+# Priority: HIGH
+# Prerequisites: User logged in, ability to toggle network state
+
+appId: com.swap.mobile
+tags:
+  - high
+  - network
+  - offline
+  - local-first
+
+---
+
+# Flow: Network Status Banner Behavior
+# Note: This flow tests the network status UI component
+# The app is local-first: users can VIEW data offline but cannot perform transactions
+
+- launchApp:
+    clearState: false  # Keep logged in state
+
+# Step 1: Verify Online State (Normal)
+- assertVisible:
+    anyOf:
+      - "Home"
+      - id: "home-screen"
+      - "Balance"
+
+# Verify NO offline banner when connected
+- assertNotVisible:
+    anyOf:
+      - id: "network-status-banner"
+      - "You're offline"
+      - "No connection"
+    timeout: 2000
+
+# Verify data is accessible
+- assertVisible:
+    anyOf:
+      - id: "wallet-balance"
+      - "G "
+
+# Take screenshot of online state
+- takeScreenshot: "network_status_online"
+
+# Step 2: Simulate Offline Mode
+# Note: This requires device/emulator network toggle
+- setAirplaneMode: true
+
+# Wait for network status to update
+- extendedWaitUntil:
+    visible:
+      anyOf:
+        - id: "network-status-banner"
+        - "You're offline"
+        - "No connection"
+        - "Offline"
+        - id: "offline-indicator"
+    timeout: 10000
+
+# Step 3: Verify Offline Banner UI
+- assertVisible:
+    anyOf:
+      - id: "network-status-banner"
+      - "You're offline"
+      - "Offline"
+      - "No internet connection"
+
+# Take screenshot of offline banner
+- takeScreenshot: "network_status_offline_banner"
+
+# Step 4: Verify Cached Data Still Visible (Local-First)
+# User should still see their cached balance and transactions
+- assertVisible:
+    anyOf:
+      - id: "wallet-balance"
+      - "G "
+      - "Balance"
+
+# Verify transaction history still viewable
+- tapOn:
+    anyOf:
+      - id: "transactions-tab"
+      - "Transactions"
+      - "Activity"
+
+- assertVisible:
+    anyOf:
+      - id: "transactions-list"
+      - id: "transaction-item-0"
+      - "Transactions"
+      - "Activity"
+
+# Take screenshot of offline cached data
+- takeScreenshot: "network_status_offline_cached_data"
+
+# Step 5: Verify Actions Disabled When Offline
+# Send button should be disabled or show error
+- tapOn:
+    anyOf:
+      - id: "home-tab"
+      - "Home"
+
+- tapOn:
+    anyOf:
+      - "Send"
+      - id: "send-money-button"
+
+# Should see offline error or disabled state
+- assertVisible:
+    anyOf:
+      - "You're offline"
+      - "No connection"
+      - "Connect to send money"
+      - id: "offline-error"
+      - id: "network-required-modal"
+
+# Take screenshot of disabled action
+- takeScreenshot: "network_status_action_disabled"
+
+# Dismiss any modal
+- runFlow:
+    when:
+      visible:
+        anyOf:
+          - "OK"
+          - "Close"
+          - id: "modal-dismiss"
+    commands:
+      - tapOn:
+          anyOf:
+            - "OK"
+            - "Close"
+            - id: "modal-dismiss"
+
+# Step 6: Restore Online Mode
+- setAirplaneMode: false
+
+# Wait for network to reconnect
+- extendedWaitUntil:
+    notVisible:
+      anyOf:
+        - id: "network-status-banner"
+        - "You're offline"
+        - "Offline"
+    timeout: 15000
+
+# Step 7: Verify Banner Cleared
+- assertNotVisible:
+    anyOf:
+      - id: "network-status-banner"
+      - "You're offline"
+      - "Offline"
+    timeout: 3000
+
+# Verify full functionality restored
+- assertVisible:
+    anyOf:
+      - id: "home-screen"
+      - "Balance"
+      - id: "wallet-balance"
+
+# Take screenshot of restored online state
+- takeScreenshot: "network_status_reconnected"
+
+# Step 8: Verify Actions Work Again
+- tapOn:
+    anyOf:
+      - "Send"
+      - id: "send-money-button"
+
+# Should navigate to send screen without error
+- assertVisible:
+    anyOf:
+      - "Send to"
+      - "Select recipient"
+      - id: "send-screen"
+
+# Go back to home
+- tapOn:
+    anyOf:
+      - id: "back-button"
+      - "Back"
+      - "<"
+
+# Final verification
+- assertVisible:
+    anyOf:
+      - id: "home-screen"
+      - "Balance"
+
+# Take final screenshot
+- takeScreenshot: "network_status_flow_complete"

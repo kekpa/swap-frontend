@@ -1,0 +1,31 @@
+# Maestro E2E Testing Configuration
+# Swap Mobile App
+
+# App configuration
+appId: com.swap.mobile
+
+# Test execution settings
+executionOrder:
+  continueOnFailure: false
+  flowTimeout: 300000  # 5 minutes max per flow
+
+# Environment variables for tests
+env:
+  # Test user credentials (use test accounts only)
+  TEST_PHONE: "+50937000001"
+  TEST_OTP: "123456"  # Test OTP for development
+  TEST_EMAIL: "e2e-test@swap.ht"
+  TEST_PASSWORD: "TestPass123!"
+  TEST_RECIPIENT_PHONE: "+50937000002"
+
+# Tags for filtering tests
+tags:
+  - smoke
+  - critical
+  - regression
+
+# Output settings
+output:
+  screenshots: true
+  video: true
+  reportFormat: junit
