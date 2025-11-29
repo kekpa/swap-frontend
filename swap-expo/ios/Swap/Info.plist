@@ -66,6 +66,8 @@
     <string>Swap needs permission to save QR codes and receipts to your photo library.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Swap needs access to your photos to let you upload profile pictures and documents for verification.</string>
+    <key>RCTNewArchEnabled</key>
+    <true/>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>
@@ -75,7 +77,7 @@
     <key>UIRequiresFullScreen</key>
     <false/>
     <key>UIStatusBarHidden</key>
-    <true/>
+    <false/>
     <key>UIStatusBarStyle</key>
     <string>UIStatusBarStyleDefault</string>
     <key>UISupportedInterfaceOrientations</key>
