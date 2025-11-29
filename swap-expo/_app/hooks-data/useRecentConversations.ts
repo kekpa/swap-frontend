@@ -11,6 +11,7 @@ import { queryKeys } from '../tanstack-query/queryKeys';
 import apiClient from '../_api/apiClient';
 import { getStaleTimeForQuery } from '../tanstack-query/config/staleTimeConfig';
 import { interactionRepository } from '../localdb/InteractionRepository';
+import { useCurrentProfileId } from '../hooks/useCurrentProfileId';
 
 // Recent conversation interface
 export interface RecentConversation {
@@ -163,10 +164,12 @@ export const useRecentConversations = (
   entityId?: string,
   options: UseRecentConversationsOptions = {}
 ) => {
+  const profileId = useCurrentProfileId();
+
   return useQuery({
-    queryKey: queryKeys.recentConversations(entityId || '', options),
+    queryKey: queryKeys.recentConversations(profileId || '', entityId || '', options),
     queryFn: () => fetchRecentConversations(entityId!, options),
-    enabled: !!entityId,
+    enabled: !!entityId && !!profileId,
     staleTime: getStaleTimeForQuery('interaction'), // Use interaction stale time
     networkMode: 'offlineFirst',
     retry: (failureCount, error: any) => {

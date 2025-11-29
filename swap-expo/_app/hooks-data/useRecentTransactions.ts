@@ -9,6 +9,7 @@ import { transactionRepository } from '../localdb/TransactionRepository';
 import { Transaction } from '../types/transaction.types';
 import logger from '../utils/logger';
 import { networkService } from '../services/NetworkService';
+import { useCurrentProfileId } from '../hooks/useCurrentProfileId';
 
 interface BaseTransactionResult {
   transactions: Transaction[];
@@ -22,12 +23,13 @@ interface BaseTransactionResult {
 /**
  * WhatsApp-style fetch wallet transactions with instant cached data display
  */
-const fetchWalletTransactionsWhatsAppStyle = async (accountId: string, limit: number = 4): Promise<Transaction[]> => {
+const fetchWalletTransactionsWhatsAppStyle = async (profileId: string, accountId: string, limit: number = 4): Promise<Transaction[]> => {
   try {
-    logger.debug(`[useWalletTransactions] 🚀 WHATSAPP-STYLE: Starting transaction fetch for account: ${accountId}`);
-    
+    logger.debug(`[useWalletTransactions] 🚀 WHATSAPP-STYLE: Starting transaction fetch for account: ${accountId} (profileId: ${profileId})`);
+
     // STEP 1: ALWAYS load from local cache first (INSTANT display like WhatsApp)
-    const cachedTransactions = await transactionRepository.getTransactionsByAccount(accountId, limit);
+    // SECURITY FIX: Include profileId for proper data isolation
+    const cachedTransactions = await transactionRepository.getTransactionsByAccount(profileId, accountId, limit);
     logger.debug(`[useWalletTransactions] ✅ INSTANT: Loaded ${cachedTransactions.length} transactions from SQLite cache`);
     
     // STEP 2: Return cached data IMMEDIATELY if we have it (WhatsApp behavior)
@@ -43,12 +45,13 @@ const fetchWalletTransactionsWhatsAppStyle = async (accountId: string, limit: nu
           logger.debug(`[useWalletTransactions] ✅ BACKGROUND SYNC: Loaded ${apiTransactions.length} transactions from server`);
           
           // Save to local cache
+          // SECURITY FIX: Include profileId for proper data isolation
           if (apiTransactions.length > 0) {
-            await transactionRepository.saveTransactions(apiTransactions);
+            await transactionRepository.saveTransactions(apiTransactions, profileId);
             logger.debug(`[useWalletTransactions] ✅ BACKGROUND SYNC: Updated ${apiTransactions.length} transactions in cache`);
             
             // Update TanStack Query cache with fresh data
-            queryClient.setQueryData(queryKeys.transactionsByAccount(accountId, limit), apiTransactions);
+            queryClient.setQueryData(queryKeys.transactionsByAccount(profileId, accountId, limit), apiTransactions);
           }
           
         } catch (error) {
@@ -66,8 +69,9 @@ const fetchWalletTransactionsWhatsAppStyle = async (accountId: string, limit: nu
     logger.debug(`[useWalletTransactions] ✅ FIRST TIME: Loaded ${apiTransactions.length} transactions from server`);
     
     // Save to cache for next time
+    // SECURITY FIX: Include profileId for proper data isolation
     if (apiTransactions.length > 0) {
-      await transactionRepository.saveTransactions(apiTransactions);
+      await transactionRepository.saveTransactions(apiTransactions, profileId);
       logger.debug(`[useWalletTransactions] ✅ FIRST TIME: Saved ${apiTransactions.length} transactions to cache`);
     }
     
@@ -81,13 +85,14 @@ const fetchWalletTransactionsWhatsAppStyle = async (accountId: string, limit: nu
 
 /**
  * Hook for wallet dashboard - WhatsApp-Style Local-First
- * 
+ *
  * Shows cached transactions instantly, syncs in background.
  * Same pattern as useTimeline and useBalances.
  */
 export const useWalletTransactions = (accountId: string, enabled: boolean = true): BaseTransactionResult => {
   const isOffline = !networkService.isOnline();
-  
+  const profileId = useCurrentProfileId();
+
   const {
     data: transactions = [],
     isLoading,
@@ -95,17 +100,17 @@ export const useWalletTransactions = (accountId: string, enabled: boolean = true
     error,
     refetch,
   } = useQuery({
-    queryKey: queryKeys.transactionsByAccount(accountId, 4),
+    queryKey: queryKeys.transactionsByAccount(profileId!, accountId, 4),
     queryFn: async (): Promise<Transaction[]> => {
-      if (!accountId) {
-        logger.debug('[useWalletTransactions] No accountId provided');
+      if (!accountId || !profileId) {
+        logger.debug('[useWalletTransactions] No accountId or profileId provided');
         return [];
       }
 
-      logger.debug(`[useWalletTransactions] 🎯 WALLET: Loading 4 transactions for account: ${accountId}`);
-      return fetchWalletTransactionsWhatsAppStyle(accountId, 4);
+      logger.debug(`[useWalletTransactions] 🎯 WALLET: Loading 4 transactions for account: ${accountId} (profileId: ${profileId})`);
+      return fetchWalletTransactionsWhatsAppStyle(profileId, accountId, 4);
     },
-    enabled: enabled && !!accountId,
+    enabled: enabled && !!accountId && !!profileId,
     
     // WHATSAPP-STYLE: Optimized configuration for instant loading
     staleTime: 10 * 60 * 1000, // 10 minutes - longer staleness for better UX
@@ -143,20 +148,21 @@ export const useWalletTransactions = (accountId: string, enabled: boolean = true
 
 /**
  * Hook for transaction list page - Shows 50 transactions with pagination
- * 
+ *
  * Purpose: Full transaction list with pagination
  * Endpoint: GET /api/v1/transactions/account/{accountId}?limit=50&offset={offset}
  * Backend Filtering: ✅ Account-specific with pagination
  * Frontend Filtering: ❌ None needed
  */
 export const useTransactionList = (
-  accountId: string, 
-  limit: number = 50, 
+  accountId: string,
+  limit: number = 50,
   offset: number = 0,
   enabled: boolean = true
 ): BaseTransactionResult & { hasMore: boolean; loadMore: () => void } => {
   const isOffline = !networkService.isOnline();
-  
+  const profileId = useCurrentProfileId();
+
   const {
     data: result,
     isLoading,
@@ -164,14 +170,14 @@ export const useTransactionList = (
     error,
     refetch,
   } = useQuery({
-         queryKey: [...queryKeys.transactionsByAccount(accountId, limit), 'offset', offset] as const,
+         queryKey: [...queryKeys.transactionsByAccount(profileId!, accountId, limit), 'offset', offset] as const,
     queryFn: async (): Promise<{ data: Transaction[]; hasMore: boolean }> => {
-      if (!accountId) {
-        logger.debug('[useTransactionList] No accountId provided');
+      if (!accountId || !profileId) {
+        logger.debug('[useTransactionList] No accountId or profileId provided');
         return { data: [], hasMore: false };
       }
 
-      logger.debug(`[useTransactionList] 📋 LIST: Loading ${limit} transactions for account: ${accountId} (offset: ${offset})`);
+      logger.debug(`[useTransactionList] 📋 LIST: Loading ${limit} transactions for account: ${accountId} (offset: ${offset}, profileId: ${profileId})`);
       
       try {
         const result = await transactionManager.getTransactionsForAccount(accountId, limit, offset);
@@ -192,7 +198,7 @@ export const useTransactionList = (
         throw error;
       }
     },
-    enabled: enabled && !!accountId,
+    enabled: enabled && !!accountId && !!profileId,
     staleTime: 60 * 1000, // 1 minute
     gcTime: 30 * 60 * 1000, // 30 minutes
     retry: (failureCount) => !isOffline && failureCount < 2,
@@ -220,7 +226,7 @@ export const useTransactionList = (
 
 /**
  * Hook for general recent transactions (fallback/legacy support)
- * 
+ *
  * Purpose: General recent transactions (not account-specific)
  * Endpoint: GET /api/v1/transactions?limit={limit}
  * Backend Filtering: ❌ General transactions
@@ -232,7 +238,8 @@ export const useRecentTransactions = (
   enabled: boolean = true
 ): BaseTransactionResult => {
   const isOffline = !networkService.isOnline();
-  
+  const profileId = useCurrentProfileId();
+
   const {
     data: transactions = [],
     isLoading,
@@ -240,9 +247,9 @@ export const useRecentTransactions = (
     error,
     refetch,
   } = useQuery({
-    queryKey: queryKeys.recentTransactions(entityId, limit),
+    queryKey: queryKeys.recentTransactions(profileId!, entityId, limit),
     queryFn: async (): Promise<Transaction[]> => {
-      logger.debug(`[useRecentTransactions] 📊 GENERAL: Loading ${limit} recent transactions`);
+      logger.debug(`[useRecentTransactions] 📊 GENERAL: Loading ${limit} recent transactions (profileId: ${profileId})`);
       
       try {
         const recentTransactions = await transactionManager.getRecentTransactions(limit);
@@ -259,7 +266,7 @@ export const useRecentTransactions = (
         throw error;
       }
     },
-    enabled: enabled && !!entityId,
+    enabled: enabled && !!entityId && !!profileId,
     staleTime: 30 * 1000,
     gcTime: 10 * 60 * 1000,
     retry: (failureCount) => !isOffline && failureCount < 2,

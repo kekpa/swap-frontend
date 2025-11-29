@@ -72,6 +72,12 @@ export const useTimeline = (
     logger.debug(`[useTimeline] 🚀 QUERY FUNCTION CALLED for interactionId: ${interactionId}`, 'timeline_query');
     logger.debug(`[useTimeline] Fetching timeline for interaction: ${interactionId}`, 'timeline_query');
 
+    // SECURITY FIX: Validate profileId for data isolation
+    if (!user?.profileId) {
+      logger.warn('[useTimeline] Missing profileId, aborting to prevent data leakage', 'timeline_query');
+      return [];
+    }
+
     // STEP 1: ALWAYS load from local SQLite first (WhatsApp behavior)
     let localTimelineItems: TimelineItem[] = [];
     let hasLocalData = false;
@@ -82,8 +88,9 @@ export const useTimeline = (
         
         // Get local timeline data
         const localTimeline = await timelineRepository.getTimelineForInteraction(
-          interactionId, 
-          limit, 
+          interactionId,
+          user.profileId,  // Add profileId for profile isolation
+          limit,
           {
             includeMessages: true,
             includeTransactions: true,
@@ -182,11 +189,11 @@ export const useTimeline = (
 
                 // Save to repositories and update TanStack Query cache
                 if (messagesToSave.length > 0) {
-                  await messageRepository.saveMessages(messagesToSave);
+                  await messageRepository.saveMessages(messagesToSave, user.profileId);
                 }
-                
+
                 if (transactionsToSave.length > 0) {
-                  await transactionRepository.saveTransactions(transactionsToSave);
+                  await transactionRepository.saveTransactions(transactionsToSave, user.profileId);
                 }
                 
                 // Update TanStack Query cache with new data
@@ -303,13 +310,13 @@ export const useTimeline = (
 
           // Save to repositories
           if (messagesToSave.length > 0) {
-            messageRepository.saveMessages(messagesToSave).catch((err: any) => {
+            messageRepository.saveMessages(messagesToSave, user.profileId).catch((err: any) => {
               logger.warn('[useTimeline] Error saving API messages to local DB', 'timeline_query', { error: String(err) });
             });
           }
-          
+
           if (transactionsToSave.length > 0) {
-            transactionRepository.saveTransactions(transactionsToSave).catch((err: any) => {
+            transactionRepository.saveTransactions(transactionsToSave, user.profileId).catch((err: any) => {
               logger.warn('[useTimeline] Error saving API transactions to local DB', 'timeline_query', { error: String(err) });
             });
           }
@@ -413,9 +420,10 @@ export const usePrefetchTimeline = () => {
   
   return useCallback(async (interactionId: string, options: UseTimelineOptions = {}) => {
     const { limit = 100 } = options;
-    
-    if (!interactionId || !user?.entityId) {
-      logger.debug(`[usePrefetchTimeline] Skipping prefetch - missing interactionId or user`, 'timeline_query');
+
+    // SECURITY FIX: Validate profileId for data isolation
+    if (!interactionId || !user?.entityId || !user?.profileId) {
+      logger.debug(`[usePrefetchTimeline] Skipping prefetch - missing interactionId, entityId, or profileId`, 'timeline_query');
       return;
     }
     
@@ -436,7 +444,7 @@ export const usePrefetchTimeline = () => {
           logger.debug(`[usePrefetchTimeline] Loading from local cache first: ${interactionId}`, 'timeline_query');
           
           // Step 1: Try to load from local cache first
-          const cachedItems = await timelineRepository.getTimelineForInteraction(interactionId, limit, { filter: 'all', currentUserEntityId: user.entityId });
+          const cachedItems = await timelineRepository.getTimelineForInteraction(interactionId, user.profileId, limit, { filter: 'all', currentUserEntityId: user.entityId });
           
           if (cachedItems.length > 0) {
             logger.debug(`[usePrefetchTimeline] Found ${cachedItems.length} items in cache for: ${interactionId}`, 'timeline_query');
@@ -517,13 +525,13 @@ export const usePrefetchTimeline = () => {
 
                 // Save to repositories (background, don't await)
                 if (messagesToSave.length > 0) {
-                  messageRepository.saveMessages(messagesToSave).catch((err: any) => {
+                  messageRepository.saveMessages(messagesToSave, user.profileId).catch((err: any) => {
                     logger.debug('[usePrefetchTimeline] Background save of messages failed', 'timeline_query', { error: String(err) });
                   });
                 }
-                
+
                 if (transactionsToSave.length > 0) {
-                  transactionRepository.saveTransactions(transactionsToSave).catch((err: any) => {
+                  transactionRepository.saveTransactions(transactionsToSave, user.profileId).catch((err: any) => {
                     logger.debug('[usePrefetchTimeline] Background save of transactions failed', 'timeline_query', { error: String(err) });
                   });
                 }
@@ -598,6 +606,12 @@ export const useTimelineInfinite = (
       const cursor = pageParam as string | undefined;
 
       logger.debug(`[useTimelineInfinite] Fetching page: cursor=${cursor || 'initial'}`, 'timeline_query');
+
+      // SECURITY FIX: Validate profileId for data isolation
+      if (!user?.profileId) {
+        logger.warn('[useTimelineInfinite] Missing profileId, aborting to prevent data leakage', 'timeline_query');
+        return { items: [], nextCursor: undefined, hasMore: false };
+      }
 
       // Build API request
       const path = API_PATHS.INTERACTION.TIMELINE(interactionId);
@@ -690,10 +704,10 @@ export const useTimelineInfinite = (
                 }));
 
               if (messagesToSave.length > 0) {
-                await messageRepository.saveMessages(messagesToSave);
+                await messageRepository.saveMessages(messagesToSave, user.profileId);
               }
               if (transactionsToSave.length > 0) {
-                await transactionRepository.saveTransactions(transactionsToSave);
+                await transactionRepository.saveTransactions(transactionsToSave, user.profileId);
               }
             } catch (saveError) {
               logger.debug(`[useTimelineInfinite] Background save failed: ${String(saveError)}`, 'timeline_query');

@@ -12,6 +12,7 @@ import logger from '../utils/logger';
 import { useAuthContext } from '../features/auth/context/AuthContext';
 import { interactionRepository } from '../localdb/InteractionRepository';
 import { eventEmitter } from '../utils/eventEmitter';
+import { useCurrentProfileId } from '../hooks/useCurrentProfileId';
 
 export interface InteractionItem {
   id: string;
@@ -102,6 +103,7 @@ export const useInteractions = (
   const user = authContext?.user;
   const isAuthenticated = authContext?.isAuthenticated;
   const queryClient = useQueryClient();
+  const profileId = useCurrentProfileId();
 
   // Local-first interactions fetcher with deletion sync
   const fetchInteractions = useCallback(async (): Promise<InteractionItem[]> => {
@@ -118,7 +120,7 @@ export const useInteractions = (
     // STEP 1: Load from local SQLite first (instant display)
     try {
       logger.debug('[useInteractions] Loading interactions from local cache with members', 'interactions_query');
-      const localInteractionsWithMembers = await interactionRepository.getInteractionsWithMembers();
+      const localInteractionsWithMembers = await interactionRepository.getInteractionsWithMembers(profileId || '');
       
       if (localInteractionsWithMembers.length > 0) {
         // Transform to InteractionItem[] format
@@ -180,7 +182,7 @@ export const useInteractions = (
       // This ensures deleted interactions are removed before saving new ones
       if (deletedIds.length > 0) {
         logger.info(`[useInteractions] Processing ${deletedIds.length} deletions from backend`, 'interactions_query');
-        await interactionRepository.deleteInteractions(deletedIds);
+        await interactionRepository.deleteInteractions(deletedIds, profileId || '');
       }
 
       if (fetchedInteractions.length > 0) {
@@ -201,7 +203,7 @@ export const useInteractions = (
              };
              
              // Save interaction
-             await interactionRepository.upsertInteraction(localInteraction);
+             await interactionRepository.upsertInteraction(localInteraction, profileId || '');
             
                          // Save members if they exist
              if (interaction.members && interaction.members.length > 0) {
@@ -222,7 +224,7 @@ export const useInteractions = (
                  entity_type: member.entity_type || 'profile',
                  joined_at: new Date().toISOString()
                }));
-               await interactionRepository.saveInteractionMembers(membersToSave);
+               await interactionRepository.saveInteractionMembers(membersToSave, profileId || '');
              }
           }
           logger.debug('[useInteractions] Interactions and members saved to local cache', 'interactions_query');
@@ -254,9 +256,9 @@ export const useInteractions = (
 
   // TanStack Query configuration
   const queryResult = useQuery({
-    queryKey: queryKeys.interactionsByEntity(user?.entityId || 'anonymous'),
+    queryKey: queryKeys.interactionsByEntity(profileId || 'anonymous', user?.entityId || 'anonymous'),
     queryFn: fetchInteractions,
-    enabled: enabled && isAuthenticated && !!user,
+    enabled: enabled && isAuthenticated && !!user && !!profileId,
     staleTime: 2 * 60 * 1000, // 2 minutes - interactions can be slightly stale
     gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
     refetchOnMount: false, // Don't refetch on mount to prevent loading glitches
@@ -297,12 +299,13 @@ export const usePrefetchInteractions = () => {
   const queryClient = useQueryClient();
   const authContext = useAuthContext();
   const user = authContext?.user;
-  
+  const profileId = useCurrentProfileId();
+
   return useCallback(() => {
-    if (!user?.entityId) return;
-    
+    if (!user?.entityId || !profileId) return;
+
     queryClient.prefetchQuery({
-      queryKey: queryKeys.interactionsByEntity(user.entityId),
+      queryKey: queryKeys.interactionsByEntity(profileId, user.entityId),
       queryFn: async () => {
         logger.debug('[usePrefetchInteractions] Prefetching interactions', 'interactions_query');
         // This will be automatically deduplicated if already fetching
@@ -310,5 +313,5 @@ export const usePrefetchInteractions = () => {
       },
       staleTime: 2 * 60 * 1000,
     });
-  }, [queryClient, user?.entityId]);
+  }, [queryClient, user?.entityId, profileId]);
 }; 

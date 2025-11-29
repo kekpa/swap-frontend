@@ -11,6 +11,7 @@ import { queryKeys } from '../tanstack-query/queryKeys';
 import apiClient from '../_api/apiClient';
 import { getStaleTimeForQuery } from '../tanstack-query/config/staleTimeConfig';
 import { createRetryFunction } from '../utils/errorHandler';
+import { useCurrentProfileId } from '../hooks/useCurrentProfileId';
 
 // User profile interface matching PersonalUserProfileDto from backend
 export interface UserProfile {
@@ -37,15 +38,15 @@ export interface UserProfile {
 /**
  * Fetch user profile from API
  */
-const fetchUserProfile = async (entityId: string): Promise<UserProfile> => {
-  logger.debug('[useUserProfile] Fetching profile for entity:', entityId);
-  
+const fetchUserProfile = async (profileId: string, entityId: string): Promise<UserProfile> => {
+  logger.debug('[useUserProfile] Fetching profile for entity:', entityId, '(profileId:', profileId, ')');
+
   try {
     // Use the correct backend endpoint
     const response = await apiClient.get('/auth/me');
-    
+
     if (response.data) {
-      logger.debug('[useUserProfile] ✅ Profile fetched successfully');
+      logger.debug('[useUserProfile] ✅ Profile fetched successfully (profileId:', profileId, ')');
       return response.data;
     } else {
       throw new Error('No profile data received');
@@ -60,10 +61,12 @@ const fetchUserProfile = async (entityId: string): Promise<UserProfile> => {
  * useUserProfile Hook
  */
 export const useUserProfile = (entityId?: string) => {
+  const profileId = useCurrentProfileId();
+
   return useQuery({
-    queryKey: queryKeys.userProfile(entityId || ''),
-    queryFn: () => fetchUserProfile(entityId!),
-    enabled: !!entityId,
+    queryKey: queryKeys.userProfile(profileId || ''),
+    queryFn: () => fetchUserProfile(profileId!, entityId!),
+    enabled: !!entityId && !!profileId,
     staleTime: getStaleTimeForQuery('userProfile'),
     networkMode: 'offlineFirst',
     retry: createRetryFunction(2),
