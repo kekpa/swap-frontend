@@ -471,11 +471,25 @@ class ContactsService {
       this.cachedPhoneOnlyNormalizedContacts = null;
       this.cachedRawDeviceContacts = null;
       this.lastSyncTimestamp = null;
-      this.hasPermission = false; 
+      this.hasPermission = false;
       logger.info('[ContactsService] Contact data cleared successfully.');
     } catch (error) {
       logger.error('[ContactsService] Error clearing contact data:', error);
     }
+  }
+
+  /**
+   * Reset all internal state - primarily for testing
+   */
+  reset(): void {
+    this.hasPermission = false;
+    this.lastSyncTimestamp = null;
+    this.syncInProgress = false;
+    this.activeSyncPromise = null;
+    this.cachedMatchedPlatformContacts = null;
+    this.cachedPhoneOnlyNormalizedContacts = null;
+    this.cachedRawDeviceContacts = null;
+    logger.debug('[ContactsService] Reset completed');
   }
 }
 

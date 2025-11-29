@@ -290,12 +290,25 @@ class MessageManager {
       clearInterval(this.queueProcessingInterval);
       this.queueProcessingInterval = null;
     }
-    
+
     if (this.reconnectHandler) {
       this.reconnectHandler = null;
     }
-    
+
     logger.debug('[MessageManager] Cleanup completed');
+  }
+
+  /**
+   * Reset all internal state - primarily for testing
+   */
+  reset(): void {
+    this.outgoingQueue.clear();
+    this.pendingMessages.clear();
+    this.messageStatusCache.clear();
+    this.lastRequestTime.clear();
+    this.optimisticMessageMap.clear();
+    this.isProcessingQueue = false;
+    logger.debug('[MessageManager] Reset completed');
   }
 }
 

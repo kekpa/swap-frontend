@@ -312,6 +312,16 @@ class OfflineTransactionQueue {
 
     return stats;
   }
+
+  /**
+   * Reset all internal state - primarily for testing
+   * @internal
+   */
+  reset(): void {
+    this.isProcessing = false;
+    this.listeners = [];
+    logger.debug('[OfflineQueue] Reset completed');
+  }
 }
 
 // Export singleton instance

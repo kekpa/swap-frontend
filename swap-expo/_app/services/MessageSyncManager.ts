@@ -42,6 +42,7 @@ class MessageSyncManager {
   private lastSyncTime = 0;
   private syncInterval: NodeJS.Timeout | null = null;
   private networkListener: (() => void) | null = null;
+  private currentProfileId: string | null = null; // Track current profile for sync operations
   private readonly SYNC_INTERVAL_MS = 30000; // 30 seconds
   private readonly MAX_SYNC_RETRIES = 3;
 
@@ -58,6 +59,15 @@ class MessageSyncManager {
     this.setupPeriodicSync();
 
     logger.info('[MessageSyncManager] ✅ Message sync manager initialized');
+  }
+
+  /**
+   * Update the current profile ID for sync operations
+   * Should be called when user switches profiles
+   */
+  setCurrentProfileId(profileId: string | null): void {
+    this.currentProfileId = profileId;
+    logger.debug(`[MessageSyncManager] Profile ID updated: ${profileId || 'null'}`);
   }
 
   /**
@@ -105,7 +115,7 @@ class MessageSyncManager {
       logger.info('[MessageSyncManager] 🔄 Starting message synchronization...');
 
       // 1. Get all active interactions
-      const interactions = await interactionRepository.getInteractionsWithMembers();
+      const interactions = await interactionRepository.getInteractionsWithMembers(this.currentProfileId || '');
       logger.debug(`[MessageSyncManager] Found ${interactions.length} interactions to sync`);
 
       // 2. Check for missed messages in each interaction
@@ -350,6 +360,16 @@ class MessageSyncManager {
     this.lastSyncTime = 0;
 
     logger.info('[MessageSyncManager] ✅ Cleanup complete');
+  }
+
+  /**
+   * Reset all internal state - primarily for testing
+   * @internal
+   */
+  reset(): void {
+    this.cleanup();
+    this.currentProfileId = null;
+    logger.debug('[MessageSyncManager] Reset completed');
   }
 }
 

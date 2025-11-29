@@ -102,7 +102,7 @@ class AppLifecycleManager {
       await this.initializePushNotifications();
 
       // 🚀 PHASE 2.5: Initialize message sync for offline reliability
-      this.initializeMessageSync();
+      this.initializeMessageSync(user);
 
       // 🚀 PHASE 2.6: Initialize delivery confirmation system
       this.initializeDeliveryConfirmation();
@@ -424,10 +424,17 @@ class AppLifecycleManager {
   /**
    * 🚀 PHASE 2.5: Initialize message sync for offline message reliability
    */
-  private initializeMessageSync(): void {
+  private initializeMessageSync(user?: { profileId?: string }): void {
     try {
       logger.debug('[AppLifecycleManager] 🔄 Initializing message sync...');
       messageSyncManager.initialize();
+
+      // Set current profile ID for sync operations
+      if (user?.profileId) {
+        messageSyncManager.setCurrentProfileId(user.profileId);
+        logger.debug(`[AppLifecycleManager] Profile ID set for message sync: ${user.profileId}`);
+      }
+
       logger.info('[AppLifecycleManager] ✅ Message sync initialized');
     } catch (error) {
       logger.error('[AppLifecycleManager] ❌ Message sync initialization failed:', error);

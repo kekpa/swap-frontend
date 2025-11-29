@@ -218,25 +218,12 @@ class TransactionManager {
    */
   async createTransaction(dto: CreateDirectTransactionDto): Promise<Transaction | null> {
     try {
-      // Check for recent duplicate requests
-      const duplicateKey = `${dto.to_entity_id}:${dto.amount}`;
-      const lastRequestTime = this.lastRequestTime.get(duplicateKey);
-      const now = Date.now();
-      
-      if (lastRequestTime && (now - lastRequestTime) < this.DEDUPLICATION_WINDOW) {
-        logger.warn('[TransactionManager] Duplicate transaction request blocked');
-        return null;
-      }
-      
-      // Update last request time
-      this.lastRequestTime.set(duplicateKey, now);
-      
       // Generate optimistic transaction ID
       const optimisticId = `opt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
+
       logger.info('[TransactionManager] Creating transaction', { optimisticId });
-      
-      // Check if offline
+
+      // Check if offline FIRST - always allow offline queueing
       const isOffline = networkService.getNetworkState().isOfflineMode;
       if (isOffline) {
         logger.debug('[TransactionManager] Offline mode - queuing transaction for later');
@@ -263,7 +250,20 @@ class TransactionManager {
         
         return optimisticTransaction;
       }
-      
+
+      // Online - check for recent duplicate requests (only for online transactions)
+      const duplicateKey = `${dto.to_entity_id}:${dto.amount}`;
+      const lastRequestTime = this.lastRequestTime.get(duplicateKey);
+      const now = Date.now();
+
+      if (lastRequestTime && (now - lastRequestTime) < this.DEDUPLICATION_WINDOW) {
+        logger.warn('[TransactionManager] Duplicate transaction request blocked');
+        return null;
+      }
+
+      // Update last request time
+      this.lastRequestTime.set(duplicateKey, now);
+
       // Online - send to server immediately
       const response = await apiClient.post(API_PATHS.TRANSACTION.CREATE, dto);
       
@@ -399,12 +399,25 @@ class TransactionManager {
       clearInterval(this.queueProcessingInterval);
       this.queueProcessingInterval = null;
     }
-    
+
     if (this.reconnectHandler) {
       this.reconnectHandler = null;
     }
-    
+
     logger.debug('[TransactionManager] Cleanup completed');
+  }
+
+  /**
+   * Reset all internal state - primarily for testing
+   */
+  reset(): void {
+    this.outgoingQueue.clear();
+    this.pendingTransactions.clear();
+    this.transactionStatusCache.clear();
+    this.lastRequestTime.clear();
+    this.optimisticTransactionMap.clear();
+    this.isProcessingQueue = false;
+    logger.debug('[TransactionManager] Reset completed');
   }
 }
 
