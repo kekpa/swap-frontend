@@ -1,11 +1,15 @@
 /**
  * TanStack Query Client Configuration
- * 
+ *
  * Optimized for React Native with local-first architecture:
  * - Background refetch when app becomes active
  * - Intelligent caching with proper stale times
  * - Network-aware behavior
  * - Persistent cache with AsyncStorage
+ *
+ * SECURITY UPDATE 2025-01-18:
+ * - Profile isolation guards to prevent data bleeding
+ * - Development warnings for missing profile context
  */
 
 import { QueryClient } from '@tanstack/react-query';
@@ -16,6 +20,7 @@ import { persistQueryClient } from '@tanstack/react-query-persist-client';
 import logger from '../utils/logger';
 import { networkService } from '../services/NetworkService';
 import { staleTimeManager } from './config/staleTimeConfig';
+import { validateQueryKeyForProfileIsolation } from './profileIsolationGuards';
 
 /**
  * Create AsyncStorage persister for cache persistence
@@ -63,15 +68,15 @@ export const queryClient = new QueryClient({
       // WHATSAPP-STYLE: Prioritize cached data
       staleTime: 10 * 60 * 1000, // 10 minutes - longer staleness for better UX
       gcTime: 60 * 60 * 1000, // 1 hour - keep data longer in memory
-      
+
       // LOCAL-FIRST: Prefer cached data over network
       networkMode: 'offlineFirst',
-      
+
       // PERFORMANCE: Reduce unnecessary refetches
       refetchOnWindowFocus: false,
       refetchOnReconnect: true,
       refetchOnMount: false, // Don't refetch if we have cached data
-      
+
       // RELIABILITY: Conservative retry strategy
       retry: (failureCount, error: any) => {
         // Don't retry client errors (4xx)
@@ -80,12 +85,25 @@ export const queryClient = new QueryClient({
         return failureCount < 2;
       },
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-      
+
       // PERFORMANCE: Enable structural sharing for better re-renders
       structuralSharing: true,
-      
+
       // UX: Use placeholder data for smoother transitions
       placeholderData: (previousData: any) => previousData,
+
+      // SECURITY (DEV ONLY): Profile isolation validation
+      onError: __DEV__ ? (error: unknown, query: any) => {
+        // Validate query key for profile isolation in development
+        try {
+          if (query?.queryKey) {
+            validateQueryKeyForProfileIsolation(query.queryKey);
+          }
+        } catch (validationError) {
+          // Don't throw, just log the validation error
+          logger.error('[Profile Isolation Guard] Validation failed:', validationError);
+        }
+      } : undefined,
     },
     mutations: {
       // RELIABILITY: Retry mutations more aggressively
