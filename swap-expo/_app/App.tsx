@@ -32,6 +32,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { databaseManager } from './localdb/DatabaseManager';
 import logger from './utils/logger';
 import { navigationStateManager } from './utils/NavigationStateManager';
+import { navigationRef } from './utils/navigationRef';
+import { tokenManager } from './services/TokenManager';
 
 // PROFESSIONAL FIX: Suppress technical warnings that don't represent bugs
 // - TanStack Query: queries are intentionally cancelled during navigation
@@ -125,29 +127,39 @@ const App: React.FC = () => {
   const [isDatabaseReady, setIsDatabaseReady] = useState(false);
   const [databaseError, setDatabaseError] = useState<string | null>(null);
 
-  // Initialize database on app startup
+  // Initialize database and token manager on app startup
   useEffect(() => {
-    const initializeDatabase = async () => {
+    const initializeAppInfrastructure = async () => {
       try {
+        // Phase 1: Initialize database
         logger.info('[App] 🚀 Initializing database...');
-        const success = await databaseManager.initialize();
-        
-        if (success) {
-          logger.info('[App] ✅ Database initialization completed successfully');
-          setIsDatabaseReady(true);
-        } else {
+        const dbSuccess = await databaseManager.initialize();
+
+        if (!dbSuccess) {
           const error = 'Database initialization failed';
           logger.error('[App] ❌ Database initialization failed');
           setDatabaseError(error);
+          return;
         }
+
+        logger.info('[App] ✅ Database initialization completed successfully');
+
+        // Phase 2: Initialize TokenManager (load tokens from storage)
+        logger.info('[App] 🔐 Initializing TokenManager...');
+        await tokenManager.initialize();
+        logger.info('[App] ✅ TokenManager initialization completed successfully');
+
+        // All infrastructure initialized successfully
+        setIsDatabaseReady(true);
+
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        logger.error('[App] ❌ Database initialization error:', errorMessage);
+        logger.error('[App] ❌ App infrastructure initialization error:', errorMessage);
         setDatabaseError(errorMessage);
       }
     };
 
-    initializeDatabase();
+    initializeAppInfrastructure();
   }, []);
 
   // Show loading screen while database initializes
@@ -212,6 +224,7 @@ const App: React.FC = () => {
               <RefreshProvider>
                 <AppLifecycleHandler>
                   <NavigationContainer
+                    ref={navigationRef}
                     onStateChange={(state) => {
                       // Professional navigation state tracking
                       navigationStateManager.updateNavigationState(state);

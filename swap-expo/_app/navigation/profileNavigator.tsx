@@ -16,6 +16,8 @@
 import React from "react";
 import { createStackNavigator } from "@react-navigation/stack";
 import Profile from "../features/profile/profile";
+import AddAccountScreen from "../features/profile/AddAccountScreen";
+import BusinessSetup from "../features/business/BusinessSetup";
 import ReferralScreen from "../features/profile/Referrals/Referral";
 import ReferralCounterScreen from "../features/profile/Referrals/ReferralCounter";
 import AddCardScreen from "../features/wallet/AddMoney/Instant/AddCard";
@@ -44,7 +46,6 @@ import {
   BeneficialOwnerForm,
   BeneficialOwnerAddress,
   BeneficialOwnersReview,
-  BeneficialOwnersDocuments,
   BusinessCountryOfResidence,
   BusinessAddress,
   BusinessRegistrationDocuments,
@@ -56,6 +57,8 @@ import {
 // Define the types for the profile stack navigator
 export type ProfileStackParamList = {
   Profile: { sourceRoute?: string } | undefined;
+  AddAccount: undefined;
+  BusinessSetup: undefined;
   Account: undefined;
   PersonalInfo: undefined;
   Documents: undefined;
@@ -156,10 +159,6 @@ export type ProfileStackParamList = {
     returnToTimeline?: boolean;
     sourceRoute?: string;
   };
-  BeneficialOwnersDocuments: {
-    returnToTimeline?: boolean;
-    sourceRoute?: string;
-  };
   BusinessCountryOfResidence: {
     returnToTimeline?: boolean;
     sourceRoute?: string;
@@ -193,6 +192,20 @@ export default function ProfileNavigator() {
         component={Profile}
         options={{
           animation: "slide_from_left",
+        }}
+      />
+      <Stack.Screen
+        name="AddAccount"
+        component={AddAccountScreen}
+        options={{
+          animation: "slide_from_right",
+        }}
+      />
+      <Stack.Screen
+        name="BusinessSetup"
+        component={BusinessSetup}
+        options={{
+          animation: "slide_from_right",
         }}
       />
       <Stack.Screen
@@ -394,15 +407,6 @@ export default function ProfileNavigator() {
       <Stack.Screen
         name="BeneficialOwnersReview"
         component={BeneficialOwnersReview}
-        options={{
-          animation: "slide_from_right",
-          gestureEnabled: true,
-          gestureDirection: "horizontal"
-        }}
-      />
-      <Stack.Screen
-        name="BeneficialOwnersDocuments"
-        component={BeneficialOwnersDocuments}
         options={{
           animation: "slide_from_right",
           gestureEnabled: true,

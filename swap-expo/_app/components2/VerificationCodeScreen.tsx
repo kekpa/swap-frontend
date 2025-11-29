@@ -30,8 +30,12 @@ type AuthStackParamList = {
     returnToTimeline?: boolean; // for KYC flows
     sourceRoute?: string; // for KYC flows
     accountType?: 'personal' | 'business'; // for business registration support
+    isAddingAccount?: boolean; // Instagram-style add account
   };
-  CompleteProfile: { accountType?: 'personal' | 'business' };
+  CompleteProfile: {
+    accountType?: 'personal' | 'business';
+    isAddingAccount?: boolean;
+  };
   EmailVerification: { email: string };
   ResetPassword: { email: string }; // for forgot password flow
   VerifyYourIdentity: { sourceRoute?: string }; // for KYC flows
@@ -49,7 +53,8 @@ const VerificationCodeScreen = () => {
     channel,
     returnToTimeline,
     sourceRoute,
-    accountType
+    accountType,
+    isAddingAccount = false
   } = route.params;
   
   const themeContext = useTheme();
@@ -289,7 +294,7 @@ const VerificationCodeScreen = () => {
         }
         
         if (authData.is_new_user) {
-          navigation.navigate("CompleteProfile", { accountType });
+          navigation.navigate("CompleteProfile", { accountType, isAddingAccount });
         } else {
           const hasRequiredFields = authData.has_required_fields || false;
 
@@ -297,7 +302,7 @@ const VerificationCodeScreen = () => {
             authContext.setIsAuthenticated(true);
             await authContext.checkSession();
           } else {
-            navigation.navigate("CompleteProfile", { accountType });
+            navigation.navigate("CompleteProfile", { accountType, isAddingAccount });
           }
         }
       }

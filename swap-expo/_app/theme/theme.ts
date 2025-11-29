@@ -308,7 +308,7 @@ const lightBaseColors: Partial<ThemeColors> = {
   error: PALETTE.semantic.error,
   info: PALETTE.semantic.info,
   
-  background: PALETTE.neutral.white,
+  background: PALETTE.neutral.gray100,  // #F3F4F6 - Main app background for light theme
   card: PALETTE.neutral.white,
   statusBar: PALETTE.neutral.white,
   inputBackground: PALETTE.neutral.gray50,

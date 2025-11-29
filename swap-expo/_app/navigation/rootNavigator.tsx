@@ -19,6 +19,7 @@ const ContactInteractionHistoryScreen2 = React.lazy(() => import("../features/in
 const SendMoneyScreen = React.lazy(() => import("../features/interactions/sendMoney2/SendMoneyScreen"));
 const ReviewTransferScreen = React.lazy(() => import("../features/interactions/sendMoney2/ReviewTransferScreen"));
 const TransferCompletedScreen = React.lazy(() => import("../features/interactions/sendMoney2/TransferCompletedScreen"));
+const TempAddMoneyScreen = React.lazy(() => import("../features/wallet/AddMoney/AddMoney2/TempAddMoney"));
 
 // Development bypass settings - rely on AuthContext now
 const DEV_ALWAYS_AUTHENTICATED = false;
@@ -73,6 +74,7 @@ export type RootStackParamList = {
   LoadingScreen: undefined;
   ProfileModal: { sourceRoute?: string };
   NewInteraction: undefined; // Add NewInteraction here (can add params if needed later)
+  AddMoneyModal: undefined; // TempAddMoney modal accessible from anywhere
   TransactionDetails: {
     transactionId: string;
     transaction?: any;
@@ -265,6 +267,20 @@ export default function RootNavigator() {
             }}
           />
           <Stack.Screen
+            name="AddMoneyModal"
+            children={() => (
+              <Suspense fallback={<ScreenLoadingFallback name="Add Money" />}>
+                <TempAddMoneyScreen />
+              </Suspense>
+            )}
+            options={{
+              presentation: 'modal',
+              cardStyleInterpolator: CardStyleInterpolators.forModalPresentationIOS,
+              gestureEnabled: true,
+              gestureDirection: 'vertical',
+            }}
+          />
+          <Stack.Screen
             name="TransactionDetails"
             children={() => (
               <Suspense fallback={<ScreenLoadingFallback name="Transaction Details" />}>
@@ -330,10 +346,19 @@ export default function RootNavigator() {
               gestureEnabled: false, // Typically don't want to dismiss a completion screen
             }}
           />
+          {/* Auth screen available for profile switching even when authenticated */}
+          <Stack.Screen
+            name="Auth"
+            component={AuthNavigator}
+            options={{
+              gestureEnabled: false,
+              animationEnabled: true,
+            }}
+          />
         </>
       ) : showLoadingScreen ? (
-        <Stack.Screen 
-          name="LoadingScreen" 
+        <Stack.Screen
+          name="LoadingScreen"
           component={LoadingScreen}
         />
       ) : (

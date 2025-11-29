@@ -274,7 +274,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
   if (permission === null) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#000" />
+        <StatusBar hidden={true} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={styles.loadingText}>
@@ -303,7 +303,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
 
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#000" />
+        <StatusBar hidden={true} />
         <View style={styles.loadingContainer}>
           <Ionicons name="videocam-off" size={64} color="rgba(255, 255, 255, 0.6)" />
           <Text style={styles.loadingText}>
@@ -332,8 +332,8 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
-      
+      <StatusBar hidden={true} />
+
       {/* Back button */}
       <TouchableOpacity style={styles.backButton} onPress={onCancel}>
         <Ionicons name="chevron-back" size={24} color="white" />

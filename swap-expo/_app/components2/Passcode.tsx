@@ -38,7 +38,7 @@ const PasscodeScreen: React.FC<PasscodeProps> = ({
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<PasscodeScreenRouteProp>();
   const { theme } = useTheme();
-  const { completePasscode } = useKycCompletion();
+  const { completeStep } = useKycCompletion(); // ✅ Updated to use completeStep (industry standard)
   const isKycFlow = route.params?.isKycFlow || false;
   const returnToTimeline = route.params?.returnToTimeline;
   const sourceRoute = route.params?.sourceRoute;
@@ -115,7 +115,7 @@ const PasscodeScreen: React.FC<PasscodeProps> = ({
     console.log(`[PasscodeScreen] 🚀 Starting professional KYC completion for passcode...`);
 
     // Use professional KYC completion system
-    const result = await completePasscode(confirmedPasscode, {
+    const result = await completeStep('setup_security', { passcode: confirmedPasscode }, {
       returnToTimeline,
       sourceRoute,
       showSuccessAlert: false,

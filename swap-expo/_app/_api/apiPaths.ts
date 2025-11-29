@@ -39,6 +39,9 @@ export const AUTH_PATHS = {
   // VERIFY_EMAIL: '/auth/verify-email',
   // RESEND_EMAIL_CODE: '/auth/resend-email-code',
   VERIFY_RESET_CODE: '/auth/verify-reset-code',
+  // Multi-account management (Instagram-style)
+  AVAILABLE_PROFILES: '/auth/available-profiles',
+  SWITCH_PROFILE: '/auth/switch-profile',
 };
 
 /**

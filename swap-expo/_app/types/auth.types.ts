@@ -90,7 +90,14 @@ export interface AuthContextType {
   loginBusiness: (identifier: string, password: string, skipStore?: boolean) => Promise<{ success: boolean; message?: string }>;
   loginWithPin: (identifier: string, pin: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
-  
+
+  // Multi-account Management (Instagram-style)
+  availableAccounts: any[]; // Account[] from AccountsManager
+  switchAccount: (userId: string) => Promise<boolean>;
+  saveCurrentAccountToManager: () => Promise<void>;
+  loadAvailableAccounts: () => Promise<void>;
+  removeAccount: (userId: string) => Promise<boolean>;
+
   // Progressive Authentication
   upgradeToAuthenticated: () => Promise<boolean>;
   requestWalletAccess: () => Promise<boolean>;
@@ -102,6 +109,7 @@ export interface AuthContextType {
   
   // Session Management
   checkSession: () => Promise<void>;
+  completeProfileSwitch: (newProfileId: string) => Promise<boolean>;
   getAccessToken: () => Promise<string | null>;
   
   // Legacy Support (keep for backward compatibility)
@@ -110,6 +118,7 @@ export interface AuthContextType {
   handleSignUp: (userData: UserData) => Promise<any>;
   checkEmailConfirmation: (email: string) => Promise<boolean>;
   setIsAuthenticated: React.Dispatch<React.SetStateAction<boolean>>;
+  setUser: React.Dispatch<React.SetStateAction<User | null>>;
   needsLogin: boolean;
   setNeedsLogin: React.Dispatch<React.SetStateAction<boolean>>;
   forceLogout: () => Promise<void>;

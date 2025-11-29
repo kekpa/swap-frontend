@@ -12,6 +12,7 @@ import { crashLogger } from '../utils/crashLogger'; // Initialize global crash l
 
 // Lazy load heavy navigators for better app startup performance
 const WalletNavigator = React.lazy(() => import("./walletNavigator"));
+const HomeNavigator = React.lazy(() => import("./homeNavigator"));
 const InteractionsNavigator = React.lazy(() => import("./interactions/interactionsNavigator"));
 const ShopNavigator = React.lazy(() => import("./shopNavigator"));
 const MapNavigator = React.lazy(() => import("./mapNavigator"));
@@ -77,11 +78,12 @@ export default function AppNavigator() {
 
             if (route.name === "Wallet") {
               iconName = focused ? "wallet" : "wallet-outline";
+            } else if (route.name === "Home") {
+              iconName = focused ? "home" : "home-outline";
+            } else if (route.name === "Contacts") {
+              iconName = focused ? "people" : "people-outline";
             } else if (route.name === "Offers") {
               iconName = focused ? "pricetag" : "pricetag-outline";
-            }
-            else if (route.name === "Contacts") {
-              iconName = focused ? "people" : "people-outline";
             } else if (route.name === "Map") {
               iconName = focused ? "map" : "map-outline";
             } else if (route.name === "Shop") {
@@ -95,7 +97,7 @@ export default function AppNavigator() {
             tabBarActiveTintColor: theme.colors.primary,
             tabBarInactiveTintColor: theme.colors.textSecondary,
             tabBarStyle: {
-              backgroundColor: theme.colors.card,
+              backgroundColor: theme.colors.background,  // Consistent with screen backgrounds
               borderTopColor: theme.colors.border,
               height: 72,
               paddingBottom: Platform.OS === 'ios' ? 25 : 10,
@@ -112,13 +114,21 @@ export default function AppNavigator() {
             headerShown: false,
           };
         }}
-        initialRouteName="Contacts"
+        initialRouteName="Home"
       >
         <Tab.Screen 
           name="Wallet" 
           children={() => (
             <Suspense fallback={<NavigatorLoadingFallback name="Wallet" />}>
               <WalletNavigator />
+            </Suspense>
+          )}
+        />
+        <Tab.Screen
+          name="Home"
+          children={() => (
+            <Suspense fallback={<NavigatorLoadingFallback name="Home" />}>
+              <HomeNavigator />
             </Suspense>
           )}
         />
@@ -130,14 +140,14 @@ export default function AppNavigator() {
             </Suspense>
           )}
         />
-        <Tab.Screen 
+        {/* <Tab.Screen 
           name="Offers" 
           children={() => (
             <Suspense fallback={<NavigatorLoadingFallback name="Offers" />}>
               <OffersNavigator />
             </Suspense>
           )}
-        />
+        /> */}
         
         {/* <Tab.Screen 
           name="Map" 

@@ -11,14 +11,15 @@ import { IS_DEVELOPMENT } from "../config/env"; // Assuming env is moved here
 import logger from "../utils/logger";
 import cacheService, { DEFAULT_CACHE_TTL } from "../utils/cacheService";
 import Constants from "expo-constants";
-import { 
-  CacheConfig, 
-  QueuedRequest, 
-  AUTH_EVENTS, 
+import {
+  CacheConfig,
+  QueuedRequest,
+  AUTH_EVENTS,
   EventEmitter,
   CachedEntry
 } from "../types/api.types";
 import { jwtDecode } from "jwt-decode";
+import { tokenManager } from "../services/TokenManager";
 
 
 // Define the interface for the call history
@@ -99,9 +100,15 @@ const CACHE_CONFIG: CacheConfig = {
 };
 
 // Helper to generate a cache key from request config
+// PROFESSIONAL: Extract profile_id from JWT (single source of truth)
+// This ensures cache isolation between profiles at the database level
 const getCacheKey = (config: AxiosRequestConfig): string => {
   const { url, method, params } = config;
-  return `api:${method || "GET"}-${url}-${JSON.stringify(params || {})}`;
+
+  // Extract profile ID from JWT token (single source of truth)
+  const profileId = tokenManager.getCurrentProfileId() || "none";
+
+  return `api:${method || "GET"}-${url}-${profileId}-${JSON.stringify(params || {})}`;
 };
 
 // Helper to check if a request is cacheable
@@ -332,19 +339,25 @@ apiClient.interceptors.request.use(
     }
 
     try {
-      const token = await getAccessToken();
-      
+      // Use synchronous token access from TokenManager (fast path)
+      let token = tokenManager.getCurrentAccessToken();
+
+      // Fallback to async storage if cache miss (initialization or cold start)
+      if (!token) {
+        token = await tokenManager.getAccessToken();
+      }
+
       if (token) {
         // Check if this is an auth endpoint (logout, refresh, etc.)
-        const isAuthPath = endpoint.includes('/auth/logout') || 
+        const isAuthPath = endpoint.includes('/auth/logout') ||
                           endpoint.includes('/auth/refresh') ||
                           endpoint.includes('/auth/me');
-        
+
         // For non-critical paths like navigation and UI, don't block on token refresh
-        const isUiPath = endpoint.includes('/interactions') || 
-                          endpoint.includes('/profiles') || 
+        const isUiPath = endpoint.includes('/interactions') ||
+                          endpoint.includes('/profiles') ||
                           endpoint.includes('/accounts');
-        
+
         // For auth paths (like logout), always try to refresh expired tokens
         if (isTokenExpired(token) && (isAuthPath || !isUiPath)) {
           logger.debug('Token is expired, refreshing...', 'auth');
@@ -737,6 +750,12 @@ const clearFinancialCache = async () => {
   logger.info("Financial cache cleared", "api");
 };
 
+// Clear profile-specific cache (used when switching profiles to force fresh data)
+const clearProfileCache = async () => {
+  await cacheService.clearCacheCategory("api:GET-/auth/me");
+  logger.info("Profile cache (/auth/me) cleared", "api");
+};
+
 // Function to set profile ID in request headers
 const setProfileId = (profileId: string | null) => {
   if (profileId) {
@@ -756,11 +775,18 @@ const getProfileId = (): string | null => {
 // 🔧 DATABASE-FIRST FIX: Function to get entity_id from JWT token for unified messaging
 const getEntityId = async (): Promise<string | null> => {
   try {
-    const token = await getAccessToken();
+    // Use TokenManager for synchronous access
+    const entityId = tokenManager.getCurrentEntityId();
+    if (entityId) {
+      return entityId;
+    }
+
+    // Fallback: Try loading from storage
+    const token = await tokenManager.getAccessToken();
     if (!token) {
       return null;
     }
-    
+
     const decoded: any = jwtDecode(token);
     return decoded.entity_id || null;
   } catch (error) {
@@ -825,17 +851,44 @@ const enhancedApiClient = {
   clearCache,
   clearUserCache,
   clearFinancialCache,
+  clearProfileCache,
   setProfileId,
   getProfileId,
   getEntityId,
   
+  // PROFESSIONAL: Synchronous token setter for profile switching
+  setAccessToken: (token: string) => {
+    logger.info('[apiClient] 🔐 Setting new access token (synchronous update)', 'api');
+
+    // Update TokenManager (synchronous + background persistence)
+    tokenManager.setAccessToken(token);
+
+    // Update Authorization header immediately (synchronous)
+    apiClient.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+
+    logger.debug('[apiClient] ✅ Token updated in both TokenManager and axios headers', 'api');
+  },
+
+  // PROFESSIONAL: Synchronous refresh token setter for profile switching
+  setRefreshToken: (token: string) => {
+    logger.info('[apiClient] 🔐 Setting new refresh token (synchronous update)', 'api');
+
+    // Update TokenManager (synchronous + background persistence)
+    tokenManager.setRefreshToken(token);
+    // Note: Refresh tokens are not stored in request headers, only in secure storage
+
+    logger.debug('[apiClient] ✅ Refresh token updated in TokenManager', 'api');
+  },
+
   // Add token management functions
   refreshToken: async () => {
     // Skip token refresh in mock mode
-    
+
     try {
       const token = await refreshAccessToken();
       if (token) {
+        // Use new setAccessToken method for consistency
+        tokenManager.setAccessToken(token);
         apiClient.defaults.headers.common["Authorization"] = `Bearer ${token}`;
         return true;
       }

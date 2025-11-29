@@ -148,7 +148,7 @@ const ContactList: React.FC<ContactListProps> = React.memo(({
       alignItems: 'center',
       paddingHorizontal: theme.spacing.md,
       paddingVertical: theme.spacing.sm, // Adjusted padding
-      backgroundColor: theme.colors.grayUltraLight, // Gray bar background
+      backgroundColor: theme.isDark ? theme.colors.grayUltraLight : theme.colors.card,  // White background in light mode
       // borderBottomWidth: 1, // Optional: if you want a bottom border for the header
       // borderBottomColor: theme.colors.divider,
     },
