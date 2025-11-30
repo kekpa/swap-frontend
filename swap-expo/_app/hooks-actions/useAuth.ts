@@ -16,11 +16,11 @@ import { useState } from "react";
 import apiClient from "../_api/apiClient";
 import { Alert } from "react-native";
 import {
+  tokenManager,
   saveAccessToken,
-  clearTokens,
   getAccessToken,
   saveRefreshToken,
-} from "../utils/tokenStorage";
+} from "../services/token";
 import logger from "../utils/logger";
 import { handleAuthError, getUserErrorMessage } from '../utils/errorHandler';
 import { UserData as SharedUserData } from "../types/auth.types"; // Import shared type
@@ -82,7 +82,7 @@ export function useAuth() {
 
       const data = response.data;
       if (data.access_token) {
-        await saveAccessToken(data.access_token);
+        tokenManager.setAccessToken(data.access_token);
       }
 
       return {
@@ -245,10 +245,10 @@ export function useAuth() {
       
       // Now use actualData for token, userId, profileId
       if (actualData.access_token) {
-        await saveAccessToken(actualData.access_token);
+        tokenManager.setAccessToken(actualData.access_token);
         // Also save refresh token if present
         if (actualData.refresh_token) {
-          await saveRefreshToken(actualData.refresh_token);
+          tokenManager.setRefreshToken(actualData.refresh_token);
         }
       } else {
         // If no access_token after parsing, it's still a failed login from our perspective
@@ -332,7 +332,7 @@ export function useAuth() {
       }
 
       // Always perform local cleanup regardless of API call success
-      await clearTokens();
+      await tokenManager.clearAllTokens();
       await apiClient.clearCache();
       
       logger.debug('Local logout cleanup completed successfully', 'auth');
@@ -345,7 +345,7 @@ export function useAuth() {
       
       // Still try to clear tokens even if other cleanup fails
       try {
-        await clearTokens();
+        await tokenManager.clearAllTokens();
       } catch (tokenError) {
         logger.error("Failed to clear tokens during error recovery:", { error: tokenError });
       }

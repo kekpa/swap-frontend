@@ -12,7 +12,7 @@ import { queryKeys } from '../../../tanstack-query/queryKeys';
 import apiClient from '../../../_api/apiClient';
 import { AUTH_PATHS } from '../../../_api/apiPaths';
 import { logger } from '../../../utils/logger';
-import { saveAccessToken, saveRefreshToken } from '../../../utils/tokenStorage';
+import { tokenManager } from '../../../services/token';
 import { eventEmitter } from '../../../utils/eventEmitter';
 import { clearProfileLocalDB } from '../../../localdb';
 
@@ -180,8 +180,8 @@ export const useProfileSwitch = () => {
       });
 
       // Step 2: Store new JWT tokens
-      await saveAccessToken(data.access_token);
-      await saveRefreshToken(data.refresh_token);
+      tokenManager.setAccessToken(data.access_token);
+      tokenManager.setRefreshToken(data.refresh_token);
 
       // Step 3: Update API client with new profile ID
       apiClient.setProfileId(newProfileId);

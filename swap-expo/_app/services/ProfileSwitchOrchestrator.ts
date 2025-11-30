@@ -23,8 +23,7 @@
  */
 
 import logger from '../utils/logger';
-import { tokenManager } from './TokenManager';
-import { saveAccessToken, saveRefreshToken } from '../utils/tokenStorage';
+import { tokenManager, saveAccessToken, saveRefreshToken } from './token';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { Alert } from 'react-native';
 import { queryKeys } from '../tanstack-query/queryKeys';
@@ -484,8 +483,8 @@ export class ProfileSwitchOrchestrator {
 
       // Step 2: Persist to storage (ASYNCHRONOUS - can fail)
       await Promise.all([
-        saveAccessToken(apiResponse.access_token),
-        saveRefreshToken(apiResponse.refresh_token),
+        tokenManager.setAccessToken(apiResponse.access_token),
+        tokenManager.setRefreshToken(apiResponse.refresh_token),
       ]);
 
       logger.debug('[ProfileSwitchOrchestrator] ✅ Tokens persisted to storage');
@@ -728,10 +727,10 @@ export class ProfileSwitchOrchestrator {
 
       // Restore persisted tokens
       if (this.snapshot.accessToken) {
-        await saveAccessToken(this.snapshot.accessToken);
+        tokenManager.setAccessToken(this.snapshot.accessToken);
       }
       if (this.snapshot.refreshToken) {
-        await saveRefreshToken(this.snapshot.refreshToken);
+        tokenManager.setRefreshToken(this.snapshot.refreshToken);
       }
 
       // Restore AuthContext

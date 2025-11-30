@@ -22,7 +22,7 @@ import { Alert } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { User, AuthContextType, UserData, PhoneVerification, AuthLevel } from '../../../types/auth.types';
 import { useAuth } from '../../../hooks-actions/useAuth';
-import { getAccessToken, clearTokens, saveAccessToken, saveRefreshToken } from '../../../utils/tokenStorage';
+import { tokenManager, getAccessToken, saveAccessToken, saveRefreshToken } from '../../../services/token';
 import apiClient, { authEvents } from '../../../_api/apiClient';
 import { AUTH_EVENTS } from '../../../types/api.types';
 import { AUTH_PATHS } from '../../../_api/apiPaths';
@@ -128,7 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const clearCorruptedSession = useCallback(async () => {
     console.log('🧹 [SessionCleanup] Clearing corrupted session data');
     try {
-      await clearTokens();
+      await tokenManager.clearAllTokens();
       apiClient.defaults.headers.common['Authorization'] = 'none';
       apiClient.setProfileId(null);
               
@@ -203,7 +203,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch (error) {
       console.warn('⚠️ [TokenValidation] Failed, clearing session:', error);
       // Clear invalid tokens and reset API client
-      await clearTokens();
+      await tokenManager.clearAllTokens();
       apiClient.defaults.headers.common['Authorization'] = 'none';
       apiClient.setProfileId(null);
               }
@@ -367,7 +367,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (response.data?.access_token) {
         const newAccessToken = response.data.access_token;
-        await saveAccessToken(newAccessToken);
+        tokenManager.setAccessToken(newAccessToken);
         
         // Update authorization header
         apiClient.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
@@ -476,7 +476,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             const newToken = await refreshAccessToken();
             if (!newToken) {
               console.log('🔒 [AuthContext] Token refresh failed, clearing session');
-              await clearTokens();
+              await tokenManager.clearAllTokens();
               setIsAuthenticated(false);
               setIsGuestMode(false);
               setUser(null);
@@ -486,7 +486,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             console.log('✅ [AuthContext] Token refreshed during session restoration');
         } else {
             console.log('🔒 [AuthContext] No refresh token available, clearing session');
-            await clearTokens();
+            await tokenManager.clearAllTokens();
             setIsAuthenticated(false);
             setIsGuestMode(false);
             setUser(null);
@@ -498,7 +498,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       } catch (decodeError) {
         console.error('❌ [AuthContext] Invalid token format, clearing session:', decodeError);
-        await clearTokens();
+        await tokenManager.clearAllTokens();
         setIsAuthenticated(false);
         setIsGuestMode(false);
         setUser(null);
@@ -581,7 +581,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           error: new Error('No profile data received')
         });
 
-        await clearTokens();
+        await tokenManager.clearAllTokens();
         setIsAuthenticated(false);
         setIsGuestMode(false);
         setUser(null);
@@ -600,7 +600,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       // If it's a 401, the token is invalid - clear everything
       if (error.response?.status === 401) {
         console.log('🔒 [AuthContext] Received 401, clearing invalid session');
-        await clearTokens();
+        await tokenManager.clearAllTokens();
         delete apiClient.defaults.headers.common['Authorization'];
       }
 
@@ -893,8 +893,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       // Step 4: Update tokens
-      await saveAccessToken(account.accessToken);
-      await saveRefreshToken(account.refreshToken);
+      tokenManager.setAccessToken(account.accessToken);
+      tokenManager.setRefreshToken(account.refreshToken);
 
       // Step 5: Update API client
       apiClient.defaults.headers.common['Authorization'] = `Bearer ${account.accessToken}`;
@@ -1137,12 +1137,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         console.log('✅ [BusinessLogin] Business login successful, processing tokens');
         
         // CRITICAL: Clear any existing invalid tokens first
-        await clearTokens();
-        
-        await saveAccessToken(authData.access_token);
+        await tokenManager.clearAllTokens();
+
+        tokenManager.setAccessToken(authData.access_token);
         // Handle refresh token if available
         if (authData.refresh_token) {
-          await saveRefreshToken(authData.refresh_token);
+          tokenManager.setRefreshToken(authData.refresh_token);
           console.log('✅ [BusinessLogin] Refresh token saved successfully');
         } else {
           console.warn('⚠️ [BusinessLogin] No refresh token in response');
@@ -1255,12 +1255,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         console.log('✅ [LoginWithPin] PIN login successful, processing tokens');
         
         // CRITICAL: Clear any existing invalid tokens first
-        await clearTokens();
-        
-        await saveAccessToken(authData.access_token);
+        await tokenManager.clearAllTokens();
+
+        tokenManager.setAccessToken(authData.access_token);
         // Handle refresh token if available
         if (authData.refresh_token) {
-          await saveRefreshToken(authData.refresh_token);
+          tokenManager.setRefreshToken(authData.refresh_token);
           console.log('✅ [LoginWithPin] Refresh token saved successfully');
         } else {
           console.warn('⚠️ [LoginWithPin] No refresh token in response');
@@ -1394,10 +1394,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         console.log('🔑 [Login] Parsed auth data:', authData);
         if (authData.access_token) {
           console.log('✅ [Login] Personal login successful, processing tokens');
-          await saveAccessToken(authData.access_token);
+          tokenManager.setAccessToken(authData.access_token);
           if (authData.refresh_token) {
             if (!skipStore) {
-              await saveRefreshToken(authData.refresh_token);
+              tokenManager.setRefreshToken(authData.refresh_token);
               console.log('✅ [Login] Refresh token saved successfully');
             } else {
               console.warn('⚠️ [Login] Skipping refresh token storage as requested');
@@ -1497,11 +1497,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
         if (authData.access_token) {
           console.log('✅ [UnifiedLogin] Login successful, processing tokens');
-          await saveAccessToken(authData.access_token);
+          tokenManager.setAccessToken(authData.access_token);
 
           if (authData.refresh_token) {
             if (!skipStore) {
-              await saveRefreshToken(authData.refresh_token);
+              tokenManager.setRefreshToken(authData.refresh_token);
               console.log('✅ [UnifiedLogin] Refresh token saved successfully');
             } else {
               console.warn('⚠️ [UnifiedLogin] Skipping refresh token storage as requested');

@@ -18,7 +18,7 @@ import apiClient from "./../_api/apiClient";
 import { API_PATHS } from "./../_api/apiPaths";
 import { useAuthContext } from "./../features/auth/context/AuthContext";
 import defaultTheme from "./../theme/theme";
-import { saveAccessToken, saveRefreshToken } from "./../utils/tokenStorage";
+import { tokenManager } from "./../services/token";
 
 // Define type for route and navigation - now supports both phone and email
 type AuthStackParamList = {
@@ -280,8 +280,8 @@ const VerificationCodeScreen = () => {
       const authData = response.data;
 
       if (authData.access_token && authContext) {
-        await saveAccessToken(authData.access_token);
-        await saveRefreshToken(authData.refresh_token);
+        tokenManager.setAccessToken(authData.access_token);
+        tokenManager.setRefreshToken(authData.refresh_token);
         
         authContext.setPhoneVerified({
           phoneNumber: contact,
