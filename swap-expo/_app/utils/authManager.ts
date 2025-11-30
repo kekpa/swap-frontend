@@ -2,7 +2,7 @@
 
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getAccessToken, clearTokens, saveAccessToken, saveRefreshToken } from './tokenStorage';
+import { tokenManager, getAccessToken, saveAccessToken, saveRefreshToken } from '../services/token';
 import logger from './logger';
 // Simple EventEmitter implementation for React Native
 class SimpleEventEmitter {
@@ -295,7 +295,7 @@ class AuthManager {
 
       // Clear persistent storage
       await AsyncStorage.removeItem(SESSION_KEY);
-      await clearTokens();
+      await tokenManager.clearAllTokens();
 
       // Clear any other potential session-related data
       const allKeys = await AsyncStorage.getAllKeys();

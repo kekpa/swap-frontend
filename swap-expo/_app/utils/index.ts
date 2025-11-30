@@ -12,8 +12,8 @@ export { default as logger, LogLevel, setLogLevel, setLogCategory } from './logg
 // Error handling utilities
 export * from './errorHandler';
 
-// Token storage utilities
-export * from './tokenStorage';
+// Token storage is now in services/token module
+// import { tokenManager, saveAccessToken, getAccessToken, etc. } from '../services/token';
 
 // Cache utilities
 export { default as cacheService } from './cacheService';

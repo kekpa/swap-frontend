@@ -10,6 +10,7 @@ import {
   Animated,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SearchHeader from '../header/SearchHeader';
 import SearchOverlay from '../header/SearchOverlay';
 import { useTheme } from '../../theme/ThemeContext';
@@ -19,10 +20,17 @@ import QuickActionsRow from './components/QuickActionsRow';
 import DiscoveryCard from './components/DiscoveryCard';
 import DiscoveryCardsSlider, { DiscoveryCardData } from './components/DiscoveryCardsSlider';
 
+// Header content height: profile pic (40) + padding (6 bottom + 4 top) + spacing buffer (8)
+const HEADER_CONTENT_HEIGHT = 58;
+
 export default function HomeScreen() {
   const { theme } = useTheme();
   const { user } = useAuthContext();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+
+  // Calculate dynamic header height based on device safe area
+  const headerHeight = insets.top + HEADER_CONTENT_HEIGHT;
 
   // Scroll tracking for SearchHeader blur effect
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -221,7 +229,7 @@ export default function HomeScreen() {
       />
 
       {isSearchActive ? (
-        <View style={styles.searchOverlayContainer}>
+        <View style={[styles.searchOverlayContainer, { paddingTop: headerHeight }]}>
           <SearchOverlay
             searchQuery={searchQuery}
             onItemSelect={handleSearchItemSelect}
@@ -230,8 +238,9 @@ export default function HomeScreen() {
       ) : (
         <Animated.ScrollView
           style={styles.content}
-          contentContainerStyle={styles.contentContainer}
+          contentContainerStyle={[styles.contentContainer, { paddingTop: headerHeight }]}
           showsVerticalScrollIndicator={false}
+          alwaysBounceVertical={true}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
             { useNativeDriver: false }
@@ -269,11 +278,9 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   contentContainer: {
-    paddingTop: 78,
     paddingBottom: 24,
   },
   searchOverlayContainer: {
     flex: 1,
-    paddingTop: 78,
   },
 });

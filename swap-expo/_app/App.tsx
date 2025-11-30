@@ -33,7 +33,7 @@ import { databaseManager } from './localdb/DatabaseManager';
 import logger from './utils/logger';
 import { navigationStateManager } from './utils/NavigationStateManager';
 import { navigationRef } from './utils/navigationRef';
-import { tokenManager } from './services/TokenManager';
+import { tokenManager } from './services/token';
 
 // PROFESSIONAL FIX: Suppress technical warnings that don't represent bugs
 // - TanStack Query: queries are intentionally cancelled during navigation

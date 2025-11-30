@@ -1,12 +1,12 @@
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from "axios";
 import {
+  tokenManager,
   getAccessToken,
   saveAccessToken,
   saveRefreshToken,
   getRefreshToken,
-  clearTokens,
   refreshAccessToken,
-} from "../utils/tokenStorage";
+} from "../services/token";
 import { IS_DEVELOPMENT } from "../config/env"; // Assuming env is moved here
 import logger from "../utils/logger";
 import cacheService, { DEFAULT_CACHE_TTL } from "../utils/cacheService";
@@ -19,7 +19,6 @@ import {
   CachedEntry
 } from "../types/api.types";
 import { jwtDecode } from "jwt-decode";
-import { tokenManager } from "../services/TokenManager";
 
 
 // Define the interface for the call history

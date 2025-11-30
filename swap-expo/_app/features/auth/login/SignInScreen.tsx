@@ -32,7 +32,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from "../../../tanstack-query/queryKeys";
 import apiClient from "../../../_api/apiClient";
 import { AUTH_PATHS } from "../../../_api/apiPaths";
-import { saveAccessToken, saveRefreshToken } from "../../../utils/tokenStorage";
+import { saveAccessToken, saveRefreshToken } from "../../../services/token";
 import { useAvailableProfiles } from "../../../hooks-data/useAvailableProfiles";
 
 // Define type for navigation

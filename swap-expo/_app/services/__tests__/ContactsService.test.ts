@@ -17,7 +17,7 @@
 // Mock dependencies before imports
 jest.mock('../../utils/logger');
 
-jest.mock('../../utils/tokenStorage', () => ({
+jest.mock('../token', () => ({
   __esModule: true,
   getAccessToken: jest.fn(),
 }));
@@ -62,7 +62,7 @@ import contactsService from '../ContactsService';
 import * as Contacts from 'expo-contacts';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../../_api/apiClient';
-import { getAccessToken } from '../../utils/tokenStorage';
+import { getAccessToken } from '../token';
 
 // Cast mocks
 const mockRequestPermissions = Contacts.requestPermissionsAsync as jest.Mock;

@@ -12,7 +12,7 @@ jest.mock('expo-local-authentication', () => ({
   authenticateAsync: jest.fn().mockResolvedValue({ success: true }),
 }));
 
-jest.mock('../TokenManager', () => ({
+jest.mock('../token', () => ({
   tokenManager: {
     setAccessToken: jest.fn(),
     getCurrentAccessToken: jest.fn(),
@@ -21,9 +21,6 @@ jest.mock('../TokenManager', () => ({
     getCurrentEntityId: jest.fn(),
     shouldRefreshToken: jest.fn(),
   },
-}));
-
-jest.mock('../../utils/tokenStorage', () => ({
   saveAccessToken: jest.fn(),
   saveRefreshToken: jest.fn(),
 }));
@@ -63,8 +60,7 @@ import ProfileSwitchOrchestrator, {
   ProfileSwitchOptions,
   AvailableProfile,
 } from '../ProfileSwitchOrchestrator';
-import { tokenManager } from '../TokenManager';
-import { saveAccessToken, saveRefreshToken } from '../../utils/tokenStorage';
+import { tokenManager, saveAccessToken, saveRefreshToken } from '../token';
 import { clearProfileLocalDB } from '../../localdb';
 
 // Get references to mocked functions

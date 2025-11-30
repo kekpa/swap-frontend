@@ -12,8 +12,8 @@ jest.mock('jwt-decode', () => ({
   jwtDecode: jest.fn(),
 }));
 
-// Mock token storage
-jest.mock('../../utils/tokenStorage', () => ({
+// Mock token storage (internal module used by TokenManager)
+jest.mock('../token/storage', () => ({
   saveAccessToken: jest.fn().mockResolvedValue(undefined),
   saveRefreshToken: jest.fn().mockResolvedValue(undefined),
   getAccessToken: jest.fn(),
@@ -25,14 +25,14 @@ jest.mock('../../utils/tokenStorage', () => ({
 jest.mock('../../utils/logger');
 
 // Import after mocks
-import TokenManager, { tokenManager } from '../TokenManager';
+import TokenManager, { tokenManager } from '../token/TokenManager';
 import {
   saveAccessToken,
   saveRefreshToken,
   getAccessToken,
   getRefreshToken,
   clearTokens,
-} from '../../utils/tokenStorage';
+} from '../token/storage';
 
 const mockJwtDecode = jwtDecode as jest.MockedFunction<typeof jwtDecode>;
 const mockGetAccessToken = getAccessToken as jest.MockedFunction<typeof getAccessToken>;
@@ -481,7 +481,7 @@ describe('tokenManager singleton', () => {
 
   it('should be the same instance on multiple imports', async () => {
     // Import again
-    const { tokenManager: anotherImport } = await import('../TokenManager');
+    const { tokenManager: anotherImport } = await import('../token/TokenManager');
     expect(tokenManager).toBe(anotherImport);
   });
 });

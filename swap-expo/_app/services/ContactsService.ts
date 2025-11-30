@@ -6,7 +6,7 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import logger from '../utils/logger';
 import apiClient from '../_api/apiClient';
-import { getAccessToken } from '../utils/tokenStorage';
+import { getAccessToken } from './token';
 // import { API_PATHS } from '../_api/apiPaths'; // Original import
 
 // Placeholder for API paths until they are formally added to apiPaths.ts
