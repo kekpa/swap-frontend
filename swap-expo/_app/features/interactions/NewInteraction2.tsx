@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,9 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { CommonActions, StackActions } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { InteractionsStackParamList } from '../../navigation/interactions/interactionsNavigator';
-import { useSearchEntities } from '../../hooks-data/useSearchEntities';
+import { useUnifiedSearch, SearchResult } from '../../hooks-data/useUnifiedSearch';
+import { useInteractions } from '../../hooks-data/useInteractions';
+import { useAuthContext } from '../auth/context/AuthContext';
 // EntitySearchResult type moved to query hooks
 interface EntitySearchResult {
   id: string;
@@ -30,6 +32,7 @@ interface EntitySearchResult {
   lastActiveAt?: string;
 }
 import logger from '../../utils/logger';
+import { getAvatarColor, getInitials } from '../../utils/avatarUtils';
 import { RootStackParamList } from '../../navigation/rootNavigator';
 import contactsService, { ContactMatch, DeviceContact, NormalizedContact } from '../../services/ContactsService';
 import ContactList, { DisplayableContact } from '../../components2/ContactList';
@@ -57,44 +60,27 @@ type NavigationProp = StackNavigationProp<RootStackParamList>;
 //   avatarColor: string;
 // }
 
-// SearchResult interface to match SearchResultsList component
-interface SearchResult {
-  id: string;
-  name: string;
-  type: 'entity' | 'interaction' | 'contact';
-  avatarUrl?: string;
-  initials: string;
-  avatarColor: string;
-  secondaryText: string;
-  originalData: any;
-}
+// SearchResult interface is imported from useUnifiedSearch hook
 
 const NewInteraction2: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  
+  const { user } = useAuthContext();
+
   // State declarations first
   const [searchQuery, setSearchQuery] = useState('');
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
-  const [hasSearched, setHasSearched] = useState(false);
-  
-  // TanStack Query hook for search - replaces useData() search functions
+
+  // Unified search hook - handles local interactions + network entities
   const {
-    results: { entities: entitySearchResults },
-    isLoading: isLoadingEntitySearch,
-    refetch: refetchSearch
-  } = useSearchEntities({ query: searchQuery, enabled: searchQuery.length >= 2 });
-  
-  // getInitials can be removed if ContactList handles it or it's not needed elsewhere
-  const getInitials = (name: string): string => {
-    const nameParts = name.split(' ');
-    if (nameParts.length >= 2) {
-      return `${nameParts[0][0] || ''}${nameParts[1][0] || ''}`.toUpperCase();
-    } else if (nameParts.length === 1 && nameParts[0]) {
-      return nameParts[0].substring(0, 2).toUpperCase();
-    }
-    return 'UN';
-  };
+    results: combinedSearchResults,
+    isLoading: isLoadingSearch,
+    hasSearched,
+    refetch: refetchSearch,
+  } = useUnifiedSearch(searchQuery);
+
+  // Get recent interactions to derive recent contacts
+  const { interactions } = useInteractions({ enabled: true });
   
   // Contact-related state - types changed to DisplayableContact[]
   const [allDeviceContacts, setAllDeviceContacts] = useState<ContactMatch[]>([]); // This might be less directly used now
@@ -105,22 +91,35 @@ const NewInteraction2: React.FC = () => {
   const [isLoadingContacts, setIsLoadingContacts] = useState(true);
   const [isLoadingInitialContacts, setIsLoadingInitialContacts] = useState(true);
   const [contactsSynced, setContactsSynced] = useState(false);
-  
-  // Move the ref declaration to component top level
-  const prevResultsRef = useRef('');
-  
-  // Recent contacts - clear hardcoded data, this should be populated dynamically if used
-  const [recentContacts, setRecentContacts] = useState<DisplayableContact[]>([]);
 
-  // Search results state - now using SearchResult[] for consistency
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  // Derive recent contacts from interactions (best practice: derive from data, not separate state)
+  const recentContacts = useMemo((): DisplayableContact[] => {
+    if (!interactions || interactions.length === 0) return [];
 
-  // Helper to generate avatar color
-  const getAvatarColor = (name: string): string => {
-    const colorPalette = ['#3B82F6', '#8B5CF6', '#EF4444', '#F97316', '#10B981', '#06B6D4', '#8B5A2B', '#EC4899'];
-    const charCode = name.charCodeAt(0) || 0;
-    return colorPalette[Math.abs(charCode) % colorPalette.length];
-  };
+    return interactions
+      .filter(i => !i.is_group) // Only direct conversations
+      .slice(0, 10) // Last 10 interactions
+      .map(i => {
+        // Find the other member (not current user)
+        const other = i.members?.find(m => m.entity_id !== user?.entityId);
+        if (!other) return null;
+
+        const displayName = other.display_name || 'Unknown';
+        return {
+          id: other.entity_id,
+          name: displayName,
+          initials: getInitials(displayName),
+          avatarColor: getAvatarColor(other.entity_id), // Use entity_id for consistent colors
+          avatarUrl: other.avatar_url,
+          statusOrPhone: 'Recent',
+        };
+      })
+      .filter((c): c is DisplayableContact => c !== null)
+      // Deduplicate by id
+      .filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+  }, [interactions, user?.entityId]);
+
+  // Search is now handled by useUnifiedSearch hook (combinedSearchResults)
 
   // Check contacts permission and load phone contacts on mount
   useEffect(() => {
@@ -140,18 +139,12 @@ const NewInteraction2: React.FC = () => {
           const platformMatches = await contactsService.getMatchedPlatformContacts(false); // false = don't force refresh initially
           const appUsersMapped = platformMatches.map(cm => {
             const displayName = cm.matchedUser?.displayName || cm.contact.displayName;
+            const entityId = cm.matchedUser?.entityId || cm.contact.deviceContactId || `app-user-${cm.contact.phoneNumber}`;
             const initials = getInitials(displayName);
-            const charCode = displayName.charCodeAt(0) || 0;
-            // Consistent, valid color palette
-            const colorPalette = ['#38bdf8', '#818cf8', '#f87171', '#fb923c', '#a3e635', '#4ade80', '#2dd4bf', '#60a5fa'];
-            const avatarColor = colorPalette[Math.abs(charCode) % colorPalette.length];
-
-            if (displayName.toLowerCase().includes('hank')) {
-              logger.debug(`[NewInteraction2] Mapping AppUser: Name='${displayName}', Initials='${initials}', AvatarColor='${avatarColor}'`);
-            }
+            const avatarColor = getAvatarColor(entityId); // Use entity_id for consistent colors
 
             return {
-              id: cm.matchedUser?.entityId || cm.contact.deviceContactId || `app-user-${cm.contact.phoneNumber}`,
+              id: entityId,
               name: displayName,
               statusOrPhone: `@${cm.matchedUser?.username || 'user'}`,
               initials: initials,
@@ -167,18 +160,14 @@ const NewInteraction2: React.FC = () => {
           const phoneOnlyNormalized = await contactsService.getPhoneOnlyNormalizedContacts(false); // false = don't force refresh initially
           const phoneOnlyMapped = phoneOnlyNormalized.map(normContact => {
             const displayName = normContact.displayName;
+            const contactId = normContact.deviceContactId || `phone-${normContact.phoneNumber}`;
+            // Extract base contact ID (remove _index suffix) so same person = same color
+            const baseContactId = normContact.deviceContactId?.split('_')[0] || `phone-${normContact.phoneNumber}`;
             const initials = getInitials(displayName);
-            const charCode = displayName.charCodeAt(0) || 0;
-            // Consistent, valid color palette
-            const colorPalette = ['#38bdf8', '#818cf8', '#f87171', '#fb923c', '#a3e635', '#4ade80', '#2dd4bf', '#60a5fa'];
-            const avatarColor = colorPalette[Math.abs(charCode) % colorPalette.length];
-
-            if (displayName.toLowerCase().includes('hank')) {
-              logger.debug(`[NewInteraction2] Mapping PhoneOnly: Name='${displayName}', Initials='${initials}', AvatarColor='${avatarColor}'`);
-            }
+            const avatarColor = getAvatarColor(baseContactId); // Use base contact ID for consistent colors per person
 
             return {
-              id: normContact.deviceContactId || `phone-${normContact.phoneNumber}`,
+              id: contactId,
               name: displayName,
               statusOrPhone: normContact.rawPhoneNumber,
               initials: initials,
@@ -210,82 +199,33 @@ const NewInteraction2: React.FC = () => {
     initializeContacts();
   }, []); // Removed dependencies that might cause re-fetch, like currentUser.entityId if it changes rarely after init.
 
-  // Convert entity search results to contacts format
-  useEffect(() => {
-    // Skip if dependencies didn't actually change or if we've already processed these results
-    const resultsFingerprint = entitySearchResults?.length ? entitySearchResults.map(e => e.id).join(',') : '';
-    
-    if (resultsFingerprint === prevResultsRef.current && prevResultsRef.current !== '') {
-      // Skip processing if we've already processed these exact results
-      return;
-    }
-    
-    // Update reference to current results
-    prevResultsRef.current = resultsFingerprint;
-    
-    if (entitySearchResults && entitySearchResults.length > 0) {
-      logger.debug(`Processing ${entitySearchResults.length} search results`, "NewInteraction");
-      const mappedResults = entitySearchResults.map(entity => {
-        const displayName = entity.displayName || 'Unknown User';
-        const initials = getInitials(displayName);
-        const avatarColor = getAvatarColor(displayName);
-
-        return {
-          id: entity.id,
-          name: displayName,
-          type: 'entity' as const,
-          avatarUrl: entity.avatarUrl || undefined,
-          initials: initials,
-          avatarColor: avatarColor,
-          secondaryText: entity.entityType === 'profile' ? 'Profile' : 
-                        entity.entityType === 'business' ? 'Business' : 'Account',
-          originalData: entity,
-        };
-      });
-      
-      setSearchResults(mappedResults);
-      setHasSearched(true);
-      logger.debug(`Mapped ${mappedResults.length} contacts from search results`, "NewInteraction");
-    } else if (hasSearched) {
-      // Only clear contacts if we've actually searched and found nothing
-      logger.debug(`No search results found or empty results`, "NewInteraction");
-      setSearchResults([]);
-    }
-    
-    // Cleanup function
-    return () => {
-      // Nothing to clean up right now
-    };
-  }, [entitySearchResults, hasSearched]);
+  // Entity search results mapping is now handled by useUnifiedSearch hook
 
   // Debounced search function
+  // Search state (hasSearched) is managed by useUnifiedSearch hook
   const handleSearch = (text: string) => {
     setSearchQuery(text);
-    
+
     // Clear previous timeout
     if (searchTimeout) {
       clearTimeout(searchTimeout);
     }
-    
-    // If query is empty, don't search and reset contacts to default
+
+    // If query is empty or too short, skip network search
     if (!text || text.length < 2) {
-      setHasSearched(false);
       return;
     }
-    
-    // Set new timeout (300ms debounce)
+
+    // Set new timeout (300ms debounce) for network search refetch
     const timeout = setTimeout(async () => {
       logger.debug(`Searching all with query: ${text}`, "NewInteraction");
       try {
-        await refetchSearch(); // Use refetchSearch from TanStack Query
-        setHasSearched(true);
+        await refetchSearch();
       } catch (error) {
         logger.error("Error searching all", error, "NewInteraction");
-        // Still mark as searched even on error to show empty state
-        setHasSearched(true);
       }
     }, 300);
-    
+
     setSearchTimeout(timeout);
   };
 
@@ -315,10 +255,9 @@ const NewInteraction2: React.FC = () => {
     
     // Add to recent contacts
     // setRecentContacts([newContact, ...recentContacts.slice(0, 3)]);
-    
+
     // Reset search
     setSearchQuery('');
-    setHasSearched(false);
   };
 
   const handleRequestContactsPermission = async () => {
@@ -333,18 +272,12 @@ const NewInteraction2: React.FC = () => {
         const platformMatches = await contactsService.getMatchedPlatformContacts(true);
         const appUsersMapped = platformMatches.map(cm => {
           const displayName = cm.matchedUser?.displayName || cm.contact.displayName;
+          const entityId = cm.matchedUser?.entityId || cm.contact.deviceContactId || `app-user-${cm.contact.phoneNumber}`;
           const initials = getInitials(displayName);
-          const charCode = displayName.charCodeAt(0) || 0;
-          // Consistent, valid color palette
-          const colorPalette = ['#38bdf8', '#818cf8', '#f87171', '#fb923c', '#a3e635', '#4ade80', '#2dd4bf', '#60a5fa'];
-          const avatarColor = colorPalette[Math.abs(charCode) % colorPalette.length];
-
-          if (displayName.toLowerCase().includes('hank')) {
-            logger.debug(`[NewInteraction2] Mapping AppUser (Permission Grant): Name='${displayName}', Initials='${initials}', AvatarColor='${avatarColor}'`);
-          }
+          const avatarColor = getAvatarColor(entityId); // Use entity_id for consistent colors
 
           return {
-            id: cm.matchedUser?.entityId || cm.contact.deviceContactId || `app-user-${cm.contact.phoneNumber}`,
+            id: entityId,
             name: displayName,
             statusOrPhone: `@${cm.matchedUser?.username || 'user'}`,
             initials: initials,
@@ -358,18 +291,14 @@ const NewInteraction2: React.FC = () => {
         const phoneOnlyNormalized = await contactsService.getPhoneOnlyNormalizedContacts(true);
         const phoneOnlyMapped = phoneOnlyNormalized.map(normContact => {
           const displayName = normContact.displayName;
+          const contactId = normContact.deviceContactId || `phone-${normContact.phoneNumber}`;
+          // Extract base contact ID (remove _index suffix) so same person = same color
+          const baseContactId = normContact.deviceContactId?.split('_')[0] || `phone-${normContact.phoneNumber}`;
           const initials = getInitials(displayName);
-          const charCode = displayName.charCodeAt(0) || 0;
-          // Consistent, valid color palette
-          const colorPalette = ['#38bdf8', '#818cf8', '#f87171', '#fb923c', '#a3e635', '#4ade80', '#2dd4bf', '#60a5fa'];
-          const avatarColor = colorPalette[Math.abs(charCode) % colorPalette.length];
-          
-          if (displayName.toLowerCase().includes('hank')) {
-            logger.debug(`[NewInteraction2] Mapping PhoneOnly (Permission Grant): Name='${displayName}', Initials='${initials}', AvatarColor='${avatarColor}'`);
-          }
+          const avatarColor = getAvatarColor(baseContactId); // Use base contact ID for consistent colors per person
 
           return {
-            id: normContact.deviceContactId || `phone-${normContact.phoneNumber}`,
+            id: contactId,
             name: displayName,
             statusOrPhone: normContact.rawPhoneNumber,
             initials: initials,
@@ -455,8 +384,36 @@ const NewInteraction2: React.FC = () => {
 
   // Handle search result selection
   const handleSearchResultPress = (searchResult: SearchResult) => {
-    logger.debug(`Search result pressed: ${searchResult.name} (ID: ${searchResult.id})`, "NewInteraction");
-    
+    logger.debug(`Search result pressed: ${searchResult.name} (ID: ${searchResult.id}, type: ${searchResult.type})`, "NewInteraction");
+
+    // Check if this is an interaction result (from local cache)
+    if (searchResult.originalData?.isInteraction) {
+      // Navigate directly to the existing interaction
+      const contactData = {
+        contactId: searchResult.originalData.contactEntityId, // Use the other participant's entity ID
+        contactName: searchResult.name,
+        contactInitials: searchResult.initials,
+        contactAvatarColor: searchResult.avatarColor,
+        interactionId: searchResult.id, // Pass the interaction ID for direct access
+        forceRefresh: false, // No need to refresh, we have the interaction
+        timestamp: new Date().getTime(),
+      };
+
+      navigation.goBack();
+      InteractionManager.runAfterInteractions(() => {
+        logger.debug(`Navigating to existing interaction: ${searchResult.id}`, "NewInteraction");
+        navigation.navigate('App', {
+          screen: 'Contacts',
+          params: {
+            screen: 'ContactInteractionHistory2',
+            params: contactData,
+          },
+        });
+      });
+      return;
+    }
+
+    // Entity result - navigate to create/find interaction
     const contactData = {
       contactId: searchResult.id, // Use entity ID directly from search results
       contactName: searchResult.name,
@@ -465,7 +422,7 @@ const NewInteraction2: React.FC = () => {
       forceRefresh: true,
       timestamp: new Date().getTime(),
     };
-    
+
     // 1. Dismiss the modal first
     navigation.goBack();
 
@@ -552,7 +509,7 @@ const NewInteraction2: React.FC = () => {
         <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
           <Ionicons name="close" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>New chat</Text>
+        <Text style={styles.headerTitle}>New interaction</Text>
         <View style={styles.emptySpace} />
       </View>
       
@@ -566,7 +523,7 @@ const NewInteraction2: React.FC = () => {
           value={searchQuery}
           onChangeText={handleSearch}
         />
-        {isLoadingEntitySearch && (
+        {isLoadingSearch && (
           <ActivityIndicator size="small" color={theme.colors.primary} style={styles.searchLoader} />
         )}
       </View>
@@ -587,13 +544,13 @@ const NewInteraction2: React.FC = () => {
           </View>
         </View> */}
         
-        {/* Recent Contacts Section */}
-        {!searchQuery && (
+        {/* Recent Contacts Section - Only show if there are recent contacts */}
+        {!searchQuery && recentContacts.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Recent contacts</Text>
-            
-            <ScrollView 
-              horizontal 
+
+            <ScrollView
+              horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.recentContactsContainer}
             >
@@ -619,13 +576,14 @@ const NewInteraction2: React.FC = () => {
         )}
         
         {/* Search Results Section - Only shown when searchQuery is active */}
+        {/* LOCAL-FIRST: combinedSearchResults from useUnifiedSearch includes instant local + delayed network results */}
         {searchQuery && (
           <View style={styles.fullWidthSection}>
             <SearchResultsList
-              searchResults={searchResults}
-              isLoading={isLoadingEntitySearch}
+              searchResults={combinedSearchResults}
+              isLoading={isLoadingSearch && combinedSearchResults.length === 0}
               searchQuery={searchQuery}
-              hasSearched={hasSearched}
+              hasSearched={hasSearched || combinedSearchResults.length > 0}
               onItemSelect={handleSearchResultPress}
               emptyStateTitle={`No results found for "${searchQuery}"`}
               emptyStateSubtitle="Try a different search term or add this contact manually"

@@ -20,6 +20,7 @@ interface SearchResult {
   initials: string;
   avatarColor: string;
   secondaryText: string;
+  date?: string; // For interactions - shows relative date (e.g., "Nov 8")
   originalData: any;
 }
 
@@ -109,6 +110,17 @@ const SearchResultsList: React.FC<SearchResultsListProps> = ({
     secondaryText: {
       fontSize: 14,
       color: theme.colors.textSecondary,
+      flex: 1,
+    },
+    itemRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    dateText: {
+      fontSize: 13,
+      color: theme.colors.textTertiary,
+      marginLeft: 8,
     },
     loadingContainer: {
       flex: 1,
@@ -148,23 +160,31 @@ const SearchResultsList: React.FC<SearchResultsListProps> = ({
   }), [theme, scrollable]);
 
   // Render search result item
-  const renderSearchItem = useCallback((item: SearchResult) => (
-    <TouchableOpacity
-      key={item.id}
-      style={styles.resultItem}
-      onPress={() => handleItemPress(item)}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.avatar, { backgroundColor: item.avatarColor }]}>
-        <Text style={styles.avatarText}>{item.initials}</Text>
-      </View>
-      
-      <View style={styles.itemContent}>
-        <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.secondaryText} numberOfLines={1}>{item.secondaryText}</Text>
-      </View>
-    </TouchableOpacity>
-  ), [handleItemPress, styles]);
+  // Use composite key to avoid duplicate key error when same entity appears in both entity and interaction results
+  const renderSearchItem = useCallback((item: SearchResult) => {
+    const compositeKey = `${item.originalData?.isInteraction ? 'interaction' : item.type}-${item.id}`;
+
+    return (
+      <TouchableOpacity
+        key={compositeKey}
+        style={styles.resultItem}
+        onPress={() => handleItemPress(item)}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.avatar, { backgroundColor: item.avatarColor }]}>
+          <Text style={styles.avatarText}>{item.initials}</Text>
+        </View>
+
+        <View style={styles.itemContent}>
+          <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
+          <View style={styles.itemRow}>
+            <Text style={styles.secondaryText} numberOfLines={1}>{item.secondaryText}</Text>
+            {item.date && <Text style={styles.dateText}>{item.date}</Text>}
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  }, [handleItemPress, styles]);
 
   // Content based on state
   const renderContent = () => {

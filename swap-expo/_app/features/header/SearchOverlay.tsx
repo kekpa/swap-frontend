@@ -1,6 +1,6 @@
 // Created: SearchOverlay component for Google Maps-style in-place search experience - 2025-05-29
-// Updated: Complete TanStack Query migration with proper hooks - 2025-01-10
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+// Updated: Refactored to use useUnifiedSearch hook for consistent search - 2025-12-04
+import React, { useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ScrollView,
   ActivityIndicator,
   InteractionManager,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -19,21 +20,10 @@ import { InteractionsStackParamList } from '../../navigation/interactions/intera
 import SearchResultsList from '../../components2/SearchResultsList';
 import { getAvatarProps } from '../../utils/avatarUtils';
 import logger from '../../utils/logger';
-import { useSearchEntities } from '../../hooks-data/useSearchEntities';
+import { useUnifiedSearch, SearchResult } from '../../hooks-data/useUnifiedSearch';
 import { useInteractions, InteractionItem } from '../../hooks-data/useInteractions';
 
 type NavigationProp = StackNavigationProp<InteractionsStackParamList>;
-
-interface SearchResult {
-  id: string;
-  name: string;
-  type: 'entity' | 'interaction' | 'contact';
-  avatarUrl?: string;
-  initials: string;
-  avatarColor: string;
-  secondaryText: string;
-  originalData: any;
-}
 
 interface SearchOverlayProps {
   searchQuery: string;
@@ -48,27 +38,21 @@ const SearchOverlay: React.FC<SearchOverlayProps> = React.memo(({
   const { theme } = useTheme();
   const { user } = useAuthContext();
 
-  // TanStack Query hooks
+  // Unified search hook - combines local interactions + network entities
   const {
     results: searchResults,
-    isLoading: isLoadingEntitySearch,
-    isError: isSearchError,
-    error: searchError,
-  } = useSearchEntities({
-    query: searchQuery,
-    enabled: searchQuery.length >= 2,
-  });
+    isLoading: isLoadingSearch,
+    hasSearched,
+  } = useUnifiedSearch(searchQuery);
 
+  // Interactions for recent conversations (when not searching)
   const {
     interactions,
     isLoading: isLoadingInteractions,
     isError: isInteractionsError,
-    error: interactionsError,
   } = useInteractions({
     enabled: true,
   });
-
-  const [hasSearched, setHasSearched] = useState(false);
   
   // Convert interactions to suggestions format
   const memoizedSuggestions = useMemo(() => {
@@ -85,7 +69,11 @@ const SearchOverlay: React.FC<SearchOverlayProps> = React.memo(({
         member => member.entity_id !== user?.entityId
       );
       
-      const displayName = interaction.name || otherMember?.display_name || 'Unknown';
+      // For direct conversations, prefer the other member's name over interaction.name
+      // (interaction.name is often "Direct Conversation" which is not useful)
+      const displayName = !interaction.is_group && otherMember?.display_name
+        ? otherMember.display_name
+        : interaction.name || 'Unknown';
       const avatarProps = getAvatarProps(
         otherMember?.entity_id || interaction.id,
         displayName
@@ -107,53 +95,6 @@ const SearchOverlay: React.FC<SearchOverlayProps> = React.memo(({
       };
     });
   }, [interactions, user?.entityId]);
-
-  // Handle search state changes
-  useEffect(() => {
-    // Mark as searched for queries >= 2 characters
-    if (searchQuery && searchQuery.trim().length >= 2) {
-      setHasSearched(true);
-    } else {
-      setHasSearched(false);
-    }
-  }, [searchQuery]);
-
-  // Convert entity search results to SearchResult format using useMemo (React best practice)
-  const mappedSearchResults = useMemo(() => {
-    // Return empty array if no search has been performed or no results
-    if (!hasSearched || !searchResults?.entities || searchResults.entities.length === 0) {
-      return [];
-    }
-
-    logger.debug(`[SearchOverlay] Processing ${searchResults.entities.length} search results. Current user entityId: ${user?.entityId}`);
-
-    // Filter out current user's entity to prevent self-chat
-    const filteredResults = searchResults.entities.filter(entity => {
-      const shouldKeep = entity.id !== user?.entityId;
-      if (!shouldKeep) {
-        logger.debug(`[SearchOverlay] Filtering out current user's entity: ${entity.id} (displayName: ${entity.displayName})`);
-      }
-      return shouldKeep;
-    });
-
-    logger.debug(`[SearchOverlay] After filtering: ${filteredResults.length} results (removed ${searchResults.entities.length - filteredResults.length} self-results)`);
-
-    return filteredResults.map(entity => {
-      const avatarProps = getAvatarProps(entity.id, entity.displayName);
-
-      return {
-        id: entity.id,
-        name: entity.displayName,
-        type: 'entity' as const,
-        avatarUrl: entity.avatarUrl,
-        initials: avatarProps.initials,
-        avatarColor: avatarProps.color,
-        secondaryText: entity.entityType === 'profile' ? 'Profile' :
-                      entity.entityType === 'business' ? 'Business' : 'Account',
-        originalData: entity,
-      };
-    });
-  }, [searchResults?.entities, hasSearched, user?.entityId]);
 
   // Handle item selection
   const handleItemPress = useCallback((item: SearchResult) => {
@@ -230,7 +171,7 @@ const SearchOverlay: React.FC<SearchOverlayProps> = React.memo(({
       fontWeight: '500',
     },
     searchResultsContainer: {
-      flex: 1,
+      // No flex - content determines height
     },
     errorContainer: {
       padding: 20,
@@ -288,11 +229,8 @@ const SearchOverlay: React.FC<SearchOverlayProps> = React.memo(({
   ), [handleItemPress, theme]);
 
   // Handle errors
-  if (isSearchError || isInteractionsError) {
-    logger.error('[SearchOverlay] Error in search or interactions:', {
-      searchError: searchError?.message,
-      interactionsError: interactionsError?.message,
-    });
+  if (isInteractionsError) {
+    logger.error('[SearchOverlay] Error loading interactions');
   }
 
   return (
@@ -304,7 +242,10 @@ const SearchOverlay: React.FC<SearchOverlayProps> = React.memo(({
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Quick Actions</Text>
             </View>
-            <TouchableOpacity style={styles.quickActionItem}>
+            <TouchableOpacity
+              style={styles.quickActionItem}
+              onPress={() => Alert.alert('Coming Soon', 'This feature is still in progress.')}
+            >
               <View style={styles.quickActionIcon}>
                 <Ionicons name="qr-code-outline" size={24} color={theme.colors.primary} />
               </View>
@@ -350,8 +291,8 @@ const SearchOverlay: React.FC<SearchOverlayProps> = React.memo(({
         {searchQuery && (
           <View style={styles.searchResultsContainer}>
             <SearchResultsList
-              searchResults={mappedSearchResults}
-              isLoading={isLoadingEntitySearch}
+              searchResults={searchResults}
+              isLoading={isLoadingSearch}
               searchQuery={searchQuery}
               hasSearched={hasSearched}
               onItemSelect={handleItemPress}
