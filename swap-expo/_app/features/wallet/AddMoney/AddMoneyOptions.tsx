@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  StatusBar,
   Image,
   ScrollView,
 } from "react-native";
@@ -93,8 +92,6 @@ const AddMoneyOptionsScreen: React.FC<AddMoneyOptionsScreenProps> = ({
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-
       <View style={styles.header}>
         <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
           <Text style={styles.closeButtonText}>Close</Text>

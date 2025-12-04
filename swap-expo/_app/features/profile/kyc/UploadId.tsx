@@ -475,10 +475,11 @@ const UploadIdScreen: React.FC = () => {
   const styles = useMemo(() => StyleSheet.create({
     safeArea: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.card,
     },
     container: {
       flex: 1,
+      backgroundColor: theme.colors.background,
     },
     scrollContent: {
       flexGrow: 1,
@@ -1354,6 +1355,7 @@ const UploadIdScreen: React.FC = () => {
       <StatusBar
         hidden={uploadState === 'camera'}
         barStyle={theme.isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={theme.colors.card}
       />
       
       {/* Header - hidden during camera */}

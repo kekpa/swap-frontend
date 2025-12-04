@@ -81,7 +81,7 @@ const ReviewInformation: React.FC<ReviewInformationProps> = ({
   const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.card,
     },
     header: {
       flexDirection: 'row',
@@ -91,6 +91,7 @@ const ReviewInformation: React.FC<ReviewInformationProps> = ({
       paddingVertical: theme.spacing.sm,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
+      backgroundColor: theme.colors.card,
     },
     backButton: {
       width: 40,
@@ -105,6 +106,7 @@ const ReviewInformation: React.FC<ReviewInformationProps> = ({
     },
     content: {
       flex: 1,
+      backgroundColor: theme.colors.background,
     },
     formContainer: {
       padding: theme.spacing.lg,

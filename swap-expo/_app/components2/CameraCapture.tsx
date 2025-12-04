@@ -11,7 +11,8 @@ import {
   StatusBar,
   ActivityIndicator,
   Alert,
-  Dimensions
+  Dimensions,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
@@ -43,6 +44,15 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>(mode === 'selfie' ? 'front' : 'back');
   const [isCapturing, setIsCapturing] = useState(false);
+  const [hasRequestedPermission, setHasRequestedPermission] = useState(false);
+
+  // Auto-request permission on mount - triggers native iOS/Android dialog immediately
+  useEffect(() => {
+    if (permission && !permission.granted && !hasRequestedPermission) {
+      setHasRequestedPermission(true);
+      requestPermission();
+    }
+  }, [permission, hasRequestedPermission, requestPermission]);
 
   // Get display text based on mode
   const getDisplayInfo = () => {
@@ -285,46 +295,50 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
     );
   }
 
-  // If permission was denied, show option to request again
-  if (!permission.granted) {
-    const handleRequestPermission = async () => {
-      const result = await requestPermission();
-      if (!result.granted) {
-        Alert.alert(
-          'Camera Permission Required',
-          'Camera access is needed to capture photos. Please enable camera permission in your device settings.',
-          [
-            { text: 'Cancel', onPress: onCancel },
-            { text: 'Try Again', onPress: handleRequestPermission }
-          ]
-        );
-      }
-    };
-
+  // If permission was denied after we requested it, show clean "denied" screen with Settings button
+  // This only shows AFTER the native dialog was dismissed - not the ugly custom screen
+  if (!permission.granted && hasRequestedPermission) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar hidden={true} />
         <View style={styles.loadingContainer}>
-          <Ionicons name="videocam-off" size={64} color="rgba(255, 255, 255, 0.6)" />
-          <Text style={styles.loadingText}>
-            Camera permission is required to continue
+          <Text style={[styles.loadingText, { fontSize: 18, marginBottom: 10 }]}>
+            Camera Access Denied
+          </Text>
+          <Text style={[styles.loadingText, { fontSize: 14, opacity: 0.8 }]}>
+            Please enable camera access in Settings to continue
           </Text>
           <View style={{ flexDirection: 'row', gap: 15, marginTop: 30 }}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.controlButton, { backgroundColor: 'rgba(255, 255, 255, 0.3)' }]}
               onPress={onCancel}
             >
-              <Ionicons name="chevron-back" size={24} color="white" />
+              <Ionicons name="close" size={24} color="white" />
             </TouchableOpacity>
-          <TouchableOpacity 
-              style={[styles.captureButton, { width: 120, borderRadius: 20 }]}
-              onPress={handleRequestPermission}
-          >
+            <TouchableOpacity
+              style={[styles.captureButton, { width: 140, borderRadius: 20 }]}
+              onPress={() => Linking.openSettings()}
+            >
               <Text style={{ color: 'white', fontWeight: '600', fontSize: 14 }}>
-                Allow Camera
+                Open Settings
               </Text>
-          </TouchableOpacity>
+            </TouchableOpacity>
           </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Still waiting for permission response (native dialog is showing)
+  if (!permission.granted) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar hidden={true} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>
+            Requesting camera access...
+          </Text>
         </View>
       </SafeAreaView>
     );

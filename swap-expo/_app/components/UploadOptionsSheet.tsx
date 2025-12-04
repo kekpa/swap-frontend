@@ -161,6 +161,14 @@ const UploadOptionsSheet: React.FC<UploadOptionsSheetProps> = ({
         lastOptionButton: {
           borderBottomWidth: 0,
         },
+        handleIndicator: {
+          backgroundColor: theme.colors.border, // Theme-aware handle color
+          width: 36,
+          height: 4,
+        },
+        sheetBackground: {
+          backgroundColor: theme.colors.card,
+        },
         optionIcon: {
           width: 40,
           height: 40,
@@ -187,6 +195,8 @@ const UploadOptionsSheet: React.FC<UploadOptionsSheetProps> = ({
       snapPoints={['45%']}
       enablePanDownToClose={true}
       backdropComponent={renderBackdrop}
+      handleIndicatorStyle={styles.handleIndicator}
+      backgroundStyle={styles.sheetBackground}
       onChange={(index) => {
         if (index === -1) {
           // Sheet has finished closing animation

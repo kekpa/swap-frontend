@@ -318,13 +318,16 @@ const PersonalInfoFlow: React.FC = () => {
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background, // Use theme background color
+      backgroundColor: theme.colors.card, // Use card color for header area
     },
   });
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* StatusBar component is no longer explicitly rendered here, it's controlled by useFocusEffect */}
+      <StatusBar
+        barStyle={theme.isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={theme.colors.card}
+      />
       {renderStep()}
     </SafeAreaView>
   );

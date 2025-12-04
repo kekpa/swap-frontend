@@ -66,6 +66,13 @@ class SimpleEventEmitter implements EventEmitter {
 // Create a global event emitter for auth events
 export const authEvents = new SimpleEventEmitter();
 
+// Event types for app lock integration
+export const APP_LOCK_EVENTS = {
+  SESSION_EXPIRED: 'session_expired',      // Token refresh failed, need re-auth
+  REQUIRE_UNLOCK: 'require_unlock',        // Need biometric/PIN unlock
+  FORCE_LOGOUT: 'force_logout',            // Complete logout required
+} as const;
+
 // Extend AxiosResponse to include our cached property
 declare module "axios" {
   interface AxiosResponse {
@@ -385,6 +392,8 @@ apiClient.interceptors.request.use(
                 } else {
                   // Emit auth error event for non-UI paths or auth paths
                   authEvents.emit(AUTH_EVENTS.AUTH_ERROR, 'Token refresh failed');
+                  // Emit session expired for app lock (triggers lock screen instead of logout)
+                  authEvents.emit(APP_LOCK_EVENTS.SESSION_EXPIRED, 'Token refresh failed');
                 }
               }
             } catch (error) {
@@ -398,6 +407,8 @@ apiClient.interceptors.request.use(
               } else {
                 logger.error('Error refreshing token:', error);
                 authEvents.emit(AUTH_EVENTS.AUTH_ERROR, 'Token refresh error');
+                // Emit session expired for app lock (triggers lock screen instead of logout)
+                authEvents.emit(APP_LOCK_EVENTS.SESSION_EXPIRED, 'Token refresh error');
               }
             }
           } else {
@@ -578,6 +589,8 @@ apiClient.interceptors.response.use(
           if (isAuthPath) {
             logger.debug(`Token refresh failed for auth path: ${originalRequest.url}, rejecting request`, "api");
             authEvents.emit(AUTH_EVENTS.AUTH_ERROR, 'Token refresh failed');
+            // Emit session expired for app lock (triggers lock screen instead of logout)
+            authEvents.emit(APP_LOCK_EVENTS.SESSION_EXPIRED, 'Token refresh failed');
             return Promise.reject(error);
           }
           
@@ -596,7 +609,9 @@ apiClient.interceptors.response.use(
           
           // Emit auth error event
           authEvents.emit(AUTH_EVENTS.AUTH_ERROR, 'Token refresh failed');
-          
+          // Emit session expired for app lock (triggers lock screen instead of logout)
+          authEvents.emit(APP_LOCK_EVENTS.SESSION_EXPIRED, 'Token refresh failed');
+
           return Promise.reject(error);
         }
       } catch (refreshError) {
@@ -609,6 +624,8 @@ apiClient.interceptors.response.use(
         if (isAuthPath) {
           logger.debug(`Token refresh error for auth path: ${originalRequest.url}, rejecting request`, "api");
           authEvents.emit(AUTH_EVENTS.AUTH_ERROR, 'Token refresh error');
+          // Emit session expired for app lock (triggers lock screen instead of logout)
+          authEvents.emit(APP_LOCK_EVENTS.SESSION_EXPIRED, 'Token refresh error');
           return Promise.reject(refreshError);
         }
         
@@ -627,7 +644,9 @@ apiClient.interceptors.response.use(
         
         // Emit auth error
         authEvents.emit(AUTH_EVENTS.AUTH_ERROR, 'Token refresh error');
-        
+        // Emit session expired for app lock (triggers lock screen instead of logout)
+        authEvents.emit(APP_LOCK_EVENTS.SESSION_EXPIRED, 'Token refresh error');
+
         return Promise.reject(refreshError);
       }
     }

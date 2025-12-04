@@ -3,7 +3,7 @@
 // Updated: Added endpoint configuration for flexible upload endpoints (personal vs business KYC) - 2025-01-22
 import { useState, useCallback } from 'react';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
+import { File } from 'expo-file-system';
 import apiClient from '../_api/apiClient';
 import { API_PATHS } from '../_api/apiPaths';
 import logger from '../utils/logger';
@@ -135,13 +135,13 @@ export const useDocumentUpload = (config?: UseDocumentUploadConfig): UseDocument
       
       logger.debug(`[useDocumentUpload] Starting upload for ${documentType}`);
       
-      // Get file info
-      const fileInfo = await FileSystem.getInfoAsync(imageUri);
-      if (!fileInfo.exists) {
+      // Get file info using new Expo SDK 54+ File API
+      const file = new File(imageUri);
+      if (!file.exists) {
         throw new Error('File does not exist');
       }
 
-      logger.debug(`[useDocumentUpload] File info:`, JSON.stringify(fileInfo, null, 2));
+      logger.debug(`[useDocumentUpload] File info: exists=${file.exists}, size=${file.size}, name=${file.name}`);
       setUploadProgress(25);
 
       // Create FormData for upload

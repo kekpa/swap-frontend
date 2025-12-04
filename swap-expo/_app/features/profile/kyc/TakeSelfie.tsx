@@ -172,7 +172,7 @@ const TakeSelfieScreen: React.FC = () => {
   const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.card,
     },
     header: {
       flexDirection: 'row',
@@ -182,7 +182,7 @@ const TakeSelfieScreen: React.FC = () => {
       paddingVertical: theme.spacing.sm,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.card,
       zIndex: 100,
     },
     backButton: {
@@ -201,6 +201,7 @@ const TakeSelfieScreen: React.FC = () => {
     initialContainer: {
       flex: 1,
       padding: theme.spacing.lg,
+      backgroundColor: theme.colors.background,
     },
     initialTitle: {
       fontSize: theme.typography.fontSize.xl,
@@ -551,6 +552,7 @@ const TakeSelfieScreen: React.FC = () => {
       <StatusBar
         hidden={selfieState === 'camera'}
         barStyle={theme.isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={theme.colors.card}
       />
       
       {selfieState === 'camera' ? (

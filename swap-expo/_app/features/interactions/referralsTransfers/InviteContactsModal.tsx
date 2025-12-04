@@ -18,7 +18,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  StatusBar,
   TextInput,
   Share,
   Clipboard,
@@ -120,8 +119,6 @@ const InviteContactsModal: React.FC<InviteContactsModalProps> = ({
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-
       <View style={styles.header}>
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
           <Ionicons name="close" size={24} color="#000" />

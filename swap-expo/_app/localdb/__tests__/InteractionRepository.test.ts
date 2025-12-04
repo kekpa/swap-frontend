@@ -11,8 +11,7 @@ jest.mock('expo-sqlite', () => ({}));
 // Mock logger
 jest.mock('../../utils/logger');
 
-// Mock EventCoordinator
-jest.mock('../../utils/EventCoordinator');
+// NOTE: EventCoordinator removed
 
 // Mock DatabaseManager - will connect in beforeEach
 jest.mock('../DatabaseManager', () => ({
@@ -26,11 +25,9 @@ jest.mock('../DatabaseManager', () => ({
 // Import after mocks
 import { InteractionRepository, interactionRepository } from '../InteractionRepository';
 import { databaseManager } from '../DatabaseManager';
-import { eventCoordinator } from '../../utils/EventCoordinator';
 
 // Get mock references
 const mockDatabaseManager = databaseManager as jest.Mocked<typeof databaseManager>;
-const mockEventCoordinator = eventCoordinator as jest.Mocked<typeof eventCoordinator>;
 
 // Mock database objects
 const mockPrepareAsync = jest.fn();
@@ -181,7 +178,6 @@ describe('InteractionRepository', () => {
     it('should emit data updated event', async () => {
       await interactionRepository.saveInteractions([testInteraction], testProfileId);
 
-      expect(mockEventCoordinator.emitDataUpdated).toHaveBeenCalledWith(
         'user',
         testInteraction,
         expect.objectContaining({ profileId: testProfileId })
@@ -283,7 +279,6 @@ describe('InteractionRepository', () => {
     it('should emit data updated event', async () => {
       await interactionRepository.upsertInteraction(testInteraction, testProfileId);
 
-      expect(mockEventCoordinator.emitDataUpdated).toHaveBeenCalledWith(
         'user',
         testInteraction,
         expect.objectContaining({ profileId: testProfileId })
@@ -308,7 +303,6 @@ describe('InteractionRepository', () => {
     it('should emit data updated event with removed flag', async () => {
       await interactionRepository.deleteInteraction('interaction-001', testProfileId);
 
-      expect(mockEventCoordinator.emitDataUpdated).toHaveBeenCalledWith(
         'user',
         expect.objectContaining({ id: 'interaction-001', removed: true }),
         expect.anything()
@@ -337,7 +331,6 @@ describe('InteractionRepository', () => {
 
       await interactionRepository.deleteInteractions(ids, testProfileId);
 
-      expect(mockEventCoordinator.emitDataUpdated).toHaveBeenCalledWith(
         'user',
         expect.objectContaining({ deletedIds: ids }),
         expect.anything()
@@ -605,7 +598,6 @@ describe('InteractionRepository', () => {
 
       await interactionRepository.syncInteractionsFromRemote(fetchRemote, testProfileId);
 
-      expect(mockEventCoordinator.emitDataUpdated).toHaveBeenCalledWith(
         'user',
         remoteInteractions,
         expect.objectContaining({ source: 'InteractionRepository.sync' })

@@ -18,7 +18,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  StatusBar,
   ScrollView,
   Share,
 } from "react-native";
@@ -286,7 +285,6 @@ const ReferralCounterScreen: React.FC<ReferralCounterScreenProps> = (props) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
       {currentView === "faq" ? renderFaqView() : renderInvitesView()}
     </SafeAreaView>
   );

@@ -60,26 +60,26 @@ const WalletOnboarding: React.FC<WalletOnboardingProps> = ({
     if (reason === 'KYC_REQUIRED') {
       // Check if KYC is in progress/under review vs not started
       if (_kycStatus === 'partial') {
-        // User has submitted KYC and it's under review - they should have wallet access
-        // This case should not normally happen with the new backend logic
-        logger.warn('[WalletOnboarding] KYC is under review but wallet access denied - possible backend issue');
+        // User has submitted KYC and it's under review
+        logger.debug('[WalletOnboarding] KYC under review - showing waiting message');
         return {
           icon: 'time-outline' as const,
           iconColor: theme.colors.status?.pending || theme.colors.warning,
-          title: 'Identity Under Review',
-          subtitle: 'Your documents are being verified. Wallet access should be available.',
+          title: 'Account Being Reviewed',
+          subtitle: 'Your identity documents have been submitted and are being verified. This usually takes a few hours.',
           benefits: [
-            '⏳ Verification in progress',
-            '💰 Limited wallet access available',
-            '📞 Contact support if needed',
+            '⏳ Verification typically takes 1-24 hours',
+            '📧 We\'ll notify you once approved',
+            '💰 Wallet access unlocks automatically after approval',
           ],
-          primaryCta: 'Refresh',
+          primaryCta: 'Check Status',
           primaryAction: () => {
-            logger.debug('[WalletOnboarding] Refreshing wallet status');
-            // Force refresh of wallet eligibility
-            window.location.reload();
+            logger.debug('[WalletOnboarding] Navigating to profile to check KYC status');
+            (navigation as any).navigate('ProfileModal', {
+              sourceRoute: 'Wallet'
+            });
           },
-          estimatedTime: 'Review in progress',
+          estimatedTime: 'Usually within 24 hours',
         };
       }
 

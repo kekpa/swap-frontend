@@ -18,7 +18,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  StatusBar,
   TextInput,
   KeyboardAvoidingView,
   Platform,
@@ -143,8 +142,6 @@ const AddCardScreen: React.FC<AddCardScreenProps> = (props) => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color="#6200ee" />

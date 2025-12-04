@@ -131,7 +131,7 @@ const BeneficialOwnerFlow: React.FC = () => {
       const isDarkBackground = theme.isDark;
       StatusBar.setBarStyle(isDarkBackground ? 'light-content' : 'dark-content');
       if (Platform.OS === 'android') {
-        StatusBar.setBackgroundColor(theme.colors.background);
+        StatusBar.setBackgroundColor(theme.colors.card);
         StatusBar.setTranslucent(false);
       }
     }, [theme])
@@ -261,7 +261,7 @@ const BeneficialOwnerFlow: React.FC = () => {
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.card,
     },
   });
 

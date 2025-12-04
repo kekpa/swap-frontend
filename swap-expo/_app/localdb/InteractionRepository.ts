@@ -1,8 +1,8 @@
 // Updated: InteractionRepository with proper schema support - 2025-01-12
+// NOTE: EventCoordinator removed - TanStack Query handles data reactivity
 
 import * as SQLite from 'expo-sqlite';
 import { databaseManager } from './DatabaseManager';
-import { eventCoordinator } from '../utils/EventCoordinator';
 import logger from '../utils/logger';
 
 /**
@@ -168,7 +168,7 @@ export class InteractionRepository {
 
       await statement.finalizeAsync();
       logger.debug(`[InteractionRepository] Saved interaction: ${interaction.id} (profileId: ${profileId})`);
-      await eventCoordinator.emitDataUpdated('user', interaction, { source: 'InteractionRepository', profileId });
+      // Data saved - TanStack Query will fetch fresh data when needed
 
     } catch (error) {
       logger.error(`[InteractionRepository] Error inserting interaction ${interaction.id}: ${error instanceof Error ? error.message : String(error)}`);
@@ -205,7 +205,7 @@ export class InteractionRepository {
           profileId
         ]
       );
-      await eventCoordinator.emitDataUpdated('user', interaction, { source: 'InteractionRepository', profileId });
+      // Data saved - TanStack Query will fetch fresh data when needed
     } catch (error) {
       logger.error('[InteractionRepository] Error upserting interaction:', error instanceof Error ? error.message : String(error));
     }
@@ -219,7 +219,7 @@ export class InteractionRepository {
     try {
       const db = await this.getDatabase();
       await db.runAsync('DELETE FROM interactions WHERE id = ? AND profile_id = ?', [id, profileId]);
-      await eventCoordinator.emitDataUpdated('user', { id, removed: true, profileId }, { source: 'InteractionRepository.delete' });
+      // Data deleted - TanStack Query will refetch when needed
     } catch (error) {
       logger.error('[InteractionRepository] Error deleting interaction:', error instanceof Error ? error.message : String(error));
     }
@@ -258,7 +258,7 @@ export class InteractionRepository {
       }
 
       logger.info(`[InteractionRepository] ✅ Deleted ${ids.length} interactions from sync reconciliation (profileId: ${profileId})`);
-      await eventCoordinator.emitDataUpdated('user', { deletedIds: ids, profileId }, { source: 'InteractionRepository.deleteInteractions' });
+      // Data deleted - TanStack Query will refetch when needed
 
     } catch (error) {
       logger.error('[InteractionRepository] Error deleting interactions:', error instanceof Error ? error.message : String(error));
@@ -266,7 +266,7 @@ export class InteractionRepository {
   }
 
   /**
-   * Background sync: fetch from remote, update local, emit event (PROFILE-ISOLATED)
+   * Background sync: fetch from remote, update local (PROFILE-ISOLATED)
    */
   public async syncInteractionsFromRemote(fetchRemote: () => Promise<LocalInteraction[]>, profileId: string): Promise<void> {
     if (!(await this.isDatabaseAvailable())) return;
@@ -275,7 +275,8 @@ export class InteractionRepository {
       for (const interaction of remoteInteractions) {
         await this.upsertInteraction(interaction, profileId);
       }
-      await eventCoordinator.emitDataUpdated('user', remoteInteractions, { source: 'InteractionRepository.sync', profileId });
+      logger.info(`[InteractionRepository] Synced ${remoteInteractions.length} interactions from remote`);
+      // Data saved - TanStack Query will fetch fresh data when needed
     } catch (error) {
       logger.error('[InteractionRepository] Error syncing interactions from remote:', error instanceof Error ? error.message : String(error));
     }

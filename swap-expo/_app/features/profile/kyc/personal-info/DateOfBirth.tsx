@@ -102,17 +102,17 @@ const DateOfBirth: React.FC<DateOfBirthProps> = ({
 
   // Styles memoized with theme dependency
   const styles = useMemo(() => StyleSheet.create({
-    container: { 
-      flex: 1, 
-      backgroundColor: theme.colors.background 
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.card
     },
     header: {
-      flexDirection: 'row', 
-      alignItems: 'center', 
+      flexDirection: 'row',
+      alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: theme.spacing.md, 
+      paddingHorizontal: theme.spacing.md,
       paddingVertical: theme.spacing.sm,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.card,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
     },
@@ -226,7 +226,7 @@ const DateOfBirth: React.FC<DateOfBirthProps> = ({
   // Set status bar style when the screen is focused
   useFocusEffect(
     React.useCallback(() => {
-      const headerBackgroundColor = theme.colors.background;
+      const headerBackgroundColor = theme.colors.card;
       const isDarkBackground = theme.isDark;
 
       StatusBar.setBarStyle(isDarkBackground ? 'light-content' : 'dark-content');

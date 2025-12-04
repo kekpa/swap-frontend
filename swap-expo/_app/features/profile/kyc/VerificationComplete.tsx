@@ -29,7 +29,7 @@ const VerificationCompleteScreen: React.FC = () => {
   const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.card,
     },
     header: {
       flexDirection: 'row',
@@ -39,6 +39,7 @@ const VerificationCompleteScreen: React.FC = () => {
       paddingVertical: theme.spacing.sm,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
+      backgroundColor: theme.colors.card,
     },
     headerSpacer: {
       width: 40,
@@ -54,6 +55,7 @@ const VerificationCompleteScreen: React.FC = () => {
       alignItems: 'center',
       paddingHorizontal: theme.spacing.lg,
       paddingTop: theme.spacing.xl * 2,
+      backgroundColor: theme.colors.background,
     },
     successCheck: {
       width: 80,
@@ -94,7 +96,7 @@ const VerificationCompleteScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.card} />
       
       {/* Header */}
       <View style={styles.header}>

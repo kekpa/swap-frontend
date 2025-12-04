@@ -51,17 +51,17 @@ const CountryOfResidence: React.FC<CountryOfResidenceProps> = ({
   const isLoading = countriesLoading || personalInfoLoading;
 
   const styles = useMemo(() => StyleSheet.create({
-    container: { 
-      flex: 1, 
-      backgroundColor: theme.colors.background 
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.card
     },
     header: {
-      flexDirection: 'row', 
-      alignItems: 'center', 
+      flexDirection: 'row',
+      alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: theme.spacing.md, 
+      paddingHorizontal: theme.spacing.md,
       paddingVertical: theme.spacing.sm,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.card,
     },
     backButton: { 
       width: 40, 

@@ -18,7 +18,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  StatusBar,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -35,8 +34,6 @@ const AddMoneySuccessScreen: React.FC<AddMoneySuccessScreenProps> = ({
 }) => {
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-
       <View style={styles.content}>
         <View style={styles.successIconContainer}>
           <Ionicons name="checkmark" size={40} color="#fff" />

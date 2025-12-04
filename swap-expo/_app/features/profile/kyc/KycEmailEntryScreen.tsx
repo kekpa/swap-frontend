@@ -81,9 +81,9 @@ const KycEmailEntryScreen = () => {
   };
 
   const styles = useMemo(() => StyleSheet.create({
-    container: { 
-      flex: 1, 
-      backgroundColor: theme.colors.background 
+    container: {
+      flex: 1,
+      backgroundColor: theme.colors.card
     },
     header: {
       flexDirection: 'row',
@@ -93,6 +93,7 @@ const KycEmailEntryScreen = () => {
       paddingVertical: theme.spacing.sm,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
+      backgroundColor: theme.colors.card,
     },
     backButton: {
       width: 40,
@@ -194,7 +195,7 @@ const KycEmailEntryScreen = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0} // Adjust if necessary
       >
-        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
+        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.card} />
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
             <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />

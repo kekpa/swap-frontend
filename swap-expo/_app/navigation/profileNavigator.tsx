@@ -23,6 +23,8 @@ import ReferralCounterScreen from "../features/profile/Referrals/ReferralCounter
 import AddCardScreen from "../features/wallet/AddMoney/Instant/AddCard";
 import AddMoneyOptionsScreen from "../features/wallet/AddMoney/AddMoneyOptions";
 import FeesScreen from "../features/profile/fees";
+import PrivacyPolicyScreen from "../features/profile/legal/PrivacyPolicy";
+import TermsAndConditionsScreen from "../features/profile/legal/TermsAndConditions";
 import VerifyYourIdentityScreen from "../features/profile/kyc/VerifyYourIdentity";
 import VerificationCompleteScreen from "../features/profile/kyc/VerificationComplete";
 import TakeSelfieScreen from "../features/profile/kyc/TakeSelfie";
@@ -63,6 +65,8 @@ export type ProfileStackParamList = {
   PersonalInfo: undefined;
   Documents: undefined;
   Fees: undefined;
+  PrivacyPolicy: undefined;
+  TermsAndConditions: undefined;
   SecurityPrivacy: undefined;
   Passcode: { 
     isKycFlow?: boolean; 
@@ -239,6 +243,20 @@ export default function ProfileNavigator() {
       <Stack.Screen
         name="Fees"
         component={FeesScreen}
+        options={{
+          animation: "slide_from_right",
+        }}
+      />
+      <Stack.Screen
+        name="PrivacyPolicy"
+        component={PrivacyPolicyScreen}
+        options={{
+          animation: "slide_from_right",
+        }}
+      />
+      <Stack.Screen
+        name="TermsAndConditions"
+        component={TermsAndConditionsScreen}
         options={{
           animation: "slide_from_right",
         }}

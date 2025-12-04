@@ -12,6 +12,7 @@ import SearchHeader from '../header/SearchHeader';
 import { useTheme } from '../../theme/ThemeContext';
 import { Theme } from '../../theme/theme';
 import { useAuthContext } from '../auth/context/AuthContext';
+import { useHeaderOffset } from '../../hooks/useHeaderOffset';
 
 interface Bundle {
   name: string;
@@ -54,6 +55,9 @@ const OffersDiscoveryRedesignedScreen: React.FC = () => {
 
   // Scroll tracking for SearchHeader blur effect
   const scrollY = useRef(new Animated.Value(0)).current;
+
+  // Header offset for device-adaptive padding (iPhone SE to Pro Max)
+  const { headerHeight } = useHeaderOffset();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -871,7 +875,7 @@ const OffersDiscoveryRedesignedScreen: React.FC = () => {
       />
       <Animated.ScrollView
         style={styles.scrollView}
-        contentContainerStyle={{ paddingTop: 78 }}
+        contentContainerStyle={{ paddingTop: headerHeight }}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }

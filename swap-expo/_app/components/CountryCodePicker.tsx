@@ -11,7 +11,6 @@ import {
   StyleSheet,
   Modal,
   SafeAreaView,
-  StatusBar,
   Dimensions,
 } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
@@ -105,8 +104,6 @@ const CountryCodePicker = forwardRef<CountryCodePickerRef, CountryCodePickerProp
         onRequestClose={closeModal}
       >
         <SafeAreaView style={[styles.fullScreenModal, { backgroundColor: theme.colors.background }]}>
-          <StatusBar barStyle="dark-content" />
-          
           <View style={styles.modalHeader}>
             <TouchableOpacity 
               onPress={closeModal} 

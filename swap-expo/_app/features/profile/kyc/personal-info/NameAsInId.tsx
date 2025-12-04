@@ -63,7 +63,7 @@ const NameAsInId: React.FC<NameAsInIdProps> = ({
   const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.card,
     },
     header: {
       flexDirection: 'row',
@@ -73,6 +73,7 @@ const NameAsInId: React.FC<NameAsInIdProps> = ({
       paddingVertical: theme.spacing.sm,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
+      backgroundColor: theme.colors.card,
     },
     backButton: {
       width: 40,
@@ -87,6 +88,7 @@ const NameAsInId: React.FC<NameAsInIdProps> = ({
     },
     content: {
       flex: 1,
+      backgroundColor: theme.colors.background,
     },
     formContainer: {
       padding: theme.spacing.lg,

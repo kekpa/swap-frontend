@@ -114,7 +114,7 @@ const BusinessAddress: React.FC = () => {
   };
 
   const styles = useMemo(() => StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.background },
+    container: { flex: 1, backgroundColor: theme.colors.card },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -136,7 +136,7 @@ const BusinessAddress: React.FC = () => {
       fontSize: theme.typography.fontSize.md, 
       fontWeight: '600' 
     },
-    content: { padding: theme.spacing.lg },
+    content: { padding: theme.spacing.lg, flex: 1, backgroundColor: theme.colors.background },
     title: {
       fontSize: theme.typography.fontSize.xl,
       fontWeight: '600',
@@ -191,7 +191,7 @@ const BusinessAddress: React.FC = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
     >
-      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.card} />
       
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>

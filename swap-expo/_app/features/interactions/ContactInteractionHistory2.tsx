@@ -129,8 +129,8 @@ const dateHeaderStyles = (theme: Theme) => StyleSheet.create({
 
 // Global styles function for the main screen
 const createGlobalStyles = (theme: Theme) => StyleSheet.create({
-  outerContainer: { flex: 1, backgroundColor: theme.colors.background },
-  container: { flex: 1, backgroundColor: theme.colors.background },
+  outerContainer: { flex: 1, backgroundColor: theme.colors.card },
+  container: { flex: 1, backgroundColor: theme.colors.card },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm, height: 70, backgroundColor: theme.colors.card, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
   backButton: { marginRight: theme.spacing.sm, padding: theme.spacing.xs },
   avatarContainer: { marginRight: theme.spacing.sm },
@@ -141,7 +141,8 @@ const createGlobalStyles = (theme: Theme) => StyleSheet.create({
   headerStatus: { color: theme.colors.textSecondary, fontSize: theme.typography.fontSize.xs },
   headerActions: { flexDirection: 'row' },
   headerButton: { width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center', marginLeft: theme.spacing.sm },
-  filterBar: { flexDirection: 'row', justifyContent: 'center', gap: theme.spacing.sm, padding: theme.spacing.sm, backgroundColor: theme.colors.background, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  filterBar: { flexDirection: 'row', justifyContent: 'center', gap: theme.spacing.sm, padding: theme.spacing.sm, backgroundColor: theme.colors.card, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+  contentArea: { flex: 1, backgroundColor: theme.colors.background },
   filterBadge: { paddingVertical: theme.spacing.xs + 2, paddingHorizontal: theme.spacing.md, borderRadius: theme.borderRadius.xl, backgroundColor: theme.colors.grayUltraLight },
   activeFilterBadge: { backgroundColor: theme.colors.primaryLight },
   filterBadgeText: { fontSize: theme.typography.fontSize.sm, fontWeight: '500', color: theme.colors.textSecondary },
@@ -701,7 +702,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
   if (shouldShowLoadingScreen) {
     return (
       <View style={styles.outerContainer}>
-        <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
+        <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.card} />
         <SafeAreaView style={styles.container}>
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
@@ -727,7 +728,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
 
   return (
     <View style={styles.outerContainer}>
-      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
+      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.card} />
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={handleBackPress} style={styles.backButton}>
@@ -765,48 +766,50 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
             <Text style={[styles.filterBadgeText, activeTab === 'message' && styles.activeFilterBadgeText]}>Messages</Text>
           </TouchableOpacity>
         </View>
-        
-        <FlashList
-          ref={flatListRef}
-          data={filteredItems}
-          keyExtractor={(item, index) => `${item.type || item.itemType || 'unknown'}-${item.id}-${index}`}
-          renderItem={renderTimelineItem}
-          estimatedItemSize={80}
-          contentContainerStyle={[
-            styles.timelineContent,
-            { flexGrow: 1, justifyContent: filteredItems.length > 0 ? 'flex-start' : 'center' }
-          ]}
-          inverted={false} // Keep chronological order: oldest at top, newest at bottom
-          ListEmptyComponent={renderEmptyState}
-          showsVerticalScrollIndicator={false}
-          onScroll={(event) => {
-            // Defensive check for FlashList layout timing issue
-            if (!event?.nativeEvent?.contentOffset) {
-              return;
-            }
 
-            // Load older messages when scrolling UP to the TOP
-            const yOffset = event.nativeEvent.contentOffset.y;
-            const threshold = 100; // Trigger when within 100px of top
+        <View style={styles.contentArea}>
+          <FlashList
+            ref={flatListRef}
+            data={filteredItems}
+            keyExtractor={(item, index) => `${item.type || item.itemType || 'unknown'}-${item.id}-${index}`}
+            renderItem={renderTimelineItem}
+            estimatedItemSize={80}
+            contentContainerStyle={[
+              styles.timelineContent,
+              { flexGrow: 1, justifyContent: filteredItems.length > 0 ? 'flex-start' : 'center' }
+            ]}
+            inverted={false} // Keep chronological order: oldest at top, newest at bottom
+            ListEmptyComponent={renderEmptyState}
+            showsVerticalScrollIndicator={false}
+            onScroll={(event) => {
+              // Defensive check for FlashList layout timing issue
+              if (!event?.nativeEvent?.contentOffset) {
+                return;
+              }
 
-            if (yOffset <= threshold && hasNextPage && !isFetchingNextPage) {
-              logger.debug('[ContactInteractionHistory] Near top - loading older messages...', 'ContactInteractionHistory');
-              fetchNextPage();
+              // Load older messages when scrolling UP to the TOP
+              const yOffset = event.nativeEvent.contentOffset.y;
+              const threshold = 100; // Trigger when within 100px of top
+
+              if (yOffset <= threshold && hasNextPage && !isFetchingNextPage) {
+                logger.debug('[ContactInteractionHistory] Near top - loading older messages...', 'ContactInteractionHistory');
+                fetchNextPage();
+              }
+            }}
+            scrollEventThrottle={400}
+            ListHeaderComponent={
+              isFetchingNextPage ? (
+                <View style={{ padding: 16, alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                  <Text style={{ marginTop: 8, color: theme.colors.textSecondary, fontSize: 12 }}>
+                    Loading older messages...
+                  </Text>
+                </View>
+              ) : null
             }
-          }}
-          scrollEventThrottle={400}
-          ListHeaderComponent={
-            isFetchingNextPage ? (
-              <View style={{ padding: 16, alignItems: 'center' }}>
-                <ActivityIndicator size="small" color={theme.colors.primary} />
-                <Text style={{ marginTop: 8, color: theme.colors.textSecondary, fontSize: 12 }}>
-                  Loading older messages...
-                </Text>
-              </View>
-            ) : null
-          }
-        />
-        
+          />
+        </View>
+
         <KeyboardAvoidingView 
           behavior={Platform.OS === "ios" ? "padding" : "height"} 
           keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}

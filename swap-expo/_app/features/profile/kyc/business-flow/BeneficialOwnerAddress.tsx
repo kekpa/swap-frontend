@@ -88,7 +88,7 @@ const BeneficialOwnerAddress: React.FC = () => {
   };
 
   const styles = useMemo(() => StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.background },
+    container: { flex: 1, backgroundColor: theme.colors.card },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -101,7 +101,7 @@ const BeneficialOwnerAddress: React.FC = () => {
     },
     backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
     headerTitle: { fontSize: theme.typography.fontSize.lg, fontWeight: '600', color: theme.colors.textPrimary },
-    content: { flex: 1, padding: theme.spacing.lg },
+    content: { flex: 1, padding: theme.spacing.lg, backgroundColor: theme.colors.background },
     title: {
       fontSize: theme.typography.fontSize.xl,
       fontWeight: '600',
@@ -176,7 +176,7 @@ const BeneficialOwnerAddress: React.FC = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
       >
-        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
+        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.card} />
 
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={handleBack}>
@@ -229,7 +229,7 @@ const BeneficialOwnerAddress: React.FC = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
     >
-      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.card} />
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>

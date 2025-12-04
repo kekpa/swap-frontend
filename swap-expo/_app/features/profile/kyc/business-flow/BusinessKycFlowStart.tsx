@@ -79,7 +79,7 @@ const BusinessKycFlowStart: React.FC = () => {
   const styles = StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.card,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -102,7 +102,7 @@ const BusinessKycFlowStart: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.card} />
 
       <View style={styles.content}>
         <ActivityIndicator size="large" color={theme.colors.primary} />

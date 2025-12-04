@@ -1303,7 +1303,7 @@ const MapScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="light" translucent backgroundColor="transparent" />
+      <StatusBar style={theme.isDark ? "light" : "dark"} translucent backgroundColor="transparent" />
       
       {/* Map View should be rendered first to act as the base layer */}
       <MapView

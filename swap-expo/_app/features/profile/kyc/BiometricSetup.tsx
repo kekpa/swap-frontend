@@ -261,7 +261,7 @@ const BiometricSetup: React.FC = () => {
   const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.card,
     },
     header: {
       flexDirection: 'row',
@@ -271,6 +271,7 @@ const BiometricSetup: React.FC = () => {
       paddingVertical: theme.spacing.sm,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
+      backgroundColor: theme.colors.card,
     },
     backButton: {
       width: 40,
@@ -285,6 +286,7 @@ const BiometricSetup: React.FC = () => {
     },
     content: {
       flex: 1,
+      backgroundColor: theme.colors.background,
     },
     formContainer: {
       padding: theme.spacing.lg,
@@ -415,7 +417,7 @@ const BiometricSetup: React.FC = () => {
   if (!hasHardware) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background} />
+        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.card} />
         <KeyboardAvoidingView
           style={styles.container}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -461,7 +463,7 @@ const BiometricSetup: React.FC = () => {
   if (hasHardware && !hasEnrolledBiometrics) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background} />
+        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.card} />
         <KeyboardAvoidingView
           style={styles.container}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -505,7 +507,7 @@ const BiometricSetup: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.card} />
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

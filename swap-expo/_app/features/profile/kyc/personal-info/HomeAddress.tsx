@@ -69,7 +69,7 @@ const HomeAddress: React.FC<HomeAddressProps> = ({
   const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.card,
     },
     header: {
       flexDirection: 'row',
@@ -79,6 +79,7 @@ const HomeAddress: React.FC<HomeAddressProps> = ({
       paddingVertical: theme.spacing.sm,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
+      backgroundColor: theme.colors.card,
     },
     backButton: {
       width: 40,
@@ -93,6 +94,7 @@ const HomeAddress: React.FC<HomeAddressProps> = ({
     },
     content: {
       flex: 1,
+      backgroundColor: theme.colors.background,
     },
     formContainer: {
       padding: theme.spacing.lg,
@@ -207,7 +209,8 @@ const HomeAddress: React.FC<HomeAddressProps> = ({
               placeholder="Postal code"
               value={postal}
               onChangeText={setPostal}
-              keyboardType="number-pad"
+              keyboardType="default"
+              autoCapitalize="characters"
               placeholderTextColor={theme.colors.textTertiary}
             />
           </View>

@@ -244,7 +244,7 @@ const BusinessInfoFlow: React.FC = () => {
   }, [industries]);
 
   const styles = useMemo(() => StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.background },
+    container: { flex: 1, backgroundColor: theme.colors.card },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -267,7 +267,7 @@ const BusinessInfoFlow: React.FC = () => {
       fontSize: theme.typography.fontSize.md, 
       fontWeight: '600' 
     },
-    scrollView: { flex: 1 },
+    scrollView: { flex: 1, backgroundColor: theme.colors.background },
     content: { padding: theme.spacing.lg },
     sectionTitle: {
       fontSize: theme.typography.fontSize.lg,
@@ -402,7 +402,7 @@ const BusinessInfoFlow: React.FC = () => {
   if (isLoadingData) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
+        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.card} />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <Text style={[styles.sectionDescription, { marginTop: theme.spacing.md }]}>
@@ -443,7 +443,7 @@ const BusinessInfoFlow: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.card} />
       
       {/* Header */}
       <View style={styles.header}>

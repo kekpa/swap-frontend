@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
-  StatusBar,
   TextInput,
 } from "react-native";
 import { FlashList } from '@shopify/flash-list';
@@ -157,8 +156,6 @@ const CurrencySelectionModal: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
-
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Choose currency</Text>
       </View>

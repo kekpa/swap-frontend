@@ -370,12 +370,12 @@ const VerifyYourIdentityScreen: React.FC = () => {
   };
 
   const styles = useMemo(() => StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.colors.background },
+    container: { flex: 1, backgroundColor: theme.colors.card },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm + 2, borderBottomWidth: 1, borderBottomColor: theme.colors.border, backgroundColor: theme.colors.card },
     backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
     headerTitle: { fontSize: theme.typography.fontSize.lg, fontWeight: '600', color: theme.colors.textPrimary },
     helpButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-    scrollView: { flex: 1 },
+    scrollView: { flex: 1, backgroundColor: theme.colors.background },
     kycContainer: { padding: theme.spacing.lg },
     statusDescription: { fontSize: theme.typography.fontSize.sm, color: theme.colors.textSecondary, textAlign: 'center', marginBottom: theme.spacing.xl, marginTop: theme.spacing.sm, lineHeight: 22, paddingHorizontal: theme.spacing.sm },
     timelineContainer: { padding: 0, paddingLeft: theme.spacing.md, marginBottom: theme.spacing.xl },
@@ -410,7 +410,7 @@ const VerifyYourIdentityScreen: React.FC = () => {
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background} />
+        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.card} />
         
         {/* Header */}
         <View style={styles.header}>
@@ -439,7 +439,7 @@ const VerifyYourIdentityScreen: React.FC = () => {
   if (error) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background} />
+        <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.card} />
         
         {/* Header */}
         <View style={styles.header}>
@@ -469,7 +469,7 @@ const VerifyYourIdentityScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.background} />
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.card} />
       
       {/* Header */}
       <View style={styles.header}>

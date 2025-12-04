@@ -103,7 +103,7 @@ const BeneficialOwnerBasicInfo: React.FC<BeneficialOwnerBasicInfoProps> = ({
       StyleSheet.create({
         container: {
           flex: 1,
-          backgroundColor: theme.colors.background,
+          backgroundColor: theme.colors.card,
         },
         header: {
           flexDirection: 'row',
