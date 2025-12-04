@@ -19,7 +19,7 @@ export default {
   splash: {
     image: "./assets/splash-icon.png",
     resizeMode: "contain",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#8b14fd",  // Purple brand color
   },
   ios: {
     supportsTablet: false,
