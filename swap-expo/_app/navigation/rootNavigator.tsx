@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, Suspense, useState } from "react";
+import React, { useEffect, Suspense, useState } from "react";
 import { createStackNavigator } from "@react-navigation/stack";
 import { useAuthContext } from "../features/auth/context/AuthContext";
 import { useLoadingState } from '../hooks-data/useLoadingState';
@@ -7,7 +7,6 @@ import AuthNavigator from "./authNavigator";
 import AppNavigator from "./appNavigator";
 import ProfileNavigator from "./profileNavigator";
 import LoadingScreen from "../features/auth/login/LoadingScreen";
-import logger from "../utils/logger";
 import { CardStyleInterpolators, TransitionPresets } from "@react-navigation/stack";
 import { View, ActivityIndicator, Text } from "react-native";
 import { useTheme } from "../theme/ThemeContext";
@@ -124,6 +123,7 @@ export type RootStackParamList = {
 };
 
 export default function RootNavigator() {
+  const { theme } = useTheme();
   const authContext = useAuthContext();
   const { isInitialLoadComplete } = useLoadingState();
 
@@ -131,23 +131,14 @@ export default function RootNavigator() {
   const [orchestratorState, setOrchestratorState] = useState<LoadingState>(loadingOrchestrator.getLoadingState());
 
   const isAuthenticated = authContext?.isAuthenticated || false;
-  const isLoading = authContext?.isLoading || false;
-  const needsLogin = authContext?.needsLogin || false;
-
-  // Add refs to prevent rapid loops and state oscillations
-  const lastNeedsLoginState = useRef(needsLogin);
-  const isHandlingNeedsLogin = useRef(false);
-  const needsLoginTimer = useRef<NodeJS.Timeout | null>(null);
 
   // PROFESSIONAL: Listen to LoadingOrchestrator state changes for coordinated navigation
   useEffect(() => {
     const unsubscribe = loadingOrchestrator.onStateChange((newState) => {
-      console.log('🏛️ [RootNavigator] PROFESSIONAL: LoadingOrchestrator state update:', {
+      console.log('🏛️ [RootNavigator] LoadingOrchestrator state update:', {
         isLoading: newState.isLoading,
         canShowUI: newState.canShowUI,
-        shouldShowSplash: newState.shouldShowSplash,
-        transitionPhase: newState.transitionPhase,
-        activeOperations: newState.activeOperations.length
+        transitionPhase: newState.transitionPhase
       });
 
       setOrchestratorState(newState);
@@ -156,84 +147,33 @@ export default function RootNavigator() {
     return unsubscribe;
   }, []);
 
-  // Prevent rapid needsLogin state changes that cause navigation loops
-  useEffect(() => {
-    // Only handle if needsLogin actually changed and we're not already handling it
-    if (needsLogin && needsLogin !== lastNeedsLoginState.current && !isHandlingNeedsLogin.current) {
-      console.log('🚨 [RootNavigator] 🔄 needsLogin detected, preventing rapid state changes');
-      isHandlingNeedsLogin.current = true;
-      lastNeedsLoginState.current = needsLogin;
-      
-      logger.debug("needsLogin flag is true, forcing logout", "navigation");
-      
-      // Clear any existing timer to prevent multiple timeouts
-      if (needsLoginTimer.current) {
-        clearTimeout(needsLoginTimer.current);
-      }
-      
-      // This will trigger a re-render with isAuthenticated = false
-      authContext?.setIsAuthenticated(false);
-      
-      // Reset flags after a longer delay to prevent loops
-      needsLoginTimer.current = setTimeout(() => {
-        if (authContext?.needsLogin) {
-          logger.debug("Resetting needsLogin flag after controlled delay", "navigation");
-          authContext.setNeedsLogin?.(false);
-        }
-        isHandlingNeedsLogin.current = false;
-        console.log('🚨 [RootNavigator] ✅ needsLogin handling completed');
-      }, 1000); // Increased to 1 second to prevent rapid loops
-    } else if (!needsLogin) {
-      // Reset tracking when needsLogin becomes false
-      lastNeedsLoginState.current = needsLogin;
-      isHandlingNeedsLogin.current = false;
-    }
-    
-    return () => {
-      if (needsLoginTimer.current) {
-        clearTimeout(needsLoginTimer.current);
-      }
-    };
-  }, [needsLogin, authContext]);
+  // NOTE: needsLogin handling removed - AuthStateMachine is now the sole coordinator
+  // The setTimeout hack was a symptom of competing coordination systems
 
-  // PROFESSIONAL: Enhanced three-state navigation logic with LoadingOrchestrator coordination:
-  // 1. Not authenticated → Auth stack
-  // 2. Authenticated but data still loading or LoadingOrchestrator not ready → LoadingScreen
-  // 3. Authenticated and data loaded AND LoadingOrchestrator ready → App stack
+  // PROFESSIONAL: Clean three-state navigation logic with LoadingOrchestrator coordination:
+  // 1. Authenticated and data loaded AND LoadingOrchestrator ready → App stack
+  // 2. Authenticated but data loading or LoadingOrchestrator not ready → LoadingScreen
+  // 3. Not authenticated → Auth stack (always, don't block on canShowUI)
   const showAppNavigator = isAuthenticated && isInitialLoadComplete && orchestratorState.canShowUI;
   const showLoadingScreen = isAuthenticated && (!isInitialLoadComplete || !orchestratorState.canShowUI);
-  const showAuthNavigator = !isAuthenticated;
+  const showAuthNavigator = !isAuthenticated;  // Always show auth when logged out - no blocking
 
   // In development mode, can force app navigator
   const forceAppInDev = isDevelopment && DEV_ALWAYS_AUTHENTICATED;
 
-  console.log('🔄 [RootNavigator] PROFESSIONAL: Navigation state decision with LoadingOrchestrator:', {
-    inputs: {
-      isAuthenticated,
-      isInitialLoadComplete,
-      orchestratorCanShowUI: orchestratorState.canShowUI,
-      orchestratorIsLoading: orchestratorState.isLoading,
-      orchestratorTransitionPhase: orchestratorState.transitionPhase,
-      isDevelopment,
-      DEV_ALWAYS_AUTHENTICATED
-    },
-    calculations: {
-      showAppNavigator,
-      showLoadingScreen,
-      showAuthNavigator,
-      forceAppInDev
-    },
-    finalDecision: {
-      willShow: showAppNavigator || forceAppInDev ? 'App' : showLoadingScreen ? 'LoadingScreen' : 'Auth',
-      timestamp: Date.now(),
-      trigger: 'professional_navigation_coordination'
-    }
+  // Debug logging (minimal)
+  console.log('🔄 [RootNavigator] Navigation:', {
+    isAuthenticated,
+    isInitialLoadComplete,
+    canShowUI: orchestratorState.canShowUI,
+    decision: showAppNavigator || forceAppInDev ? 'App' : showLoadingScreen ? 'Loading' : 'Auth'
   });
 
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
+        cardStyle: { backgroundColor: theme.colors.background },
       }}
     >
       {showAppNavigator || forceAppInDev ? (
@@ -249,7 +189,6 @@ export default function RootNavigator() {
               gestureEnabled: true,
               gestureDirection: 'horizontal',
               cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
-              cardStyle: { backgroundColor: "#FFFFFF" },
             }}
           />
           <Stack.Screen

@@ -1,120 +1,75 @@
-// Updated: Integrated expo-secure-store for credential management and disabled mock mode - 2024-07-31
-// Updated: Added guest mode and persistent authentication for tiered auth system - 2025-07-02
-// Updated: Added tiered authentication with persistent sessions and biometric gates - 2025-07-02
-// Updated: WhatsApp-style progressive authentication with quick session restoration - 2025-07-02
-// Updated: Fixed session restoration security issue - always validate with backend, never trust cached data alone - 2025-07-07
-// Copyright 2025 frantzopf
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     https://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+/**
+ * AuthContext - Thin React Context Wrapper for Authentication
+ *
+ * REFACTORED: This is now a thin wrapper that delegates to specialized services:
+ * - SessionManager: Session validation, restoration, cleanup
+ * - LoginService: All login methods (unified, PIN, biometric)
+ * - AccountSwitcher: Multi-account management
+ * - WalletSecurity: Wallet-level security
+ *
+ * Before: 1,761 lines doing 15+ things (God Object)
+ * After: ~400 lines - thin React wrapper
+ *
+ * @author Swap Team
+ * @version 2.0.0
+ */
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { Alert } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { User, AuthContextType, UserData, PhoneVerification, AuthLevel } from '../../../types/auth.types';
 import { useAuth } from '../../../hooks-actions/useAuth';
-import { tokenManager, getAccessToken, saveAccessToken, saveRefreshToken } from '../../../services/token';
-import apiClient, { authEvents } from '../../../_api/apiClient';
-import { AUTH_EVENTS } from '../../../types/api.types';
-import { AUTH_PATHS } from '../../../_api/apiPaths';
+import { tokenManager, getAccessToken } from '../../../services/token';
+import apiClient from '../../../_api/apiClient';
 import logger from '../../../utils/logger';
-import { authManager, authEvents as authManagerEvents, AUTH_EVENT_TYPES } from '../../../utils/authManager';
 import { MMKV } from 'react-native-mmkv';
 import { clearAllCachedData } from '../../../localdb';
 import { storeLastUserForPin, getLastUserForPin as getStoredPinUser, clearLastUserForPin, hasPinUserStored as checkPinUserStored } from '../../../utils/pinUserStorage';
-import * as LocalAuthentication from 'expo-local-authentication';
-import NetInfo from '@react-native-community/netinfo';
-import { jwtDecode } from 'jwt-decode';
-import { authStateMachine, AuthState, AuthEvent } from '../../../utils/AuthStateMachine';
+import { authStateMachine, AuthEvent } from '../../../utils/AuthStateMachine';
 import { loadingOrchestrator, LoadingOperationType, LoadingPriority } from '../../../utils/LoadingOrchestrator';
-import { eventCoordinator } from '../../../utils/EventCoordinator';
-import AccountsManager, { Account } from '../../../services/AccountsManager';
-import { logAccountSwitch } from '../../../services/AccountSwitchAuditLogger';
+import { Account } from '../../../services/AccountsManager';
 
-// High-performance MMKV storage for auth preferences
+// Import new modular services
+import { sessionManager, SessionData } from '../../../services/auth/SessionManager';
+import { loginService, LoginResult } from '../../../services/auth/LoginService';
+import { accountSwitcher } from '../../../services/auth/AccountSwitcher';
+import { walletSecurity } from '../../../services/auth/WalletSecurity';
+
+// MMKV for preferences
 const authStorage = new MMKV({
   id: 'swap-auth-preferences',
   encryptionKey: 'swap-auth-prefs-encryption-key-2025'
 });
 
+const PERSISTENT_AUTH_KEY = 'persistentAuthEnabled';
 const SECURE_STORE_EMAIL_KEY = 'userEmail';
 const SECURE_STORE_PASSWORD_KEY = 'userPassword';
-const SECURE_STORE_BIOMETRIC_IDENTIFIER_KEY = 'biometricIdentifier';
-const SECURE_STORE_BIOMETRIC_PASSWORD_KEY = 'biometricPassword';
-const PERSISTENT_AUTH_KEY = 'persistentAuthEnabled';
-const GUEST_MODE_KEY = 'guestModeEnabled';
-const LAST_WALLET_UNLOCK_KEY = 'lastWalletUnlock';
-
-// --- DEVELOPMENT BYPASS ---
-// DISABLED to prevent auth loops
-const DEV_MODE_AUTO_LOGIN = false; // Disabled to prevent looping
-const DEV_USER_TOKEN = ""; // Removed token
-const DEV_USER_REFRESH_TOKEN = ""; // Removed token
-const DEV_USER_ID = "20da8f2e-4a76-4e16-9a30-01ad737eb4de"; // UUID from auth.users
-const DEV_USER_PROFILE_ID = "20da8f2e-4a76-4e16-9a30-01ad737eb4de"; // Your profile ID (might be same as user ID)
-const DEV_USER_EMAIL = "fof+htjght@brides.ht";
-// --- END DEVELOPMENT BYPASS ---
-
-
-
-
-// Use AuthLevel and AuthContextType from types file
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Storage Keys
-const STORAGE_KEYS = {
-  SESSION_TOKEN: 'secure_session_token',
-  REFRESH_TOKEN: 'secure_refresh_token',
-  USER_DATA: 'secure_user_data',
-  REMEMBER_ME: 'remember_me_preference',
-  BIOMETRIC_ENABLED: 'biometric_auth_enabled',
-  LAST_WALLET_UNLOCK: 'last_wallet_unlock',
-} as const;
-
-// Session timeout for wallet operations (5 minutes)
-const WALLET_SESSION_TIMEOUT = 5 * 60 * 1000;
-
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Core authentication state
   const [authLevel, setAuthLevel] = useState<AuthLevel>(AuthLevel.GUEST);
   const [user, setUser] = useState<User | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isGuestMode, setIsGuestMode] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
 
-  // Multi-account management (Instagram-style)
+  // Multi-account state
   const [availableAccounts, setAvailableAccounts] = useState<Account[]>([]);
 
-  // Session management
+  // Session state
   const [hasPersistedSession, setHasPersistedSession] = useState<boolean>(false);
 
-  // PROFESSIONAL ARCHITECTURE: Remove reactive session restoration
-  // State machine handles all auth coordination now
-
-  // Wallet security
+  // Wallet security state
   const [isWalletUnlocked, setIsWalletUnlocked] = useState<boolean>(false);
   const [lastWalletUnlock, setLastWalletUnlock] = useState<number | null>(null);
 
-  // Legacy states (keeping for backward compatibility)
+  // Legacy states for backward compatibility
   const [showConfirmationModal, setShowConfirmationModal] = useState<boolean>(false);
   const [needsLogin, setNeedsLogin] = useState<boolean>(false);
   const [rememberMe, setRememberMe] = useState<boolean>(true);
   const [justLoggedOut, setJustLoggedOut] = useState<boolean>(false);
   const [persistentAuthEnabled, setPersistentAuthEnabled] = useState<boolean>(() => {
-    // Initialize from MMKV storage with default true
     return authStorage.getBoolean(PERSISTENT_AUTH_KEY) ?? true;
   });
   const [phoneVerification, setPhoneVerification] = useState<PhoneVerification | null>(null);
@@ -122,528 +77,360 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const hasRunInitialCheckSession = useRef(false);
   const authHook = useAuth();
 
-  // PROFESSIONAL: Direct state machine coordination - no wrapper bullshit
+  // ============================================
+  // SESSION MANAGEMENT (delegates to SessionManager)
+  // ============================================
 
-  // Clear corrupted session data
-  const clearCorruptedSession = useCallback(async () => {
-    console.log('🧹 [SessionCleanup] Clearing corrupted session data');
-    try {
-      await tokenManager.clearAllTokens();
-      apiClient.defaults.headers.common['Authorization'] = 'none';
-      apiClient.setProfileId(null);
-              
-      setUser(null);
-      setIsAuthenticated(false);
-      setAuthLevel(AuthLevel.GUEST);
-      setIsGuestMode(true);
-      setHasPersistedSession(false);
-    } catch (error) {
-      console.error('❌ [SessionCleanup] Error clearing session:', error);
-    }
-  }, []);
-
-
-
-  // Token validation and session restoration
-  const validateTokenAndRestoreSession = useCallback(async (token: string): Promise<boolean> => {
-      try {
-      // Ensure API client has the token for validation
-      apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
-          const profile = await authHook.getCurrentUserProfile();
-          if (profile) {
-        // CRITICAL: Get profile ID from multiple sources as fallback
-        const profileId = profile.id || profile.profile_id || profile.user_id;
-        
-        // Validate that we have essential profile data
-        if (!profileId) {
-          console.error('❌ [TokenValidation] No valid profile ID found');
-          throw new Error('Invalid profile data: missing profile ID');
-        }
-        
-        const displayName = profile.type === 'business' ? profile.business_name : profile.first_name;
-        const email = profile.type === 'business' ? profile.business_email : profile.email;
-        
-        // Validate essential user data
-        if (!displayName || !email) {
-          console.error('❌ [TokenValidation] Incomplete profile data:', {
-            displayName: !!displayName,
-            email: !!email,
-            profileType: profile.type
-          });
-          throw new Error('Invalid profile data: missing essential fields');
-        }
-        
-        const restoredUser = {
-              id: profile.user_id || profile.id, 
-          profileId: profileId,    
-              entityId: profile.entity_id,
-          firstName: profile.type === 'business' ? profile.business_name : profile.first_name,
-          lastName: profile.type === 'business' ? null : profile.last_name,
-          username: profile.username,
-          avatarUrl: profile.avatar_url || profile.logo_url,
-          email: email,
-                profileType: profile.type,
-                businessName: profile.business_name,
-            };
-            
-        setUser(restoredUser);
-        setIsAuthenticated(true);
-        setIsGuestMode(false);
-        setAuthLevel(AuthLevel.AUTHENTICATED);
-        setHasPersistedSession(true);
-        apiClient.setProfileId(profileId); 
-        
-        console.log('✅ [TokenValidation] Session restored successfully for:', displayName);
-                  return true;
-      } else {
-        console.error('❌ [TokenValidation] No profile data received from backend');
-        throw new Error('No profile data available');
-                }
-    } catch (error) {
-      console.warn('⚠️ [TokenValidation] Failed, clearing session:', error);
-      // Clear invalid tokens and reset API client
-      await tokenManager.clearAllTokens();
-      apiClient.defaults.headers.common['Authorization'] = 'none';
-      apiClient.setProfileId(null);
-              }
-    
-    return false;
-  }, [authHook]);
-
-  // Enable guest mode for public features
-  const enableGuestMode = useCallback(async () => {
-    console.log('👤 [GuestMode] Enabling guest mode for public features');
-    
-    // Clear any stale authentication state
-    apiClient.defaults.headers.common['Authorization'] = 'none';
-    apiClient.setProfileId(null);
-    
-    setIsGuestMode(true);
-    setAuthLevel(AuthLevel.GUEST);
-            setIsAuthenticated(false);
-            setUser(null);
-    setIsLoading(false);
-    setNeedsLogin(false);
-  }, []);
-
-  // Quick session restoration - like WhatsApp
-  const restoreSessionQuickly = useCallback(async (): Promise<boolean> => {
-    try {
-      console.log('🚀 [QuickRestore] Attempting quick session restoration...');
-      
-      // CRITICAL: Always validate with backend first, don't trust cached data alone
-      const token = await getAccessToken();
-      if (!token) {
-        console.log('🔒 [QuickRestore] No access token found, enabling guest mode');
-        await enableGuestMode();
-        return false;
-      }
-
-      // Validate token with backend immediately (don't use cache without validation)
-      console.log('🔑 [QuickRestore] Validating token with backend...');
-      const isValidSession = await validateTokenAndRestoreSession(token);
-      
-      if (isValidSession) {
-        console.log('✅ [QuickRestore] Session restored and validated with backend');
-        setHasPersistedSession(true);
-        return true;
-      } else {
-        console.warn('⚠️ [QuickRestore] Backend validation failed, clearing all session data');
-        await clearCorruptedSession();
-        return false;
-      }
-      
-    } catch (error) {
-      console.error('❌ [QuickRestore] Error:', error);
-      await clearCorruptedSession();
-      return false;
-    }
-  }, [validateTokenAndRestoreSession, enableGuestMode, clearCorruptedSession]);
-
-  // Upgrade to authenticated level
-  const upgradeToAuthenticated = useCallback(async (): Promise<boolean> => {
-    if (isAuthenticated && user) {
-      return true; // Already authenticated
-    }
-    
-    console.log('⬆️ [AuthUpgrade] Upgrading from guest to authenticated');
-    
-    // Try to restore session first
-    const sessionRestored = await restoreSessionQuickly();
-    if (sessionRestored) {
-                return true;
-              }
-    
-    // Set state to show login requirement
-    setIsGuestMode(false);
-        setNeedsLogin(true);
-        setIsLoading(false);
-    
-    return false;
-  }, [isAuthenticated, user, restoreSessionQuickly]);
-
-  // Request wallet access with biometric/PIN verification
-  const requestWalletAccess = useCallback(async (): Promise<boolean> => {
-    // First ensure user is authenticated
-    if (authLevel < AuthLevel.AUTHENTICATED) {
-      const upgraded = await upgradeToAuthenticated();
-      if (!upgraded) return false;
-    }
-    
-    // Check if wallet is already unlocked and not expired
-    const now = Date.now();
-    if (isWalletUnlocked && lastWalletUnlock && (now - lastWalletUnlock < WALLET_SESSION_TIMEOUT)) {
-      return true; // Still valid
-    }
-    
-    try {
-      console.log('🔐 [WalletAccess] Requesting biometric authentication');
-      
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-      
-      if (!hasHardware || !isEnrolled) {
-        console.warn('⚠️ [WalletAccess] Biometric not available');
-        return false;
-      }
-
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Access your wallet',
-        fallbackLabel: 'Use PIN',
-        cancelLabel: 'Cancel',
-      });
-
-      if (result.success) {
-        const unlockTime = Date.now();
-        setIsWalletUnlocked(true);
-        setLastWalletUnlock(unlockTime);
-        setAuthLevel(AuthLevel.WALLET_VERIFIED);
-        
-        // Cache wallet unlock time
-        await SecureStore.setItemAsync(LAST_WALLET_UNLOCK_KEY, unlockTime.toString());
-        
-        console.log('✅ [WalletAccess] Wallet unlocked successfully');
-        return true;
-      }
-    } catch (error) {
-      console.error('❌ [WalletAccess] Authentication error:', error);
-      }
-    
-    return false;
-  }, [authLevel, isWalletUnlocked, lastWalletUnlock, upgradeToAuthenticated]);
-
-  // Lock wallet (security measure)
-  const lockWallet = useCallback(() => {
-    console.log('🔒 [WalletSecurity] Locking wallet');
-    setIsWalletUnlocked(false);
-    setLastWalletUnlock(null);
-    setAuthLevel(isAuthenticated ? AuthLevel.AUTHENTICATED : AuthLevel.GUEST);
-    SecureStore.deleteItemAsync(LAST_WALLET_UNLOCK_KEY).catch(() => {});
-  }, [isAuthenticated]);
-
-  // Add missing token functions
-  const getRefreshToken = useCallback(async (): Promise<string | null> => {
-    try {
-      return await SecureStore.getItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
-    } catch (error) {
-      console.error('❌ [AuthContext] Error getting refresh token:', error);
-      return null;
-    }
-  }, []);
-
-  const refreshAccessToken = useCallback(async (): Promise<string | null> => {
-    try {
-      const refreshToken = await getRefreshToken();
-      if (!refreshToken) {
-        console.log('DEBUG [refreshAccessToken] No refresh token found');
-        return null;
-      }
-
-      console.log('🔄 [AuthContext] Attempting token refresh...');
-      const response = await apiClient.post('/auth/refresh', {
-        refresh_token: refreshToken
-      });
-
-      if (response.data?.access_token) {
-        const newAccessToken = response.data.access_token;
-        tokenManager.setAccessToken(newAccessToken);
-        
-        // Update authorization header
-        apiClient.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
-        
-        console.log('✅ [AuthContext] Token refreshed successfully');
-        return newAccessToken;
-      } else {
-        console.error('❌ [AuthContext] No access token in refresh response');
-        return null;
-      }
-    } catch (error) {
-      console.error('❌ [AuthContext] Token refresh failed:', error);
-      return null;
-    }
-  }, [getRefreshToken]);
-
-  // Enhanced token validation and refresh logic
-  const ensureValidToken = useCallback(async (): Promise<string | null> => {
-    try {
-      const currentToken = await getAccessToken();
-      
-      if (!currentToken) {
-        console.log('🔒 [AuthContext] No access token found');
-        return null;
-      }
-      
-      // Check if token is expired or about to expire
-      try {
-        const decoded = jwtDecode(currentToken) as any;
-        const currentTime = Math.floor(Date.now() / 1000);
-        const timeUntilExpiry = decoded.exp - currentTime;
-        
-        // If token expires in less than 5 minutes, refresh it
-        if (timeUntilExpiry < 300) {
-          console.log('🔒 [AuthContext] Token expires soon, refreshing...');
-          const newToken = await refreshAccessToken();
-          if (newToken) {
-            console.log('✅ [AuthContext] Token refreshed successfully');
-            return newToken;
-          } else {
-            console.error('❌ [AuthContext] Token refresh failed');
-            return null;
-          }
-        }
-        
-        return currentToken;
-      } catch (decodeError) {
-        console.error('❌ [AuthContext] Invalid token format:', decodeError);
-        return null;
-        }
-        
-    } catch (error) {
-      console.error('❌ [AuthContext] Error ensuring valid token:', error);
-      return null;
-    }
-  }, []);
-
-
-
-  // PROFESSIONAL ARCHITECTURE: State machine coordinated session check
   const checkSession = useCallback(async (): Promise<boolean> => {
-    // Check if auth operations are allowed by navigation state
     if (!authStateMachine.canPerformAuthOperation()) {
-      console.log('🏛️ [AuthContext] PROFESSIONAL: Navigation state prevents auth operations - skipping session check');
+      logger.debug('[AuthContext] Navigation prevents auth operations');
       return false;
     }
 
     try {
-      console.log('🏛️ [AuthContext] PROFESSIONAL: Starting state machine coordinated session check');
+      setIsLoading(true);
 
-      // Notify state machine we're starting session refresh
       authStateMachine.transition(AuthEvent.SESSION_REFRESH_START, {
         event: AuthEvent.SESSION_REFRESH_START,
         timestamp: Date.now(),
-        metadata: { trigger: 'checkSession_called' }
       });
 
-      setIsLoading(true);
-      
-      const token = await getAccessToken();
-      const refreshToken = await getRefreshToken();
-      
-      console.log('🔒 [AuthContext] Session restoration tokens:', {
-        hasAccessToken: !!token,
-        hasRefreshToken: !!refreshToken
-      });
-      
-      if (!token) {
-        console.log('🔒 [AuthContext] No access token found, cannot restore session');
-        setIsAuthenticated(false);
-        setIsGuestMode(false);
-        setUser(null);
-        setIsLoading(false);
-        return false;
-          }
-          
-      // CRITICAL: Validate token before using it
-      try {
-        const decoded = jwtDecode(token) as any;
-        const currentTime = Math.floor(Date.now() / 1000);
-        
-        if (decoded.exp && decoded.exp < currentTime) {
-          console.log('🔒 [AuthContext] Access token expired, attempting refresh...');
-          
-          if (refreshToken) {
-            const newToken = await refreshAccessToken();
-            if (!newToken) {
-              console.log('🔒 [AuthContext] Token refresh failed, clearing session');
-              await tokenManager.clearAllTokens();
-              setIsAuthenticated(false);
-              setIsGuestMode(false);
-              setUser(null);
-              setIsLoading(false);
-              return false;
-            }
-            console.log('✅ [AuthContext] Token refreshed during session restoration');
-        } else {
-            console.log('🔒 [AuthContext] No refresh token available, clearing session');
-            await tokenManager.clearAllTokens();
-            setIsAuthenticated(false);
-            setIsGuestMode(false);
-            setUser(null);
-          setIsLoading(false);
-            return false;
-          }
-        } else {
-          console.log('✅ [AuthContext] Access token is valid');
-        }
-      } catch (decodeError) {
-        console.error('❌ [AuthContext] Invalid token format, clearing session:', decodeError);
-        await tokenManager.clearAllTokens();
-        setIsAuthenticated(false);
-        setIsGuestMode(false);
-        setUser(null);
-      setIsLoading(false);
-        return false;
-      }
-      
-      // Set authorization header for API calls
-      apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
-      // Try to fetch user profile to validate session
-      console.log('🔒 [AuthContext] Validating session with profile fetch...');
-      
-      // Use getCurrentUserProfile() for proper profile mapping (same as login functions)
-      const profile = await authHook.getCurrentUserProfile();
-      
-      if (profile) {
-        // CRITICAL: Get profile ID from multiple sources as fallback
-        const profileId = profile.id || profile.profile_id || profile.user_id;
-        
-        // Validate that we have essential profile data
-        if (!profileId) {
-          console.error('❌ [AuthContext] No valid profile ID found');
-          throw new Error('Invalid profile data: missing profile ID');
-        }
-      
-        // Set profile ID for API calls
-        apiClient.setProfileId(profileId);
-        console.log('✅ [AuthContext] Session restored with profile ID:', profileId);
-        
-        // Use the same mapping logic as login functions
-        const mappedUser = {
-          id: profile.user_id || profile.id,
-          profileId: profileId,
-          entityId: profile.entity_id,
-          firstName: profile.type === 'business' ? profile.business_name : profile.first_name,
-          lastName: profile.type === 'business' ? null : profile.last_name,
-          username: profile.username,
-          avatarUrl: profile.avatar_url || profile.logo_url,
-          email: profile.type === 'business' ? profile.business_email : profile.email,
-          profileType: profile.type,
-          businessName: profile.business_name,
-        };
-        
-        setUser(mappedUser);
+      const result = await sessionManager.validateAndRestoreSession();
+
+      if (result.isValid && result.user) {
+        updateUserFromSession(result.user);
         setIsAuthenticated(true);
         setAuthLevel(AuthLevel.AUTHENTICATED);
         setIsGuestMode(false);
+        setHasPersistedSession(true);
 
-        // PROFESSIONAL: Notify state machine of successful session refresh
         authStateMachine.transition(AuthEvent.SESSION_REFRESH_SUCCESS, {
           event: AuthEvent.SESSION_REFRESH_SUCCESS,
           timestamp: Date.now(),
           authData: {
-            userId: mappedUser.id,
-            profileId: mappedUser.profileId,
-            accessToken: token
+            userId: result.user.userId,
+            profileId: result.user.profileId,
           }
         });
 
-        // PROFESSIONAL: LoadingOrchestrator coordination for session restore
         loadingOrchestrator.coordinateAuthToAppTransition();
-
-        console.log('✅ [AuthContext] Session restored successfully with profile data:', {
-          userId: mappedUser.id,
-          profileId: mappedUser.profileId,
-          entityId: mappedUser.entityId,
-          firstName: mappedUser.firstName,
-          lastName: mappedUser.lastName,
-          username: mappedUser.username
-        });
         return true;
-          } else {
-        console.log('🔒 [AuthContext] No profile data received, clearing session');
-
-        // PROFESSIONAL: Notify state machine of session refresh failure
-        authStateMachine.transition(AuthEvent.SESSION_REFRESH_FAILURE, {
-          event: AuthEvent.SESSION_REFRESH_FAILURE,
-          timestamp: Date.now(),
-          error: new Error('No profile data received')
-        });
-
-        await tokenManager.clearAllTokens();
-        setIsAuthenticated(false);
-        setIsGuestMode(false);
-        setUser(null);
-        return false;
-        }
-    } catch (error: any) {
-      console.error('❌ [AuthContext] Session restoration failed:', error);
-
-      // PROFESSIONAL: Notify state machine of session refresh failure
-      authStateMachine.transition(AuthEvent.SESSION_REFRESH_FAILURE, {
-        event: AuthEvent.SESSION_REFRESH_FAILURE,
-        timestamp: Date.now(),
-        error: error
-      });
-
-      // If it's a 401, the token is invalid - clear everything
-      if (error.response?.status === 401) {
-        console.log('🔒 [AuthContext] Received 401, clearing invalid session');
-        await tokenManager.clearAllTokens();
-        delete apiClient.defaults.headers.common['Authorization'];
       }
 
       setIsAuthenticated(false);
       setIsGuestMode(false);
       setUser(null);
+
+      // "No access token" is not an error - it's the normal initial state for logged-out users
+      // Only log as error if it's an actual failure (expired token, network issue, etc.)
+      authStateMachine.transition(AuthEvent.SESSION_REFRESH_FAILURE, {
+        event: AuthEvent.SESSION_REFRESH_FAILURE,
+        timestamp: Date.now(),
+        ...(result.error !== 'No access token' && {
+          error: new Error(result.error || 'Session invalid')
+        })
+      });
+
+      return false;
+    } catch (error: any) {
+      logger.error('[AuthContext] Session check failed:', error);
       return false;
     } finally {
       setIsLoading(false);
-          }
-    return false;
+    }
   }, []);
 
-  // PROFESSIONAL ARCHITECTURE: Dedicated profile switch orchestration
-  // This method handles the complete profile switch flow after backend authentication
-  const completeProfileSwitch = useCallback(async (newProfileId: string): Promise<boolean> => {
-    console.log('[AuthContext] 🔄 Starting profile switch orchestration for:', newProfileId);
+  // ============================================
+  // LOGIN METHODS (delegates to LoginService)
+  // ============================================
+
+  const unifiedLogin = useCallback(async (
+    identifier: string,
+    password: string,
+    skipStore = false
+  ): Promise<{ success: boolean; message?: string; user_type?: string }> => {
+    const result = await loginService.login(identifier, password);
+
+    if (result.success && result.user) {
+      updateUserFromSession(result.user);
+      setIsAuthenticated(true);
+      setAuthLevel(AuthLevel.AUTHENTICATED);
+      setIsGuestMode(false);
+      setHasPersistedSession(true);
+
+      // Save credentials for biometric if not skipped
+      if (!skipStore && persistentAuthEnabled && rememberMe) {
+        await loginService.setupBiometricLogin(identifier, password);
+      }
+    }
+
+    return {
+      success: result.success,
+      message: result.message,
+      user_type: result.userType
+    };
+  }, [persistentAuthEnabled, rememberMe]);
+
+  const loginWithPin = useCallback(async (
+    identifier: string,
+    pin: string
+  ): Promise<{ success: boolean; message?: string }> => {
+    setIsLoading(true);
+    try {
+      const result = await loginService.loginWithPin(identifier, pin);
+
+      if (result.success && result.user) {
+        updateUserFromSession(result.user);
+        setIsAuthenticated(true);
+        setAuthLevel(AuthLevel.AUTHENTICATED);
+        setIsGuestMode(false);
+        setHasPersistedSession(true);
+        await storeLastUserForPin(identifier);
+      }
+
+      return { success: result.success, message: result.message };
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const loginWithBiometric = useCallback(async (): Promise<{ success: boolean; message?: string }> => {
+    const result = await loginService.loginWithBiometric();
+
+    if (result.success && result.user) {
+      updateUserFromSession(result.user);
+      setIsAuthenticated(true);
+      setAuthLevel(AuthLevel.AUTHENTICATED);
+      setIsGuestMode(false);
+      setHasPersistedSession(true);
+    }
+
+    return { success: result.success, message: result.message };
+  }, []);
+
+  const setupBiometricLogin = useCallback(async (identifier: string, password: string): Promise<void> => {
+    await loginService.setupBiometricLogin(identifier, password);
+  }, []);
+
+  const getBiometricCredentials = useCallback(async () => {
+    return loginService.getBiometricCredentials();
+  }, []);
+
+  // ============================================
+  // LOGOUT (uses SessionManager)
+  // ============================================
+
+  const logout = useCallback(async (): Promise<void> => {
+    logger.debug('[AuthContext] Starting logout...');
+
+    // Start BLOCKING operation - RootNavigator will show LoadingScreen instead of switching immediately
+    // This prevents white flash by keeping LoadingScreen visible during the transition
+    loadingOrchestrator.startOperation(
+      LoadingOperationType.LOGOUT,
+      'Signing out...',
+      { priority: LoadingPriority.CRITICAL, blockingOperation: true, id: 'logout' }
+    );
+    setIsLoading(true);
 
     try {
-      // STEP 1: Fetch fresh user profile data (API client already has new profile ID set)
-      // CRITICAL: Skip cache to ensure we get the latest profile data after switch
-      console.log('[AuthContext] 📡 Fetching fresh profile data from /auth/me (skipping cache)...');
+      // Backend logout
+      await authHook.logout();
+    } catch (error: any) {
+      logger.warn('[AuthContext] Backend logout failed:', error.message);
+    }
+
+    try {
+      // Clear session and local data
+      await sessionManager.clearSession();
+      await loginService.clearBiometricCredentials();
+      await clearAllCachedData();
+      await walletSecurity.lock();
+
+      // Reset state - RootNavigator now wants to show AuthNavigator
+      // BUT canShowUI is false (blocking operation), so LoadingScreen stays visible
+      setUser(null);
+      setIsAuthenticated(false);
+      setAuthLevel(AuthLevel.GUEST);
+      setIsWalletUnlocked(false);
+      setLastWalletUnlock(null);
+      setHasPersistedSession(false);
+      setJustLoggedOut(true);
+      setNeedsLogin(false);
+      setIsGuestMode(true);
+
+      authStateMachine.transition(AuthEvent.LOGOUT, {
+        event: AuthEvent.LOGOUT,
+        timestamp: Date.now()
+      });
+
+      logger.debug('[AuthContext] Logout completed');
+    } catch (error) {
+      logger.error('[AuthContext] Logout error:', error);
+    } finally {
+      setIsLoading(false);
+
+      // Brief delay for navigation to settle, THEN complete blocking operation
+      // This allows RootNavigator to smoothly transition to AuthNavigator
+      await new Promise(resolve => setTimeout(resolve, 300));
+      loadingOrchestrator.completeOperation('logout');
+      // NOW canShowUI becomes true → AuthNavigator appears smoothly
+    }
+  }, [authHook]);
+
+  const forceLogout = useCallback(async (): Promise<void> => {
+    logger.warn('[AuthContext] Force logout triggered');
+    await logout();
+  }, [logout]);
+
+  // ============================================
+  // ACCOUNT SWITCHING (delegates to AccountSwitcher)
+  // ============================================
+
+  const loadAvailableAccounts = useCallback(async () => {
+    const accounts = await accountSwitcher.getAvailableAccounts();
+    setAvailableAccounts(accounts);
+  }, []);
+
+  const switchAccount = useCallback(async (userId: string): Promise<boolean> => {
+    const result = await accountSwitcher.switchAccount(userId, user?.userId);
+
+    if (result.success && result.account) {
+      // Update state from switched account
+      setUser({
+        userId: result.account.userId,
+        email: result.account.email,
+        profileId: result.account.profileId,
+        entityId: result.account.entityId,
+        firstName: result.account.displayName.split(' ')[0],
+        lastName: result.account.displayName.split(' ').slice(1).join(' '),
+      } as User);
+      setIsAuthenticated(true);
+      setAuthLevel(AuthLevel.AUTHENTICATED);
+
+      await loadAvailableAccounts();
+      return true;
+    }
+
+    return false;
+  }, [user, loadAvailableAccounts]);
+
+  const saveCurrentAccountToManager = useCallback(async () => {
+    if (!user || !isAuthenticated) return;
+
+    const accessToken = await getAccessToken();
+    const refreshToken = await tokenManager.getRefreshToken();
+
+    if (!accessToken) return;
+
+    const sessionData: SessionData = {
+      userId: user.userId || '',
+      profileId: user.profileId || '',
+      entityId: user.entityId,
+      email: user.email || '',
+      firstName: user.firstName,
+      lastName: user.lastName,
+      username: user.username,
+      avatarUrl: user.avatarUrl,
+      profileType: user.businessName ? 'business' : 'personal',
+      businessName: user.businessName,
+      sessionId: `session_${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      lastValidated: new Date().toISOString(),
+    };
+
+    await accountSwitcher.saveCurrentAccount(sessionData, accessToken, refreshToken || accessToken);
+    await loadAvailableAccounts();
+  }, [user, isAuthenticated, loadAvailableAccounts]);
+
+  const removeAccount = useCallback(async (userId: string): Promise<boolean> => {
+    const result = await accountSwitcher.removeAccount(userId, user?.userId);
+    if (result) {
+      await loadAvailableAccounts();
+    }
+    return result;
+  }, [user, loadAvailableAccounts]);
+
+  // ============================================
+  // WALLET SECURITY (delegates to WalletSecurity)
+  // ============================================
+
+  const requestWalletAccess = useCallback(async (): Promise<boolean> => {
+    const result = await walletSecurity.requestAccess(authLevel);
+
+    if (result.success) {
+      setIsWalletUnlocked(true);
+      setLastWalletUnlock(Date.now());
+      setAuthLevel(result.authLevel);
+      return true;
+    }
+
+    return false;
+  }, [authLevel]);
+
+  const lockWallet = useCallback(async () => {
+    await walletSecurity.lock();
+    setIsWalletUnlocked(false);
+    setLastWalletUnlock(null);
+    setAuthLevel(isAuthenticated ? AuthLevel.AUTHENTICATED : AuthLevel.GUEST);
+  }, [isAuthenticated]);
+
+  // ============================================
+  // HELPER METHODS
+  // ============================================
+
+  const updateUserFromSession = (session: SessionData) => {
+    setUser({
+      id: session.userId,
+      profileId: session.profileId,
+      entityId: session.entityId,
+      firstName: session.firstName,
+      lastName: session.lastName,
+      username: session.username,
+      avatarUrl: session.avatarUrl,
+      email: session.email,
+      profileType: session.profileType,
+      businessName: session.businessName,
+    } as User);
+  };
+
+  const enableGuestMode = useCallback(async () => {
+    apiClient.defaults.headers.common['Authorization'] = 'none';
+    apiClient.setProfileId(null);
+    setIsGuestMode(true);
+    setAuthLevel(AuthLevel.GUEST);
+    setIsAuthenticated(false);
+    setUser(null);
+    setIsLoading(false);
+    setNeedsLogin(false);
+  }, []);
+
+  const upgradeToAuthenticated = useCallback(async (): Promise<boolean> => {
+    if (isAuthenticated && user) return true;
+
+    const restored = await checkSession();
+    if (restored) return true;
+
+    setIsGuestMode(false);
+    setNeedsLogin(true);
+    setIsLoading(false);
+    return false;
+  }, [isAuthenticated, user, checkSession]);
+
+  const requireAuthentication = useCallback(async (): Promise<boolean> => {
+    return upgradeToAuthenticated();
+  }, [upgradeToAuthenticated]);
+
+  const completeProfileSwitch = useCallback(async (newProfileId: string): Promise<boolean> => {
+    try {
       const profile = await authHook.getCurrentUserProfile({ skipCache: true });
+      if (!profile) return false;
 
-      if (!profile) {
-        console.error('[AuthContext] ❌ No profile data received from /auth/me');
-        return false;
-      }
+      const profileId = profile.id || profile.profile_id || profile.user_id;
+      if (profileId !== newProfileId) return false;
 
-      // STEP 2: Validate profile ID matches what we expect
-      const fetchedProfileId = profile.id || profile.profile_id || profile.user_id;
-      if (fetchedProfileId !== newProfileId) {
-        console.error('[AuthContext] ❌ Profile ID mismatch!', {
-          expected: newProfileId,
-          received: fetchedProfileId
-        });
-        return false;
-      }
-
-      // STEP 3: Map profile to user object (same logic as checkSession)
-      const mappedUser = {
+      setUser({
         id: profile.user_id || profile.id,
-        profileId: fetchedProfileId,
+        profileId,
         entityId: profile.entity_id,
         firstName: profile.type === 'business' ? profile.business_name : profile.first_name,
         lastName: profile.type === 'business' ? null : profile.last_name,
@@ -652,1057 +439,156 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         email: profile.type === 'business' ? profile.business_email : profile.email,
         profileType: profile.type,
         businessName: profile.business_name,
-      };
+      } as User);
 
-      // STEP 4: Update AuthContext user state
-      console.log('[AuthContext] ✅ Updating user state with new profile:', {
-        profileId: mappedUser.profileId,
-        displayName: mappedUser.firstName,
-        profileType: mappedUser.profileType,
-        entityId: mappedUser.entityId
-      });
-
-      setUser(mappedUser);
-
-      // STEP 5: Ensure authentication state is maintained
-      setIsAuthenticated(true);
-      setAuthLevel(AuthLevel.AUTHENTICATED);
-      setIsGuestMode(false);
-
-      console.log('[AuthContext] ✅ Profile switch orchestration complete!');
       return true;
-
-    } catch (error: any) {
-      console.error('[AuthContext] ❌ Profile switch orchestration failed:', error);
+    } catch (error) {
+      logger.error('[AuthContext] Profile switch failed:', error);
       return false;
     }
   }, [authHook]);
 
-  // Initialize authentication on app start
-  useEffect(() => {
-    if (!hasRunInitialCheckSession.current) {
-      hasRunInitialCheckSession.current = true;
-      console.log('🚀 [AuthInit] Starting traditional authentication check');
-
-      // Traditional session restoration - clean and predictable
-      checkSession();
-
-      // Load available accounts for multi-account switcher
-      loadAvailableAccounts();
-        }
-  }, [checkSession, loadAvailableAccounts]);
-
-  // Restore wallet unlock state on app resume
-  useEffect(() => {
-    const restoreWalletState = async () => {
-      if (authLevel >= AuthLevel.AUTHENTICATED) {
-        try {
-          const lastUnlockStr = await SecureStore.getItemAsync(LAST_WALLET_UNLOCK_KEY);
-          if (lastUnlockStr) {
-            const lastUnlock = parseInt(lastUnlockStr);
-            const now = Date.now();
-            
-            if (now - lastUnlock < WALLET_SESSION_TIMEOUT) {
-              setIsWalletUnlocked(true);
-              setLastWalletUnlock(lastUnlock);
-              setAuthLevel(AuthLevel.WALLET_VERIFIED);
-        }
-      }
-        } catch (error) {
-          console.warn('⚠️ [WalletRestore] Error restoring wallet state:', error);
-        }
-      }
-    };
-    
-    restoreWalletState();
-  }, [authLevel]);
-
-  // Auto-lock wallet on app background (security)
-  useEffect(() => {
-    let walletLockTimer: NodeJS.Timeout;
-    
-    if (isWalletUnlocked && lastWalletUnlock) {
-      const timeRemaining = WALLET_SESSION_TIMEOUT - (Date.now() - lastWalletUnlock);
-      
-      if (timeRemaining > 0) {
-        walletLockTimer = setTimeout(lockWallet, timeRemaining);
-        } else {
-        lockWallet();
-      }
-    }
-    
-    return () => {
-      if (walletLockTimer) clearTimeout(walletLockTimer);
-      };
-  }, [isWalletUnlocked, lastWalletUnlock, lockWallet]);
-
-  // Enhanced logout with proper cleanup
-  const logout = useCallback(async (): Promise<void> => {
-    setIsLoading(true);
-     
+  // Legacy credential functions
+  const loadCredentials = useCallback(async () => {
+    if (!persistentAuthEnabled) return null;
     try {
-      // Backend logout
-      await authHook.logout();
-    } catch (error: any) {
-      console.warn('⚠️ [Logout] Backend logout failed:', error.message);
-    }
-    
-    try {
-      // Enhanced local cleanup
-      await authManager.logout();
-      await clearAllCachedData();
-      await SecureStore.deleteItemAsync(LAST_WALLET_UNLOCK_KEY);
-      
-      // Reset all state
-      setUser(null);
-      setIsAuthenticated(false);
-      setAuthLevel(AuthLevel.GUEST);
-      setIsWalletUnlocked(false);
-      setLastWalletUnlock(null);
-      setHasPersistedSession(false);
-      apiClient.setProfileId(null);
-      setJustLoggedOut(true);
-      setNeedsLogin(false);
-
-      // Return to guest mode
-      await enableGuestMode();
-
-      // PROFESSIONAL: Direct auth state machine coordination
-      authStateMachine.transition(AuthEvent.LOGOUT, {
-        event: AuthEvent.LOGOUT,
-        timestamp: Date.now()
-      });
-
-      console.log('✅ [Logout] Completed successfully');
-    } catch (error) {
-      console.error('❌ [Logout] Error during cleanup:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [authHook, enableGuestMode]);
-
-  // Multi-account management methods
-  const loadAvailableAccounts = useCallback(async () => {
-    try {
-      const accounts = await AccountsManager.getAllAccounts();
-      setAvailableAccounts(accounts);
-      logger.debug('[Auth] Loaded available accounts:', accounts.length);
-    } catch (error) {
-      logger.error('[Auth] Error loading accounts:', error);
-    }
-  }, []);
-
-  // Account switching state (circuit breaker + race protection)
-  const accountSwitchRef = useRef(false);
-  const accountSwitchAttemptsRef = useRef(0);
-  const lastAccountSwitchRef = useRef(0);
-
-  const switchAccount = useCallback(async (userId: string): Promise<boolean> => {
-    const now = Date.now();
-
-    // Circuit breaker: Stop after too many attempts
-    if (accountSwitchAttemptsRef.current >= 5) {
-      logger.warn('[Auth] Too many account switch attempts, circuit breaker activated');
-      return false;
-    }
-
-    // Prevent rapid re-attempts (minimum 2 seconds between attempts)
-    if (now - lastAccountSwitchRef.current < 2000) {
-      logger.debug('[Auth] Account switch attempt too soon, skipping');
-      return false;
-    }
-
-    // Race condition protection
-    if (accountSwitchRef.current) {
-      logger.debug('[Auth] Account switch already in progress, skipping');
-      return false;
-    }
-
-    try {
-      accountSwitchRef.current = true;
-      lastAccountSwitchRef.current = now;
-      accountSwitchAttemptsRef.current++;
-
-      logger.info('[Auth] Switching to account:', userId);
-
-      // Track current userId for audit log
-      const fromUserId = user?.userId || 'unknown';
-
-      // Step 0: Check network connectivity
-      const networkState = await NetInfo.fetch();
-      const isConnected = networkState.isConnected ?? false;
-
-      if (!isConnected) {
-        logger.warn('[Auth] Cannot switch account - offline');
-        Alert.alert(
-          'No Internet Connection',
-          'Account switching requires an internet connection. Please connect to Wi-Fi or mobile data and try again.',
-          [{ text: 'OK', style: 'default' }]
-        );
-        return false;
-      }
-
-      // Step 1: Biometric authentication
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-
-      if (!hasHardware || !isEnrolled) {
-        logger.warn('[Auth] Biometric not available for account switch');
-        return false;
-      }
-
-      const biometricResult = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Authenticate to switch account',
-        fallbackLabel: 'Cancel',
-        cancelLabel: 'Cancel',
-      });
-
-      if (!biometricResult.success) {
-        logger.info('[Auth] Biometric authentication cancelled');
-        return false;
-      }
-
-      // Step 2: Get account from AccountsManager
-      const account = await AccountsManager.switchAccount(userId);
-
-      if (!account) {
-        logger.error('[Auth] Account not found:', userId);
-        return false;
-      }
-
-      // Step 3: Token freshness validation (Phase 2.2)
-      try {
-        const decoded: any = jwtDecode(account.accessToken);
-        if (decoded.exp * 1000 < Date.now()) {
-          logger.error('[Auth] Token expired for account:', userId);
-          Alert.alert(
-            'Session Expired',
-            'This account\'s session has expired. Please login again.',
-            [{ text: 'OK', style: 'default' }]
-          );
-          return false;
-        }
-      } catch (error) {
-        logger.error('[Auth] Error decoding token:', error);
-        Alert.alert(
-          'Authentication Error',
-          'Unable to verify account session. Please try again.',
-          [{ text: 'OK', style: 'default' }]
-        );
-        return false;
-      }
-
-      // Step 4: Update tokens
-      tokenManager.setAccessToken(account.accessToken);
-      tokenManager.setRefreshToken(account.refreshToken);
-
-      // Step 5: Update API client
-      apiClient.defaults.headers.common['Authorization'] = `Bearer ${account.accessToken}`;
-      apiClient.setProfileId(account.profileId);
-
-      // Step 6: Update user state
-      setUser({
-        userId: account.userId,
-        email: account.email,
-        profileId: account.profileId,
-        entityId: account.entityId,
-        firstName: account.displayName.split(' ')[0],
-        lastName: account.displayName.split(' ').slice(1).join(' '),
-      } as User);
-
-      setIsAuthenticated(true);
-      setAuthLevel(AuthLevel.FULL);
-
-      // Step 7: Log switch to audit trail
-      await logAccountSwitch(fromUserId, userId, true);
-
-      // Reset circuit breaker on success
-      accountSwitchAttemptsRef.current = 0;
-
-      logger.info('[Auth] ✅ Account switched successfully');
-      return true;
-    } catch (error) {
-      logger.error('[Auth] Error switching account:', error);
-
-      // Log failed attempt
-      const fromUserId = user?.userId || 'unknown';
-      await logAccountSwitch(fromUserId, userId, false);
-
-      return false;
-    } finally {
-      accountSwitchRef.current = false;
-    }
-  }, [user]);
-
-  const saveCurrentAccountToManager = useCallback(async () => {
-    try {
-      if (!user || !isAuthenticated) return;
-
-      const accessToken = await getAccessToken();
-      const refreshToken = await getAccessToken(); // Should be getRefreshToken but keeping safe
-
-      if (!accessToken) return;
-
-      const account: Account = {
-        userId: user.userId,
-        email: user.email,
-        phone: user.phoneNumber,
-        profileId: user.profileId || '',
-        entityId: user.entityId || '',
-        profileType: user.businessName ? 'business' : 'personal',
-        displayName: user.businessName || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
-        avatarUrl: user.avatarUrl,
-        accessToken,
-        refreshToken: refreshToken || accessToken, // Fallback to access if refresh not available
-        addedAt: Date.now(),
-      };
-
-      await AccountsManager.addAccount(account);
-      await loadAvailableAccounts();
-
-      logger.info('[Auth] Saved current account to manager');
-    } catch (error: any) {
-      logger.error('[Auth] Error saving account to manager:', error);
-
-      // Show user-friendly error for max accounts limit
-      if (error.message?.includes('Maximum 5 accounts')) {
-        Alert.alert(
-          'Account Limit Reached',
-          'You can have up to 5 accounts on this device. Please remove an existing account from Settings → Accounts to add a new one.',
-          [{ text: 'OK', style: 'default' }]
-        );
-      }
-
-      // Re-throw error for caller to handle
-      throw error;
-    }
-  }, [user, isAuthenticated, loadAvailableAccounts]);
-
-  const removeAccount = useCallback(async (userId: string): Promise<boolean> => {
-    try {
-      logger.info('[Auth] Removing account:', userId);
-
-      // Check: Can't remove current account
-      if (user?.userId === userId) {
-        Alert.alert(
-          'Cannot Remove Current Account',
-          'Please switch to another account before removing this one.',
-          [{ text: 'OK', style: 'default' }]
-        );
-        return false;
-      }
-
-      // Check: Can't remove last account
-      const accounts = await AccountsManager.getAllAccounts();
-      if (accounts.length <= 1) {
-        Alert.alert(
-          'Cannot Remove Last Account',
-          'You must have at least one account. Add another account before removing this one.',
-          [{ text: 'OK', style: 'default' }]
-        );
-        return false;
-      }
-
-      // Call AccountsManager to remove
-      await AccountsManager.removeAccount(userId);
-
-      // Reload available accounts
-      await loadAvailableAccounts();
-
-      logger.info('[Auth] ✅ Account removed successfully');
-      return true;
-    } catch (error) {
-      logger.error('[Auth] Error removing account:', error);
-      Alert.alert(
-        'Error',
-        'Failed to remove account. Please try again.',
-        [{ text: 'OK', style: 'default' }]
-      );
-      return false;
-    }
-  }, [user, loadAvailableAccounts]);
-
-  // Helper functions for credentials
-  const saveCredentials = async (email: string, password: string): Promise<void> => {
-    try {
-      if (persistentAuthEnabled && rememberMe) {
-        await SecureStore.setItemAsync(SECURE_STORE_EMAIL_KEY, email);
-        await SecureStore.setItemAsync(SECURE_STORE_PASSWORD_KEY, password);
-      }
-    } catch (error) {
-      console.warn('⚠️ [Credentials] Failed to save:', error);
-    }
-  };
-  
-  const loadCredentials = async (): Promise<{ email?: string; password?: string } | null> => {
-    try {
-      if (!persistentAuthEnabled) return null;
-      
       const email = await SecureStore.getItemAsync(SECURE_STORE_EMAIL_KEY);
       const password = await SecureStore.getItemAsync(SECURE_STORE_PASSWORD_KEY);
-      
       if (email && password) {
         setRememberMe(true);
         return { email, password };
       }
-      
       setRememberMe(false);
       return null;
-    } catch (error) {
-      console.warn('⚠️ [Credentials] Failed to load:', error);
+    } catch {
       setRememberMe(false);
       return null;
     }
-  };
-      
-  // PIN and biometric functions (legacy support)
-  const getLastUserForPin = async (): Promise<string | null> => {
-    return await getStoredPinUser();
-  };
+  }, [persistentAuthEnabled]);
 
-  const clearPinUser = async (): Promise<void> => {
-    await clearLastUserForPin();
-  };
-
-  const hasPinUserStored = async (): Promise<boolean> => {
-    return await checkPinUserStored();
-  };
-
-  const setupBiometricLogin = async (identifier: string, password: string): Promise<void> => {
-    try {
-      await SecureStore.setItemAsync(SECURE_STORE_BIOMETRIC_IDENTIFIER_KEY, identifier);
-      await SecureStore.setItemAsync(SECURE_STORE_BIOMETRIC_PASSWORD_KEY, password);
-    } catch (error) {
-      throw new Error('Failed to set up biometric login');
-    }
-  };
-
-  const getBiometricCredentials = async (): Promise<{ identifier: string; password: string } | null> => {
-    try {
-      const identifier = await SecureStore.getItemAsync(SECURE_STORE_BIOMETRIC_IDENTIFIER_KEY);
-      const password = await SecureStore.getItemAsync(SECURE_STORE_BIOMETRIC_PASSWORD_KEY);
-      
-      if (identifier && password) {
-        return { identifier, password };
-      }
-      
-      return null;
-    } catch (error) {
-      return null;
-    }
-  };
-
-  const loginWithBiometric = async (): Promise<{ success: boolean; message?: string }> => {
-    try {
-      const credentials = await getBiometricCredentials();
-      if (!credentials) {
-        return { 
-          success: false, 
-          message: 'No biometric credentials found. Please set up biometric login first.' 
-        };
-      }
-      
-      const loginResult = await login(credentials.identifier, credentials.password, true);
-      return loginResult;
-    } catch (error: any) {
-      return { 
-        success: false, 
-        message: error.message || 'An error occurred during biometric login' 
-      };
-    }
-  };
-
-  // Legacy functions (keeping for backward compatibility)
-  const loginBusiness = async (identifier: string, password: string, skipStore = false): Promise<{ success: boolean; message?: string }> => {
-    setIsLoading(true);
-    try {
-      console.log('🔑 [BusinessLogin] Attempting business login for:', identifier);
-      const response = await apiClient.post(AUTH_PATHS.BUSINESS_LOGIN, { identifier, password });
-      
-      console.log('🔑 [BusinessLogin] Business login response status:', response.status);
-      console.log('🔑 [BusinessLogin] Business login response data:', response.data);
-      
-      // Parse the response data
-      let authData;
-      // If data is a string, parse it as JSON
-      if (typeof response.data === 'string') {
-        authData = JSON.parse(response.data);
-      } else {
-        authData = response.data;
-      }
-      
-      console.log('🔑 [BusinessLogin] Parsed auth data:', authData);
-      
-      if (authData?.access_token) {
-        console.log('✅ [BusinessLogin] Business login successful, processing tokens');
-        
-        // CRITICAL: Clear any existing invalid tokens first
-        await tokenManager.clearAllTokens();
-
-        tokenManager.setAccessToken(authData.access_token);
-        // Handle refresh token if available
-        if (authData.refresh_token) {
-          tokenManager.setRefreshToken(authData.refresh_token);
-          console.log('✅ [BusinessLogin] Refresh token saved successfully');
-        } else {
-          console.warn('⚠️ [BusinessLogin] No refresh token in response');
-        }
-        apiClient.defaults.headers.common['Authorization'] = `Bearer ${authData.access_token}`;
-        
-        if (authData.profile_id) {
-          apiClient.setProfileId(authData.profile_id);
-          console.log('✅ [BusinessLogin] Profile ID set:', authData.profile_id);
-        }
-        
-        if (rememberMe && !skipStore) {
-          await saveCredentials(identifier, password);
-        }
-        
-        setIsAuthenticated(true);
-        setAuthLevel(AuthLevel.AUTHENTICATED);
-        setIsGuestMode(false);
-        setHasPersistedSession(true);
-        
-        // CRITICAL: Fetch user profile data after successful login
-        try {
-          const profile = await authHook.getCurrentUserProfile();
-          if (profile) {
-            // CRITICAL: Get profile ID from multiple sources as fallback
-            const profileId = profile.id || profile.profile_id || profile.user_id;
-            
-            const mappedUser = {
-              id: profile.user_id || profile.id,
-              profileId: profileId,
-              entityId: profile.entity_id,
-              firstName: profile.type === 'business' ? profile.business_name : profile.first_name,
-              lastName: profile.type === 'business' ? null : profile.last_name,
-              username: profile.username,
-              avatarUrl: profile.avatar_url || profile.logo_url,
-              email: profile.type === 'business' ? profile.business_email : profile.email,
-              profileType: profile.type,
-              businessName: profile.business_name,
-            };
-            setUser(mappedUser);
-            console.log('✅ [BusinessLogin] User profile loaded:', mappedUser);
-          }
-        } catch (profileError) {
-          console.warn('⚠️ [BusinessLogin] Failed to load user profile:', profileError);
-          // Continue with login even if profile fails
-        }
-        
-        console.log('✅ [BusinessLogin] Business login completed successfully');
-
-        // PROFESSIONAL: Direct auth state machine coordination
-        authStateMachine.transition(AuthEvent.LOGIN_SUCCESS, {
-          event: AuthEvent.LOGIN_SUCCESS,
-          timestamp: Date.now(),
-          authData: {
-            userId: authData.user_id,
-            profileId: authData.profile_id,
-            accessToken: authData.access_token
-          }
-        });
-
-        // PROFESSIONAL: Direct LoadingOrchestrator coordination to prevent white flash
-        loadingOrchestrator.coordinateAuthToAppTransition();
-
-        setIsLoading(false);
-        return { success: true };
-      } else {
-        console.error('❌ [BusinessLogin] No access token in response:', authData);
-        setIsLoading(false);
-        return { success: false, message: "Business login failed - no access token received" };
-      }
-    } catch (error: any) {
-      console.error('❌ [BusinessLogin] Business login error:', error);
-      console.error('❌ [BusinessLogin] Error response:', error.response?.data);
-      
-      setIsLoading(false);
-      
-      // Handle specific error cases
-      if (error.response?.status === 401) {
-        return { 
-          success: false, 
-          message: error.response?.data?.message || "Invalid credentials. Please check your email/phone and password." 
-        };
-      } else if (error.response?.status === 400) {
-        return { 
-          success: false, 
-          message: error.response?.data?.message || "Invalid request. Please check your credentials." 
-        };
-      } else {
-        return { 
-          success: false, 
-          message: error.response?.data?.message || error.message || "Failed to sign in to business account." 
-        };
-      }
-    }
-  };
-
-  const loginWithPin = async (identifier: string, pin: string): Promise<{ success: boolean; message?: string }> => {
-    setIsLoading(true);
-    try {
-      console.log('🔐 [LoginWithPin] Attempting PIN login for:', identifier);
-      const response = await apiClient.post(AUTH_PATHS.PIN_LOGIN, { identifier, pin });
-      
-      console.log('�� [LoginWithPin] PIN login response status:', response.status);
-      console.log('🔐 [LoginWithPin] PIN login response data:', response.data);
-      
-      // PIN login returns data directly in response.data
-      const authData = response.data;
-      
-      if (authData?.access_token) {
-        console.log('✅ [LoginWithPin] PIN login successful, processing tokens');
-        
-        // CRITICAL: Clear any existing invalid tokens first
-        await tokenManager.clearAllTokens();
-
-        tokenManager.setAccessToken(authData.access_token);
-        // Handle refresh token if available
-        if (authData.refresh_token) {
-          tokenManager.setRefreshToken(authData.refresh_token);
-          console.log('✅ [LoginWithPin] Refresh token saved successfully');
-        } else {
-          console.warn('⚠️ [LoginWithPin] No refresh token in response');
-        }
-        apiClient.defaults.headers.common['Authorization'] = `Bearer ${authData.access_token}`;
-        
-        if (authData.profile_id) {
-          apiClient.setProfileId(authData.profile_id);
-          console.log('✅ [LoginWithPin] Profile ID set:', authData.profile_id);
-        }
-        
-        await storeLastUserForPin(identifier);
-        
-        setIsAuthenticated(true);
-        setAuthLevel(AuthLevel.AUTHENTICATED);
-        setIsGuestMode(false);
-        setHasPersistedSession(true);
-        
-        // CRITICAL: Fetch user profile data after successful login
-        try {
-          const profile = await authHook.getCurrentUserProfile();
-          if (profile) {
-            // CRITICAL: Get profile ID from multiple sources as fallback
-            const profileId = profile.id || profile.profile_id || profile.user_id;
-            
-            const mappedUser = {
-              id: profile.user_id || profile.id,
-              profileId: profileId,
-              entityId: profile.entity_id,
-              firstName: profile.type === 'business' ? profile.business_name : profile.first_name,
-              lastName: profile.type === 'business' ? null : profile.last_name,
-              username: profile.username,
-              avatarUrl: profile.avatar_url || profile.logo_url,
-              email: profile.type === 'business' ? profile.business_email : profile.email,
-              profileType: profile.type,
-              businessName: profile.business_name,
-            };
-            setUser(mappedUser);
-            console.log('✅ [LoginWithPin] User profile loaded:', mappedUser);
-          }
-        } catch (profileError) {
-          console.warn('⚠️ [LoginWithPin] Failed to load user profile:', profileError);
-          // Continue with login even if profile fails
-        }
-        
-        console.log('✅ [LoginWithPin] PIN login completed successfully');
-
-        // PROFESSIONAL: Direct auth state machine coordination
-        authStateMachine.transition(AuthEvent.LOGIN_SUCCESS, {
-          event: AuthEvent.LOGIN_SUCCESS,
-          timestamp: Date.now(),
-          authData: {
-            userId: authData.user_id,
-            profileId: authData.profile_id,
-            accessToken: authData.access_token
-          }
-        });
-
-        // PROFESSIONAL: Direct LoadingOrchestrator coordination to prevent white flash
-        loadingOrchestrator.coordinateAuthToAppTransition();
-
-        setIsLoading(false);
-        return { success: true };
-      } else {
-        console.error('❌ [LoginWithPin] No access token in response:', authData);
-        setIsLoading(false);
-        return { success: false, message: "PIN login failed - no access token received" };
-      }
-    } catch (error: any) {
-      console.error('❌ [LoginWithPin] PIN login error:', error);
-      console.error('❌ [LoginWithPin] Error response:', error.response?.data);
-      
-      setIsLoading(false);
-      
-      // Handle specific error cases
-      if (error.response?.status === 401) {
-      return { 
-        success: false, 
-          message: error.response?.data?.message || "Invalid PIN or PIN not set up for this account." 
-        };
-      } else if (error.response?.status === 400) {
-        return { 
-          success: false, 
-          message: error.response?.data?.message || "Invalid request. Please check your PIN." 
-        };
-      } else {
-        return { 
-          success: false, 
-          message: error.response?.data?.message || error.message || "Failed to sign in with PIN." 
-      };
-    }
-    }
-  };
-
-  const forceLogout = async (): Promise<void> => {
-    
-    console.warn('🚨 [ForceLogout] Forcing logout due to auth error');
-    await logout();
-  };
-
-  const handleSignUp = async (userData: UserData): Promise<any> => {
+  const handleSignUp = useCallback(async (userData: UserData) => {
     return authHook.createAuthUser(userData);
-  };
+  }, [authHook]);
 
-  const checkEmailConfirmation = async (email: string): Promise<boolean> => {
+  const checkEmailConfirmation = useCallback(async (email: string): Promise<boolean> => {
     setShowConfirmationModal(true);
     return false;
-  };
-
-  const requireAuthentication = useCallback(async (): Promise<boolean> => {
-    return await upgradeToAuthenticated();
-  }, [upgradeToAuthenticated]);
+  }, []);
 
   const setPhoneVerified = useCallback((data: PhoneVerification) => {
     setPhoneVerification(data);
   }, []);
 
-  // Add missing login function for backward compatibility
-  const login = useCallback(async (identifier: string, password: string, skipStore = false): Promise<{ success: boolean; message?: string }> => {
-    console.log('🔑 [Login] Attempting personal login for:', identifier);
-    try {
-      const response = await apiClient.post(AUTH_PATHS.LOGIN, { identifier, password });
-      console.log('🔑 [Login] Personal login response status:', response.status);
-      console.log('🔑 [Login] Personal login response data:', response.data);
-      if (response.status === 200 || response.status === 201) {
-        let authData = response.data;
-        if (!('access_token' in authData)) {
-          console.error('❌ [Login] No access token in response:', response.data);
-          return { success: false, message: "Login failed - no access token received" };
-        }
-        console.log('🔑 [Login] Parsed auth data:', authData);
-        if (authData.access_token) {
-          console.log('✅ [Login] Personal login successful, processing tokens');
-          tokenManager.setAccessToken(authData.access_token);
-          if (authData.refresh_token) {
-            if (!skipStore) {
-              tokenManager.setRefreshToken(authData.refresh_token);
-              console.log('✅ [Login] Refresh token saved successfully');
-            } else {
-              console.warn('⚠️ [Login] Skipping refresh token storage as requested');
-            }
-          } else {
-            console.warn('⚠️ [Login] No refresh token in response');
-          }
-          if (authData.profile_id) {
-            apiClient.setProfileId(authData.profile_id);
-            console.log('✅ [Login] Profile ID set:', authData.profile_id);
-          }
-          // CRITICAL: Fetch user profile data after successful login
-          try {
-            const profileResponse = await apiClient.get(AUTH_PATHS.ME);
-            if (profileResponse.status === 200 && profileResponse.data) {
-              const profileData = profileResponse.data;
-              const mappedUser = {
-                id: profileData.id || profileData.user_id,
-                profileId: profileData.profile_id || profileData.id,
-                entityId: profileData.entity_id,
-                firstName: profileData.first_name,
-                lastName: profileData.last_name,
-                username: profileData.username,
-                avatarUrl: profileData.avatar_url || profileData.logo_url,
-                email: profileData.email,
-                profileType: profileData.type,
-                businessName: profileData.business_name,
-              };
-              setUser(mappedUser);
-              console.log('✅ [Login] User profile loaded:', mappedUser);
-            } else {
-              console.warn('⚠️ [Login] Failed to load user profile - empty response');
-            }
-          } catch (profileError: any) {
-            console.warn('⚠️ [Login] Failed to load user profile:', profileError);
-            // Continue with login even if profile fails
-          }
-          console.log('✅ [Login] Personal login completed successfully');
-          setIsAuthenticated(true); // Set authenticated state
+  const getLastUserForPin = useCallback(async () => getStoredPinUser(), []);
+  const clearPinUser = useCallback(async () => clearLastUserForPin(), []);
+  const hasPinUserStored = useCallback(async () => checkPinUserStored(), []);
 
-          // PROFESSIONAL: Direct auth state machine coordination
-          authStateMachine.transition(AuthEvent.LOGIN_SUCCESS, {
-            event: AuthEvent.LOGIN_SUCCESS,
-            timestamp: Date.now(),
-            authData: {
-              userId: authData.user_id,
-              profileId: authData.profile_id,
-              accessToken: authData.access_token
-            }
-          });
-
-          // PROFESSIONAL: Direct LoadingOrchestrator coordination to prevent white flash
-          loadingOrchestrator.coordinateAuthToAppTransition();
-
-          return { success: true };
-        } else {
-          console.error('❌ [Login] No access token in response:', authData);
-          return { success: false, message: "Personal login failed - no access token received" };
-        }
-      } else {
-        console.error('❌ [Login] Unexpected response status:', response.status);
-        return { success: false, message: "Personal login failed - unexpected response status" };
-      }
-    } catch (error: any) {
-      console.error('❌ [Login] Personal login error:', error);
-      console.error('❌ [Login] Error response:', error.response?.data);
-      // If personal login fails with 401, it might be a business account
-      if (error.response?.status === 401) {
-        console.log('🔑 [Login] Personal login failed, trying business login as fallback...');
-        return await loginBusiness(identifier, password, skipStore);
-      }
-      return { success: false, message: error.response?.data?.errors?.[0]?.message || error.message || "Personal login failed" };
-    }
-    // If personal login fails for other reasons, fallback to business login
-    console.log('🔑 [Login] Personal login failed, trying business login as fallback...');
-    return await loginBusiness(identifier, password, skipStore);
-  }, []);
-
-  // Unified login method that handles both personal and business users
-  const unifiedLogin = useCallback(async (identifier: string, password: string, skipStore = false): Promise<{ success: boolean; message?: string; user_type?: string }> => {
-    console.log('🔑 [UnifiedLogin] Attempting unified login for:', identifier);
-    try {
-      const response = await apiClient.post('/auth/unified-login', { identifier, password });
-      console.log('🔑 [UnifiedLogin] Response status:', response.status);
-      console.log('🔑 [UnifiedLogin] Response data:', response.data);
-
-      if (response.status === 200 || response.status === 201) {
-        let authData = response.data;
-        if (!('access_token' in authData)) {
-          console.error('❌ [UnifiedLogin] No access token in response:', response.data);
-          return { success: false, message: "Unified login failed - no access token received" };
-        }
-
-        console.log('🔑 [UnifiedLogin] Parsed auth data:', authData);
-        const userType = authData.user_type || 'unknown';
-        console.log('🔑 [UnifiedLogin] User type detected:', userType);
-
-        if (authData.access_token) {
-          console.log('✅ [UnifiedLogin] Login successful, processing tokens');
-          tokenManager.setAccessToken(authData.access_token);
-
-          if (authData.refresh_token) {
-            if (!skipStore) {
-              tokenManager.setRefreshToken(authData.refresh_token);
-              console.log('✅ [UnifiedLogin] Refresh token saved successfully');
-            } else {
-              console.warn('⚠️ [UnifiedLogin] Skipping refresh token storage as requested');
-            }
-          } else {
-            console.warn('⚠️ [UnifiedLogin] No refresh token in response');
-          }
-
-          if (authData.profile_id) {
-            apiClient.setProfileId(authData.profile_id);
-            console.log('✅ [UnifiedLogin] Profile ID set:', authData.profile_id);
-          }
-
-          // CRITICAL: Fetch user profile data after successful login
-          try {
-            const profileResponse = await apiClient.get(AUTH_PATHS.ME);
-            if (profileResponse.status === 200 && profileResponse.data) {
-              const profileData = profileResponse.data;
-              const mappedUser = {
-                id: profileData.id || profileData.user_id,
-                profileId: profileData.profile_id || profileData.id,
-                entityId: profileData.entity_id,
-                firstName: profileData.first_name,
-                lastName: profileData.last_name,
-                username: profileData.username,
-                avatarUrl: profileData.avatar_url || profileData.logo_url,
-                email: profileData.email,
-                profileType: profileData.type || userType,
-                businessName: profileData.business_name,
-              };
-              setUser(mappedUser);
-              console.log('✅ [UnifiedLogin] User profile loaded:', mappedUser);
-            } else {
-              console.warn('⚠️ [UnifiedLogin] Failed to load user profile - empty response');
-            }
-          } catch (profileError: any) {
-            console.warn('⚠️ [UnifiedLogin] Failed to load user profile:', profileError);
-            // Continue with login even if profile fails
-          }
-
-          console.log('✅ [UnifiedLogin] Login completed successfully');
-          setIsAuthenticated(true);
-
-          // PROFESSIONAL: Direct auth state machine coordination
-          authStateMachine.transition(AuthEvent.LOGIN_SUCCESS, {
-            event: AuthEvent.LOGIN_SUCCESS,
-            timestamp: Date.now(),
-            authData: {
-              userId: authData.user_id,
-              profileId: authData.profile_id,
-              accessToken: authData.access_token
-            }
-          });
-
-          // PROFESSIONAL: Direct LoadingOrchestrator coordination to prevent white flash
-          loadingOrchestrator.coordinateAuthToAppTransition();
-
-          return { success: true, user_type: userType };
-        } else {
-          console.error('❌ [UnifiedLogin] No access token in response:', authData);
-          return { success: false, message: "Unified login failed - no access token received" };
-        }
-      } else {
-        console.error('❌ [UnifiedLogin] Unexpected response status:', response.status);
-        return { success: false, message: "Unified login failed - unexpected response status" };
-      }
-    } catch (error: any) {
-      console.error('❌ [UnifiedLogin] Error:', error);
-      console.error('❌ [UnifiedLogin] Error response:', error.response?.data);
-      return {
-        success: false,
-        message: error.response?.data?.message || error.message || "Unified login failed"
-      };
-    }
-  }, []);
-
-  // DEVELOPMENT HELPER: Emergency cleanup for testing
   const emergencyCleanupForDev = useCallback(async () => {
     if (__DEV__) {
-      console.log('🧨 [DEV] Emergency cleanup - clearing ALL auth data');
-      await authManager.emergencyCleanup();
+      await sessionManager.emergencyCleanup();
       await clearAllCachedData();
       setIsAuthenticated(false);
       setUser(null);
       setIsLoading(false);
-      console.log('✅ [DEV] Emergency cleanup complete - restart app for fresh login');
     }
   }, []);
 
-  // PROFESSIONAL ARCHITECTURE: Listen to EventCoordinator for all data events
+  // ============================================
+  // INITIALIZATION
+  // ============================================
+
   useEffect(() => {
-    const unsubscribeEvents = eventCoordinator.onDataUpdated((eventType, data, metadata) => {
-      console.log('🏛️ [AuthContext] PROFESSIONAL: EventCoordinator event received:', {
-        eventType,
-        metadata,
-        timestamp: Date.now()
+    if (!hasRunInitialCheckSession.current) {
+      hasRunInitialCheckSession.current = true;
+      checkSession();
+      loadAvailableAccounts();
+    }
+  }, [checkSession, loadAvailableAccounts]);
+
+  // Restore wallet state on mount
+  useEffect(() => {
+    if (authLevel >= AuthLevel.AUTHENTICATED) {
+      walletSecurity.restoreState().then(restored => {
+        if (restored) {
+          const state = walletSecurity.getState();
+          setIsWalletUnlocked(state.isUnlocked);
+          setLastWalletUnlock(state.lastUnlock);
+          setAuthLevel(state.authLevel);
+        }
       });
+    }
+  }, [authLevel]);
 
-      switch (eventType) {
-        case 'user':
-          // User data changes require session validation
-          if (!isAuthenticated || isLoading) {
-            console.log('🏛️ [AuthContext] PROFESSIONAL: User data update - triggering session check');
-            checkSession();
-          }
-          break;
+  // ============================================
+  // CONTEXT VALUE
+  // ============================================
 
-        case 'kyc':
-          // KYC data changes require session validation if not authenticated
-          if (!isAuthenticated || isLoading) {
-            console.log('🏛️ [AuthContext] PROFESSIONAL: KYC data update - triggering session check');
-            checkSession();
-          }
-          break;
-
-        default:
-          console.log('🏛️ [AuthContext] PROFESSIONAL: Ignoring event type:', eventType);
-          break;
-      }
-    });
-
-    return unsubscribeEvents;
-  }, [isAuthenticated, isLoading, checkSession]);
-
-
-  // Context value
   const value: AuthContextType = {
-    // Core Authentication State
+    // Core state
     authLevel,
-        isAuthenticated,
+    isAuthenticated,
     isGuestMode,
-        isLoading,
+    isLoading,
     user,
-
-    // Session Management
     hasPersistedSession,
 
-    // PROFESSIONAL ARCHITECTURE: State machine coordination (no more reactive chaos)
-
-    // Wallet Security
+    // Wallet security
     isWalletUnlocked,
     lastWalletUnlock,
 
-    // Authentication Methods
-        login,
-        loginBusiness,
-        loginWithPin,
-        unifiedLogin,
-        logout,
+    // Login methods
+    loginWithPin,
+    unifiedLogin,
+    logout,
+    loginWithBiometric,
+    setupBiometricLogin,
 
-    // Multi-account management
+    // Multi-account
     availableAccounts,
     switchAccount,
     saveCurrentAccountToManager,
     loadAvailableAccounts,
     removeAccount,
 
-    // Progressive Authentication
+    // Progressive auth
     upgradeToAuthenticated,
     requestWalletAccess,
     lockWallet,
 
-    // Biometric & Security
-    loginWithBiometric,
-    setupBiometricLogin,
-
-    // Session Management
-        checkSession,
+    // Session
+    checkSession,
     completeProfileSwitch,
     getAccessToken,
 
-    // DEVELOPMENT HELPERS
+    // Dev helpers
     emergencyCleanupForDev,
 
-    // Legacy Support
-        showConfirmationModal,
-        setShowConfirmationModal,
-        handleSignUp,
-        checkEmailConfirmation,
-        setIsAuthenticated,
-        setUser,
-        needsLogin,
-        setNeedsLogin,
-        forceLogout,
-        rememberMe,
-        setRememberMe,
-        loadCredentials,
-        justLoggedOut,
-        setJustLoggedOut,
-        setPhoneVerified,
-        phoneVerification,
+    // Legacy support
+    showConfirmationModal,
+    setShowConfirmationModal,
+    handleSignUp,
+    checkEmailConfirmation,
+    setIsAuthenticated,
+    setUser,
+    needsLogin,
+    setNeedsLogin,
+    forceLogout,
+    rememberMe,
+    setRememberMe,
+    loadCredentials,
+    justLoggedOut,
+    setJustLoggedOut,
+    setPhoneVerified,
+    phoneVerification,
     getLastUserForPin,
     clearPinUser,
     hasPinUserStored,
-        getBiometricCredentials,
+    getBiometricCredentials,
     enableGuestMode,
     requireAuthentication,
     persistentAuthEnabled,
     setPersistentAuthEnabled: (enabled: boolean) => {
       setPersistentAuthEnabled(enabled);
-      // Use MMKV for 30x faster performance
       authStorage.set(PERSISTENT_AUTH_KEY, enabled);
     }
   };
@@ -1721,4 +607,3 @@ export const useAuthContext = (): AuthContextType => {
   }
   return context;
 };
-

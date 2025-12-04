@@ -1,5 +1,5 @@
-// PROFESSIONAL ARCHITECTURE: EventCoordinator for navigation-aware data updates
-import { eventCoordinator } from '../utils/EventCoordinator';
+// UserRepository: Local SQLite storage for user and KYC data
+// NOTE: EventCoordinator removed - TanStack Query handles data reactivity
 import { databaseManager } from './DatabaseManager';
 import { SQLiteDatabase } from 'expo-sqlite';
 
@@ -38,20 +38,14 @@ export class UserRepository {
     return rows.length > 0 ? rows[0] : null;
   }
 
-  // PROFESSIONAL: Save user with navigation-aware event coordination (PROFILE-ISOLATED)
+  // Save user to local SQLite (PROFILE-ISOLATED)
   async saveUser(user: any, profileId: string): Promise<void> { // TODO: type
     const db = await this.getDatabase();
     await db.runAsync(
       `INSERT OR REPLACE INTO ${UserRepository.USER_TABLE} (id, data, profile_id) VALUES (?, ?, ?)`,
       [user.id, JSON.stringify(user), profileId]
     );
-
-    // PROFESSIONAL: Use EventCoordinator for navigation-aware data events
-    await eventCoordinator.emitDataUpdated('user', user, {
-      source: 'UserRepository.saveUser',
-      userId: user.id,
-      profileId
-    });
+    // Data saved - TanStack Query will fetch fresh data when needed
   }
 
   // Update user profile fields (PROFILE-ISOLATED)
@@ -130,19 +124,8 @@ export class UserRepository {
       [kyc.id, JSON.stringify(mergedData), profileId]
     );
 
-    console.log('🏛️ [UserRepository] PROFESSIONAL: Saving KYC status with EventCoordinator:', {
-      kycId: kyc.id,
-      source: 'UserRepository.saveKycStatus',
-      usesProfessionalCoordination: true
-    });
-
-    // PROFESSIONAL: Use EventCoordinator for navigation-aware KYC events
-    // This prevents the navigation glitches by coordinating with navigation state
-    await eventCoordinator.emitDataUpdated('kyc', mergedData, {
-      source: 'UserRepository.saveKycStatus',
-      kycId: kyc.id,
-      priority: 'high' // KYC updates are high priority
-    });
+    console.log('[UserRepository] KYC status saved:', { kycId: kyc.id });
+    // Data saved - TanStack Query will fetch fresh data when needed
   }
 
   // Background sync: fetch from remote, update local, emit event (PROFILE-ISOLATED)
@@ -156,16 +139,13 @@ export class UserRepository {
     await this.saveKycStatus({ ...remoteKyc, profile_id: profileId });
   }
 
-  // PROFESSIONAL: Sync with navigation-aware coordination (PROFILE-ISOLATED)
+  // Sync with remote data (PROFILE-ISOLATED)
   async syncWithRemote(remoteData: any, profileId: string): Promise<void> { // TODO: type
-    // ...fetch remote, upsert to DB...
-
-    // PROFESSIONAL: Use EventCoordinator for navigation-aware sync events
-    await eventCoordinator.emitDataUpdated('user', remoteData, {
-      source: 'UserRepository.syncWithRemote',
-      isRemoteSync: true,
-      profileId
-    });
+    // Save remote data to local SQLite
+    if (remoteData?.id) {
+      await this.saveUser(remoteData, profileId);
+    }
+    // Data saved - TanStack Query will fetch fresh data when needed
   }
 }
 

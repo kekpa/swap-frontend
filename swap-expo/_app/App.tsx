@@ -25,15 +25,19 @@ import { QueryErrorBoundary } from "./tanstack-query/errors/QueryErrorBoundary";
 import { useAuthContext } from "./features/auth/context/AuthContext";
 import { ToastContainer } from "./components/Toast";
 import { ThemeProvider } from './theme/ThemeContext';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator, Text, TouchableOpacity, LogBox } from 'react-native';
+import { View, ActivityIndicator, Text, TouchableOpacity, LogBox, AppState, AppStateStatus } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { databaseManager } from './localdb/DatabaseManager';
 import logger from './utils/logger';
 import { navigationStateManager } from './utils/NavigationStateManager';
 import { navigationRef } from './utils/navigationRef';
 import { tokenManager } from './services/token';
+import appLockService from './services/AppLockService';
+import LockScreen from './features/auth/components/LockScreen';
+import AppLockSetupScreen from './features/auth/components/AppLockSetupScreen';
+import { authEvents, APP_LOCK_EVENTS } from './_api/apiClient';
 
 // PROFESSIONAL FIX: Suppress technical warnings that don't represent bugs
 // - TanStack Query: queries are intentionally cancelled during navigation
@@ -57,6 +61,129 @@ if (__DEV__) {
   // In production, only show WARN level and above
   setLogLevel(LogLevel.WARN);
 }
+
+// Component to handle App Lock Screen
+const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const authContext = useAuthContext();
+  const [isAppLocked, setIsAppLocked] = useState(true);
+  const [isLockConfigured, setIsLockConfigured] = useState<boolean | null>(null);
+  const [needsSetup, setNeedsSetup] = useState(false);
+
+  // Initialize app lock service and check lock state
+  useEffect(() => {
+    const initAppLock = async () => {
+      await appLockService.initialize();
+      const configured = await appLockService.isConfigured();
+      setIsLockConfigured(configured);
+
+      // If user is authenticated and lock is configured, check if locked
+      if (authContext.isAuthenticated && configured) {
+        setIsAppLocked(appLockService.isLocked());
+        setNeedsSetup(false);
+      } else if (authContext.isAuthenticated && !configured) {
+        // User is authenticated but lock not configured - needs setup
+        setNeedsSetup(true);
+        setIsAppLocked(false);
+      } else {
+        // Not authenticated = not locked, no setup needed
+        setIsAppLocked(false);
+        setNeedsSetup(false);
+      }
+    };
+
+    initAppLock();
+  }, [authContext.isAuthenticated]);
+
+  // Handle app state changes (background/foreground)
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'background') {
+        // Lock app ONLY when going to actual background (minimized)
+        // NOT on 'inactive' - that's just system dialogs (permissions, share sheet, etc.)
+        if (isLockConfigured && authContext.isAuthenticated) {
+          logger.debug('[AppLockHandler] App going to background, locking...');
+          appLockService.lock();
+          setIsAppLocked(true);
+        }
+      } else if (nextAppState === 'active') {
+        // Check if session expired when returning to foreground
+        if (isLockConfigured && authContext.isAuthenticated && appLockService.isSessionExpired()) {
+          logger.debug('[AppLockHandler] Session expired, locking...');
+          setIsAppLocked(true);
+        }
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription?.remove();
+  }, [isLockConfigured, authContext.isAuthenticated]);
+
+  // Listen for SESSION_EXPIRED events (token refresh failures)
+  // Revolut-style: lock the app instead of logging out
+  useEffect(() => {
+    const handleSessionExpired = (reason: string) => {
+      if (isLockConfigured && authContext.isAuthenticated) {
+        logger.info(`[AppLockHandler] Session expired (${reason}), locking app...`);
+        appLockService.lock();
+        setIsAppLocked(true);
+      }
+    };
+
+    authEvents.on(APP_LOCK_EVENTS.SESSION_EXPIRED, handleSessionExpired);
+    return () => {
+      authEvents.off(APP_LOCK_EVENTS.SESSION_EXPIRED, handleSessionExpired);
+    };
+  }, [isLockConfigured, authContext.isAuthenticated]);
+
+  const handleUnlock = useCallback(() => {
+    logger.info('[AppLockHandler] App unlocked');
+    setIsAppLocked(false);
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    logger.info('[AppLockHandler] Logout from lock screen');
+    await appLockService.reset();
+    await authContext.logout();
+    setIsAppLocked(false);
+    setNeedsSetup(false);
+  }, [authContext]);
+
+  const handleSetupComplete = useCallback(async () => {
+    logger.info('[AppLockHandler] Lock setup complete');
+    setIsLockConfigured(true);
+    setNeedsSetup(false);
+    setIsAppLocked(false);
+  }, []);
+
+  // Show setup screen if:
+  // - User is authenticated
+  // - Lock is not configured
+  // - Not loading
+  if (authContext.isAuthenticated && needsSetup && !authContext.isLoading) {
+    return (
+      <AppLockSetupScreen
+        userName={authContext.user?.firstName || 'there'}
+        onComplete={handleSetupComplete}
+      />
+    );
+  }
+
+  // Show lock screen if:
+  // - Lock is configured
+  // - User is authenticated
+  // - App is locked
+  if (isLockConfigured && authContext.isAuthenticated && isAppLocked && !authContext.isLoading) {
+    return (
+      <LockScreen
+        userName={authContext.user?.firstName || 'there'}
+        onUnlock={handleUnlock}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  return <>{children}</>;
+};
 
 // Component to handle AppLifecycleManager initialization
 const AppLifecycleHandler: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -149,6 +276,11 @@ const App: React.FC = () => {
         await tokenManager.initialize();
         logger.info('[App] ✅ TokenManager initialization completed successfully');
 
+        // Phase 3: Initialize AppLockService (Revolut-style app lock)
+        logger.info('[App] 🔒 Initializing AppLockService...');
+        await appLockService.initialize();
+        logger.info('[App] ✅ AppLockService initialization completed successfully');
+
         // All infrastructure initialized successfully
         setIsDatabaseReady(true);
 
@@ -163,13 +295,14 @@ const App: React.FC = () => {
   }, []);
 
   // Show loading screen while database initializes
+  // Purple background (#8b14fd) matches native splash for seamless transition
   if (!isDatabaseReady && !databaseError) {
     return (
       <SafeAreaProvider>
         <ThemeProvider>
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
-            <ActivityIndicator size="large" color="#6366F1" />
-            <Text style={{ color: '#FFF', marginTop: 16, fontSize: 16 }}>Initializing Database...</Text>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#8b14fd' }}>
+            <ActivityIndicator size="large" color="#ffffff" />
+            <Text style={{ color: '#FFF', marginTop: 16, fontSize: 16 }}>Loading...</Text>
           </View>
         </ThemeProvider>
       </SafeAreaProvider>
@@ -222,19 +355,21 @@ const App: React.FC = () => {
           >
             <AuthProvider>
               <RefreshProvider>
-                <AppLifecycleHandler>
-                  <NavigationContainer
-                    ref={navigationRef}
-                    onStateChange={(state) => {
-                      // Professional navigation state tracking
-                      navigationStateManager.updateNavigationState(state);
-                    }}
-                  >
-                    <RootNavigator />
-                    <ToastContainer />
-                    <StatusBar style="auto" />
-                  </NavigationContainer>
-                </AppLifecycleHandler>
+                <AppLockHandler>
+                  <AppLifecycleHandler>
+                    <NavigationContainer
+                      ref={navigationRef}
+                      onStateChange={(state) => {
+                        // Professional navigation state tracking
+                        navigationStateManager.updateNavigationState(state);
+                      }}
+                    >
+                      <RootNavigator />
+                      <ToastContainer />
+                      <StatusBar style="auto" />
+                    </NavigationContainer>
+                  </AppLifecycleHandler>
+                </AppLockHandler>
               </RefreshProvider>
             </AuthProvider>
           </QueryErrorBoundary>

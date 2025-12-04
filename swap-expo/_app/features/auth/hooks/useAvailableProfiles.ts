@@ -56,10 +56,14 @@ const fetchAvailableProfiles = async (): Promise<AvailableProfile[]> => {
  * SECURITY: Only fetches when user is authenticated to prevent 401 errors.
  */
 export const useAvailableProfiles = () => {
-  const { isAuthenticated } = useAuthContext();
+  const { isAuthenticated, user } = useAuthContext();
+
+  // SECURITY FIX: Include user ID in cache key to prevent cross-user cache pollution
+  // Without this, User A's profiles could be shown to User B after account switch
+  const userId = user?.userId || user?.profileId || 'anonymous';
 
   return useQuery({
-    queryKey: queryKeys.availableProfiles,
+    queryKey: [...queryKeys.availableProfiles, userId],
     queryFn: fetchAvailableProfiles,
 
     // Cache for 5 minutes (balances fresh data vs performance)

@@ -2,7 +2,8 @@
  * UserRepository Tests
  *
  * Tests the user repository with profile isolation, KYC data merging,
- * event coordination, and remote sync patterns.
+ * and remote sync patterns.
+ * NOTE: EventCoordinator removed - TanStack Query handles data reactivity
  */
 
 // Reset modules before importing to ensure clean singleton state
@@ -20,19 +21,11 @@ jest.mock('../DatabaseManager', () => ({
   },
 }));
 
-jest.mock('../../utils/EventCoordinator', () => ({
-  eventCoordinator: {
-    emitDataUpdated: jest.fn(),
-  },
-}));
-
 // Import after mocking
 import { UserRepository, userRepository } from '../UserRepository';
 import { databaseManager } from '../DatabaseManager';
-import { eventCoordinator } from '../../utils/EventCoordinator';
 
 const mockDatabaseManager = databaseManager as jest.Mocked<typeof databaseManager>;
-const mockEventCoordinator = eventCoordinator as jest.Mocked<typeof eventCoordinator>;
 
 // Test data
 const mockUser = {
@@ -64,7 +57,6 @@ describe('UserRepository', () => {
 
     mockDatabaseManager.initialize.mockResolvedValue(true);
     mockDatabaseManager.getDatabase.mockReturnValue(mockDb);
-    mockEventCoordinator.emitDataUpdated.mockResolvedValue(undefined);
   });
 
   // ============================================================
@@ -163,16 +155,6 @@ describe('UserRepository', () => {
       );
     });
 
-    it('should emit data_updated event via EventCoordinator', async () => {
-      mockDb.runAsync.mockResolvedValue(undefined);
-
-      await userRepository.saveUser(mockUser, 'profile-123');
-
-      expect(mockEventCoordinator.emitDataUpdated).toHaveBeenCalledWith('user', mockUser, {
-        source: 'UserRepository.saveUser',
-        userId: mockUser.id,
-        profileId: 'profile-123',
-      });
     });
 
     it('should use INSERT OR REPLACE for upsert behavior', async () => {
@@ -200,13 +182,6 @@ describe('UserRepository', () => {
       );
     });
 
-    it('should emit event via EventCoordinator', async () => {
-      mockDb.runAsync.mockResolvedValue(undefined);
-
-      await userRepository.updateUser(mockUser, 'profile-123');
-
-      expect(mockEventCoordinator.emitDataUpdated).toHaveBeenCalled();
-    });
   });
 
   // ============================================================
@@ -331,13 +306,7 @@ describe('UserRepository', () => {
       expect(mockDb.runAsync).toHaveBeenCalled();
     });
 
-    it('should emit high priority KYC event via EventCoordinator', async () => {
-      mockDb.getAllAsync.mockResolvedValue([]);
-      mockDb.runAsync.mockResolvedValue(undefined);
 
-      await userRepository.saveKycStatus({ ...mockKycStatus, profile_id: 'profile-123' });
-
-      expect(mockEventCoordinator.emitDataUpdated).toHaveBeenCalledWith(
         'kyc',
         expect.any(Object),
         expect.objectContaining({
@@ -379,14 +348,6 @@ describe('UserRepository', () => {
       );
     });
 
-    it('should emit event after saving remote user', async () => {
-      const fetchRemote = jest.fn().mockResolvedValue(mockUser);
-      mockDb.runAsync.mockResolvedValue(undefined);
-
-      await userRepository.syncUserFromRemote(fetchRemote, 'profile-123');
-
-      expect(mockEventCoordinator.emitDataUpdated).toHaveBeenCalledWith('user', mockUser, expect.any(Object));
-    });
 
     it('should propagate errors from remote fetch', async () => {
       const fetchRemote = jest.fn().mockRejectedValue(new Error('Network error'));
@@ -422,16 +383,6 @@ describe('UserRepository', () => {
   });
 
   describe('syncWithRemote', () => {
-    it('should emit data_updated event with remote sync metadata', async () => {
-      const remoteData = { id: 'user-123', email: 'updated@example.com' };
-
-      await userRepository.syncWithRemote(remoteData, 'profile-123');
-
-      expect(mockEventCoordinator.emitDataUpdated).toHaveBeenCalledWith('user', remoteData, {
-        source: 'UserRepository.syncWithRemote',
-        isRemoteSync: true,
-        profileId: 'profile-123',
-      });
     });
   });
 
@@ -483,7 +434,6 @@ describe('UserRepository', () => {
 
       await userRepository.saveUser(mockUser, 'profile-TEST');
 
-      expect(mockEventCoordinator.emitDataUpdated).toHaveBeenCalledWith(
         'user',
         expect.any(Object),
         expect.objectContaining({ profileId: 'profile-TEST' }),
@@ -511,7 +461,6 @@ describe('UserRepository', () => {
     it('should handle event coordinator errors gracefully', async () => {
       mockDb.runAsync.mockResolvedValue(undefined);
       mockDb.getAllAsync.mockResolvedValue([]);
-      mockEventCoordinator.emitDataUpdated.mockRejectedValue(new Error('Event error'));
 
       // Should propagate the error
       await expect(userRepository.saveKycStatus({ ...mockKycStatus, profile_id: 'profile-123' })).rejects.toThrow(

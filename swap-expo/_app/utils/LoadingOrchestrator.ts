@@ -123,7 +123,7 @@ const DEFAULT_CONFIG: LoadingConfig = {
   maxConcurrentOperations: 5,
   defaultExpiration: 30000,        // 30 seconds
   transitionDelay: 300,            // 300ms smooth transition
-  splashMinimumDuration: 1000,     // 1 second minimum splash
+  splashMinimumDuration: 1000,     // 1 second minimum splash (industry standard)
   uiPreparationDelay: 150,         // 150ms UI preparation
 };
 

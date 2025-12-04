@@ -79,16 +79,16 @@ export interface AuthContextType {
   // Session Management
   hasPersistedSession: boolean;
 
-  // KYC Operation Tracking removed - now handled by EventCoordinator professional architecture
+  // KYC Operation Tracking removed - handled by TanStack Query
 
   // Wallet Security
   isWalletUnlocked: boolean;
   lastWalletUnlock: number | null;
   
   // Authentication Methods
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<any>;
-  loginBusiness: (identifier: string, password: string, skipStore?: boolean) => Promise<{ success: boolean; message?: string }>;
+  // NOTE: login() and loginBusiness() removed - use unifiedLogin() which auto-detects user type
   loginWithPin: (identifier: string, pin: string) => Promise<{ success: boolean; message?: string }>;
+  unifiedLogin: (identifier: string, password: string, skipStore?: boolean) => Promise<{ success: boolean; message?: string; user_type?: string }>;
   logout: () => Promise<void>;
 
   // Multi-account Management (Instagram-style)

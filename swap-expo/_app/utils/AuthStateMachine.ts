@@ -464,12 +464,13 @@ class AuthStateMachine {
         error: context.error,
         event: context.event
       });
-    }
 
-    logger.error('[AuthStateMachine] ❌ Authentication error', {
-      event: context.event,
-      error: context.error?.message
-    });
+      logger.error('[AuthStateMachine] ❌ Authentication error', {
+        event: context.event,
+        error: context.error?.message
+      });
+    }
+    // If no error provided, this is a normal transition (e.g., no token = not logged in)
   }
 
   private handleReset(context: AuthTransitionContext): void {

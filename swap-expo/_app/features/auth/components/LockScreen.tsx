@@ -11,7 +11,7 @@
  * @created 2025-12-01
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,15 +19,41 @@ import {
   SafeAreaView,
   TouchableOpacity,
   StatusBar,
-  Image,
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '../theme/ThemeContext';
-import PinPad from '../components2/PinPad';
-import appLockService, { BiometricCapabilities } from '../services/AppLockService';
-import { logger } from '../utils/logger';
+import { useTheme } from '../../../theme/ThemeContext';
+import PinPad from '../../../components2/PinPad';
+import appLockService, { BiometricCapabilities } from '../../../services/AppLockService';
+import { logger } from '../../../utils/logger';
+
+// Map raw biometric error codes to user-friendly messages
+const getBiometricErrorMessage = (error: string): string | null => {
+  const errorMessages: Record<string, string | null> = {
+    // User actions - don't show error, just let them retry
+    'user_cancel': null,
+    'system_cancel': null,
+    'app_cancel': null,
+    // Device issues
+    'not_enrolled': 'Biometrics not set up on this device',
+    'not_available': 'Biometrics not available',
+    'lockout': 'Too many attempts. Use PIN instead',
+    'lockout_permanent': 'Biometrics disabled. Use PIN instead',
+    // Generic fallbacks
+    'authentication_failed': 'Authentication failed. Try again',
+  };
+
+  // Check if we have a mapped message
+  const mapped = errorMessages[error];
+  if (mapped !== undefined) return mapped; // null means suppress
+
+  // Don't show technical errors
+  if (error.includes('cancel') || error.includes('Cancel')) return null;
+
+  // Default: show generic message for unknown errors
+  return 'Authentication failed. Try again';
+};
 
 interface LockScreenProps {
   /** User's display name for "Welcome back" */
@@ -71,14 +97,13 @@ const LockScreen: React.FC<LockScreenProps> = ({
     checkCapabilities();
   }, []);
 
-  // Auto-trigger biometric on mount if available
+  // Auto-trigger biometric on mount if available - INSTANT, no delay (Revolut-style)
+  const biometricTriggered = useRef(false);
   useEffect(() => {
-    if (mode === 'biometric' && biometricCapabilities?.isEnrolled) {
-      // Small delay for better UX
-      const timer = setTimeout(() => {
-        handleBiometricUnlock();
-      }, 300);
-      return () => clearTimeout(timer);
+    if (mode === 'biometric' && biometricCapabilities?.isEnrolled && !biometricTriggered.current) {
+      biometricTriggered.current = true;
+      // Trigger immediately - Revolut-style instant unlock
+      handleBiometricUnlock();
     }
   }, [mode, biometricCapabilities]);
 
@@ -123,10 +148,18 @@ const LockScreen: React.FC<LockScreenProps> = ({
         if (lockout.lockedOut) {
           setLockoutSeconds(Math.ceil(lockout.remainingMs / 1000));
         }
-        setError(result.error || 'Authentication failed');
+        // Use friendly error message (suppress cancel errors)
+        const friendlyError = getBiometricErrorMessage(result.error || 'authentication_failed');
+        if (friendlyError) {
+          setError(friendlyError);
+        }
+        // If null, user cancelled - don't show error, just let them retry
       }
     } catch (err: any) {
-      setError(err.message || 'Authentication error');
+      const friendlyError = getBiometricErrorMessage(err.message || 'authentication_failed');
+      if (friendlyError) {
+        setError(friendlyError);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -197,30 +230,39 @@ const LockScreen: React.FC<LockScreenProps> = ({
     content: {
       flex: 1,
       alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent: isSmallScreen ? 'flex-start' : 'center',
       paddingHorizontal: theme.spacing.lg,
+      paddingTop: isSmallScreen ? theme.spacing.xl : 0,
     },
-    logo: {
-      width: isSmallScreen ? 60 : 80,
-      height: isSmallScreen ? 60 : 80,
-      marginBottom: theme.spacing.lg,
+    logoContainer: {
+      backgroundColor: '#8b14fd',
+      paddingHorizontal: isSmallScreen ? 12 : 18,
+      paddingVertical: isSmallScreen ? 5 : 10,
+      borderRadius: 8,
+      marginBottom: isSmallScreen ? theme.spacing.md : theme.spacing.lg,
+    },
+    logoText: {
+      color: '#FFFFFF',
+      fontSize: isSmallScreen ? 24 : 30,
+      fontWeight: '700',
+      fontStyle: 'italic',
     },
     greeting: {
-      fontSize: isSmallScreen ? theme.typography.fontSize.xl : theme.typography.fontSize.xxl,
+      fontSize: isSmallScreen ? theme.typography.fontSize.lg : theme.typography.fontSize.xxl,
       fontWeight: '600',
       color: theme.colors.textPrimary,
-      marginBottom: theme.spacing.sm,
+      marginBottom: isSmallScreen ? theme.spacing.xs : theme.spacing.sm,
       textAlign: 'center',
     },
     subtitle: {
-      fontSize: theme.typography.fontSize.md,
+      fontSize: isSmallScreen ? theme.typography.fontSize.sm : theme.typography.fontSize.md,
       color: theme.colors.textSecondary,
-      marginBottom: theme.spacing.xl,
+      marginBottom: isSmallScreen ? theme.spacing.lg : theme.spacing.xl,
       textAlign: 'center',
     },
     biometricContainer: {
       alignItems: 'center',
-      marginBottom: theme.spacing.xl,
+      marginBottom: isSmallScreen ? theme.spacing.md : theme.spacing.xl,
     },
     biometricButton: {
       width: isSmallScreen ? 80 : 100,
@@ -267,14 +309,14 @@ const LockScreen: React.FC<LockScreenProps> = ({
       alignItems: 'center',
     },
     pinTitle: {
-      fontSize: isSmallScreen ? theme.typography.fontSize.lg : theme.typography.fontSize.xl,
+      fontSize: isSmallScreen ? theme.typography.fontSize.md : theme.typography.fontSize.xl,
       fontWeight: '600',
       color: theme.colors.textPrimary,
-      marginBottom: theme.spacing.lg,
+      marginBottom: isSmallScreen ? theme.spacing.sm : theme.spacing.lg,
       textAlign: 'center',
     },
     footer: {
-      paddingVertical: theme.spacing.lg,
+      paddingVertical: isSmallScreen ? theme.spacing.md : theme.spacing.lg,
       paddingHorizontal: theme.spacing.lg,
       alignItems: 'center',
     },
@@ -338,12 +380,10 @@ const LockScreen: React.FC<LockScreenProps> = ({
       />
 
       <View style={styles.content}>
-        {/* Logo */}
-        <Image
-          source={require('../../assets/icon.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        {/* Logo - Text style matching app branding */}
+        <View style={styles.logoContainer}>
+          <Text style={styles.logoText}>Swap</Text>
+        </View>
 
         {/* Greeting */}
         <Text style={styles.greeting}>Welcome back, {userName}</Text>

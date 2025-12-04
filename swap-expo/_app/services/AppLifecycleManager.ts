@@ -24,6 +24,7 @@ import { deliveryConfirmationManager } from './DeliveryConfirmationManager';
 import { AppState } from 'react-native';
 import { queryClient } from '../tanstack-query/queryClient';
 import apiClient from '../_api/apiClient';
+import { getAccessToken } from './token';
 
 interface User {
   entityId: string;
@@ -377,7 +378,7 @@ class AppLifecycleManager {
 
           // Get fresh token and reconnect
           try {
-            const token = await apiClient.getAccessToken();
+            const token = await getAccessToken();
             if (token) {
               const connected = await websocketService.connect(token);
 

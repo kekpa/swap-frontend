@@ -2,7 +2,7 @@
 
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import Launch from "../features/auth/launchScreen";
+// LaunchScreen removed - Revolut-style direct flow to SignIn
 
 // Import new signup flow screens
 import SignUpScreen from "../features/auth/signup/SignUpScreen";
@@ -24,7 +24,7 @@ const Stack = createNativeStackNavigator();
 
 // Define Auth stack param list
 export type AuthStackParamList = {
-  Launch: undefined;
+  SignIn: undefined;
   SignUpScreen: undefined;
   PhoneEntry: {
     returnToTimeline?: boolean;
@@ -50,9 +50,7 @@ export default function AuthNavigator() {
         headerShown: false,
       }}
     >
-      <Stack.Screen name="Launch" component={Launch} />
-      
-      {/* Original auth screens (can be used as alternative entry points) */}
+      {/* Revolut-style: Direct to SignIn (no LaunchScreen) */}
       <Stack.Screen name="SignIn" component={SignInScreen} />
       <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
 
