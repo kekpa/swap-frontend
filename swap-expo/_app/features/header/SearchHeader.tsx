@@ -27,6 +27,7 @@ import {
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../theme/ThemeContext";
+import { getAvatarColor } from "../../utils/avatarUtils";
 
 interface SearchHeaderProps {
   onSearch?: (text: string) => void;
@@ -55,6 +56,7 @@ interface SearchHeaderProps {
   onSearchCancel?: () => void;
   transparent?: boolean;
   scrollY?: Animated.Value;
+  entityId?: string;  // For consistent avatar color using hash
 }
 
 const SearchHeader: React.FC<SearchHeaderProps> = ({
@@ -80,6 +82,7 @@ const SearchHeader: React.FC<SearchHeaderProps> = ({
   onSearchCancel,
   transparent = false,
   scrollY,
+  entityId,
 }) => {
   const { theme } = useTheme();
   const searchInputRef = useRef<TextInput>(null);
@@ -151,7 +154,7 @@ const SearchHeader: React.FC<SearchHeaderProps> = ({
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: theme.colors.primary,
+      backgroundColor: entityId ? getAvatarColor(entityId) : theme.colors.primary,
       justifyContent: "center",
       alignItems: "center",
       // Only apply shadow on iOS for transparent profile

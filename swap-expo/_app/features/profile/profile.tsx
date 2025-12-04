@@ -4,12 +4,12 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   ScrollView,
   Alert,
   Platform,
 } from "react-native";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect, useRoute, RouteProp, CommonActions } from "@react-navigation/native";
@@ -17,6 +17,7 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { useAuth } from '../../hooks-actions/useAuth';
 import { useAuthContext } from "../auth/context/AuthContext";
 import logger from "../../utils/logger";
+import { getAvatarColor } from "../../utils/avatarUtils";
 import { ProfileStackParamList } from "../../navigation/profileNavigator";
 import { useTheme, availableThemes, ThemeName } from "../../theme/ThemeContext";
 import { Theme } from "../../theme/theme";
@@ -186,6 +187,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const auth = useAuth(); // This is useAuth() hook, not context directly for logout
   const authContext = useAuthContext(); // Use this for user data and context logout
   const { theme } = useTheme(); // Get current theme for styling ProfileScreen itself
+  const insets = useSafeAreaInsets(); // For manual safe area handling
   const { data: kycStatus, isLoading: isKycLoading, refetch: refetchKyc } = useKycStatus(authContext.user?.entityId);
   const { data: userProfile, isLoading: isLoadingUserProfile, refetch: refetchProfile } = useUserProfile(authContext.user?.entityId);
   const { isAvailable: isBiometricAvailable } = useBiometricAvailability();
@@ -294,6 +296,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       paddingHorizontal: 16,
       paddingVertical: 12,
       borderBottomWidth: 1,
+      backgroundColor: theme.colors.card,
     },
     backButton: {
       width: 40,
@@ -310,6 +313,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     },
     scrollView: {
       flex: 1,
+      backgroundColor: theme.colors.background,
     },
     profileHeader: {
       flexDirection: "row",
@@ -659,8 +663,11 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       case "Fees and Rates":
         navigation.navigate("Fees");
         break;
-      case "Terms and conditions":
-        console.log("Navigate to Terms and conditions");
+      case "Terms and Conditions":
+        navigation.navigate("TermsAndConditions");
+        break;
+      case "Privacy Policy":
+        navigation.navigate("PrivacyPolicy");
         break;
       case "Security & Privacy":
         navigation.navigate("SecurityPrivacy");
@@ -785,24 +792,29 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   return (
     <View style={[styles.mainContainer, { backgroundColor: theme.colors.background }]}>
-      {/* StatusBar is now controlled by ThemeContext, no need to set props here */}
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        {/* Header */}
+      <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.card} />
+      {/* Header with top safe area - card color */}
+      <View style={{ backgroundColor: theme.colors.card, paddingTop: insets.top }}>
         <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
           <TouchableOpacity style={styles.backButton} onPress={handleBack}>
             <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Profile</Text>
         </View>
+      </View>
 
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: insets.bottom }}
+      >
           {/* Profile Header - Tappable for profile switching */}
           <TouchableOpacity
             style={[styles.profileHeader, { borderBottomColor: theme.colors.border }]}
             onPress={handleProfileSwitcherOpen}
             activeOpacity={0.7}
           >
-            <View style={[styles.avatar, { backgroundColor: user?.avatarUrl ? 'transparent' : theme.colors.primary }]}>
+            <View style={[styles.avatar, { backgroundColor: user?.avatarUrl ? 'transparent' : getAvatarColor(user?.entityId || '') }]}>
               {user?.avatarUrl ? (
                 <Image
                   source={{ uri: user.avatarUrl }}
@@ -889,13 +901,18 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <View style={styles.menuSectionContainer}>
             {renderMenuItem("person-outline", "Account", () => handleMenuItemPress("Account"))}
             {renderMenuItem("cash-outline", "Fees and Rates", () => handleMenuItemPress("Fees and Rates"))}
-            {renderMenuItem("reader-outline", "Terms and conditions", () => handleMenuItemPress("Terms and conditions"), true)}
           </View>
 
           <View style={styles.menuSectionContainer}>
             {renderMenuItem("shield-checkmark-outline", "Security & Privacy", () => handleMenuItemPress("Security & Privacy"), true)}
           </View>
           */}
+
+          {/* Legal Section - Required for Apple App Store */}
+          <View style={styles.menuSectionContainer}>
+            {renderMenuItem("document-text-outline", "Privacy Policy", () => handleMenuItemPress("Privacy Policy"))}
+            {renderMenuItem("reader-outline", "Terms and Conditions", () => handleMenuItemPress("Terms and Conditions"), true)}
+          </View>
 
           {/* Theme Selection Section - Moved below Security & Privacy section */}
           <View style={styles.menuSectionContainer}>
@@ -928,18 +945,17 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           */}
         </ScrollView>
 
-        {/* Profile Switcher Modal */}
-        <ProfileSwitcherModal
-          visible={isProfileSwitcherVisible}
-          profiles={availableProfiles || []}
-          currentProfileId={user?.profileId || ''}
-          onSelectProfile={handleProfileSelect}
-          onClose={handleProfileSwitcherClose}
-          onAddAccount={handleAddAccount}
-          onRemoveAccount={handleRemoveAccount}
-          isLoading={isLoadingProfiles}
-        />
-      </SafeAreaView>
+      {/* Profile Switcher Modal */}
+      <ProfileSwitcherModal
+        visible={isProfileSwitcherVisible}
+        profiles={availableProfiles || []}
+        currentProfileId={user?.profileId || ''}
+        onSelectProfile={handleProfileSelect}
+        onClose={handleProfileSwitcherClose}
+        onAddAccount={handleAddAccount}
+        onRemoveAccount={handleRemoveAccount}
+        isLoading={isLoadingProfiles}
+      />
     </View>
   );
 };

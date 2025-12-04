@@ -33,6 +33,7 @@ import WalletOnboarding from './components/WalletOnboarding';
 import logger from '../../utils/logger';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useWalletTransactions } from '../../hooks-data/useRecentTransactions';
+import { useHeaderOffset } from '../../hooks/useHeaderOffset';
 
 // 🚀 PROFESSIONAL: Add intelligent preloading for WhatsApp-style instant loading
 import { queryClient } from '../../tanstack-query/queryClient';
@@ -75,6 +76,9 @@ const WalletDashboard: React.FC = () => {
 
   // Scroll tracking for SearchHeader blur effect
   const scrollY = useRef(new Animated.Value(0)).current;
+
+  // Header offset for device-adaptive padding (iPhone SE to Pro Max)
+  const { headerHeight } = useHeaderOffset();
 
   // Debug logging for entityId
   useEffect(() => {
@@ -246,11 +250,17 @@ const WalletDashboard: React.FC = () => {
         return;
       }
 
-      // User is eligible - trust that Kafka created wallet after KYC
-      // If hasWallets is false, wallet is being created (show loading state)
+      // User is eligible - check wallet status
       if (!eligibility.hasWallets) {
-        logger.debug('[WalletDashboard] User eligible but wallet not yet available - Kafka creating wallet');
-        setWalletState('needs-init'); // Will show "Setting up wallet" message (rare edge case)
+        // KYC is partial (under review) - user is waiting for approval
+        if (eligibility.kycStatus === 'partial') {
+          logger.debug('[WalletDashboard] KYC under review - waiting for approval');
+          setWalletState('no-access'); // Will show WalletOnboarding with KYC_UNDER_REVIEW
+          return;
+        }
+        // KYC verified but wallet not yet created (rare edge case - Kafka creating wallet)
+        logger.debug('[WalletDashboard] User eligible, KYC verified, wallet being created by Kafka');
+        setWalletState('needs-init');
         return;
       }
 
@@ -736,7 +746,7 @@ const WalletDashboard: React.FC = () => {
       bottom: 0,
     },
     scrollViewContent: {
-      paddingTop: 78,
+      paddingTop: headerHeight,
       paddingBottom: theme.spacing.lg,
     },
     greeting: {
@@ -933,7 +943,7 @@ const WalletDashboard: React.FC = () => {
       alignItems: 'center',
       padding: theme.spacing.md,
     },
-  }), [theme]);
+  }), [theme, headerHeight]);
 
   const handleAvatarPress = useCallback((transaction: WalletTransaction) => {
     logger.debug(`[WalletDashboard] Avatar pressed for transaction: ${transaction.id}, navigating to chat`, "WalletDashboard");
@@ -1173,6 +1183,7 @@ const WalletDashboard: React.FC = () => {
         brandName="Swap"
         transparent={true}
         scrollY={scrollY}
+        entityId={user?.entityId}
       />
 
       <Animated.ScrollView

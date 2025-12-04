@@ -15,6 +15,7 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { InteractionsStackParamList } from '../../navigation/interactions/interactionsNavigator';
@@ -38,6 +39,7 @@ interface EntitySearchResult {
   lastActiveAt?: string;
 }
 import logger from '../../utils/logger';
+import { getAvatarColor } from '../../utils/avatarUtils';
 import { MaterialIcons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/rootNavigator';
 import { CompositeScreenProps } from '@react-navigation/native';
@@ -155,13 +157,19 @@ const getInitials = (name: string): string => {
   return name.substring(0, 2).toUpperCase();
 };
 
+// SearchHeader height constant (matches SearchHeader.tsx: 40px content + 10px padding)
+// SEARCH_HEADER_HEIGHT removed - no longer needed for padding calculation
+
 const InteractionsHistory2: React.FC = (): JSX.Element => {
   const navigation = useNavigation<InteractionsNavigationProp>();
   const route = useRoute<InteractionsHistoryRouteProp>();
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const authContext = useAuthContext();
   const user = authContext.user;
   const isAuthenticated = authContext.isAuthenticated;
+
+  // Note: headerOffset removed - contentContainer is already below SearchHeader in normal flow
 
   // Scroll tracking for SearchHeader blur effect
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -271,36 +279,34 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
           // Map cached contacts for instant display
           const cachedAppUsers = cachedPlatformMatches.map(cm => {
             const displayName = cm.matchedUser?.displayName || cm.contact.displayName;
+            const entityId = cm.matchedUser?.entityId || cm.contact.deviceContactId || `app-user-${cm.contact.phoneNumber}`;
             const initials = getInitials(displayName);
-            const charCode = displayName.charCodeAt(0) || 0;
-            const colorPalette = ['#38bdf8', '#818cf8', '#f87171', '#fb923c', '#a3e635', '#4ade80', '#2dd4bf', '#60a5fa'];
-            const avatarColor = colorPalette[Math.abs(charCode) % colorPalette.length];
-            
+            const avatarColor = getAvatarColor(entityId); // Use entity_id for consistent colors
+
             return {
-              id: cm.matchedUser?.entityId || cm.contact.deviceContactId || `app-user-${cm.contact.phoneNumber}`,
+              id: entityId,
               name: displayName,
               statusOrPhone: `@${cm.matchedUser?.username || 'user'}`,
               initials: initials,
               avatarColor: avatarColor,
               avatarUrl: cm.matchedUser?.avatarUrl,
-              originalContact: cm, 
+              originalContact: cm,
             };
           });
           
           const cachedPhoneUsers = cachedPhoneOnly.map(normContact => {
             const displayName = normContact.displayName;
+            const contactId = normContact.deviceContactId || `phone-${normContact.phoneNumber}`;
             const initials = getInitials(displayName);
-            const charCode = displayName.charCodeAt(0) || 0;
-            const colorPalette = ['#38bdf8', '#818cf8', '#f87171', '#fb923c', '#a3e635', '#4ade80', '#2dd4bf', '#60a5fa'];
-            const avatarColor = colorPalette[Math.abs(charCode) % colorPalette.length];
+            const avatarColor = getAvatarColor(contactId); // Use contact ID for consistent colors
 
             return {
-              id: normContact.deviceContactId || `phone-${normContact.phoneNumber}`,
+              id: contactId,
               name: displayName,
-              statusOrPhone: normContact.rawPhoneNumber, 
+              statusOrPhone: normContact.rawPhoneNumber,
               initials: initials,
               avatarColor: avatarColor,
-              originalContact: normContact, 
+              originalContact: normContact,
             };
           });
           
@@ -331,24 +337,18 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         const platformMatches = await contactsService.getMatchedPlatformContacts(forceRefreshContacts);
         const appUsersMapped = platformMatches.map(cm => {
           const displayName = cm.matchedUser?.displayName || cm.contact.displayName;
+          const entityId = cm.matchedUser?.entityId || cm.contact.deviceContactId || `app-user-${cm.contact.phoneNumber}`;
           const initials = getInitials(displayName);
-          const charCode = displayName.charCodeAt(0) || 0;
-          // Consistent, valid color palette
-          const colorPalette = ['#38bdf8', '#818cf8', '#f87171', '#fb923c', '#a3e635', '#4ade80', '#2dd4bf', '#60a5fa'];
-          const avatarColor = colorPalette[Math.abs(charCode) % colorPalette.length];
-          
-          if (displayName.toLowerCase().includes('hank')) {
-            logger.debug(`[InteractionsHistory] Mapping AppUser: Name='${displayName}', Initials='${initials}', AvatarColor='${avatarColor}'`);
-          }
+          const avatarColor = getAvatarColor(entityId); // Use entity_id for consistent colors
 
           return {
-            id: cm.matchedUser?.entityId || cm.contact.deviceContactId || `app-user-${cm.contact.phoneNumber}`,
+            id: entityId,
             name: displayName,
             statusOrPhone: `@${cm.matchedUser?.username || 'user'}`,
             initials: initials,
             avatarColor: avatarColor,
             avatarUrl: cm.matchedUser?.avatarUrl,
-            originalContact: cm, 
+            originalContact: cm,
           };
         });
         setAppUserContacts(appUsersMapped);
@@ -358,23 +358,17 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         const phoneOnlyNormalized = await contactsService.getPhoneOnlyNormalizedContacts(forceRefreshContacts);
         const phoneOnlyMapped = phoneOnlyNormalized.map(normContact => {
           const displayName = normContact.displayName;
+          const contactId = normContact.deviceContactId || `phone-${normContact.phoneNumber}`;
           const initials = getInitials(displayName);
-          const charCode = displayName.charCodeAt(0) || 0;
-          // Consistent, valid color palette
-          const colorPalette = ['#38bdf8', '#818cf8', '#f87171', '#fb923c', '#a3e635', '#4ade80', '#2dd4bf', '#60a5fa'];
-          const avatarColor = colorPalette[Math.abs(charCode) % colorPalette.length];
-
-          if (displayName.toLowerCase().includes('hank')) {
-            logger.debug(`[InteractionsHistory] Mapping PhoneOnly: Name='${displayName}', Initials='${initials}', AvatarColor='${avatarColor}'`);
-          }
+          const avatarColor = getAvatarColor(contactId); // Use contact ID for consistent colors
 
           return {
-            id: normContact.deviceContactId || `phone-${normContact.phoneNumber}`,
+            id: contactId,
             name: displayName,
-            statusOrPhone: normContact.rawPhoneNumber, 
+            statusOrPhone: normContact.rawPhoneNumber,
             initials: initials,
             avatarColor: avatarColor,
-            originalContact: normContact, 
+            originalContact: normContact,
           };
         });
         setPhoneOnlyContacts(phoneOnlyMapped);
@@ -637,10 +631,11 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     
 
     const mappedResult = sortedInteractions.map((interaction: InteractionItem): DisplayChat => {
-      let chatName = interaction.name || 'Group Chat';
+      let chatName = interaction.name || 'Group Interaction';
       let avatarText = '??';
       let interactionType: 'friend' | 'business' = 'friend';
       let avatarColor = theme.colors.primary;
+      let entityIdForColor = interaction.id; // Default to interaction ID
 
       if (!interaction.is_group && interaction.members && interaction.members.length > 0) {
         const otherMember = interaction.members.find(
@@ -650,20 +645,21 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         if (otherMember) {
           chatName = otherMember.display_name || 'Unknown User';
           avatarText = getInitials(chatName);
-          const charCode = chatName.charCodeAt(0);
-          const colorPalette = [theme.colors.primary, theme.colors.secondary, theme.colors.success, theme.colors.info, theme.colors.warning];
-          avatarColor = colorPalette[charCode % colorPalette.length];
+          entityIdForColor = otherMember.entity_id; // Use other member's entity_id
+          avatarColor = getAvatarColor(entityIdForColor); // Use entity_id for consistent colors
           interactionType = otherMember.entity_type === 'business' ? 'business' : 'friend';
         } else {
-          chatName = 'Self Chat'; 
+          chatName = 'Self Interaction';
           avatarText = user.firstName ? getInitials(user.firstName) : (user.email ? user.email.substring(0,2).toUpperCase() : 'ME');
+          avatarColor = getAvatarColor(user.entityId); // Use own entity_id
         }
       } else if (interaction.is_group) {
         avatarText = getInitials(interaction.name || 'Group');
-        interactionType = 'business'; 
+        avatarColor = getAvatarColor(interaction.id); // Use group interaction ID
+        interactionType = 'business';
       }
 
-      const messageSnippet = interaction.last_message_snippet || (interaction.is_group ? 'Group created' : 'Chat started');
+      const messageSnippet = interaction.last_message_snippet || (interaction.is_group ? 'Group created' : 'Interaction started');
       const lastMessageTime = interaction.last_message_at || interaction.updated_at || '';
 
       const displayChatItem = {
@@ -753,7 +749,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     },
     scrollView: {
       flex: 1,
-      paddingTop: 78,
+      // Note: No paddingTop needed - contentContainer is already below SearchHeader in the flow
     },
     chatItem: {
       flexDirection: 'row',
@@ -901,7 +897,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     const initials = (item as DisplayChat).avatar || (item as DisplayableContact).initials;
 
     // Specific avatar for "Swap" can be handled if needed, or make it data-driven
-    if (item.name === 'Swap' && initials === 'S') { // Example: Make 'Swap' always use primary color and icon
+    if (item.name === 'Swap' && initials === 'S') {
       bgColor = theme.colors.primary;
       return (
         <View style={[styles.avatar, { backgroundColor: bgColor }]}>
@@ -909,14 +905,11 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         </View>
       );
     }
-    // Fallback to initials if no specific logic applies
-    // Color can be derived from name hash if not provided with avatarColor
-    if (!(item as DisplayChat).avatarColor && !(item as DisplayableContact).avatarColor) { // Check if avatarColor was NOT explicitly provided
-        const charCode = item.name.charCodeAt(0);
-        const colorPalette = [theme.colors.primary, theme.colors.secondary, theme.colors.success, theme.colors.info, theme.colors.warning];
-        bgColor = colorPalette[charCode % colorPalette.length];
+    // Fallback: if no avatarColor provided, use item ID for consistent color
+    if (!(item as DisplayChat).avatarColor && !(item as DisplayableContact).avatarColor) {
+      bgColor = getAvatarColor(item.id); // Use entity_id/item ID for consistent colors
     }
-    
+
     return (
       <View style={[styles.avatar, { backgroundColor: bgColor }]}>
         <Text style={styles.avatarText}>{initials}</Text>
@@ -1238,13 +1231,13 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
           No conversations yet
         </Text>
         <Text style={styles.emptySubText}>
-          Start a new chat to begin messaging
+          Start a new interaction to begin messaging
         </Text>
         <TouchableOpacity
           style={styles.newChatButton}
           onPress={handleNewChat}
         >
-          <Text style={styles.newChatButtonText}>Start New Chat</Text>
+          <Text style={styles.newChatButtonText}>Start New Interaction</Text>
         </TouchableOpacity>
       </View>
     );
@@ -1278,7 +1271,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
           onSearchPress={handleSearchPress}
             onNewChat={handleNewChat}
             onProfilePress={handleProfilePress}
-          placeholder="Search chats & contacts"
+          placeholder="Search interactions & contacts"
             rightIcons={[{ name: "add-circle", onPress: handleNewChat, color: theme.colors.primary }]}
             avatarUrl={user?.avatarUrl}
             initials={getHeaderInitials()}
@@ -1286,6 +1279,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
           searchQuery={searchQuery}
           onSearchQueryChange={handleSearchQueryChange}
           onSearchCancel={handleSearchCancel}
+          entityId={user?.entityId}
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -1304,7 +1298,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         onSearchPress={handleSearchPress}
         onNewChat={handleNewChat}
         onProfilePress={handleProfilePress}
-        placeholder="Search chats & contacts"
+        placeholder="Search interactions & contacts"
         rightIcons={[{ name: "add-circle", onPress: handleNewChat, color: theme.colors.primary }]}
         avatarUrl={user?.avatarUrl}
         initials={getHeaderInitials()}
@@ -1316,6 +1310,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         onSearchCancel={handleSearchCancel}
         transparent={true}
         scrollY={scrollY}
+        entityId={user?.entityId}
       />
       
       {/* Content Area - Either normal content or search overlay */}

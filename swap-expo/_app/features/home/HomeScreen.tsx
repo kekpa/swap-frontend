@@ -211,7 +211,7 @@ export default function HomeScreen() {
       />
 
       <SearchHeader
-        placeholder="Search chats & contacts"
+        placeholder="Search interactions & contacts"
         onSearch={handleSearch}
         transparent={true}
         rightIcons={[{ name: "camera", onPress: handleQRScan }]}
@@ -226,6 +226,7 @@ export default function HomeScreen() {
         onSearchQueryChange={handleSearchQueryChange}
         onSearchCancel={handleSearchCancel}
         onSearchPress={handleSearchPress}
+        entityId={user?.entityId}
       />
 
       {isSearchActive ? (

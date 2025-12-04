@@ -11,15 +11,25 @@ export const AVATAR_COLOR_PALETTE = [
 ];
 
 /**
- * Generate consistent avatar color based on entity ID or name
- * Uses entity ID for consistency, falls back to name if ID not available
+ * Generate consistent avatar color based on entity ID
+ * Uses full string hash (WhatsApp style) - same entity_id = same color always
+ *
+ * Industry best practice: Hash the entire entity_id string, not just first char
+ * This ensures deterministic colors across all screens and sessions
  */
-export const getAvatarColor = (entityIdOrName: string): string => {
-  if (!entityIdOrName) return AVATAR_COLOR_PALETTE[0];
-  
-  // Use the first character's char code for consistent hashing
-  const charCode = entityIdOrName.charCodeAt(0) || 0;
-  return AVATAR_COLOR_PALETTE[Math.abs(charCode) % AVATAR_COLOR_PALETTE.length];
+export const getAvatarColor = (entityId: string): string => {
+  if (!entityId) return AVATAR_COLOR_PALETTE[0];
+
+  // Full string hash algorithm (like WhatsApp/Telegram)
+  // djb2 hash variant - fast and good distribution
+  let hash = 0;
+  for (let i = 0; i < entityId.length; i++) {
+    const char = entityId.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+
+  return AVATAR_COLOR_PALETTE[Math.abs(hash) % AVATAR_COLOR_PALETTE.length];
 };
 
 /**
