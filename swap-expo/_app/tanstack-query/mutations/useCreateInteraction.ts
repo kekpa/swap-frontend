@@ -109,7 +109,7 @@ export const useCreateInteraction = () => {
     },
 
     retry: (failureCount, error: any) => {
-      // Don't retry on 400/401/403 errors
+      // Don't retry on 400/401/403/404 errors
       if (error?.status >= 400 && error?.status < 500) {
         return false;
       }
@@ -118,6 +118,9 @@ export const useCreateInteraction = () => {
 
     meta: {
       errorMessage: 'Failed to create interaction',
+      // PROFESSIONAL PATTERN: Declare expected errors that should NOT trigger global toast
+      // 404 is expected when no conversation exists yet - it's normal behavior, not an error
+      expectedErrors: [404],
     },
   });
 };

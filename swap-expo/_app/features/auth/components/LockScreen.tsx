@@ -21,6 +21,8 @@ import {
   StatusBar,
   ActivityIndicator,
   Dimensions,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeContext';
@@ -97,15 +99,9 @@ const LockScreen: React.FC<LockScreenProps> = ({
     checkCapabilities();
   }, []);
 
-  // Auto-trigger biometric on mount if available - INSTANT, no delay (Revolut-style)
-  const biometricTriggered = useRef(false);
-  useEffect(() => {
-    if (mode === 'biometric' && biometricCapabilities?.isEnrolled && !biometricTriggered.current) {
-      biometricTriggered.current = true;
-      // Trigger immediately - Revolut-style instant unlock
-      handleBiometricUnlock();
-    }
-  }, [mode, biometricCapabilities]);
+  // Track app state for auto-triggering biometric when returning to app
+  const appState = useRef(AppState.currentState);
+  const biometricTriggeredForSession = useRef(false);
 
   // Lockout countdown timer
   useEffect(() => {
@@ -164,6 +160,42 @@ const LockScreen: React.FC<LockScreenProps> = ({
       setIsLoading(false);
     }
   }, [isLoading, onUnlock]);
+
+  // Auto-trigger biometric on mount if available (Revolut-style instant unlock)
+  useEffect(() => {
+    if (mode === 'biometric' && biometricCapabilities?.isEnrolled && !biometricTriggeredForSession.current) {
+      biometricTriggeredForSession.current = true;
+      // Small delay to ensure UI is ready (prevents issues on some devices)
+      const timer = setTimeout(() => {
+        handleBiometricUnlock();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [mode, biometricCapabilities, handleBiometricUnlock]);
+
+  // Listen for app state changes to auto-trigger biometric when returning from background
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: AppStateStatus) => {
+      // App came to foreground from background/inactive
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === 'active' &&
+        mode === 'biometric' &&
+        biometricCapabilities?.isEnrolled &&
+        !isLoading
+      ) {
+        logger.debug('[LockScreen] App returned to foreground - auto-triggering biometric');
+        // Small delay to ensure app is fully active
+        setTimeout(() => {
+          handleBiometricUnlock();
+        }, 200);
+      }
+      appState.current = nextAppState;
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => subscription.remove();
+  }, [mode, biometricCapabilities, isLoading, handleBiometricUnlock]);
 
   const handlePinUnlock = useCallback(async (enteredPin: string) => {
     if (isLoading) return;

@@ -8,7 +8,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useCallback } from 'react';
 import { logger } from '../../utils/logger';
-import { QueryErrorFactory, QueryErrorUtils, QueryError } from './QueryErrors';
+import { QueryErrorUtils, QueryError } from './QueryErrors';
 
 // Notification function type (to be implemented by the app)
 type NotificationFunction = (message: string, type: 'error' | 'warning' | 'info') => void;
@@ -61,9 +61,14 @@ export const useQueryErrorHandler = (options: UseQueryErrorHandlerOptions = {}) 
     const mutationUnsubscribe = queryClient.getMutationCache().subscribe((event) => {
       if (event.type === 'updated') {
         const { mutation } = event;
-        
+
         if (mutation.state.error) {
-          handleMutationError(mutation.state.error, mutation.options.mutationKey);
+          // Pass meta to handler so it can check for expectedErrors (TanStack official pattern)
+          handleMutationError(
+            mutation.state.error,
+            mutation.options.mutationKey as unknown[] | undefined,
+            mutation.options.meta as Record<string, unknown> | undefined
+          );
         }
       }
     });
@@ -86,10 +91,7 @@ export const useQueryErrorHandler = (options: UseQueryErrorHandlerOptions = {}) 
         errorMessage.includes('cancelled') ||
         errorMessage.includes('abort')
       ) {
-        logger.debug('[useQueryErrorHandler] Ignoring technical error (cancellation/dehydration):', {
-          error: error.message,
-          queryKey,
-        });
+        logger.debug(`[useQueryErrorHandler] Ignoring technical error (cancellation/dehydration): ${error.message}`);
         return; // Skip processing for technical errors
       }
     }
@@ -113,9 +115,24 @@ export const useQueryErrorHandler = (options: UseQueryErrorHandlerOptions = {}) 
   }, [transformError, logErrors, showUserNotifications, showNotification]);
 
   // Handle mutation errors
-  const handleMutationError = useCallback((error: unknown, mutationKey: unknown[] | undefined) => {
+  const handleMutationError = useCallback((error: unknown, mutationKey: unknown[] | undefined, meta?: Record<string, unknown>) => {
+    // PROFESSIONAL PATTERN: Check meta for expected errors (TanStack Query official pattern)
+    // This allows individual mutations to declare which errors should NOT trigger global toasts
+    if (meta?.skipGlobalErrorHandler === true) {
+      logger.debug(`[useQueryErrorHandler] Skipping global handler (meta.skipGlobalErrorHandler) for mutation: ${JSON.stringify(mutationKey)}`);
+      return;
+    }
+
+    // Check if this error status is in the expectedErrors list
+    const errorStatus = (error as any)?.response?.status || (error as any)?.status;
+    const expectedErrors = meta?.expectedErrors as number[] | undefined;
+    if (expectedErrors && errorStatus && expectedErrors.includes(errorStatus)) {
+      logger.debug(`[useQueryErrorHandler] Skipping expected error status ${errorStatus} for mutation: ${JSON.stringify(mutationKey)}`);
+      return;
+    }
+
     const normalizedError = transformError ? transformError(error) : QueryErrorUtils.normalize(error);
-    
+
     if (logErrors) {
       logger.error('[useQueryErrorHandler] Mutation error:', {
         error: normalizedError.toJSON(),
@@ -202,7 +219,7 @@ export const useQueryErrorRecovery = () => {
   // Clear specific query cache
   const clearQueryCache = useCallback((queryKey: unknown[]) => {
     queryClient.removeQueries({ queryKey });
-    logger.info('[useQueryErrorRecovery] Cleared cache for query:', queryKey);
+    logger.info(`[useQueryErrorRecovery] Cleared cache for query: ${JSON.stringify(queryKey)}`);
   }, [queryClient]);
 
   // Clear all cache
@@ -214,7 +231,7 @@ export const useQueryErrorRecovery = () => {
   // Retry specific query
   const retryQuery = useCallback((queryKey: unknown[]) => {
     queryClient.invalidateQueries({ queryKey, refetchType: 'active' });
-    logger.info('[useQueryErrorRecovery] Retrying query:', queryKey);
+    logger.info(`[useQueryErrorRecovery] Retrying query: ${JSON.stringify(queryKey)}`);
   }, [queryClient]);
 
   // Retry all failed queries
@@ -226,7 +243,7 @@ export const useQueryErrorRecovery = () => {
   // Reset query to initial state
   const resetQuery = useCallback((queryKey: unknown[]) => {
     queryClient.resetQueries({ queryKey });
-    logger.info('[useQueryErrorRecovery] Reset query to initial state:', queryKey);
+    logger.info(`[useQueryErrorRecovery] Reset query to initial state: ${JSON.stringify(queryKey)}`);
   }, [queryClient]);
 
   return {
@@ -245,37 +262,33 @@ export const useQueryErrorRecovery = () => {
  * Can be customized to use different notification systems.
  */
 export const useErrorNotification = () => {
-  const showErrorNotification = useCallback((message: string, duration: number = 5000) => {
+  const showErrorNotification = useCallback((message: string, _duration: number = 5000) => {
     // This would integrate with your notification system
     // For now, just log in development
     if (__DEV__) {
       console.error('🚨 Error Notification:', message);
     }
-    
+
     // TODO: Integrate with actual notification system
-    // Examples:
-    // - React Native Toast
-    // - Custom alert component
-    // - Push notifications
-    // - In-app banner
-    
-    logger.info('[useErrorNotification] Showing error notification:', message);
+    // _duration parameter reserved for future Toast integration
+
+    logger.info(`[useErrorNotification] Showing error notification: ${message}`);
   }, []);
 
-  const showWarningNotification = useCallback((message: string, duration: number = 3000) => {
+  const showWarningNotification = useCallback((message: string, _duration: number = 3000) => {
     if (__DEV__) {
       console.warn('⚠️ Warning Notification:', message);
     }
-    
-    logger.info('[useErrorNotification] Showing warning notification:', message);
+
+    logger.info(`[useErrorNotification] Showing warning notification: ${message}`);
   }, []);
 
-  const showInfoNotification = useCallback((message: string, duration: number = 3000) => {
+  const showInfoNotification = useCallback((message: string, _duration: number = 3000) => {
     if (__DEV__) {
       console.info('ℹ️ Info Notification:', message);
     }
-    
-    logger.info('[useErrorNotification] Showing info notification:', message);
+
+    logger.info(`[useErrorNotification] Showing info notification: ${message}`);
   }, []);
 
   return {
