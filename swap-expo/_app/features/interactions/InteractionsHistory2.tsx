@@ -24,7 +24,8 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useAuthContext } from '../auth/context/AuthContext';
 import { useInteractions, InteractionItem } from '../../hooks-data/useInteractions';
 import { usePrefetchTimeline } from '../../hooks-data/useTimeline';
-// Removed old useWebSocketQueryInvalidation - now using professional CacheUpdateManager
+// Real-time updates hook for WebSocket-driven cache invalidation
+import { useRealtimeUpdates } from '../../hooks/useRealtimeUpdates';
 import { websocketService } from '../../services/websocketService';
 import { userStateManager } from '../../services/UserStateManager';
 // EntitySearchResult type - keeping for compatibility
@@ -168,6 +169,9 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
   const authContext = useAuthContext();
   const user = authContext.user;
   const isAuthenticated = authContext.isAuthenticated;
+
+  // Enable real-time updates via WebSocket (matches ContactInteractionHistory2 pattern)
+  useRealtimeUpdates();
 
   // Note: headerOffset removed - contentContainer is already below SearchHeader in normal flow
 

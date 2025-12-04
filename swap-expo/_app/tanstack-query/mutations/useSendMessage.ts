@@ -19,6 +19,7 @@ import * as Crypto from 'expo-crypto';
 export interface SendMessageRequest {
   interactionId: string;
   recipientEntityId: string;
+  senderEntityId: string; // Required for proper cache key matching
   content: string;
   messageType: 'text' | 'payment' | 'request' | 'image' | 'file';
   metadata?: {
@@ -100,7 +101,7 @@ export const useSendMessage = () => {
       const optimisticMessage: Message = {
         id: tempId,
         interaction_id: request.interactionId,
-        sender_entity_id: 'current_user_entity_id', // Replace with actual current user ID
+        sender_entity_id: request.senderEntityId,
         recipient_entity_id: request.recipientEntityId,
         content: request.content,
         message_type: request.messageType,
@@ -120,7 +121,7 @@ export const useSendMessage = () => {
       }
 
       // Update interactions list to show latest message
-      const interactionsQueryKey = queryKeys.interactionsByEntity('current_user_entity_id');
+      const interactionsQueryKey = queryKeys.interactionsByEntity(request.senderEntityId);
       const previousInteractions = queryClient.getQueryData(interactionsQueryKey);
       
       if (previousInteractions && Array.isArray(previousInteractions)) {
@@ -182,12 +183,15 @@ export const useSendMessage = () => {
         }
       }
 
-      // Invalidate related queries - WebSocket handles the actual refetch
-      // Pure WebSocket pattern: mark as stale but don't HTTP refetch (WebSocket will trigger update)
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.interactions,
-        refetchType: 'none', // WebSocket-only updates, no HTTP fallback
-      });
+      // Hybrid approach (Slack pattern): Optimistic update + delayed HTTP fallback
+      // Give WebSocket 100ms to deliver update, then fallback to HTTP refetch
+      // This ensures updates work even if WebSocket is down
+      setTimeout(() => {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.interactions,
+          refetchType: 'active', // HTTP fallback for active queries
+        });
+      }, 100);
     },
 
     // Handle message send failure - rollback optimistic update
@@ -208,7 +212,7 @@ export const useSendMessage = () => {
 
       // Rollback interactions list if we have previous data
       if (context?.previousInteractions) {
-        const interactionsQueryKey = queryKeys.interactionsByEntity('current_user_entity_id');
+        const interactionsQueryKey = queryKeys.interactionsByEntity(variables.senderEntityId);
         queryClient.setQueryData(interactionsQueryKey, context.previousInteractions);
         logger.debug('[useSendMessage] 🔄 Interactions optimistic update rolled back');
       }

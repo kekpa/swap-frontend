@@ -529,6 +529,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
       const sentMessage = await sendMessageMutation.mutateAsync({
         interactionId: interactionIdToUse,
         recipientEntityId: contactId,
+        senderEntityId: currentUser.entityId, // Required for proper cache key matching
         content: messageToSend,
         messageType: 'text',
       });
