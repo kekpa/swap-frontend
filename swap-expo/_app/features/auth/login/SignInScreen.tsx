@@ -89,7 +89,7 @@ const SignInScreen = ({ route }: any) => {
 
   const [activeTab, setActiveTab] = useState<'pin' | 'password'>('pin'); // Start with PIN, will switch to password if no PIN user found
   const [pin, setPin] = useState<string[]>(["", "", "", "", "", ""]);
-  const [identifier, setIdentifier] = useState(__DEV__ ? "frantzo5" : "");
+  const [identifier, setIdentifier] = useState(__DEV__ ? "17542167992" : "");
   const [password, setPassword] = useState(__DEV__ ? "password" : "");
   const [isLoading, setIsLoading] = useState(false);
   const [rememberedUserIdentifier, setRememberedUserIdentifier] = useState<string | null>(null); // For displaying remembered user
