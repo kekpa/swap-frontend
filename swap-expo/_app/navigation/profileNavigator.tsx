@@ -37,7 +37,7 @@ import PasscodeScreen from "../components2/Passcode";
 import PhoneEntryScreen from "../features/auth/signup/PhoneEntryScreen";
 // Email verification disabled for Haiti market - keeping for future use
 // import KycEmailEntryScreen from "../features/profile/kyc/KycEmailEntryScreen";
-import BiometricSetupScreen from "../features/profile/kyc/BiometricSetup";
+// BiometricSetup removed - biometric is now handled locally in AppLockSetupScreen
 import VerificationCodeScreen from "../components2/VerificationCodeScreen";
 // Business KYC Components
 import {
@@ -68,10 +68,12 @@ export type ProfileStackParamList = {
   PrivacyPolicy: undefined;
   TermsAndConditions: undefined;
   SecurityPrivacy: undefined;
-  Passcode: { 
-    isKycFlow?: boolean; 
+  Passcode: {
+    isKycFlow?: boolean;
     sourceRoute?: string;
     returnToTimeline?: boolean;
+    isBusiness?: boolean;           // True when switching to business profile
+    personalUsername?: string;       // For "via @username" display during business profile switch
   } | undefined;
   VerifyYourIdentity: { sourceRoute?: string } | undefined;
   VerificationComplete: undefined;
@@ -93,10 +95,7 @@ export type ProfileStackParamList = {
     sourceRoute?: string;
     returnToTimeline?: boolean;
   } | undefined;
-  BiometricSetup: {
-    returnToTimeline?: boolean;
-    sourceRoute?: string;
-  } | undefined;
+  // BiometricSetup removed - biometric is now handled locally in AppLockSetupScreen
   OnboardingStatus: undefined;
   OnboardingStep: {
     stepId: number;
@@ -306,15 +305,7 @@ export default function ProfileNavigator() {
           gestureDirection: "horizontal"
         }}
       />
-      <Stack.Screen
-        name="BiometricSetup"
-        component={BiometricSetupScreen}
-        options={{
-          animation: "slide_from_right",
-          gestureEnabled: true,
-          gestureDirection: "horizontal"
-        }}
-      />
+      {/* BiometricSetup removed - biometric is now handled locally in AppLockSetupScreen */}
       <Stack.Screen
         name="Account"
         component={AccountScreen}

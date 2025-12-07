@@ -26,11 +26,13 @@ import { useTheme } from '../../../theme/ThemeContext';
 import PinPad from '../../../components2/PinPad';
 import appLockService, { BiometricCapabilities } from '../../../services/AppLockService';
 import { logger } from '../../../utils/logger';
-import { useKycCompletion } from '../../../hooks-actions/useKycCompletion';
+import { KycService } from '../../../services/KycService';
 
 interface AppLockSetupScreenProps {
   /** Callback when setup is complete */
   onComplete: () => void;
+  /** Callback when user wants to logout (escape hatch) */
+  onLogout?: () => void;
   /** User's name for personalization */
   userName?: string;
 }
@@ -39,12 +41,12 @@ type SetupStep = 'intro' | 'biometric' | 'pin_create' | 'pin_confirm' | 'complet
 
 const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
   onComplete,
+  onLogout,
   userName = 'there',
 }) => {
   const { theme } = useTheme();
   const { height: screenHeight } = Dimensions.get('window');
   const isSmallScreen = screenHeight < 700;
-  const { completeStep } = useKycCompletion(); // For syncing PIN to backend
 
   // State
   const [step, setStep] = useState<SetupStep>('intro');
@@ -99,7 +101,8 @@ const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
     setIsLoading(false);
 
     if (result.success) {
-      logger.info('[AppLockSetup] Biometric setup successful');
+      logger.info('[AppLockSetup] Biometric setup successful (local-only, not synced to backend)');
+      // Note: Biometric is local-only, not tracked in backend KYC steps
       // Now setup backup PIN
       setStep('pin_create');
     } else {
@@ -155,15 +158,19 @@ const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
     if (result.success) {
       logger.info('[AppLockSetup] PIN setup successful locally');
 
-      // Step 2: Sync PIN to backend (KYC passcode endpoint) - TWO-WAY SYNC
-      // This ensures KYC passcode step will be auto-completed
+      // Step 2: Sync PIN to backend via KycService - SECURITY CRITICAL
+      // Backend stores PIN hash for:
+      // 1. Account recovery (SIM swap protection)
+      // 2. Password reset verification (OTP + PIN required)
+      // Backend hashes the PIN before storing - never stores plain text
       try {
-        logger.info('[AppLockSetup] Syncing PIN to backend...');
-        await completeStep('setup_security', { passcode: pin }, {
-          skipNavigation: true,  // Don't navigate, we handle that ourselves
-          showSuccessAlert: false,
-        });
-        logger.info('[AppLockSetup] ✅ PIN synced to backend - KYC passcode step complete!');
+        logger.info('[AppLockSetup] Syncing passcode to backend for account security...');
+        const syncResult = await KycService.storePasscode(pin);
+        if (syncResult.success) {
+          logger.info('[AppLockSetup] ✅ Passcode synced to backend!');
+        } else {
+          logger.warn('[AppLockSetup] ⚠️ Backend sync failed (non-fatal):', syncResult.error);
+        }
       } catch (syncError) {
         // Non-fatal: Local PIN is saved, backend sync can retry later
         logger.warn('[AppLockSetup] ⚠️ Backend sync failed (non-fatal):', syncError);
@@ -387,6 +394,12 @@ const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
           <TouchableOpacity style={styles.primaryButton} onPress={handleContinue}>
             <Text style={styles.primaryButtonText}>Continue</Text>
           </TouchableOpacity>
+
+          {onLogout && (
+            <TouchableOpacity style={styles.secondaryButton} onPress={onLogout}>
+              <Text style={styles.secondaryButtonText}>Use Different Account</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </SafeAreaView>
     );
@@ -466,6 +479,18 @@ const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
             <Text style={styles.pinTitle}>Confirm Your PIN</Text>
             <Text style={styles.pinSubtitle}>Enter the same PIN again to confirm</Text>
             {pinError && <Text style={styles.errorText}>{pinError}</Text>}
+            {isLoading && (
+              <View style={{ alignItems: 'center', marginBottom: theme.spacing.md }}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
+                <Text style={{
+                  fontSize: theme.typography.fontSize.sm,
+                  color: theme.colors.textSecondary,
+                  marginTop: theme.spacing.xs
+                }}>
+                  Securing your account...
+                </Text>
+              </View>
+            )}
             <PinPad
               value={confirmPin}
               onChange={setConfirmPin}

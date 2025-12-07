@@ -2,7 +2,7 @@
  * Biometric Availability Hook
  *
  * Detects device biometric capabilities for both iOS and Android
- * Reuses the proven detection logic from BiometricSetup.tsx
+ * Used by AppLockSetupScreen for local biometric setup
  */
 
 import { useState, useEffect } from 'react';

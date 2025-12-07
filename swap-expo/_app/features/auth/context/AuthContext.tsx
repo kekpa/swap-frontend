@@ -23,9 +23,18 @@ import apiClient from '../../../_api/apiClient';
 import logger from '../../../utils/logger';
 import { MMKV } from 'react-native-mmkv';
 import { clearAllCachedData } from '../../../localdb';
-import { storeLastUserForPin, getLastUserForPin as getStoredPinUser, clearLastUserForPin, hasPinUserStored as checkPinUserStored } from '../../../utils/pinUserStorage';
+import {
+  storeLastUserForPin,
+  getLastUserForPin as getStoredPinUser,
+  clearLastUserForPin,
+  hasPinUserStored as checkPinUserStored,
+  // New Instagram-style multi-profile functions
+  storeProfilePinData,
+  setLastActiveProfile,
+  getProfilePinData,
+} from '../../../utils/pinUserStorage';
 import { authStateMachine, AuthEvent } from '../../../utils/AuthStateMachine';
-import { loadingOrchestrator, LoadingOperationType, LoadingPriority } from '../../../utils/LoadingOrchestrator';
+import { loadingOrchestrator } from '../../../utils/LoadingOrchestrator';
 import { Account } from '../../../services/AccountsManager';
 
 // Import new modular services
@@ -56,6 +65,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Multi-account state
   const [availableAccounts, setAvailableAccounts] = useState<Account[]>([]);
+
+  // Profile switch state (prevents stale queries during switch)
+  const [isProfileSwitching, setIsProfileSwitching] = useState<boolean>(false);
 
   // Session state
   const [hasPersistedSession, setHasPersistedSession] = useState<boolean>(false);
@@ -162,6 +174,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!skipStore && persistentAuthEnabled && rememberMe) {
         await loginService.setupBiometricLogin(identifier, password);
       }
+
+      // Store PIN data for Instagram-style multi-profile support
+      const profileId = result.user.profileId || result.user.userId;
+      if (profileId) {
+        try {
+          await storeProfilePinData(profileId, {
+            identifier,
+            username: result.user.username,
+            businessName: result.user.businessName,
+            displayName: result.user.businessName
+              || `${result.user.firstName || ''} ${result.user.lastName || ''}`.trim()
+              || identifier,
+            profileType: result.user.profileType === 'business' ? 'business' : 'personal',
+            avatarUrl: result.user.avatarUrl,
+          });
+          await setLastActiveProfile(profileId);
+          logger.debug('[AuthContext] PIN data stored for profile (unifiedLogin)');
+        } catch (pinError) {
+          logger.warn('[AuthContext] Failed to store PIN data (non-critical):', pinError);
+        }
+      }
     }
 
     return {
@@ -185,6 +218,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setAuthLevel(AuthLevel.AUTHENTICATED);
         setIsGuestMode(false);
         setHasPersistedSession(true);
+
+        // Store PIN data for Instagram-style multi-profile support
+        const profileId = result.user.profileId || result.user.userId;
+        if (profileId) {
+          try {
+            await storeProfilePinData(profileId, {
+              identifier,
+              username: result.user.username,
+              businessName: result.user.businessName,
+              displayName: result.user.businessName
+                || `${result.user.firstName || ''} ${result.user.lastName || ''}`.trim()
+                || identifier,
+              profileType: result.user.profileType === 'business' ? 'business' : 'personal',
+              avatarUrl: result.user.avatarUrl,
+            });
+            await setLastActiveProfile(profileId);
+            logger.debug('[AuthContext] PIN data stored for profile (loginWithPin)');
+          } catch (pinError) {
+            logger.warn('[AuthContext] Failed to store PIN data (non-critical):', pinError);
+          }
+        }
+
+        // Legacy: Keep for backward compatibility
         await storeLastUserForPin(identifier);
       }
 
@@ -221,59 +277,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ============================================
 
   const logout = useCallback(async (): Promise<void> => {
+    console.log('🚪 [AuthContext] LOGOUT: Starting instant logout');
     logger.debug('[AuthContext] Starting logout...');
 
-    // Start BLOCKING operation - RootNavigator will show LoadingScreen instead of switching immediately
-    // This prevents white flash by keeping LoadingScreen visible during the transition
-    loadingOrchestrator.startOperation(
-      LoadingOperationType.LOGOUT,
-      'Signing out...',
-      { priority: LoadingPriority.CRITICAL, blockingOperation: true, id: 'logout' }
-    );
-    setIsLoading(true);
+    // STEP 1: Reset auth state IMMEDIATELY (Instagram/WhatsApp-style instant logout)
+    // Navigator shows sign-in screen instantly - no loading screen
+    setUser(null);
+    setIsAuthenticated(false);
+    setAuthLevel(AuthLevel.GUEST);
+    setIsWalletUnlocked(false);
+    setLastWalletUnlock(null);
+    setHasPersistedSession(false);
+    setJustLoggedOut(true);
+    setNeedsLogin(false);
+    setIsGuestMode(true);
 
+    authStateMachine.transition(AuthEvent.LOGOUT, {
+      event: AuthEvent.LOGOUT,
+      timestamp: Date.now()
+    });
+
+    console.log('🚪 [AuthContext] LOGOUT: Auth state reset - user on sign-in screen');
+
+    // STEP 2: Background cleanup (invisible to user - they're already on sign-in)
     try {
-      // Backend logout
-      await authHook.logout();
+      await authHook.logout(); // Backend logout
     } catch (error: any) {
-      logger.warn('[AuthContext] Backend logout failed:', error.message);
+      logger.warn('[AuthContext] Backend logout failed (non-critical):', error.message);
     }
 
     try {
-      // Clear session and local data
       await sessionManager.clearSession();
       await loginService.clearBiometricCredentials();
       await clearAllCachedData();
       await walletSecurity.lock();
-
-      // Reset state - RootNavigator now wants to show AuthNavigator
-      // BUT canShowUI is false (blocking operation), so LoadingScreen stays visible
-      setUser(null);
-      setIsAuthenticated(false);
-      setAuthLevel(AuthLevel.GUEST);
-      setIsWalletUnlocked(false);
-      setLastWalletUnlock(null);
-      setHasPersistedSession(false);
-      setJustLoggedOut(true);
-      setNeedsLogin(false);
-      setIsGuestMode(true);
-
-      authStateMachine.transition(AuthEvent.LOGOUT, {
-        event: AuthEvent.LOGOUT,
-        timestamp: Date.now()
-      });
-
+      console.log('🚪 [AuthContext] LOGOUT: Background cleanup complete');
       logger.debug('[AuthContext] Logout completed');
     } catch (error) {
-      logger.error('[AuthContext] Logout error:', error);
-    } finally {
-      setIsLoading(false);
-
-      // Brief delay for navigation to settle, THEN complete blocking operation
-      // This allows RootNavigator to smoothly transition to AuthNavigator
-      await new Promise(resolve => setTimeout(resolve, 300));
-      loadingOrchestrator.completeOperation('logout');
-      // NOW canShowUI becomes true → AuthNavigator appears smoothly
+      logger.error('[AuthContext] Logout cleanup error:', error);
     }
   }, [authHook]);
 
@@ -296,13 +337,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (result.success && result.account) {
       // Update state from switched account
+      // Use stored firstName/lastName if available, fallback to displayName parsing for backward compatibility
       setUser({
         userId: result.account.userId,
         email: result.account.email,
         profileId: result.account.profileId,
         entityId: result.account.entityId,
-        firstName: result.account.displayName.split(' ')[0],
-        lastName: result.account.displayName.split(' ').slice(1).join(' '),
+        firstName: result.account.firstName || result.account.displayName.split(' ')[0],
+        lastName: result.account.lastName || result.account.displayName.split(' ').slice(1).join(' '),
       } as User);
       setIsAuthenticated(true);
       setAuthLevel(AuthLevel.AUTHENTICATED);
@@ -550,6 +592,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadAvailableAccounts,
     removeAccount,
 
+    // Profile switch state
+    isProfileSwitching,
+    setIsProfileSwitching,
+
     // Progressive auth
     upgradeToAuthenticated,
     requestWalletAccess,
@@ -569,7 +615,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     handleSignUp,
     checkEmailConfirmation,
     setIsAuthenticated,
-    setUser,
+    setUser: (newUser: User | null) => {
+      console.log('🔐 [AuthContext] setUser called:', {
+        entityId: newUser?.entityId,
+        profileId: newUser?.profileId,
+        firstName: newUser?.firstName,
+        lastName: newUser?.lastName,
+        businessName: newUser?.businessName
+      });
+      setUser(newUser);
+    },
     needsLogin,
     setNeedsLogin,
     forceLogout,

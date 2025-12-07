@@ -21,18 +21,23 @@ import {
   ScrollView
 } from "react-native";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useNavigation } from "@react-navigation/native";
+import * as SecureStore from 'expo-secure-store';
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
+
+// Storage key for remembering the last used identifier (Instagram/Revolut pattern)
+const LAST_IDENTIFIER_KEY = 'lastLoginIdentifier';
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useAuthContext } from "../context/AuthContext";
 import { useTheme } from "../../../theme/ThemeContext";
+import { getProfilePinData, ProfilePinData, getProfileDisplayName } from "../../../utils/pinUserStorage";
 import { Theme } from "../../../theme/theme";
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from "../../../tanstack-query/queryKeys";
 import apiClient from "../../../_api/apiClient";
 import { AUTH_PATHS } from "../../../_api/apiPaths";
-import { saveAccessToken, saveRefreshToken } from "../../../services/token";
+import { saveAccessToken, saveRefreshToken, tokenManager } from "../../../services/token";
 import { useAvailableProfiles } from "../../../hooks-data/useAvailableProfiles";
 
 // Define type for navigation
@@ -60,8 +65,12 @@ const SignInScreen = ({ route }: any) => {
   const mode = route?.params?.mode; // 'login' (default) | 'profileSwitch'
   const targetProfileId = route?.params?.targetProfileId;
   const targetEntityId = route?.params?.targetEntityId;
+  const targetDisplayName = route?.params?.targetDisplayName; // For UX: business name or username
+  const targetProfileType = route?.params?.targetProfileType as 'personal' | 'business' | undefined;
   const sourceRoute = route?.params?.sourceRoute;
   const sourceUserId = route?.params?.sourceUserId; // User who initiated the profile switch
+  const sourceUsername = route?.params?.sourceUsername; // For "via @username" display
+  const sourceIdentifier = route?.params?.sourceIdentifier; // Phone number for PIN auth (captured while logged in)
   const isProfileSwitchMode = mode === 'profileSwitch';
 
   // Helper functions for biometric prompt tracking
@@ -95,6 +104,7 @@ const SignInScreen = ({ route }: any) => {
   const [rememberedUserIdentifier, setRememberedUserIdentifier] = useState<string | null>(null); // For displaying remembered user
   const [pinUserIdentifier, setPinUserIdentifier] = useState<string | null>(null); // For PIN authentication
   const [hasPinUser, setHasPinUser] = useState<boolean>(false);
+  const [pinUserData, setPinUserData] = useState<ProfilePinData | null>(null); // For Instagram-style display
   const [supportedBiometrics, setSupportedBiometrics] = useState<LocalAuthentication.AuthenticationType[]>([]);
   const [isBiometricAvailable, setIsBiometricAvailable] = useState(false);
   
@@ -177,7 +187,8 @@ const SignInScreen = ({ route }: any) => {
   };
   
   const handleForgotPin = () => {
-    navigation.navigate("ForgotPassword");
+    // Switch to password tab - user can login with password to reset PIN
+    setActiveTab('password');
   };
 
   const handleForgotPassword = () => {
@@ -261,6 +272,14 @@ const SignInScreen = ({ route }: any) => {
 
         if (response && response.success) {
           console.log(`🚀 [SignInScreen] ${loginType} sign in successful, RootNavigator will handle LoadingScreen`);
+
+          // Save identifier for next time (Instagram/Revolut pattern)
+          try {
+            await SecureStore.setItemAsync(LAST_IDENTIFIER_KEY, identifierToLogin);
+            console.log('[SignInScreen] Saved identifier to SecureStore for next login');
+          } catch (saveError) {
+            console.log('[SignInScreen] Could not save identifier:', saveError);
+          }
 
           // If in profile switch mode, switch profile after auth
           if (isProfileSwitchMode && targetProfileId) {
@@ -367,12 +386,18 @@ const SignInScreen = ({ route }: any) => {
   };
   
   const handleProfileSwitch = async () => {
+    console.log('🔑 [SignInScreen] handleProfileSwitch triggered!', {
+      targetProfileId,
+      sourceUserId,
+      currentUser: authContext?.user?.entityId
+    });
+
     try {
       // SECURITY: Validate that the logged-in user matches the original user who initiated the switch
       const currentUserId = authContext?.user?.user_id;
 
       if (sourceUserId && currentUserId && currentUserId !== sourceUserId) {
-        console.warn('[SignInScreen] ⚠️ Profile switch aborted: Different user logged in', {
+        console.warn('🔑 [SignInScreen] ⚠️ Profile switch aborted: Different user logged in', {
           expected: sourceUserId,
           actual: currentUserId,
         });
@@ -387,7 +412,7 @@ const SignInScreen = ({ route }: any) => {
         return;
       }
 
-      console.log('[SignInScreen] 🔄 Starting PROFESSIONAL profile switch with orchestrator...', { targetProfileId });
+      console.log('🔑 [SignInScreen] 🔄 Starting profile switch with orchestrator...', { targetProfileId });
 
       // PROFESSIONAL: Use ProfileSwitchOrchestrator (state machine pattern)
       const { profileSwitchOrchestrator } = await import('../../../services/ProfileSwitchOrchestrator');
@@ -435,6 +460,7 @@ const SignInScreen = ({ route }: any) => {
     // Clear the stored PIN user
     await authContext.clearPinUser();
     setPinUserIdentifier(null);
+    setPinUserData(null); // Clear Instagram-style data too
     setHasPinUser(false);
     setActiveTab('password'); // Switch to password tab
     setTimeout(() => identifierInputRef.current?.focus(), 100); // Focus identifier input
@@ -469,44 +495,119 @@ const SignInScreen = ({ route }: any) => {
           setIdentifier(creds.email); // Pre-fill identifier state from SecureStore
           setPassword(creds.password); // Pre-fill password state from SecureStore
           setRememberedUserIdentifier(creds.email); // Set the remembered identifier for display
-          setActiveTab('password'); 
+          setActiveTab('password');
         } else {
           // If no saved creds, dev pre-fill (if __DEV__) will remain, or fields will be empty
-          setRememberedUserIdentifier(null); 
+          setRememberedUserIdentifier(null);
         }
       }
     };
     loadSavedCredentials();
   }, [authContext.loadCredentials]);
 
-  // Load stored PIN user on mount
+  // Load last used identifier on mount (Instagram/Revolut pattern)
+  // This keeps the identifier field populated even after logout
   useEffect(() => {
-    const loadPinUser = async () => {
+    const loadLastIdentifier = async () => {
       try {
-        const storedPinUser = await authContext.getLastUserForPin();
-        const hasStored = await authContext.hasPinUserStored();
-        
-        if (storedPinUser && hasStored) {
-          setPinUserIdentifier(storedPinUser);
-          setHasPinUser(true);
-          setActiveTab('pin'); // Stay on PIN tab if user found
-          console.log('[PIN Auth] Found stored PIN user:', storedPinUser);
-        } else {
-          setPinUserIdentifier(null);
-          setHasPinUser(false);
-          setActiveTab('password'); // Switch to password tab if no PIN user
-          console.log('[PIN Auth] No stored PIN user found');
+        const saved = await SecureStore.getItemAsync(LAST_IDENTIFIER_KEY);
+        if (saved && !identifier) {
+          console.log('[SignInScreen] Loaded last identifier from SecureStore');
+          setIdentifier(saved);
         }
       } catch (error) {
-        console.error('[PIN Auth] Error loading stored PIN user:', error);
-        setPinUserIdentifier(null);
-        setHasPinUser(false);
-        setActiveTab('password'); // Switch to password tab on error
+        console.log('[SignInScreen] Could not load saved identifier:', error);
       }
     };
-    
-    loadPinUser();
-  }, []); // Remove dependencies to prevent recursion
+    loadLastIdentifier();
+  }, []);
+
+  // Load stored PIN user on screen focus (Instagram-style multi-profile)
+  // Using useFocusEffect so PIN data reloads when returning from profile switch
+  useFocusEffect(
+    React.useCallback(() => {
+      const loadPinUser = async () => {
+        try {
+          const targetId = isProfileSwitchMode ? targetProfileId : undefined;
+
+          // PROFILE SWITCH MODE: Use passed identifier (captured while still logged in)
+          // Each team member uses THEIR OWN personal credentials to access business
+          // Same pattern as Stripe, Revolut, Square
+          if (isProfileSwitchMode && targetId) {
+            // Use sourceIdentifier passed from profile.tsx (JWT is cleared during switch)
+            const jwtIdentifier = sourceIdentifier || tokenManager.getAuthUserIdentifier();
+            console.log('[PIN Auth] Profile switch mode - using identifier:', {
+              hasJwtIdentifier: !!jwtIdentifier,
+              fromSourceParam: !!sourceIdentifier,
+              targetProfileId: targetId,
+            });
+
+            if (jwtIdentifier) {
+              setPinUserIdentifier(jwtIdentifier);
+              setHasPinUser(true);
+              setActiveTab('pin');
+
+              // Load profile data for display (avatar, business name)
+              const profileData = await getProfilePinData(targetId);
+              if (profileData) {
+                setPinUserData(profileData);
+              }
+              return; // Exit early - JWT identifier is authoritative
+            }
+          }
+
+          // NORMAL LOGIN: Use stored profile data
+          const profileData = await getProfilePinData(targetId);
+
+          console.log('[PIN Auth] Loading PIN data for:', {
+            isProfileSwitchMode,
+            targetProfileId: targetId,
+            foundData: !!profileData
+          });
+
+          if (profileData) {
+            setPinUserData(profileData);
+            setPinUserIdentifier(profileData.identifier);
+            setHasPinUser(true);
+            setActiveTab('pin'); // Stay on PIN tab if user found
+            console.log('[PIN Auth] Found stored profile PIN data:', {
+              profileType: profileData.profileType,
+              hasUsername: !!profileData.username,
+              hasBusinessName: !!profileData.businessName,
+              identifier: profileData.identifier,
+              hasIdentifier: !!profileData.identifier,
+              displayName: profileData.displayName,
+            });
+          } else {
+            // Fallback to legacy storage
+            const storedPinUser = await authContext.getLastUserForPin();
+            const hasStored = await authContext.hasPinUserStored();
+
+            if (storedPinUser && hasStored) {
+              setPinUserIdentifier(storedPinUser);
+              setHasPinUser(true);
+              setActiveTab('pin');
+              console.log('[PIN Auth] Found legacy stored PIN user');
+            } else {
+              setPinUserIdentifier(null);
+              setPinUserData(null);
+              setHasPinUser(false);
+              setActiveTab('password');
+              console.log('[PIN Auth] No stored PIN user found');
+            }
+          }
+        } catch (error) {
+          console.error('[PIN Auth] Error loading stored PIN user:', error);
+          setPinUserIdentifier(null);
+          setPinUserData(null);
+          setHasPinUser(false);
+          setActiveTab('password');
+        }
+      };
+
+      loadPinUser();
+    }, [isProfileSwitchMode, targetProfileId, sourceIdentifier]) // Re-run when profile switch mode/target/identifier changes
+  );
 
   const getInitials = (nameOrEmail?: string | null) => {
     if (!nameOrEmail) return "UA"; // Unknown Account / User Account
@@ -614,10 +715,14 @@ const SignInScreen = ({ route }: any) => {
         <View style={styles.content}>
           <View style={styles.header}>
             <Text style={styles.title}>
-              {isProfileSwitchMode ? 'Switch Profile' : 'Welcome back'}
+              {isProfileSwitchMode
+                ? `Switch to ${targetProfileType === 'business' ? 'Business' : 'Account'}`
+                : 'Welcome back'}
             </Text>
             <Text style={styles.subtitle}>
-              {isProfileSwitchMode ? 'Authenticate to switch accounts' : 'Sign in to your account'}
+              {isProfileSwitchMode
+                ? `Enter PIN for ${pinUserData?.username ? `@${pinUserData.username}` : 'your account'}`
+                : 'Sign in to your account'}
             </Text>
           </View>
           
@@ -647,15 +752,57 @@ const SignInScreen = ({ route }: any) => {
           {/* PIN Tab Content */}
           {activeTab === 'pin' && (
             <View style={styles.pinTabContent}>
-              {/* Show stored PIN user if available */}
-              {hasPinUser && pinUserIdentifier && (
+              {/* Profile Switch Mode: Show TARGET profile (business) */}
+              {isProfileSwitchMode && targetDisplayName && (
                 <View style={styles.accountInfo}>
                   <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{getInitials(pinUserIdentifier)}</Text>
+                    <Text style={styles.avatarText}>
+                      {getInitials(targetDisplayName)}
+                    </Text>
                   </View>
                   <View style={styles.userDetails}>
-                    <Text style={styles.userName} numberOfLines={1} ellipsizeMode="tail">{pinUserIdentifier}</Text>
-                    <Text style={styles.userPhone}>Enter your 6-digit PIN</Text>
+                    <Text style={styles.userName} numberOfLines={1} ellipsizeMode="tail">
+                      {targetDisplayName}
+                    </Text>
+                    <Text style={styles.userPhone}>
+                      {targetProfileType === 'business' ? 'Business Account' : 'Personal Account'}
+                    </Text>
+                    {/* "via @username" indicator for profile switch */}
+                    {sourceUsername && (
+                      <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 2, opacity: 0.8 }}>
+                        via @{sourceUsername}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              )}
+
+              {/* Normal Login Mode: Show stored PIN user (Instagram-style display) */}
+              {!isProfileSwitchMode && hasPinUser && pinUserIdentifier && (
+                <View style={styles.accountInfo}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>
+                      {getInitials(
+                        pinUserData
+                          ? (pinUserData.profileType === 'personal'
+                              ? pinUserData.username || pinUserData.displayName
+                              : pinUserData.businessName || pinUserData.displayName)
+                          : pinUserIdentifier
+                      )}
+                    </Text>
+                  </View>
+                  <View style={styles.userDetails}>
+                    {/* Display @username for personal, businessName for business */}
+                    <Text style={styles.userName} numberOfLines={1} ellipsizeMode="tail">
+                      {pinUserData
+                        ? getProfileDisplayName(pinUserData)
+                        : pinUserIdentifier}
+                    </Text>
+                    <Text style={styles.userPhone}>
+                      {pinUserData?.profileType === 'business'
+                        ? 'Business Account'
+                        : 'Personal Account'}
+                    </Text>
                   </View>
                 </View>
               )}

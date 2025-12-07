@@ -2,15 +2,13 @@ import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import HowYouHeardAboutUs from './HowYouHeardAboutUs';
 import NotificationActivation from './NotificationActivation';
-import PasscodeSetup from './PasscodeSetup';
-import BioSetup from './BioSetup';
+// PasscodeSetup and BioSetup removed - handled by AppLockSetupScreen after authentication
 
 // Define the profile setup stack navigator param list
 export type ProfileSetupStackParamList = {
   HowYouHeardAboutUs: undefined;
   NotificationActivation: undefined;
-  PasscodeSetup: undefined;
-  BioSetup: undefined;
+  // PasscodeSetup and BioSetup removed - AppLockHandler in App.tsx handles PIN/biometric setup
 };
 
 const Stack = createStackNavigator<ProfileSetupStackParamList>();
@@ -18,6 +16,9 @@ const Stack = createStackNavigator<ProfileSetupStackParamList>();
 /**
  * ProfileSetupNavigator manages the navigation flow for the profile setup process
  * after a user has signed up or needs to complete their profile.
+ *
+ * Note: Passcode and Biometric setup are now handled by AppLockSetupScreen
+ * which is triggered by AppLockHandler in App.tsx after authentication.
  */
 const ProfileSetupNavigator = () => {
   return (
@@ -46,10 +47,8 @@ const ProfileSetupNavigator = () => {
     >
       <Stack.Screen name="HowYouHeardAboutUs" component={HowYouHeardAboutUs} />
       <Stack.Screen name="NotificationActivation" component={NotificationActivation} />
-      <Stack.Screen name="PasscodeSetup" component={PasscodeSetup} />
-      <Stack.Screen name="BioSetup" component={BioSetup} />
     </Stack.Navigator>
   );
 };
 
-export default ProfileSetupNavigator; 
+export default ProfileSetupNavigator;

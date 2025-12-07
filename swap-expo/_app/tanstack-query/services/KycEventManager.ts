@@ -32,8 +32,8 @@ export type KycStepType =
   | 'personal_info'           // Personal information
   | 'upload_id'               // Document upload
   | 'take_selfie'             // Selfie verification
-  | 'setup_security'          // Passcode setup
-  | 'biometric_setup'         // Biometric authentication
+  | 'passcode_setup'          // Passcode setup (renamed from setup_security)
+  // Note: biometric_setup removed - biometric is local-only, not tracked in backend
   | 'business_info'           // Business information
   | 'business_verification'   // Business document verification
   | 'business_security'       // Business security setup
@@ -78,8 +78,8 @@ class KycEventManagerClass {
       personal_info: '/kyc/personal-information',
       upload_id: '/kyc/documents',
       take_selfie: '/kyc/selfie',
-      setup_security: '/auth/store-passcode',
-      biometric_setup: '/kyc/biometric-setup',
+      passcode_setup: '/auth/store-passcode', // Renamed from setup_security
+      // biometric_setup: removed - biometric is local-only, not tracked in backend
       business_info: '/kyc/business-information',
       business_verification: '/kyc/business-verification',
       business_security: '/kyc/business-security',
@@ -284,8 +284,7 @@ class KycEventManagerClass {
       confirm_phone: ['auth', 'phone_verification'],
       personal_info: ['profile', 'user_info'],
       upload_id: ['documents', 'verification'],
-      setup_security: ['auth', 'security'],
-      biometric_setup: ['auth', 'biometric'],
+      passcode_setup: ['auth', 'security'],
       business_info: ['business', 'profile'],
     };
 

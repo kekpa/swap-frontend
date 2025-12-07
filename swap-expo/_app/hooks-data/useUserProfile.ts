@@ -12,6 +12,7 @@ import apiClient from '../_api/apiClient';
 import { getStaleTimeForQuery } from '../tanstack-query/config/staleTimeConfig';
 import { createRetryFunction } from '../utils/errorHandler';
 import { useCurrentProfileId } from '../hooks/useCurrentProfileId';
+import { useAuthContext } from '../features/auth/context/AuthContext';
 
 // User profile interface matching PersonalUserProfileDto from backend
 export interface UserProfile {
@@ -62,11 +63,17 @@ const fetchUserProfile = async (profileId: string, entityId: string): Promise<Us
  */
 export const useUserProfile = (entityId?: string) => {
   const profileId = useCurrentProfileId();
+  const { isProfileSwitching } = useAuthContext();
+
+  // Pause queries during profile switch to prevent stale data
+  if (isProfileSwitching) {
+    logger.debug('[useUserProfile] ⏸️ SKIPPING: Profile switch in progress');
+  }
 
   return useQuery({
     queryKey: queryKeys.userProfile(profileId || ''),
     queryFn: () => fetchUserProfile(profileId!, entityId!),
-    enabled: !!entityId && !!profileId,
+    enabled: !!entityId && !!profileId && !isProfileSwitching,
     staleTime: getStaleTimeForQuery('userProfile'),
     networkMode: 'offlineFirst',
     retry: createRetryFunction(2),

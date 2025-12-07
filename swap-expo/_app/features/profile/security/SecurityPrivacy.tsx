@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   StatusBar,
   Switch,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -15,6 +16,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { ProfileStackParamList } from '../../../navigation/profileNavigator';
 import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
+import { useAuthContext } from '../../auth/context/AuthContext';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -158,13 +160,26 @@ const DeviceItem: React.FC<DeviceItemProps> = ({
 const SecurityPrivacyScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
+  const { user } = useAuthContext();
 
   const handleBack = () => {
     navigation.goBack();
   };
 
   const handleChangePasscode = () => {
-    navigation.navigate('Passcode');
+    // Business profiles share PIN with personal profile - warn user
+    if (user?.profile_type === 'business') {
+      Alert.alert(
+        'Changing Personal PIN',
+        'Your PIN is shared across all your profiles (personal and business). Changing it here will affect all profiles.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Continue', onPress: () => navigation.navigate('Passcode') }
+        ]
+      );
+    } else {
+      navigation.navigate('Passcode');
+    }
   };
 
   const handleEntityAccess = () => {

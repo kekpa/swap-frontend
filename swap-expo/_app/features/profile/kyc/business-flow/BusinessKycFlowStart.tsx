@@ -27,8 +27,10 @@ type NavigationProp = StackNavigationProp<ProfileStackParamList>;
  * 5. Business Address Entry
  * 6. Review Business Information
  * 7. Upload Business Registration Documents
- * 8. Security Setup (Passcode/Biometrics)
- * 9. Verification Complete
+ * 8. Verification Complete
+ *
+ * Note: Business profiles use the personal profile's PIN (shared auth_user),
+ * so there is no separate passcode setup step for business KYC.
  *
  * This component acts as the entry point and determines which step
  * to start from based on existing progress.
@@ -156,17 +158,10 @@ export default BusinessKycFlowStart;
  *   - Upload business registration certificate (required)
  *   - Upload tax certificate (optional)
  *   - Upload operating license (optional)
- *   - "Continue" navigates to Passcode
- *   ↓
- * Step 8: Passcode
- *   - Set up security passcode
- *   - "Continue" navigates to BiometricSetup
- *   ↓
- * Step 9: BiometricSetup
- *   - Enable Face ID/Touch ID (optional)
  *   - "Continue" navigates to VerificationComplete
  *   ↓
  * Complete: VerificationComplete
  *   - Show success message
  *   - Return to timeline or profile
+ *   - Note: Business profiles use the personal profile's PIN (shared auth_user)
  */

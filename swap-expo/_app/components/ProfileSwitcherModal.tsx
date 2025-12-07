@@ -191,13 +191,23 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
   );
 
   const handleSelectProfile = React.useCallback((profile: AvailableProfile) => {
+    console.log('👤 [ProfileSwitcherModal] Profile selected:', {
+      profileId: profile.profileId,
+      entityId: profile.entityId,
+      displayName: profile.displayName,
+      type: profile.type,
+      currentProfileId
+    });
+
     if (profile.profileId === currentProfileId) {
       // Already on this profile, just close modal
+      console.log('👤 [ProfileSwitcherModal] Same profile selected, closing modal');
       onClose();
       return;
     }
 
     // Trigger profile switch (will show biometric prompt)
+    console.log('👤 [ProfileSwitcherModal] Triggering profile switch...');
     onSelectProfile(profile);
   }, [currentProfileId, onClose, onSelectProfile]);
 

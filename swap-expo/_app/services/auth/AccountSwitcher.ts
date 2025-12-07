@@ -102,13 +102,14 @@ class AccountSwitcher {
       apiClient.setProfileId(account.profileId);
 
       // Step 6: Update session
+      // Use stored firstName/lastName if available, fallback to displayName parsing for backward compatibility
       const sessionData: SessionData = {
         userId: account.userId,
         profileId: account.profileId,
         entityId: account.entityId,
         email: account.email || '',
-        firstName: account.displayName.split(' ')[0],
-        lastName: account.displayName.split(' ').slice(1).join(' ') || undefined,
+        firstName: account.firstName || account.displayName.split(' ')[0],
+        lastName: account.lastName || account.displayName.split(' ').slice(1).join(' ') || undefined,
         avatarUrl: account.avatarUrl,
         profileType: account.profileType as 'personal' | 'business',
         sessionId: `session_${Date.now()}`,
@@ -196,6 +197,8 @@ class AccountSwitcher {
         entityId: user.entityId || '',
         profileType: user.profileType || 'personal',
         displayName: user.businessName || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+        firstName: user.firstName, // Store actual first name
+        lastName: user.lastName, // Store actual last name
         avatarUrl: user.avatarUrl,
         accessToken,
         refreshToken: refreshToken || accessToken,

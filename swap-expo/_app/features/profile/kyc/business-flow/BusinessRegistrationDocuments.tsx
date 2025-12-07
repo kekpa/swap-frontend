@@ -177,10 +177,8 @@ const BusinessRegistrationDocuments: React.FC = () => {
 
     console.log('[BusinessRegistrationDocuments] ✅ Cache invalidation completed');
 
-    // Navigate to business security (Passcode) - Skip BusinessVerification
-    navigation.navigate('Passcode', {
-      isKycFlow: true,
-      isBusiness: true,
+    // Navigate to VerificationComplete - business profiles use personal PIN (no separate passcode)
+    navigation.navigate('VerificationComplete', {
       returnToTimeline,
     });
   };
@@ -189,10 +187,8 @@ const BusinessRegistrationDocuments: React.FC = () => {
     // Allow skipping document upload entirely for informal economy
     console.log('[BusinessRegistrationDocuments] ⏭️ Skipping document upload');
 
-    // Navigate to business security (Passcode)
-    navigation.navigate('Passcode', {
-      isKycFlow: true,
-      isBusiness: true,
+    // Navigate to VerificationComplete - business profiles use personal PIN (no separate passcode)
+    navigation.navigate('VerificationComplete', {
       returnToTimeline,
     });
   };

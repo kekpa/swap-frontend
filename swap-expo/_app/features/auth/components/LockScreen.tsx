@@ -23,12 +23,17 @@ import {
   Dimensions,
   AppState,
   AppStateStatus,
+  TextInput,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeContext';
 import PinPad from '../../../components2/PinPad';
 import appLockService, { BiometricCapabilities } from '../../../services/AppLockService';
 import { logger } from '../../../utils/logger';
+import { loginService } from '../../../services/auth/LoginService';
 
 // Map raw biometric error codes to user-friendly messages
 const getBiometricErrorMessage = (error: string): string | null => {
@@ -60,18 +65,24 @@ const getBiometricErrorMessage = (error: string): string | null => {
 interface LockScreenProps {
   /** User's display name for "Welcome back" */
   userName?: string;
+  /** User's identifier for password verification (email/phone/username) */
+  userIdentifier?: string;
   /** Callback when unlock is successful */
   onUnlock: () => void;
   /** Callback when user wants to log out */
   onLogout: () => void;
+  /** Callback when PIN reset is complete (password verified, ready for new PIN setup) */
+  onPinReset?: () => void;
 }
 
 type UnlockMode = 'biometric' | 'pin';
 
 const LockScreen: React.FC<LockScreenProps> = ({
   userName = 'there',
+  userIdentifier,
   onUnlock,
   onLogout,
+  onPinReset,
 }) => {
   const { theme } = useTheme();
   const { height: screenHeight } = Dimensions.get('window');
@@ -84,6 +95,13 @@ const LockScreen: React.FC<LockScreenProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [biometricCapabilities, setBiometricCapabilities] = useState<BiometricCapabilities | null>(null);
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
+
+  // Forgot PIN state
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [isVerifyingPassword, setIsVerifyingPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Check biometric capabilities on mount
   useEffect(() => {
@@ -240,6 +258,58 @@ const LockScreen: React.FC<LockScreenProps> = ({
     }
   };
 
+  // Forgot PIN handlers
+  const handleForgotPin = () => {
+    setShowPasswordModal(true);
+    setPassword('');
+    setPasswordError(null);
+  };
+
+  const handleClosePasswordModal = () => {
+    setShowPasswordModal(false);
+    setPassword('');
+    setPasswordError(null);
+    setShowPassword(false);
+  };
+
+  const handleVerifyPassword = async () => {
+    if (!password.trim()) {
+      setPasswordError('Please enter your password');
+      return;
+    }
+
+    if (!userIdentifier) {
+      setPasswordError('Unable to verify - missing user identifier');
+      return;
+    }
+
+    setIsVerifyingPassword(true);
+    setPasswordError(null);
+
+    try {
+      // Verify password with backend
+      const result = await loginService.login(userIdentifier, password);
+
+      if (result.success) {
+        logger.info('[LockScreen] Password verified, unlocking app');
+
+        // Just unlock - user is now authenticated via password
+        await appLockService.unlock();
+
+        // Close modal and go to app
+        handleClosePasswordModal();
+        onUnlock();
+      } else {
+        setPasswordError(result.message || 'Incorrect password');
+      }
+    } catch (err: any) {
+      logger.error('[LockScreen] Password verification error:', err);
+      setPasswordError('Verification failed. Please try again.');
+    } finally {
+      setIsVerifyingPassword(false);
+    }
+  };
+
   const getBiometricIcon = (): string => {
     if (biometricCapabilities?.biometricType === 'facial') {
       return 'scan-outline'; // Face ID
@@ -364,6 +434,98 @@ const LockScreen: React.FC<LockScreenProps> = ({
       color: theme.colors.error,
       fontWeight: '600',
     },
+    forgotPinButton: {
+      marginTop: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+    },
+    forgotPinText: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.primary,
+    },
+    // Password modal styles
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: theme.spacing.lg,
+    },
+    modalContent: {
+      width: '100%',
+      maxWidth: 400,
+      backgroundColor: theme.colors.background,
+      borderRadius: theme.borderRadius.lg,
+      padding: theme.spacing.lg,
+      ...theme.shadows.large,
+    },
+    modalTitle: {
+      fontSize: theme.typography.fontSize.xl,
+      fontWeight: '600',
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.sm,
+      textAlign: 'center',
+    },
+    modalSubtitle: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.lg,
+      textAlign: 'center',
+    },
+    passwordInputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: theme.colors.inputBorder,
+      borderRadius: theme.borderRadius.md,
+      marginBottom: theme.spacing.md,
+    },
+    passwordInput: {
+      flex: 1,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.md,
+      fontSize: theme.typography.fontSize.md,
+      color: theme.colors.textPrimary,
+    },
+    passwordToggle: {
+      padding: theme.spacing.md,
+    },
+    modalError: {
+      fontSize: theme.typography.fontSize.sm,
+      color: theme.colors.error,
+      marginBottom: theme.spacing.md,
+      textAlign: 'center',
+    },
+    modalButtons: {
+      flexDirection: 'row',
+      gap: theme.spacing.md,
+    },
+    modalCancelButton: {
+      flex: 1,
+      paddingVertical: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.inputBorder,
+      alignItems: 'center',
+    },
+    modalCancelText: {
+      fontSize: theme.typography.fontSize.md,
+      color: theme.colors.textSecondary,
+    },
+    modalVerifyButton: {
+      flex: 1,
+      paddingVertical: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      backgroundColor: theme.colors.primary,
+      alignItems: 'center',
+    },
+    modalVerifyText: {
+      fontSize: theme.typography.fontSize.md,
+      color: theme.colors.white,
+      fontWeight: '600',
+    },
+    modalVerifyButtonDisabled: {
+      backgroundColor: theme.colors.inputBorder,
+    },
   }), [theme, isSmallScreen]);
 
   const renderBiometricMode = () => (
@@ -401,7 +563,86 @@ const LockScreen: React.FC<LockScreenProps> = ({
         error={!!error}
         disabled={isLoading || lockoutSeconds > 0}
       />
+      {onPinReset && userIdentifier && (
+        <TouchableOpacity style={styles.forgotPinButton} onPress={handleForgotPin}>
+          <Text style={styles.forgotPinText}>Forgot PIN?</Text>
+        </TouchableOpacity>
+      )}
     </View>
+  );
+
+  const renderPasswordModal = () => (
+    <Modal
+      visible={showPasswordModal}
+      transparent
+      animationType="fade"
+      onRequestClose={handleClosePasswordModal}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.modalOverlay}
+      >
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Sign in with password</Text>
+          <Text style={styles.modalSubtitle}>
+            Use your password to unlock the app
+          </Text>
+
+          <View style={styles.passwordInputContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              placeholder="Enter password"
+              placeholderTextColor={theme.colors.textSecondary}
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={setPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!isVerifyingPassword}
+            />
+            <TouchableOpacity
+              style={styles.passwordToggle}
+              onPress={() => setShowPassword(!showPassword)}
+            >
+              <Ionicons
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={theme.colors.textSecondary}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {passwordError && (
+            <Text style={styles.modalError}>{passwordError}</Text>
+          )}
+
+          <View style={styles.modalButtons}>
+            <TouchableOpacity
+              style={styles.modalCancelButton}
+              onPress={handleClosePasswordModal}
+              disabled={isVerifyingPassword}
+            >
+              <Text style={styles.modalCancelText}>Cancel</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.modalVerifyButton,
+                isVerifyingPassword && styles.modalVerifyButtonDisabled,
+              ]}
+              onPress={handleVerifyPassword}
+              disabled={isVerifyingPassword}
+            >
+              {isVerifyingPassword ? (
+                <ActivityIndicator size="small" color={theme.colors.white} />
+              ) : (
+                <Text style={styles.modalVerifyText}>Sign in</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 
   return (
@@ -469,6 +710,9 @@ const LockScreen: React.FC<LockScreenProps> = ({
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Password verification modal for PIN reset */}
+      {renderPasswordModal()}
     </SafeAreaView>
   );
 };

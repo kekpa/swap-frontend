@@ -23,10 +23,14 @@ export interface Account {
   userId: string;
   email?: string;
   phone?: string;
+  username?: string; // For personal profiles (Instagram-style display)
+  businessName?: string; // For business profiles
   profileId: string;
   profileType: 'personal' | 'business';
   entityId: string;
   displayName: string;
+  firstName?: string; // Actual first name from profile (not parsed from displayName)
+  lastName?: string; // Actual last name from profile
   avatarUrl?: string;
   accessToken: string;
   refreshToken: string;

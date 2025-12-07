@@ -98,6 +98,10 @@ export interface AuthContextType {
   loadAvailableAccounts: () => Promise<void>;
   removeAccount: (userId: string) => Promise<boolean>;
 
+  // Profile Switch State (prevents stale queries during switch)
+  isProfileSwitching: boolean;
+  setIsProfileSwitching: (switching: boolean) => void;
+
   // Progressive Authentication
   upgradeToAuthenticated: () => Promise<boolean>;
   requestWalletAccess: () => Promise<boolean>;

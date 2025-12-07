@@ -40,6 +40,8 @@ const PasscodeScreen: React.FC<PasscodeProps> = ({
   const { theme } = useTheme();
   const { completeStep } = useKycCompletion(); // ✅ Updated to use completeStep (industry standard)
   const isKycFlow = route.params?.isKycFlow || false;
+  const isBusiness = route.params?.isBusiness || false;
+  const personalUsername = route.params?.personalUsername;
   const returnToTimeline = route.params?.returnToTimeline;
   const sourceRoute = route.params?.sourceRoute;
   
@@ -167,7 +169,7 @@ const PasscodeScreen: React.FC<PasscodeProps> = ({
     console.log(`[PasscodeScreen] 🚀 Starting professional KYC completion for passcode...`);
 
     // Use professional KYC completion system
-    const result = await completeStep('setup_security', { passcode: confirmedPasscode }, {
+    const result = await completeStep('passcode_setup', { passcode: confirmedPasscode }, {
       returnToTimeline,
       sourceRoute,
       showSuccessAlert: false,
@@ -262,6 +264,14 @@ const PasscodeScreen: React.FC<PasscodeProps> = ({
         marginTop: isSmallScreen ? 'auto' : 'auto',
         paddingBottom: isSmallScreen ? theme.spacing.sm : theme.spacing.lg
       },
+      // Subtle "via @username" caption for business profile switch
+      viaCaption: {
+        fontSize: theme.typography.fontSize.sm,
+        color: theme.colors.textSecondary,
+        textAlign: 'center',
+        marginBottom: theme.spacing.md,
+        opacity: 0.8,
+      },
     });
   }, [theme, isSmallScreen, isTinyScreen]);
 
@@ -292,6 +302,26 @@ const PasscodeScreen: React.FC<PasscodeProps> = ({
         <View style={{ width: 40 }} />
       </View>
 
+      {/* Info banner for business profile users */}
+      {isBusiness && (
+        <View style={{
+          backgroundColor: theme.colors.primaryUltraLight,
+          padding: theme.spacing.md,
+          marginHorizontal: theme.spacing.md,
+          marginTop: theme.spacing.sm,
+          borderRadius: theme.borderRadius.sm,
+          borderLeftWidth: 3,
+          borderLeftColor: theme.colors.primary,
+        }}>
+          <Text style={{
+            color: theme.colors.textSecondary,
+            fontSize: theme.typography.fontSize.sm,
+          }}>
+            Note: This PIN is shared across all your profiles
+          </Text>
+        </View>
+      )}
+
       <View style={styles.passcodeContainer}>
         <Text style={styles.passcodeTitle}>
           {hasExistingPin
@@ -307,6 +337,11 @@ const PasscodeScreen: React.FC<PasscodeProps> = ({
               ? 'Enter a 6-digit passcode for your account.'
               : 'Re-enter your 6-digit passcode to confirm.'}
         </Text>
+
+        {/* Subtle "via @username" indicator for business profile switch */}
+        {isBusiness && personalUsername && (
+          <Text style={styles.viaCaption}>via @{personalUsername}</Text>
+        )}
 
         <View style={styles.pinPadContainer}>
           <PinPad

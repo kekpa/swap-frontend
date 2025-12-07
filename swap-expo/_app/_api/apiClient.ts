@@ -776,12 +776,13 @@ const clearProfileCache = async () => {
 
 // Function to set profile ID in request headers
 const setProfileId = (profileId: string | null) => {
+  console.log('🌐 [apiClient] setProfileId called:', profileId);
   if (profileId) {
     apiClient.defaults.headers.common["X-Profile-ID"] = profileId;
-    logger.debug(`Set X-Profile-ID header to ${profileId}`, "api");
+    console.log('🌐 [apiClient] ✅ Set X-Profile-ID header to:', profileId);
   } else {
     delete apiClient.defaults.headers.common["X-Profile-ID"];
-    logger.debug("Removed X-Profile-ID header", "api");
+    console.log('🌐 [apiClient] ❌ Removed X-Profile-ID header');
   }
 };
 

@@ -17,7 +17,7 @@ import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
 import { useKycStatusCritical, useKycStatus } from '../../../hooks-data/useKycQuery';
 import { useAuthContext } from '../../auth/context/AuthContext';
-import { useBiometricAvailability } from '../../../hooks-data/useBiometricAvailability';
+// Note: useBiometricAvailability removed - biometric is local-only, not tracked in backend
 import * as LocalAuthentication from 'expo-local-authentication';
 import { getTimelineForEntityType } from '../../../config/kycTimelines';
 
@@ -192,7 +192,7 @@ const VerifyYourIdentityScreen: React.FC = () => {
   );
 
   // Dynamic biometric availability check for iOS and Android
-  const { isAvailable: isBiometricAvailable, isLoading: isBiometricLoading } = useBiometricAvailability();
+  // Note: biometric availability hook removed - biometric is local-only, not tracked in backend
 
   // PROFESSIONAL: Dynamic verification status computation from timeline configuration
   // This adapts automatically to entity type (personal vs business)
@@ -212,14 +212,11 @@ const VerifyYourIdentityScreen: React.FC = () => {
       stepIndex: index,
     }));
 
-    // PROFESSIONAL FIX: Filter out biometric_setup step for devices without biometric hardware
-    // This prevents users from seeing a step they can never complete
-    if (!isBiometricAvailable && !isBiometricLoading) {
-      return allSteps.filter(step => step.id !== 'biometric_setup');
-    }
+    // Note: biometric_setup filter removed - biometric is no longer in KYC timeline
+    // Biometric is local-only, not tracked in backend KYC steps
 
     return allSteps;
-  }, [kycStatus, timelineConfig, isBiometricAvailable, isBiometricLoading]);
+  }, [kycStatus, timelineConfig]);
 
   // Find first incomplete step (active step)
   const activeStepIndex = useMemo(() => {
@@ -235,7 +232,6 @@ const VerifyYourIdentityScreen: React.FC = () => {
     hasVerificationStatus: !!verificationStatus,
     isLoading,
     error,
-    isBiometricAvailable,
     isStale,
     lastUpdated: lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'Never',
     cacheStatus: isStale ? '🔴 Stale' : '🟢 Fresh',
@@ -268,12 +264,9 @@ const VerifyYourIdentityScreen: React.FC = () => {
     }
   }, [route.params, sourceRoute, route.key, kycStatus, isStale, lastUpdated, isLoading]);
 
-  // PROFESSIONAL FIX: Auto-complete KYC for devices without biometric hardware
-  // When all visible steps (excluding biometric) are completed, automatically call backend
+  // Auto-complete KYC when all steps are completed
+  // Note: Biometric is local-only, not tracked in backend KYC steps
   useEffect(() => {
-    // Only process if biometric check is complete and not available
-    if (isBiometricLoading || isBiometricAvailable) return;
-
     // Check if all visible steps are completed
     const allCompleted = verificationStatus.every(step => step.isCompleted);
 
@@ -281,22 +274,22 @@ const VerifyYourIdentityScreen: React.FC = () => {
     const needsCompletion = kycStatus?.process?.overall_status === 'in_progress';
 
     if (allCompleted && needsCompletion && !isLoading) {
-      console.log('[VerifyYourIdentity] 🎯 All non-biometric steps completed - auto-completing KYC...');
+      console.log('[VerifyYourIdentity] 🎯 All KYC steps completed - completing KYC...');
 
-      // Call backend to complete KYC without biometric
+      // Call backend to complete KYC
       import('../../../_api/apiClient').then(({ default: apiClient }) => {
         apiClient.post('/kyc/complete-without-biometric', {})
           .then(() => {
-            console.log('[VerifyYourIdentity] ✅ KYC auto-completed for non-biometric device');
+            console.log('[VerifyYourIdentity] ✅ KYC completed');
             // Refresh status to show updated "Under Review" state
             refreshStatus();
           })
           .catch(error => {
-            console.error('[VerifyYourIdentity] ❌ Error auto-completing KYC:', error);
+            console.error('[VerifyYourIdentity] ❌ Error completing KYC:', error);
           });
       });
     }
-  }, [verificationStatus, isBiometricAvailable, isBiometricLoading, kycStatus?.process?.overall_status, isLoading]);
+  }, [verificationStatus, kycStatus?.process?.overall_status, isLoading]);
 
   const handleBack = () => {
     console.log(`[VerifyYourIdentityScreen] handleBack called. Navigating to Profile.`);

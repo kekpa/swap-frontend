@@ -166,31 +166,35 @@ export const useProfileSwitch = () => {
 
     // Handle successful profile switch with SURGICAL cache invalidation
     onSuccess: async (data, variables) => {
-      logger.info('[useProfileSwitch] ✅ Profile switch complete, updating app state...');
+      console.log('🔄 [useProfileSwitch] STEP 1: onSuccess started, new profile:', data.profile?.entityId);
 
       // Step 1: Capture OLD profileId BEFORE switch (for surgical invalidation)
       const oldProfileId = apiClient.getProfileId();
       const newProfileId = data.profile.entityId;
 
-      logger.debug('[useProfileSwitch] 🔄 Profile switch:', {
-        from: oldProfileId || 'none',
-        to: newProfileId,
+      console.log('🔄 [useProfileSwitch] STEP 2: Captured profileIds:', {
+        oldProfileId: oldProfileId || 'none',
+        newProfileId,
         profileType: data.profile.profileType,
         displayName: data.profile.displayName
       });
 
       // Step 2: Store new JWT tokens
+      console.log('🔄 [useProfileSwitch] STEP 3: About to update tokens...');
       tokenManager.setAccessToken(data.access_token);
       tokenManager.setRefreshToken(data.refresh_token);
+      console.log('🔄 [useProfileSwitch] STEP 4: Tokens updated');
 
       // Step 3: Update API client with new profile ID
+      console.log('🔄 [useProfileSwitch] STEP 5: About to update API headers...');
       apiClient.setProfileId(newProfileId);
-      logger.debug('[useProfileSwitch] ✅ Updated API client with new profileId');
+      console.log('🔄 [useProfileSwitch] STEP 6: API headers updated, profileId:', newProfileId);
 
       // Step 4: SURGICAL invalidation - only invalidate old profile's queries
       // This prevents flashing and maintains smooth UX by not touching unrelated queries
+      console.log('🔄 [useProfileSwitch] STEP 7: About to invalidate queries...');
       if (oldProfileId) {
-        logger.debug('[useProfileSwitch] 🔄 Performing SURGICAL cache invalidation for old profile...');
+        console.log('🔄 [useProfileSwitch] STEP 7a: Performing SURGICAL cache invalidation for old profile:', oldProfileId);
 
         await queryClient.invalidateQueries({
           predicate: (query) => {
@@ -201,37 +205,39 @@ export const useProfileSwitch = () => {
                    key.includes(oldProfileId);
 
             if (shouldInvalidate) {
-              logger.debug('[useProfileSwitch] 🗑️ Invalidating query:', key);
+              console.log('🔄 [useProfileSwitch] 🗑️ Invalidating query:', key);
             }
 
             return shouldInvalidate;
           }
         });
 
-        logger.info('[useProfileSwitch] ✅ Surgical invalidation complete for old profile');
+        console.log('🔄 [useProfileSwitch] STEP 7b: Surgical invalidation complete');
       } else {
         // Fallback: If we don't have old profileId, do full invalidation
-        logger.warn('[useProfileSwitch] ⚠️ No old profileId found, performing full invalidation');
+        console.log('🔄 [useProfileSwitch] STEP 7c: No old profileId, performing FULL invalidation');
         await queryClient.invalidateQueries();
       }
 
       // Step 5: Clear local database for old profile (privacy & data isolation)
+      console.log('🔄 [useProfileSwitch] STEP 8: Clearing local DB for old profile...');
       if (oldProfileId) {
-        logger.debug('[useProfileSwitch] 🗑️ Clearing local DB for old profile...');
         await clearProfileLocalDB(oldProfileId);
-        logger.info('[useProfileSwitch] ✅ Local DB cleared for old profile');
+        console.log('🔄 [useProfileSwitch] STEP 8a: Local DB cleared for old profile');
       }
 
       // Step 6: Refetch critical data for NEW profile
-      logger.debug('[useProfileSwitch] 🔄 Refetching data for new profile...');
+      console.log('🔄 [useProfileSwitch] STEP 9: Refetching data for new profile...');
       await queryClient.refetchQueries({
         queryKey: ['profile', newProfileId]
       });
       await queryClient.refetchQueries({
         queryKey: queryKeys.availableProfiles
       });
+      console.log('🔄 [useProfileSwitch] STEP 9a: Refetch complete');
 
       // Step 7: Emit profile switch event for any listeners
+      console.log('🔄 [useProfileSwitch] STEP 10: Emitting profile_switched event');
       eventEmitter.emit('profile_switched', {
         from: oldProfileId || 'unknown',
         to: newProfileId,
@@ -240,7 +246,7 @@ export const useProfileSwitch = () => {
         timestamp: new Date().toISOString()
       });
 
-      logger.info('[useProfileSwitch] ✅ Profile switch complete! App refreshed with new context');
+      console.log('🔄 [useProfileSwitch] STEP 11: ✅ Profile switch complete! App refreshed with new context');
     },
 
     // Handle profile switch failure

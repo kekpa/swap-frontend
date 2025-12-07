@@ -26,6 +26,7 @@ import { useUserProfile } from '../../hooks-data/useUserProfile';
 import { useBiometricAvailability } from '../../hooks-data/useBiometricAvailability';
 import useAvailableProfiles from '../auth/hooks/useAvailableProfiles';
 import ProfileSwitcherModal from '../../components/ProfileSwitcherModal';
+import { tokenManager } from '../../services/token/TokenManager';
 
 // Define a type for the route params ProfileScreen might receive when opened as ProfileModal
 // These params are passed to ProfileModal, not ProfileStackParamList for the 'Profile' screen itself.
@@ -603,14 +604,21 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
     // Navigate to SignIn screen with profile switch mode using root navigator
     if (rootNavigation) {
+      // Get identifier BEFORE navigation (while user is still logged in)
+      const sourceIdentifier = tokenManager.getAuthUserIdentifier();
+
       rootNavigation.navigate('Auth', {
         screen: 'SignIn',
         params: {
           mode: 'profileSwitch',
           targetProfileId: profile.profileId,
           targetEntityId: profile.entityId,
+          targetDisplayName: profile.displayName,  // For UX: show target profile name
+          targetProfileType: profile.type,          // For UX: 'personal' | 'business'
           sourceRoute: 'Profile',
           sourceUserId: user?.user_id, // Pass source user ID for validation
+          sourceUsername: user?.username, // For "via @username" display
+          sourceIdentifier, // Phone number for PIN auth (captured while still logged in)
         },
       });
     } else {
@@ -829,14 +837,14 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
               )}
             </View>
             <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+              <View style={{ marginBottom: 4 }}>
                 <Text style={[styles.userName, { color: theme.colors.textPrimary, marginBottom: 0 }]}>
-                {user?.businessName ? user.businessName : (user?.firstName || user?.lastName ? `${user?.firstName || ''} ${user?.lastName || ''}`.trim() : (user?.email || 'User'))}
-              </Text>
+                  {user?.businessName ? user.businessName : (user?.firstName || user?.lastName ? `${user?.firstName || ''} ${user?.lastName || ''}`.trim() : (user?.email || 'User'))}
+                </Text>
                 {actualOverallStatus === 'completed' && (
-                  <View style={styles.verifiedBadge}>
-                      <Ionicons name="shield-checkmark" size={14} color={theme.colors.primary} />
-                      <Text style={styles.verifiedText}>Verified</Text>
+                  <View style={[styles.verifiedBadge, { marginLeft: 0, marginTop: 4, alignSelf: 'flex-start' }]}>
+                    <Ionicons name="shield-checkmark" size={14} color={theme.colors.primary} />
+                    <Text style={styles.verifiedText}>Verified</Text>
                   </View>
                 )}
               </View>

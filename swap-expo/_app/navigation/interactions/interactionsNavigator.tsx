@@ -1,6 +1,7 @@
 import React from "react";
 import { createStackNavigator } from "@react-navigation/stack";
 import InteractionsHistoryScreen from "../../features/interactions/InteractionsHistory2";
+import ArchivedInteractionsScreen from "../../features/interactions/ArchivedInteractions";
 import { AccountProvider } from "../../features/interactions/context/AccountContext";
 import ReferralProgramScreen from "../../features/interactions/referralsTransfers/ReferralProgram";
 import { CardStyleInterpolators, TransitionPresets } from "@react-navigation/stack";
@@ -30,6 +31,7 @@ export type InteractionsStackParamList = {
     onBack?: () => void;
     onInviteFriends?: () => void;
   };
+  ArchivedInteractions: undefined;
   // Add other transfer-related screens here
 };
 
@@ -52,6 +54,13 @@ export default function InteractionsNavigator() {
         <Stack.Screen
           name="ReferralProgram"
           component={ReferralProgramScreen}
+          options={{
+            cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+          }}
+        />
+        <Stack.Screen
+          name="ArchivedInteractions"
+          component={ArchivedInteractionsScreen}
           options={{
             cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
           }}

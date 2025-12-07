@@ -25,11 +25,13 @@ jest.mock('../../utils/logger');
 import * as SecureStore from 'expo-secure-store';
 import AccountsManager, { Account, AccountsData } from '../AccountsManager';
 
-// Test data
+// Test data - Updated with username/businessName for Instagram-style display
 const testAccount1: Account = {
   userId: 'user-001',
   email: 'user1@example.com',
   phone: '+1234567890',
+  username: 'johndoe', // Personal profile has username
+  // businessName: undefined - personal profile
   profileId: 'profile-001',
   profileType: 'personal',
   entityId: 'entity-001',
@@ -44,10 +46,12 @@ const testAccount2: Account = {
   userId: 'user-002',
   email: 'user2@example.com',
   phone: '+0987654321',
+  // username: undefined - business profile
+  businessName: 'Jane Business LLC', // Business profile has businessName
   profileId: 'profile-002',
   profileType: 'business',
   entityId: 'entity-002',
-  displayName: 'Jane Business',
+  displayName: 'Jane Business LLC',
   avatarUrl: 'https://example.com/avatar2.jpg',
   accessToken: 'access-token-2',
   refreshToken: 'refresh-token-2',
@@ -150,7 +154,7 @@ describe('AccountsManager', () => {
 
       expect(current).not.toBeNull();
       expect(current?.userId).toBe('user-002');
-      expect(current?.displayName).toBe('Jane Business');
+      expect(current?.displayName).toBe('Jane Business LLC');
     });
 
     it('should return null if current user not in accounts', async () => {
@@ -681,6 +685,42 @@ describe('AccountsManager', () => {
 
       const current = await AccountsManager.getCurrentAccount();
       expect(current?.profileType).toBe('business');
+    });
+
+    it('should preserve username field for personal accounts', async () => {
+      await AccountsManager.addAccount(testAccount1);
+
+      const current = await AccountsManager.getCurrentAccount();
+      expect(current?.username).toBe('johndoe');
+      expect(current?.businessName).toBeUndefined();
+    });
+
+    it('should preserve businessName field for business accounts', async () => {
+      await AccountsManager.addAccount(testAccount2);
+
+      const current = await AccountsManager.getCurrentAccount();
+      expect(current?.businessName).toBe('Jane Business LLC');
+      expect(current?.username).toBeUndefined();
+    });
+
+    it('should handle account without optional username/businessName', async () => {
+      const minimalAccount: Account = {
+        userId: 'minimal-user',
+        profileId: 'profile',
+        profileType: 'personal',
+        entityId: 'entity',
+        displayName: 'Minimal User',
+        accessToken: 'token',
+        refreshToken: 'refresh',
+        addedAt: Date.now(),
+        // No email, phone, username, businessName, avatarUrl
+      };
+
+      await AccountsManager.addAccount(minimalAccount);
+
+      const data = await AccountsManager.getAccountsData();
+      expect(data?.accounts[0].username).toBeUndefined();
+      expect(data?.accounts[0].businessName).toBeUndefined();
     });
   });
 

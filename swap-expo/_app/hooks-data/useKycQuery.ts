@@ -55,9 +55,8 @@ export interface KycStatus {
   phone_verification_completed: boolean;
   document_verification_completed: boolean;
   selfie_completed: boolean;
-  security_setup_completed: boolean;
-  biometric_setup_completed: boolean;
-  passcode_setup: boolean;
+  passcode_setup_completed: boolean;
+  passcode_setup: boolean; // Legacy flag
 
   // Contact info
   email?: string;
@@ -72,8 +71,7 @@ export interface KycStatus {
   phone_verification_completed_at?: string;
   document_verification_completed_at?: string;
   selfie_completed_at?: string;
-  security_setup_completed_at?: string;
-  biometric_setup_completed_at?: string;
+  passcode_setup_completed_at?: string;
 
   // Step details
   steps: {
@@ -83,11 +81,13 @@ export interface KycStatus {
     phone_verification: KycStepStatus;
     document_verification: KycStepStatus;
     selfie: KycStepStatus;
-    security_setup: KycStepStatus;
-    biometric_setup: KycStepStatus;
+    passcode_setup: KycStepStatus;
+    // Business steps
     business_info?: KycStepStatus;
+    business_owner_info?: KycStepStatus;
+    business_documents?: KycStepStatus;
+    business_address?: KycStepStatus;
     business_verification?: KycStepStatus;
-    business_security?: KycStepStatus;
   };
 
   // Process info
@@ -617,3 +617,57 @@ export const useTransactionLimitCheck = (entityId?: string, amount: number = 0) 
 };
 
 export default useKycQuery;
+
+/**
+ * Navigation-free KYC status hook for use OUTSIDE NavigationContainer
+ *
+ * Use this in components that render before/outside NavigationContainer (e.g., AppLockHandler)
+ * This is identical to useKycStatus but WITHOUT useFocusEffect (which requires navigation context)
+ *
+ * @example
+ * // In AppLockHandler (outside NavigationContainer):
+ * const { data: kycData } = useKycStatusDirect(authContext.user?.entityId);
+ * if (kycData?.passcode_setup_completed) { ... }
+ */
+export const useKycStatusDirect = (entityId?: string) => {
+  const profileId = useCurrentProfileId();
+  const targetEntityId = entityId || '';
+
+  return useQuery({
+    queryKey: queryKeys.kycStatus(profileId || ''),
+    queryFn: async (): Promise<KycStatus | null> => {
+      if (!targetEntityId || !profileId) {
+        return null;
+      }
+
+      try {
+        // Check local cache first (offline-first pattern)
+        const localData = await userRepository.getKycStatus(profileId);
+        if (localData) {
+          logger.debug('[useKycStatusDirect] Using cached KYC data');
+          return localData as KycStatus;
+        }
+
+        // Fetch from backend
+        logger.debug('[useKycStatusDirect] Fetching KYC status from backend');
+        const response = await apiClient.get<KycStatus>('/kyc/verification-status', {
+          params: { entityId: targetEntityId },
+        });
+
+        // Cache locally for future use
+        if (response.data) {
+          await userRepository.saveKycStatus({ ...response.data, id: targetEntityId, profile_id: profileId });
+        }
+
+        return response.data;
+      } catch (error) {
+        logger.error('[useKycStatusDirect] Failed to fetch KYC status:', error);
+        throw error;
+      }
+    },
+    enabled: !!targetEntityId && !!profileId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
+    retry: 2,
+  });
+};

@@ -95,21 +95,14 @@ export const PERSONAL_TIMELINE: EntityTimelineConfig = {
       navigationParams: { returnToTimeline: true },
     },
     {
-      id: 'security_setup',
-      title: 'Setup security',
+      id: 'passcode_setup',
+      title: 'Setup passcode',
       description: 'Create a secure passcode for your account',
-      completionFlag: 'security_setup_completed',
+      completionFlag: 'passcode_setup_completed',
       navigationRoute: 'Passcode',
       navigationParams: { isKycFlow: true, returnToTimeline: true },
     },
-    {
-      id: 'biometric_setup',
-      title: 'Biometric setup',
-      description: 'Enable biometric authentication',
-      completionFlag: 'biometric_setup_completed',
-      navigationRoute: 'BiometricSetup',
-      navigationParams: { returnToTimeline: true },
-    },
+    // Note: biometric_setup removed - biometric is local-only, not tracked in backend KYC
   ],
 };
 
@@ -167,22 +160,8 @@ export const BUSINESS_TIMELINE: EntityTimelineConfig = {
       navigationRoute: 'BusinessRegistrationDocuments',
       navigationParams: { returnToTimeline: true },
     },
-    {
-      id: 'setup_security',
-      title: 'Security setup',
-      description: 'Set up passcode for your business account',
-      completionFlag: 'setup_security_completed', // ✅ Added missing security step (2025-11-23)
-      navigationRoute: 'Passcode',
-      navigationParams: { isKycFlow: true, isBusiness: true, returnToTimeline: true },
-    },
-    {
-      id: 'biometric_setup',
-      title: 'Biometric setup',
-      description: 'Enable biometric authentication for business account',
-      completionFlag: 'biometric_setup_completed',
-      navigationRoute: 'BiometricSetup',
-      navigationParams: { returnToTimeline: true, isBusiness: true },
-    },
+    // Note: passcode_setup removed - business profiles use the personal profile's PIN (shared auth_user)
+    // Note: biometric_setup removed - biometric is local-only, not tracked in backend KYC
   ],
 };
 

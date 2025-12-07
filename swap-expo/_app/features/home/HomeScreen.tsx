@@ -77,6 +77,15 @@ export default function HomeScreen() {
 
   // Get header initials for avatar
   const getHeaderInitials = () => {
+    // DEBUG: Log user data when getting initials
+    console.log('🏠 [HomeScreen] getHeaderInitials called, user:', {
+      entityId: user?.entityId,
+      profileId: user?.profileId,
+      firstName: user?.firstName,
+      lastName: user?.lastName,
+      businessName: user?.businessName
+    });
+
     // For business users, use business name initials
     if (user?.businessName) {
       const words = user.businessName.split(' ').filter(word => word.length > 0);

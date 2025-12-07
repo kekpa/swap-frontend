@@ -13,6 +13,7 @@ import logger from '../utils/logger';
 import { currencyWalletsRepository, CurrencyWallet } from '../localdb/CurrencyWalletsRepository';
 import { WalletBalance } from '../types/wallet.types';
 import { useCurrentProfileId } from '../hooks/useCurrentProfileId';
+import { useAuthContext } from '../features/auth/context/AuthContext';
 
 interface UseBalancesOptions {
   enabled?: boolean;
@@ -126,10 +127,12 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
   const { enabled = true } = options;
   const queryClient = useQueryClient();
   const profileId = useCurrentProfileId();
+  const { isProfileSwitching } = useAuthContext();
 
   // PROFESSIONAL FIX: Validate entityId AND profileId AND check if enabled to prevent unauthorized API calls
+  // CRITICAL: Also check isProfileSwitching to prevent stale queries during profile switch
   const isValidEntityId = entityId && entityId.trim().length > 0 && entityId !== 'undefined' && entityId !== 'null';
-  const shouldExecute = enabled && isValidEntityId && !!profileId;
+  const shouldExecute = enabled && isValidEntityId && !!profileId && !isProfileSwitching;
 
   if (!isValidEntityId) {
     logger.debug(`[useBalances] ⏸️ SKIPPING: Invalid entityId "${entityId}" - waiting for user data to load`);
@@ -139,15 +142,22 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
     logger.debug(`[useBalances] ⏸️ SKIPPING: Hook disabled - likely due to authentication state`);
   }
 
+  if (isProfileSwitching) {
+    logger.debug(`[useBalances] ⏸️ SKIPPING: Profile switch in progress - preventing stale query`);
+  }
+
   // WhatsApp-style fetchBalances function
   const fetchBalances = async (): Promise<WalletBalance[]> => {
+    // DEBUG: Log entityId at query execution time
+    console.log('💰 [useBalances] queryFn executing with:', { entityId, profileId, isValidEntityId, shouldExecute });
+
     // CRITICAL: Double-check entityId before making API calls
     if (!isValidEntityId) {
-      logger.debug(`[useBalances] ❌ ABORT: Cannot fetch balances with invalid entityId "${entityId}"`);
+      console.log('💰 [useBalances] ❌ ABORT: Invalid entityId:', entityId);
       return [];
     }
-    
-    logger.debug(`[useBalances] 🚀 WHATSAPP-STYLE: Starting balance fetch for entity: ${entityId}`);
+
+    console.log('💰 [useBalances] 🚀 Starting balance fetch for entity:', entityId);
   
     // STEP 1: ALWAYS load from local cache first (INSTANT display like WhatsApp)
     const cachedBalances = await currencyWalletsRepository.getAllCurrencyWallets();

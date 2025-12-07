@@ -164,9 +164,15 @@ export class ProfileSwitchOrchestrator {
   async switchProfile(options: ProfileSwitchOptions): Promise<ProfileSwitchResult> {
     const { targetProfileId, requireBiometric = true, apiClient, authContext, queryClient, availableProfiles } = options;
 
+    console.log('🎭 [ProfileSwitchOrchestrator] switchProfile() called', {
+      targetProfileId,
+      currentUser: authContext?.user?.entityId,
+      requireBiometric
+    });
+
     // Prevent concurrent switches
     if (this.isSwitching) {
-      logger.warn('[ProfileSwitchOrchestrator] ⚠️ Profile switch already in progress');
+      console.log('🎭 [ProfileSwitchOrchestrator] ⚠️ Profile switch already in progress');
       return {
         success: false,
         error: 'Profile switch already in progress',
@@ -178,7 +184,11 @@ export class ProfileSwitchOrchestrator {
       this.isSwitching = true;
       this.state = ProfileSwitchState.IDLE;
 
-      logger.info('[ProfileSwitchOrchestrator] 🚀 Starting profile switch', 'profile_switch');
+      // CRITICAL: Set isProfileSwitching flag to prevent stale queries during switch
+      authContext.setIsProfileSwitching?.(true);
+      console.log('🎭 [ProfileSwitchOrchestrator] 🔒 isProfileSwitching = true (queries disabled)');
+
+      console.log('🎭 [ProfileSwitchOrchestrator] STEP 0: Starting profile switch');
 
       // ============================================================================
       // OPTIMIZATION: Non-blocking token refresh (if needed)
@@ -193,10 +203,14 @@ export class ProfileSwitchOrchestrator {
       // ============================================================================
       // STEP 1: Capture current state (snapshot for rollback)
       // ============================================================================
+      console.log('🎭 [ProfileSwitchOrchestrator] STEP 1: Capturing snapshot...');
       this.updateProgress(ProfileSwitchState.IDLE, 'Preparing profile switch...');
       this.snapshot = await this.captureSnapshot(authContext);
 
-      logger.debug('[ProfileSwitchOrchestrator] ✅ Snapshot captured', 'profile_switch');
+      console.log('🎭 [ProfileSwitchOrchestrator] STEP 1 DONE: Snapshot captured', {
+        oldProfileId: this.snapshot?.profileId,
+        oldEntityId: this.snapshot?.entityId
+      });
 
       // ============================================================================
       // PHASE 3: OPTIMISTIC UI UPDATE (Instant avatar/name/data switch - 0ms lag)
@@ -307,25 +321,43 @@ export class ProfileSwitchOrchestrator {
       // ============================================================================
       // STEP 4: Update tokens (ATOMIC)
       // ============================================================================
+      console.log('🎭 [ProfileSwitchOrchestrator] STEP 4: Updating tokens atomically...');
       this.state = ProfileSwitchState.TOKEN_UPDATE_PENDING;
       this.updateProgress(this.state, 'Updating credentials...');
 
       await this.atomicTokenUpdate(apiResponse, apiClient);
 
-      logger.debug('[ProfileSwitchOrchestrator] ✅ Tokens updated atomically');
+      console.log('🎭 [ProfileSwitchOrchestrator] STEP 4 DONE: Tokens updated atomically');
 
       // ============================================================================
       // STEP 5: Fetch new profile data
       // ============================================================================
+      console.log('🎭 [ProfileSwitchOrchestrator] STEP 5: Fetching profile data...');
       this.state = ProfileSwitchState.DATA_FETCH_PENDING;
       this.updateProgress(this.state, 'Loading profile...');
 
       const newProfile = await this.fetchProfileData(apiClient);
 
-      logger.debug('[ProfileSwitchOrchestrator] ✅ Profile data fetched', 'profile_switch');
+      console.log('🎭 [ProfileSwitchOrchestrator] STEP 5 DONE: Profile data fetched', {
+        newProfileId: newProfile?.id,
+        firstName: newProfile?.first_name,
+        lastName: newProfile?.last_name,
+        businessName: newProfile?.business_name,
+        profileType: newProfile?.type
+      });
 
       // ============================================================================
-      // STEP 6 & 7: Parallel operations for better performance
+      // STEP 6: Update AuthContext FIRST (CRITICAL: before cache clearing)
+      // This ensures hooks have new profile IDs when TanStack Query refetches
+      // ============================================================================
+      console.log('🎭 [ProfileSwitchOrchestrator] STEP 6: Updating AuthContext (CRITICAL - before cache clear)...');
+      await this.updateAuthContext(authContext, newProfile);
+
+      console.log('🎭 [ProfileSwitchOrchestrator] STEP 6 DONE: AuthContext updated');
+
+      // ============================================================================
+      // STEP 7: Parallel operations for better performance
+      // Now safe to clear caches - refetches will use new profile IDs from AuthContext
       // ============================================================================
       this.state = ProfileSwitchState.CACHE_CLEAR_PENDING;
       this.updateProgress(this.state, 'Finalizing switch...');
@@ -357,16 +389,69 @@ export class ProfileSwitchOrchestrator {
       ];
 
       // Wait for all parallel operations to complete
-      await Promise.allSettled(parallelOperations);
+      const results = await Promise.allSettled(parallelOperations);
 
-      logger.debug('[ProfileSwitchOrchestrator] ✅ Parallel operations completed (cache + WebSocket)');
+      // Check for failures - if any cache operation failed, go NUCLEAR
+      // Industry best practice: Never leave partial state, clear everything and refetch fresh
+      const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
+      if (failures.length > 0 && queryClient) {
+        const reasons = failures.map(f => String(f.reason)).join(', ');
+        logger.warn(`[ProfileSwitchOrchestrator] ⚠️ Surgical cache clear failed: ${reasons}`);
+        logger.info('[ProfileSwitchOrchestrator] 🔄 Going NUCLEAR - clearing ALL cached data for consistency');
+
+        try {
+          // NUCLEAR: Clear ALL TanStack Query cache
+          queryClient.clear();
+          logger.debug('[ProfileSwitchOrchestrator] ✅ Nuclear cache clear completed - all data will be fetched fresh');
+        } catch (nuclearError) {
+          logger.error('[ProfileSwitchOrchestrator] ❌ Nuclear cache clear failed:', nuclearError);
+          // Continue anyway - hooks will fetch fresh data on next render
+        }
+      }
+
+      console.log('🎭 [ProfileSwitchOrchestrator] STEP 7 DONE: Cache clearing completed');
+      logger.debug('[ProfileSwitchOrchestrator] ✅ Cache operations completed (cache + WebSocket)');
 
       // ============================================================================
-      // STEP 7: Update AuthContext (after cache operations)
+      // STEP 8: Update PIN storage for new profile (Instagram-style multi-profile)
       // ============================================================================
-      await this.updateAuthContext(authContext, newProfile);
+      try {
+        const { storeProfilePinData, setLastActiveProfile } = await import('../utils/pinUserStorage');
 
-      logger.debug('[ProfileSwitchOrchestrator] ✅ AuthContext updated');
+        // ARCHITECTURE: All profiles (personal + business) belong to the SAME auth user
+        // Phone is the primary identifier stored in JWT - consistent across all profiles
+        // Business profiles share auth user with personal profile
+        const identifier = tokenManager.getAuthUserIdentifier();
+
+        console.log('🎭 [ProfileSwitchOrchestrator] STEP 8: Storing PIN data for profile', {
+          profileId: newProfile.id,
+          profileType: newProfile.type,
+          identifier: identifier ? `${identifier.slice(0, 5)}...` : 'MISSING',
+        });
+
+        if (!identifier) {
+          logger.warn('[ProfileSwitchOrchestrator] ⚠️ Cannot store PIN data - no phone in JWT');
+        } else {
+          await storeProfilePinData(newProfile.id, {
+            identifier,
+            username: newProfile.type === 'personal' ? newProfile.username : undefined,
+            businessName: newProfile.type === 'business' ? newProfile.business_name : undefined,
+            displayName: newProfile.type === 'business'
+              ? newProfile.business_name
+              : `${newProfile.first_name} ${newProfile.last_name}`,
+            profileType: newProfile.type === 'business' ? 'business' : 'personal',
+            avatarUrl: newProfile.avatar_url || newProfile.logo_url,
+          });
+
+          logger.debug('[ProfileSwitchOrchestrator] ✅ PIN data stored for profile');
+        }
+
+        await setLastActiveProfile(newProfile.id);
+
+        logger.debug('[ProfileSwitchOrchestrator] ✅ Last active profile updated');
+      } catch (pinError: any) {
+        logger.warn('[ProfileSwitchOrchestrator] ⚠️ PIN data update failed (non-critical):', pinError);
+      }
 
       // ============================================================================
       // SUCCESS
@@ -403,6 +488,9 @@ export class ProfileSwitchOrchestrator {
 
     } finally {
       this.isSwitching = false;
+      // CRITICAL: Reset isProfileSwitching flag to re-enable queries
+      authContext.setIsProfileSwitching?.(false);
+      console.log('🎭 [ProfileSwitchOrchestrator] 🔓 isProfileSwitching = false (queries enabled)');
     }
   }
 
@@ -478,6 +566,14 @@ export class ProfileSwitchOrchestrator {
       // Using apiClient.setAccessToken() ensures both in-memory cache and axios defaults are synced
       apiClient.setAccessToken(apiResponse.access_token);
       apiClient.setRefreshToken(apiResponse.refresh_token);
+
+      // CRITICAL: Update X-Profile-ID header with new profileId from JWT
+      // Without this, backend API calls use old profile context and switch fails
+      const newProfileId = tokenManager.getCurrentProfileId();
+      if (newProfileId) {
+        apiClient.setProfileId(newProfileId);
+        logger.debug('[ProfileSwitchOrchestrator] ✅ X-Profile-ID header updated:', newProfileId);
+      }
 
       logger.debug('[ProfileSwitchOrchestrator] ✅ In-memory tokens and axios headers updated');
 
@@ -731,6 +827,13 @@ export class ProfileSwitchOrchestrator {
       }
       if (this.snapshot.refreshToken) {
         tokenManager.setRefreshToken(this.snapshot.refreshToken);
+      }
+
+      // CRITICAL: Restore X-Profile-ID header
+      // Without this, API calls use new profile context but old tokens = mismatch
+      if (this.snapshot.profileId) {
+        apiClient.setProfileId(this.snapshot.profileId);
+        logger.debug('[ProfileSwitchOrchestrator] ✅ X-Profile-ID header restored:', this.snapshot.profileId);
       }
 
       // Restore AuthContext

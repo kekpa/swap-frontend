@@ -73,7 +73,7 @@ export const KYC_PATHS = {
   // Other KYC endpoints with hyphen convention
   VERIFY_PHONE: '/kyc/phone-verify',
   // VERIFY_EMAIL: '/kyc/email-verify', // Email verification disabled for Haiti market
-  BIOMETRIC_SETUP: '/kyc/biometric-setup',
+  // BIOMETRIC_SETUP: removed - biometric is local-only, not tracked in backend
   REQUEST_PHONE_CHANGE: '/kyc/phone-request-change',
   ADMIN: {
     PENDING: '/kyc/admin/pending',
@@ -147,7 +147,10 @@ export const WALLET_PATHS = {
 export const INTERACTION_PATHS = {
   LIST: '/interactions',
   RECENT: '/interactions/recent',
+  ARCHIVED: '/interactions/archived',
   DETAILS: (id: string) => `/interactions/${id}`,
+  DELETE: (id: string) => `/interactions/${id}`,
+  UNARCHIVE: (id: string) => `/interactions/${id}/unarchive`,
   CREATE: '/interactions',
   DIRECT: (profileId: string) => `/interactions/direct/${profileId}`,
   MESSAGES: (interactionId: string) => `/interactions/${interactionId}/messages`,

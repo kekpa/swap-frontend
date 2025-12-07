@@ -36,7 +36,8 @@ interface JwtPayload {
   jti: string;              // JWT ID
   iat: number;              // Issued at (timestamp)
   exp: number;              // Expiration (timestamp)
-  username?: string;
+  username?: string;        // For display (@username)
+  phone: string;            // Primary identifier for authentication (PIN, password, biometric)
 }
 
 /**
@@ -46,6 +47,8 @@ interface TokenMetadata {
   token: string;
   profileId: string;
   entityId: string;
+  username?: string;        // For display (@username)
+  phone: string;            // Primary identifier for authentication
   expiresAt: number;        // Unix timestamp (seconds)
   issuedAt: number;         // Unix timestamp (seconds)
 }
@@ -299,6 +302,15 @@ class TokenManager {
   }
 
   /**
+   * Get auth user's phone number from JWT (SYNCHRONOUS)
+   * This is the primary identifier for authentication (PIN, password, biometric).
+   * Phone is consistent across all profiles (personal + business).
+   */
+  getAuthUserIdentifier(): string | null {
+    return this.accessTokenCache?.phone || null;
+  }
+
+  /**
    * Check if current token should be refreshed
    */
   shouldRefreshToken(metadata: TokenMetadata = this.accessTokenCache!): boolean {
@@ -361,6 +373,8 @@ class TokenManager {
         token,
         profileId: decoded.profile_id,
         entityId: decoded.entity_id,
+        username: decoded.username,  // For display (@username)
+        phone: decoded.phone,        // Primary identifier for authentication
         expiresAt: decoded.exp,
         issuedAt: decoded.iat,
       };

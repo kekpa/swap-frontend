@@ -314,6 +314,12 @@ class AuthStateMachine {
    * Professional state transition method
    */
   async transition(event: AuthEvent, context: AuthTransitionContext): Promise<boolean> {
+    console.log('🔐 [AuthStateMachine] transition() called:', {
+      event,
+      currentState: this.stateData.currentState,
+      isTransitioning: this.isTransitioning
+    });
+
     if (this.isTransitioning) {
       logger.warn('[AuthStateMachine] ⚠️ Transition already in progress, queuing event', {
         event,
@@ -329,6 +335,7 @@ class AuthStateMachine {
     );
 
     if (!validTransition) {
+      console.log('🔐 [AuthStateMachine] ⚠️ Invalid transition - no valid path found');
       logger.warn('[AuthStateMachine] ⚠️ Invalid transition attempted', {
         event,
         currentState: this.stateData.currentState,
@@ -343,6 +350,7 @@ class AuthStateMachine {
       const previousState = this.stateData.currentState;
       const newState = validTransition.to;
 
+      console.log('🔐 [AuthStateMachine] ✅ State transition:', { from: previousState, to: newState, event });
       logger.debug('[AuthStateMachine] 🔄 State transition', {
         event,
         from: previousState,

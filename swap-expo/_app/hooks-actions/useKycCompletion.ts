@@ -19,7 +19,6 @@ import { userRepository } from '../localdb/UserRepository';
 import { networkService } from '../services/NetworkService';
 import { useAuthContext } from '../features/auth/context/AuthContext';
 import { kycOfflineQueue } from '../services/KycOfflineQueue';
-import { useBiometricAvailability } from '../hooks-data/useBiometricAvailability';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -37,8 +36,8 @@ export type KycStepType =
   | 'confirm_phone'
   | 'personal_info'
   | 'take_selfie'
-  | 'setup_security'
-  | 'biometric_setup'
+  | 'passcode_setup'
+  // Note: biometric_setup removed - biometric is local-only, not tracked in backend
   // Business KYC steps (verified with backend)
   | 'business_info'
   | 'business_address'
@@ -61,7 +60,6 @@ interface KycCompletionOptions {
 export const useKycCompletion = () => {
   const navigation = useNavigation<NavigationProp>();
   const { user } = useAuthContext();
-  const { isAvailable: isBiometricAvailable } = useBiometricAvailability();
 
   /**
    * Get API endpoint for KYC step
@@ -72,8 +70,8 @@ export const useKycCompletion = () => {
    * - POST /kyc/team-members (line 1177): Add admin team member or beneficial owner
    * - POST /kyc/phone-verify (line 396): Phone verification
    * - POST /kyc/selfie (line 102): Selfie upload
-   * - POST /kyc/biometric-setup (line 464): Biometric setup
    * - POST /auth/store-passcode: Security/passcode setup
+   * Note: biometric_setup removed - biometric is local-only, not tracked in backend
    */
   const getApiEndpoint = useCallback((stepType: KycStepType): string => {
     const endpointMap: Record<KycStepType, string> = {
@@ -81,8 +79,7 @@ export const useKycCompletion = () => {
       confirm_phone: '/kyc/phone-verify',
       personal_info: '/kyc/identity', // Universal endpoint
       take_selfie: '/kyc/selfie',
-      setup_security: '/auth/store-passcode',
-      biometric_setup: '/kyc/biometric-setup',
+      passcode_setup: '/auth/store-passcode',
 
       // Business KYC endpoints (use universal endpoints)
       business_info: '/kyc/identity', // ✅ Same as personal - verified line 206
@@ -107,9 +104,7 @@ export const useKycCompletion = () => {
     const stepDependencies: Partial<Record<KycStepType, string[]>> = {
       confirm_phone: ['auth', 'phone'],
       personal_info: ['profile', 'user'],
-      // upload_id: removed - documents handle cache invalidation directly
-      setup_security: ['auth', 'security'],
-      biometric_setup: ['auth', 'biometric'],
+      passcode_setup: ['auth', 'security'],
       business_info: ['business'],
     };
 
@@ -121,18 +116,18 @@ export const useKycCompletion = () => {
 
   /**
    * Get next KYC step after current completion
+   * Note: passcode_setup is now the final KYC step (biometric is local-only)
    */
   const getNextKycStep = useCallback((completedStep: KycStepType): string | null => {
     const stepFlow: Record<string, string | null> = {
       'confirm_phone': 'PersonalInfoFlow',
       'personal_info': 'UploadId', // Document upload
       'take_selfie': 'Passcode',
-      'setup_security': isBiometricAvailable ? 'BiometricSetup' : null, // Skip biometric if not available
-      'biometric_setup': null, // Final step
+      'passcode_setup': null, // Final KYC step (biometric is local-only, not tracked)
     };
 
     return stepFlow[completedStep] || null;
-  }, [isBiometricAvailable]);
+  }, []);
 
   /**
    * Professional navigation handler with direct next step navigation
@@ -143,22 +138,6 @@ export const useKycCompletion = () => {
     // NEW: Direct next step navigation for better UX
     if (options.returnToTimeline && completedStep) {
       const nextStep = getNextKycStep(completedStep);
-
-      // Special handling for security setup completion without biometrics
-      if (completedStep === 'setup_security' && !isBiometricAvailable && !nextStep) {
-        logger.debug('[useKycCompletion] 🎯 No biometric capability detected - marking KYC as complete');
-
-        try {
-          // Call backend to mark KYC as complete for non-biometric devices
-          const response = await apiClient.post('/kyc/complete-without-biometric', {});
-          logger.debug('[useKycCompletion] ✅ KYC marked as complete for non-biometric device');
-
-          // Invalidate cache to update UI
-          invalidateKycCache('setup_security');
-        } catch (error) {
-          logger.error('[useKycCompletion] ❌ Failed to mark KYC complete:', error);
-        }
-      }
 
       if (nextStep) {
         logger.debug(`[useKycCompletion] 🎯 Navigating directly to next step: ${nextStep}`);
@@ -194,7 +173,7 @@ export const useKycCompletion = () => {
         navigation.navigate('VerifyYourIdentity');
       }
     }
-  }, [navigation, getNextKycStep, isBiometricAvailable, invalidateKycCache]);
+  }, [navigation, getNextKycStep, invalidateKycCache]);
 
   /**
    * Professional KYC step completion

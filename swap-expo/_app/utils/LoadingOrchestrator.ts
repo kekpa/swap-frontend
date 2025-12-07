@@ -287,6 +287,14 @@ class LoadingOrchestrator {
                     authState !== AuthState.INITIALIZING &&
                     this.transitionPhase === TransitionPhase.NONE;
 
+    console.log('📊 [LoadingOrchestrator] canShowUI() check:', {
+      hasBlockingOperations,
+      isTransitioning: navigationState.isTransitioning,
+      authState,
+      transitionPhase: this.transitionPhase,
+      result: canShow
+    });
+
     return canShow;
   }
 

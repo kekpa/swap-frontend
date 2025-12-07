@@ -2,19 +2,32 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuthContext } from '../context/AuthContext';
 
 const NotificationActivation = () => {
   const navigation = useNavigation();
+  const authContext = useAuthContext();
+
+  // Complete profile setup and let AppLockHandler show PIN setup
+  const completeProfileSetup = () => {
+    if (authContext) {
+      // Setting authenticated will trigger AppLockHandler in App.tsx
+      // which will show AppLockSetupScreen if PIN is not configured
+      authContext.setIsAuthenticated(true);
+    } else {
+      navigation.navigate('App' as never);
+    }
+  };
 
   const handleEnableNotifications = () => {
     // Request notification permissions here
-    // Then navigate to next screen
-    navigation.navigate('PasscodeSetup' as never);
+    // Then complete profile setup
+    completeProfileSetup();
   };
 
   const handleSkip = () => {
-    // Skip notifications and navigate to next screen
-    navigation.navigate('PasscodeSetup' as never);
+    // Skip notifications and complete profile setup
+    completeProfileSetup();
   };
 
   return (

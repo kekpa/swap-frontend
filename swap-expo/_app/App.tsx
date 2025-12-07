@@ -38,6 +38,7 @@ import appLockService from './services/AppLockService';
 import LockScreen from './features/auth/components/LockScreen';
 import AppLockSetupScreen from './features/auth/components/AppLockSetupScreen';
 import { authEvents, APP_LOCK_EVENTS } from './_api/apiClient';
+import { useKycStatusDirect } from './hooks-data/useKycQuery';
 
 // PROFESSIONAL FIX: Suppress technical warnings that don't represent bugs
 // - TanStack Query: queries are intentionally cancelled during navigation
@@ -69,6 +70,10 @@ const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const [isLockConfigured, setIsLockConfigured] = useState<boolean | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
 
+  // Use navigation-free KYC hook (safe outside NavigationContainer)
+  // This prevents showing setup screen if user already completed KYC passcode setup
+  const { data: kycData } = useKycStatusDirect(authContext.user?.entityId);
+
   // Initialize app lock service and check lock state
   useEffect(() => {
     const initAppLock = async () => {
@@ -81,9 +86,18 @@ const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) =
         setIsAppLocked(appLockService.isLocked());
         setNeedsSetup(false);
       } else if (authContext.isAuthenticated && !configured) {
-        // User is authenticated but lock not configured - needs setup
-        setNeedsSetup(true);
-        setIsAppLocked(false);
+        // User is authenticated but local lock not configured
+        // Check if backend says passcode was already set up (KYC flow)
+        if (kycData?.passcode_setup_completed) {
+          // Backend says passcode exists - skip setup screen
+          logger.debug('[AppLockHandler] Skipping setup - backend passcode_setup_completed=true');
+          setNeedsSetup(false);
+          setIsAppLocked(false);
+        } else {
+          // Neither local nor backend has passcode - show setup
+          setNeedsSetup(true);
+          setIsAppLocked(false);
+        }
       } else {
         // Not authenticated = not locked, no setup needed
         setIsAppLocked(false);
@@ -92,25 +106,27 @@ const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) =
     };
 
     initAppLock();
-  }, [authContext.isAuthenticated]);
+  }, [authContext.isAuthenticated, kycData?.passcode_setup_completed]);
 
   // Handle app state changes (background/foreground)
   useEffect(() => {
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       if (nextAppState === 'background') {
-        // Lock app ONLY when going to actual background (minimized)
+        // Track when app goes to background for timeout calculation
         // NOT on 'inactive' - that's just system dialogs (permissions, share sheet, etc.)
         if (isLockConfigured && authContext.isAuthenticated) {
-          logger.debug('[AppLockHandler] App going to background, locking...');
+          logger.debug('[AppLockHandler] App going to background, starting timeout...');
+          appLockService.setBackgroundedAt(Date.now());
+        }
+      } else if (nextAppState === 'active') {
+        // Check if app was in background for longer than 3 minutes
+        if (isLockConfigured && authContext.isAuthenticated && appLockService.isBackgroundTimeoutExpired()) {
+          logger.debug('[AppLockHandler] Background timeout expired, locking...');
           appLockService.lock();
           setIsAppLocked(true);
         }
-      } else if (nextAppState === 'active') {
-        // Check if session expired when returning to foreground
-        if (isLockConfigured && authContext.isAuthenticated && appLockService.isSessionExpired()) {
-          logger.debug('[AppLockHandler] Session expired, locking...');
-          setIsAppLocked(true);
-        }
+        // Clear background timestamp
+        appLockService.setBackgroundedAt(null);
       }
     };
 
@@ -155,6 +171,13 @@ const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) =
     setIsAppLocked(false);
   }, []);
 
+  const handlePinReset = useCallback(async () => {
+    logger.info('[AppLockHandler] PIN reset requested - showing setup screen');
+    setIsLockConfigured(false);
+    setNeedsSetup(true);
+    setIsAppLocked(false);
+  }, []);
+
   // Show setup screen if:
   // - User is authenticated
   // - Lock is not configured
@@ -162,8 +185,9 @@ const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) =
   if (authContext.isAuthenticated && needsSetup && !authContext.isLoading) {
     return (
       <AppLockSetupScreen
-        userName={authContext.user?.firstName || 'there'}
+        userName={authContext.user?.firstName || authContext.user?.businessName || 'there'}
         onComplete={handleSetupComplete}
+        onLogout={handleLogout}
       />
     );
   }
@@ -173,11 +197,16 @@ const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) =
   // - User is authenticated
   // - App is locked
   if (isLockConfigured && authContext.isAuthenticated && isAppLocked && !authContext.isLoading) {
+    // Get user identifier for password verification (prefer email, then username)
+    const userIdentifier = authContext.user?.email || authContext.user?.username;
+
     return (
       <LockScreen
-        userName={authContext.user?.firstName || 'there'}
+        userName={authContext.user?.firstName || authContext.user?.businessName || 'there'}
+        userIdentifier={userIdentifier}
         onUnlock={handleUnlock}
         onLogout={handleLogout}
+        onPinReset={handlePinReset}
       />
     );
   }

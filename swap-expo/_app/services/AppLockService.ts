@@ -31,6 +31,7 @@ export interface AppLockState {
   lastUnlockTime: number;
   failedAttempts: number;
   lockoutUntil: number | null;
+  backgroundedAt: number | null;  // Track when app went to background
 }
 
 export interface BiometricCapabilities {
@@ -59,8 +60,11 @@ const STORAGE_KEYS = {
   IS_CONFIGURED: 'app_lock_configured',
 } as const;
 
-// Session timeout: 30 minutes
+// Session timeout: 30 minutes (for inactivity while in app)
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+
+// Background lock timeout: 3 minutes (for time spent in background)
+const BACKGROUND_LOCK_TIMEOUT_MS = 3 * 60 * 1000;
 
 // Brute force protection
 const MAX_FAILED_ATTEMPTS = 5;
@@ -78,6 +82,7 @@ class AppLockService {
     lastUnlockTime: 0,
     failedAttempts: 0,
     lockoutUntil: null,
+    backgroundedAt: null,
   };
 
   private initialized = false;
@@ -409,6 +414,32 @@ class AppLockService {
   }
 
   /**
+   * Track when app goes to background
+   * Used to determine if lock is required on resume
+   */
+  setBackgroundedAt(timestamp: number | null): void {
+    this.state.backgroundedAt = timestamp;
+    if (timestamp) {
+      logger.debug('[AppLockService] App backgrounded at:', new Date(timestamp).toISOString());
+    } else {
+      logger.debug('[AppLockService] Background timestamp cleared');
+    }
+  }
+
+  /**
+   * Check if app has been in background for longer than timeout (3 minutes)
+   */
+  isBackgroundTimeoutExpired(): boolean {
+    if (!this.state.backgroundedAt) return false;
+    const elapsed = Date.now() - this.state.backgroundedAt;
+    const expired = elapsed > BACKGROUND_LOCK_TIMEOUT_MS;
+    if (expired) {
+      logger.debug(`[AppLockService] Background timeout expired (${Math.round(elapsed / 1000)}s > ${BACKGROUND_LOCK_TIMEOUT_MS / 1000}s)`);
+    }
+    return expired;
+  }
+
+  /**
    * Unlock the app after strong authentication
    *
    * Called by LoginService after successful password authentication.
@@ -539,10 +570,44 @@ class AppLockService {
       lastUnlockTime: 0,
       failedAttempts: 0,
       lockoutUntil: null,
+      backgroundedAt: null,
     };
 
     this.initialized = false;
     logger.info('[AppLockService] Reset complete');
+  }
+
+  // --------------------------------------------------------------------------
+  // PIN Reset (for "Forgot PIN" flow)
+  // --------------------------------------------------------------------------
+
+  /**
+   * Clear PIN for reset flow
+   *
+   * Unlike reset(), this preserves the session and just clears the PIN
+   * so the user can set up a new one after password verification.
+   *
+   * Flow: User forgot PIN → Verify password → clearPinForReset() → Show PIN setup
+   */
+  async clearPinForReset(): Promise<void> {
+    logger.info('[AppLockService] Clearing PIN for reset...');
+
+    // Clear only PIN-related data
+    await Promise.all([
+      SecureStore.deleteItemAsync(STORAGE_KEYS.PIN_HASH),
+      SecureStore.deleteItemAsync(STORAGE_KEYS.PIN_SALT),
+      SecureStore.deleteItemAsync(STORAGE_KEYS.IS_CONFIGURED),
+      SecureStore.deleteItemAsync(STORAGE_KEYS.FAILED_ATTEMPTS),
+      SecureStore.deleteItemAsync(STORAGE_KEYS.LOCKOUT_UNTIL),
+    ]);
+
+    // Update state - not configured but not fully reset
+    this.state.lockMethod = 'none';
+    this.state.failedAttempts = 0;
+    this.state.lockoutUntil = null;
+    this.state.isLocked = false; // Unlocked because user verified with password
+
+    logger.info('[AppLockService] PIN cleared, ready for new setup');
   }
 }
 

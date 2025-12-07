@@ -24,6 +24,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useAuthContext } from '../auth/context/AuthContext';
 import { useInteractions, InteractionItem } from '../../hooks-data/useInteractions';
 import { usePrefetchTimeline } from '../../hooks-data/useTimeline';
+import { useDeleteInteraction, useArchivedCount } from '../../hooks-data/useDeleteInteraction';
 // Real-time updates hook for WebSocket-driven cache invalidation
 import { useRealtimeUpdates } from '../../hooks/useRealtimeUpdates';
 import { websocketService } from '../../services/websocketService';
@@ -172,6 +173,12 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
 
   // Enable real-time updates via WebSocket (matches ContactInteractionHistory2 pattern)
   useRealtimeUpdates();
+
+  // Delete/Archive interaction mutation
+  const deleteInteractionMutation = useDeleteInteraction();
+
+  // Archived interactions count (for badge display)
+  const { count: archivedCount } = useArchivedCount();
 
   // Note: headerOffset removed - contentContainer is already below SearchHeader in normal flow
 
@@ -1015,7 +1022,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     }
   };
 
-  // Add a function to handle interaction deletion
+  // Handle interaction deletion (smart: deletes if no transactions, archives if has transactions)
   const handleDeleteInteraction = (interactionId: string) => {
     Alert.alert(
       "Delete Conversation",
@@ -1029,32 +1036,108 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
-            // Here you would call your API to delete the conversation
-            logger.debug(`Deleting conversation with ID: ${interactionId}`, "InteractionsHistory");
-            // After deletion, refresh the interactions list
-            refreshInteractions();
-            // For now, we'll just refresh without actual deletion
+            try {
+              logger.debug(`[InteractionsHistory] Deleting/archiving conversation: ${interactionId}`, "InteractionsHistory");
+              const result = await deleteInteractionMutation.mutateAsync(interactionId);
+
+              // If archived (has transactions), show informational alert
+              if (result.action === 'archived') {
+                Alert.alert(
+                  "Conversation Archived",
+                  "This conversation was archived because it contains financial transactions. You can find it in the Archived section."
+                );
+              }
+
+              // Refresh interactions list
+              refreshInteractions();
+            } catch (error) {
+              logger.error(`[InteractionsHistory] Failed to delete conversation: ${interactionId}`, error);
+              Alert.alert("Error", "Failed to delete conversation. Please try again.");
+            }
           }
         }
       ]
     );
   };
 
-  // Add a function to handle unmuting
-  const handleMuteInteraction = (interactionId: string) => {
-    logger.debug(`Unmuting conversation with ID: ${interactionId}`, "InteractionsHistory");
-    // API call would go here
-    refreshInteractions();
+  // COMMENTED OUT - Mute feature not implemented yet (notifications not ready)
+  // const handleMuteInteraction = (interactionId: string) => {
+  //   logger.debug(`Muting conversation with ID: ${interactionId}`, "InteractionsHistory");
+  //   // API call would go here
+  //   refreshInteractions();
+  // };
+
+  // COMMENTED OUT - Archive is now handled automatically by handleDeleteInteraction
+  // (if interaction has transactions, it gets archived instead of deleted)
+  // const handleArchiveInteraction = (interactionId: string) => {
+  //   logger.debug(`Archiving conversation with ID: ${interactionId}`, "InteractionsHistory");
+  //   // API call would go here
+  //   refreshInteractions();
+  // };
+
+  // Navigate to archived interactions screen
+  const handleArchivedPress = () => {
+    logger.debug('[InteractionsHistory] Navigating to archived interactions', "InteractionsHistory");
+    // Navigate to ArchivedInteractions screen
+    navigation.navigate('ArchivedInteractions' as never);
   };
 
-  // Add a function to handle archiving
-  const handleArchiveInteraction = (interactionId: string) => {
-    logger.debug(`Archiving conversation with ID: ${interactionId}`, "InteractionsHistory");
-    // API call would go here
-    refreshInteractions();
+  // Render archived section (WhatsApp-style)
+  const renderArchivedSection = () => {
+    if (archivedCount <= 0) return null;
+
+    return (
+      <TouchableOpacity
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingVertical: theme.spacing.md,
+          paddingHorizontal: theme.spacing.lg,
+          backgroundColor: theme.colors.background,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.divider,
+        }}
+        onPress={handleArchivedPress}
+      >
+        <View
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: theme.colors.grayUltraLight,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginRight: theme.spacing.md,
+          }}
+        >
+          <Ionicons name="archive" size={20} color={theme.colors.textSecondary} />
+        </View>
+        <Text
+          style={{
+            flex: 1,
+            fontSize: theme.typography.fontSize.md,
+            fontWeight: '500',
+            color: theme.colors.textPrimary,
+          }}
+        >
+          Archived
+        </Text>
+        <Text
+          style={{
+            fontSize: theme.typography.fontSize.sm,
+            color: theme.colors.textSecondary,
+            marginRight: theme.spacing.xs,
+          }}
+        >
+          {archivedCount}
+        </Text>
+        <Ionicons name="chevron-forward" size={20} color={theme.colors.textSecondary} />
+      </TouchableOpacity>
+    );
   };
 
-  // Render swipe action buttons - simplified to just slide without scaling or opacity effects
+  // Render swipe action buttons - simplified to single Delete button
+  // (Delete auto-decides: no transactions = soft delete, has transactions = archive)
   const renderRightActions = (
     progress: any,
     dragX: any,
@@ -1064,7 +1147,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     // Create swipe action styles
     const actionStyles = StyleSheet.create({
       actionContainer: {
-        width: 240, // Increased width for 3 buttons (80px each)
+        width: 80, // Single button width
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'flex-end',
@@ -1075,14 +1158,8 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         alignItems: 'center',
         justifyContent: 'center',
       },
-      muteButton: {
-        backgroundColor: theme.colors.warning,
-      },
       deleteButton: {
         backgroundColor: theme.colors.error,
-      },
-      archiveButton: {
-        backgroundColor: theme.colors.grayDark,
       },
       actionText: {
         color: 'white',
@@ -1098,45 +1175,17 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
 
     return (
       <View style={actionStyles.actionContainer}>
-        {/* Mute Button */}
+        {/* Delete Button - auto-archives if interaction has transactions */}
         <View style={[
-          actionStyles.actionButton, 
-          actionStyles.muteButton
-        ]}>
-          <TouchableOpacity 
-            style={actionStyles.buttonContent}
-            onPress={() => handleMuteInteraction(interactionId)}
-          >
-            <Ionicons name="volume-high" size={22} color="white" />
-            <Text style={actionStyles.actionText}>Mute</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Delete Button */}
-        <View style={[
-          actionStyles.actionButton, 
+          actionStyles.actionButton,
           actionStyles.deleteButton
         ]}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={actionStyles.buttonContent}
             onPress={() => handleDeleteInteraction(interactionId)}
           >
             <Ionicons name="trash" size={22} color="white" />
             <Text style={actionStyles.actionText}>Delete</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Archive Button */}
-        <View style={[
-          actionStyles.actionButton, 
-          actionStyles.archiveButton
-        ]}>
-          <TouchableOpacity 
-            style={actionStyles.buttonContent}
-            onPress={() => handleArchiveInteraction(interactionId)}
-          >
-            <Ionicons name="archive" size={22} color="white" />
-            <Text style={actionStyles.actionText}>Archive</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1345,9 +1394,12 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
           />
         }
       >
+            {/* Archived Section (WhatsApp-style) - show at top if there are archived chats */}
+            {renderArchivedSection()}
+
             {/* Show empty state when not loading and no chats */}
             {filteredDisplayChats.length === 0 && renderEmptyState()}
-            
+
             {/* Show chats when available */}
             {filteredDisplayChats.length > 0 && filteredDisplayChats.map(chat => renderChatItem(chat))}
             

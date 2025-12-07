@@ -150,22 +150,25 @@ export default function RootNavigator() {
   // NOTE: needsLogin handling removed - AuthStateMachine is now the sole coordinator
   // The setTimeout hack was a symptom of competing coordination systems
 
-  // PROFESSIONAL: Clean three-state navigation logic with LoadingOrchestrator coordination:
-  // 1. Authenticated and data loaded AND LoadingOrchestrator ready → App stack
-  // 2. Authenticated but data loading or LoadingOrchestrator not ready → LoadingScreen
-  // 3. Not authenticated → Auth stack (always, don't block on canShowUI)
+  // SIMPLE three-state navigation logic:
+  // 1. Not authenticated → Auth stack (immediately, no loading)
+  // 2. Authenticated but loading data → LoadingScreen
+  // 3. Authenticated and ready → App stack
+  const showAuthNavigator = !isAuthenticated;  // Logged out = show auth immediately
+  const showLoadingScreen = isAuthenticated && (!orchestratorState.canShowUI || !isInitialLoadComplete);
   const showAppNavigator = isAuthenticated && isInitialLoadComplete && orchestratorState.canShowUI;
-  const showLoadingScreen = isAuthenticated && (!isInitialLoadComplete || !orchestratorState.canShowUI);
-  const showAuthNavigator = !isAuthenticated;  // Always show auth when logged out - no blocking
 
   // In development mode, can force app navigator
   const forceAppInDev = isDevelopment && DEV_ALWAYS_AUTHENTICATED;
 
-  // Debug logging (minimal)
-  console.log('🔄 [RootNavigator] Navigation:', {
+  // Debug logging (detailed for logout investigation)
+  console.log('🧭 [RootNavigator] Navigation decision:', {
     isAuthenticated,
     isInitialLoadComplete,
     canShowUI: orchestratorState.canShowUI,
+    showAppNavigator,
+    showLoadingScreen,
+    showAuthNavigator,
     decision: showAppNavigator || forceAppInDev ? 'App' : showLoadingScreen ? 'Loading' : 'Auth'
   });
 
