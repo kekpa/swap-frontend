@@ -257,6 +257,7 @@ const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
     secondaryButton: {
       paddingVertical: theme.spacing.sm,
       paddingHorizontal: theme.spacing.md,
+      marginTop: theme.spacing.md,
     },
     secondaryButtonText: {
       fontSize: theme.typography.fontSize.md,
