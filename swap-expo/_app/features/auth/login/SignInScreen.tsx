@@ -767,12 +767,10 @@ const SignInScreen = ({ route }: any) => {
                     <Text style={styles.userPhone}>
                       {targetProfileType === 'business' ? 'Business Account' : 'Personal Account'}
                     </Text>
-                    {/* "via @username" indicator for profile switch */}
-                    {sourceUsername && (
-                      <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 2, opacity: 0.8 }}>
-                        via @{sourceUsername}
-                      </Text>
-                    )}
+                    {/* "via @username" indicator for profile switch - always show context */}
+                    <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 2, opacity: 0.8 }}>
+                      {sourceUsername ? `via @${sourceUsername}` : 'via your personal account'}
+                    </Text>
                   </View>
                 </View>
               )}

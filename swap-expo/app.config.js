@@ -44,6 +44,8 @@ export default {
       NSLocationWhenInUseUsageDescription: "Swap needs your location to show nearby ATMs, merchants, and to comply with financial regulations.",
       NSPhotoLibraryUsageDescription: "Swap needs access to your photos to let you upload profile pictures and documents for verification.",
       NSPhotoLibraryAddUsageDescription: "Swap needs permission to save QR codes and receipts to your photo library.",
+      // Biometric Authentication
+      NSFaceIDUsageDescription: "Swap uses Face ID to securely unlock the app and authorize transactions.",
     },
   },
   android: {
@@ -81,6 +83,7 @@ export default {
     "@maplibre/maplibre-react-native",
     "expo-secure-store",
     "expo-sqlite",
+    "expo-local-authentication",
   ],
   extra: {
     // EAS Configuration

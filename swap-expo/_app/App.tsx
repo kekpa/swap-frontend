@@ -38,7 +38,6 @@ import appLockService from './services/AppLockService';
 import LockScreen from './features/auth/components/LockScreen';
 import AppLockSetupScreen from './features/auth/components/AppLockSetupScreen';
 import { authEvents, APP_LOCK_EVENTS } from './_api/apiClient';
-import { useKycStatusDirect } from './hooks-data/useKycQuery';
 
 // PROFESSIONAL FIX: Suppress technical warnings that don't represent bugs
 // - TanStack Query: queries are intentionally cancelled during navigation
@@ -70,11 +69,9 @@ const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const [isLockConfigured, setIsLockConfigured] = useState<boolean | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
 
-  // Use navigation-free KYC hook (safe outside NavigationContainer)
-  // This prevents showing setup screen if user already completed KYC passcode setup
-  const { data: kycData } = useKycStatusDirect(authContext.user?.entityId);
-
   // Initialize app lock service and check lock state
+  // Note: App Lock is DEVICE-WIDE, not profile-specific
+  // This ensures multi-profile works correctly (business profiles inherit from personal)
   useEffect(() => {
     const initAppLock = async () => {
       await appLockService.initialize();
@@ -86,18 +83,14 @@ const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) =
         setIsAppLocked(appLockService.isLocked());
         setNeedsSetup(false);
       } else if (authContext.isAuthenticated && !configured) {
-        // User is authenticated but local lock not configured
-        // Check if backend says passcode was already set up (KYC flow)
-        if (kycData?.passcode_setup_completed) {
-          // Backend says passcode exists - skip setup screen
-          logger.debug('[AppLockHandler] Skipping setup - backend passcode_setup_completed=true');
-          setNeedsSetup(false);
-          setIsAppLocked(false);
-        } else {
-          // Neither local nor backend has passcode - show setup
-          setNeedsSetup(true);
-          setIsAppLocked(false);
-        }
+        // Device doesn't have PIN configured - show setup
+        // Note: We intentionally don't check backend KYC here because:
+        // 1. App Lock is device-wide, not profile-specific
+        // 2. If device lost PIN data (reinstall), user should set up new PIN
+        // 3. This ensures multi-profile works correctly (business profiles inherit)
+        logger.debug('[AppLockHandler] No local PIN configured - showing setup');
+        setNeedsSetup(true);
+        setIsAppLocked(false);
       } else {
         // Not authenticated = not locked, no setup needed
         setIsAppLocked(false);
@@ -106,7 +99,7 @@ const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) =
     };
 
     initAppLock();
-  }, [authContext.isAuthenticated, kycData?.passcode_setup_completed]);
+  }, [authContext.isAuthenticated]);
 
   // Handle app state changes (background/foreground)
   useEffect(() => {
