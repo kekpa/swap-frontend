@@ -186,13 +186,9 @@ const BusinessAddress: React.FC = () => {
   }), [theme]);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
-    >
+    <SafeAreaView style={styles.container}>
       <StatusBar barStyle={theme.isDark ? 'light-content' : 'dark-content'} backgroundColor={theme.colors.card} />
-      
+
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={handleBack}>
           <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
@@ -201,8 +197,13 @@ const BusinessAddress: React.FC = () => {
         <View style={styles.backButton} />
       </View>
 
-      <ScrollView style={{ flex: 1 }}>
-        <View style={styles.content}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
+        <ScrollView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+          <View style={styles.content}>
           <Text style={styles.title}>Business Address</Text>
           <Text style={styles.subtitle}>
             Enter the physical location where your business operates.
@@ -272,7 +273,8 @@ const BusinessAddress: React.FC = () => {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 

@@ -16,13 +16,14 @@ import {
   RefreshControl,
   Alert,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import SearchHeader from '../header/SearchHeader';
 import { useAuthContext } from '../auth/context/AuthContext';
-import { useBalances, useSetPrimaryWallet, useWalletEligibility } from '../../hooks-data/useBalances';
+import { useBalances, useSetPrimaryWallet, useWalletEligibility, useInitializeWallet } from '../../hooks-data/useBalances';
 import { useInteractions } from '../../hooks-data/useInteractions';
 import { useTheme } from '../../theme/ThemeContext';
 import { RootStackParamList } from '../../navigation/rootNavigator';
@@ -174,6 +175,32 @@ const WalletDashboard: React.FC = () => {
     error: eligibilityError,
     refetch: refetchEligibility,
   } = useWalletEligibility(entityId, { enabled: !!entityId });
+
+  // Wallet initialization mutation (for retry button)
+  const initializeWalletMutation = useInitializeWallet();
+  const [isRetrying, setIsRetrying] = useState(false);
+
+  const handleRetryWalletCreation = async () => {
+    if (!entityId || isRetrying) return;
+
+    setIsRetrying(true);
+    try {
+      logger.debug('[WalletDashboard] 🔄 Retrying wallet creation...');
+      await initializeWalletMutation.mutateAsync(entityId);
+      logger.debug('[WalletDashboard] ✅ Wallet creation retry successful');
+      // Refetch eligibility to update state
+      refetchEligibility();
+    } catch (error) {
+      logger.error('[WalletDashboard] ❌ Wallet creation retry failed:', error);
+      Alert.alert(
+        'Wallet Creation Failed',
+        'Unable to create your wallet. Please try again or contact support.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsRetrying(false);
+    }
+  };
 
   // Professional wallet-specific transaction loading
   const { 
@@ -1100,8 +1127,23 @@ const WalletDashboard: React.FC = () => {
             Your wallet is being created. This usually takes just a moment.
           </Text>
           <Text style={[styles.subtitle, { marginTop: 16, fontSize: 13, color: theme.colors.textSecondary, textAlign: 'center', paddingHorizontal: 20 }]}>
-            If this persists, please contact support.
+            If this persists, tap the button below to retry.
           </Text>
+
+          <TouchableOpacity
+            style={[styles.authRetryButton, isRetrying && { opacity: 0.6 }]}
+            onPress={handleRetryWalletCreation}
+            disabled={isRetrying}
+          >
+            {isRetrying ? (
+              <ActivityIndicator size="small" color={theme.colors.white} />
+            ) : (
+              <Ionicons name="refresh" size={24} color={theme.colors.white} />
+            )}
+            <Text style={styles.authRetryText}>
+              {isRetrying ? 'Creating Wallet...' : 'Retry Wallet Creation'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );

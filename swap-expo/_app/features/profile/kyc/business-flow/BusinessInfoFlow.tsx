@@ -391,11 +391,16 @@ const BusinessInfoFlow: React.FC = () => {
     chipText: {
       fontSize: theme.typography.fontSize.sm,
       fontWeight: '500',
-      color: theme.colors.text,
+      color: theme.colors.textPrimary,
     },
     chipTextSelected: {
       color: theme.colors.white,
       fontWeight: '600',
+    },
+    helperText: {
+      fontSize: theme.typography.fontSize.xs,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.xs,
     },
   }), [theme]);
 
@@ -492,8 +497,6 @@ const BusinessInfoFlow: React.FC = () => {
               style={styles.input}
               value={businessInfo.legalName}
               onChangeText={(text) => setBusinessInfo(prev => ({ ...prev, legalName: text }))}
-              placeholder="Enter legal business name"
-              placeholderTextColor={theme.colors.textSecondary}
               autoCapitalize="words"
             />
           </View>

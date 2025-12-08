@@ -548,7 +548,7 @@ const BusinessRegistrationDocuments: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={{ flex: 1 }}>
+      <ScrollView style={{ flex: 1, backgroundColor: theme.colors.background }}>
         <View style={styles.content}>
           <Text style={styles.subtitle}>
             Please upload your business registration documents.

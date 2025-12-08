@@ -120,14 +120,9 @@ export const BUSINESS_TIMELINE: EntityTimelineConfig = {
       description: 'Business account created successfully',
       completionFlag: 'setup_account_completed',
     },
-    {
-      id: 'phone_verification',
-      title: 'Confirm phone number',
-      description: 'Verify business contact number',
-      completionFlag: 'phone_verification_completed',
-      navigationRoute: 'PhoneEntry',
-      navigationParams: { returnToTimeline: true },
-    },
+    // Note: phone_verification removed - businesses don't receive payments via phone number
+    // Business payments are received via @username, business name search, or QR code
+    // The business_phone field is just contact metadata (not a payment identifier)
     {
       id: 'beneficial_owners',
       title: 'Team members and owners',
