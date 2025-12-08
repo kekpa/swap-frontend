@@ -169,6 +169,10 @@ export const BUSINESS_PATHS = {
   TEAM_MEMBER: (id: string) => `/business/team/${id}`,
   OFFERS: '/business/offers',
   OFFER_DETAILS: (id: string) => `/business/offers/${id}`,
+  // Business access PIN endpoints
+  CHECK_PIN: (businessId: string) => `/businesses/${businessId}/check-pin`,
+  SET_PIN: (businessId: string) => `/businesses/${businessId}/set-pin`,
+  REMOVE_PIN: (businessId: string) => `/businesses/${businessId}/pin`,
 };
 
 /**

@@ -19,6 +19,7 @@ import { clearProfileLocalDB } from '../../../localdb';
 // Profile switch request
 export interface ProfileSwitchRequest {
   targetProfileId: string;
+  pin?: string; // Optional - required only if business has PIN set
 }
 
 // Profile switch response

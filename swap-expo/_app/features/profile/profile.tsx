@@ -593,10 +593,11 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     setIsProfileSwitcherVisible(false);
   };
 
-  const handleProfileSelect = (profile: any) => {
+  const handleProfileSelect = (profile: any, pin?: string) => {
     logger.info('[ProfileScreen] Profile selected for switching:', {
       targetProfileId: profile.profileId,
       displayName: profile.displayName,
+      hasPin: !!pin,
     });
 
     // Close modal first
@@ -619,6 +620,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
           sourceUserId: user?.user_id, // Pass source user ID for validation
           sourceUsername: user?.username, // For "via @username" display
           sourceIdentifier, // Phone number for PIN auth (captured while still logged in)
+          businessPin: pin, // Optional business access PIN (pre-verified in ProfileSwitcherModal)
         },
       });
     } else {

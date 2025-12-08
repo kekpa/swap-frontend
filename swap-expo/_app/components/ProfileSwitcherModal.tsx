@@ -3,9 +3,10 @@
  *
  * Bottom sheet modal for switching between user profiles (personal + business).
  * Enterprise security pattern with biometric authentication on profile switch.
+ * Supports optional business PIN verification for extra security.
  */
 
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -27,16 +28,26 @@ import { useTheme } from '../theme/ThemeContext';
 import { AvailableProfile } from '../features/auth/hooks/useAvailableProfiles';
 import { getInitials, getAvatarColor } from '../utils/avatarUtils';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
+import BusinessPinInputModal from './BusinessPinInputModal';
+import apiClient from '../_api/apiClient';
+import { BUSINESS_PATHS } from '../_api/apiPaths';
+import { logger } from '../utils/logger';
 
 interface ProfileSwitcherModalProps {
   visible: boolean;
   profiles: AvailableProfile[];
   currentProfileId: string;
-  onSelectProfile: (profile: AvailableProfile) => void;
+  onSelectProfile: (profile: AvailableProfile, pin?: string) => void;
   onClose: () => void;
   onAddAccount?: () => void;
   onRemoveAccount?: (profile: AvailableProfile) => void;
   isLoading?: boolean;
+}
+
+// Response from check-pin endpoint
+interface CheckPinResponse {
+  pinRequired: boolean;
+  pinSet: boolean;
 }
 
 const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
@@ -53,6 +64,13 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
   const { isConnected } = useNetworkStatus();
   const { height } = useWindowDimensions();
   const bottomSheetRef = React.useRef<BottomSheet>(null);
+
+  // PIN modal state
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinProfile, setPinProfile] = useState<AvailableProfile | null>(null);
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [pinLockoutUntil, setPinLockoutUntil] = useState<Date | null>(null);
+  const [isCheckingPin, setIsCheckingPin] = useState(false);
 
   // Calculate snap index based on visible prop
   const snapIndex = React.useMemo(() => (visible ? 0 : -1), [visible]);
@@ -190,8 +208,42 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
     [theme],
   );
 
-  const handleSelectProfile = React.useCallback((profile: AvailableProfile) => {
-    console.log('👤 [ProfileSwitcherModal] Profile selected:', {
+  // Check if PIN is required for a business profile
+  const checkPinRequired = useCallback(async (businessProfileId: string): Promise<CheckPinResponse> => {
+    try {
+      const { data } = await apiClient.get<CheckPinResponse>(
+        BUSINESS_PATHS.CHECK_PIN(businessProfileId)
+      );
+      return data;
+    } catch (error: any) {
+      logger.warn('[ProfileSwitcherModal] Failed to check PIN requirement:', error.message);
+      // Default to no PIN required if check fails
+      return { pinRequired: false, pinSet: false };
+    }
+  }, []);
+
+  // Handle PIN submission
+  const handlePinSubmit = useCallback((pin: string) => {
+    if (!pinProfile) return;
+
+    logger.debug('[ProfileSwitcherModal] PIN submitted, attempting switch...');
+    setPinError(null);
+
+    // Close PIN modal and trigger profile switch with PIN
+    setShowPinModal(false);
+    onSelectProfile(pinProfile, pin);
+  }, [pinProfile, onSelectProfile]);
+
+  // Handle PIN modal cancel
+  const handlePinCancel = useCallback(() => {
+    setShowPinModal(false);
+    setPinProfile(null);
+    setPinError(null);
+    setPinLockoutUntil(null);
+  }, []);
+
+  const handleSelectProfile = useCallback(async (profile: AvailableProfile) => {
+    logger.debug('[ProfileSwitcherModal] Profile selected:', {
       profileId: profile.profileId,
       entityId: profile.entityId,
       displayName: profile.displayName,
@@ -201,15 +253,38 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
 
     if (profile.profileId === currentProfileId) {
       // Already on this profile, just close modal
-      console.log('👤 [ProfileSwitcherModal] Same profile selected, closing modal');
+      logger.debug('[ProfileSwitcherModal] Same profile selected, closing modal');
       onClose();
       return;
     }
 
+    // Check if business profile requires PIN
+    if (profile.type === 'business') {
+      setIsCheckingPin(true);
+      try {
+        const pinStatus = await checkPinRequired(profile.profileId);
+        logger.debug('[ProfileSwitcherModal] PIN status:', pinStatus);
+
+        if (pinStatus.pinRequired) {
+          // Show PIN input modal
+          setPinProfile(profile);
+          setPinError(null);
+          setPinLockoutUntil(null);
+          setShowPinModal(true);
+          setIsCheckingPin(false);
+          return;
+        }
+      } catch (error: any) {
+        logger.error('[ProfileSwitcherModal] PIN check failed:', error.message);
+      } finally {
+        setIsCheckingPin(false);
+      }
+    }
+
     // Trigger profile switch (will show biometric prompt)
-    console.log('👤 [ProfileSwitcherModal] Triggering profile switch...');
+    logger.debug('[ProfileSwitcherModal] Triggering profile switch...');
     onSelectProfile(profile);
-  }, [currentProfileId, onClose, onSelectProfile]);
+  }, [currentProfileId, onClose, onSelectProfile, checkPinRequired]);
 
   const handleRemoveAccount = React.useCallback((profile: AvailableProfile, event: any) => {
     // Stop propagation so row click doesn't trigger
@@ -281,62 +356,75 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
   );
 
   return (
-    <BottomSheet
-      ref={bottomSheetRef}
-      index={snapIndex}
-      snapPoints={['50%']}
-      enablePanDownToClose={true}
-      backdropComponent={renderBackdrop}
-      backgroundStyle={{ backgroundColor: theme.colors.card }}
-      handleIndicatorStyle={{ backgroundColor: theme.colors.textSecondary }}
-      onChange={(index) => {
-        if (index === -1) {
-          onClose();
-        }
-      }}
-    >
-      <BottomSheetView style={styles.container}>
-        {/* Offline Warning Banner */}
-        {!isConnected && (
-          <View style={styles.offlineWarning}>
-            <Ionicons name="warning" size={20} color="#856404" />
-            <Text style={styles.offlineWarningText}>
-              Offline - Account switching requires internet connection
-            </Text>
-          </View>
-        )}
+    <>
+      <BottomSheet
+        ref={bottomSheetRef}
+        index={snapIndex}
+        snapPoints={['50%']}
+        enablePanDownToClose={true}
+        backdropComponent={renderBackdrop}
+        backgroundStyle={{ backgroundColor: theme.colors.card }}
+        handleIndicatorStyle={{ backgroundColor: theme.colors.textSecondary }}
+        onChange={(index) => {
+          if (index === -1) {
+            onClose();
+          }
+        }}
+      >
+        <BottomSheetView style={styles.container}>
+          {/* Offline Warning Banner */}
+          {!isConnected && (
+            <View style={styles.offlineWarning}>
+              <Ionicons name="warning" size={20} color="#856404" />
+              <Text style={styles.offlineWarningText}>
+                Offline - Account switching requires internet connection
+              </Text>
+            </View>
+          )}
 
-        {/* Profile List */}
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-          </View>
-        ) : profiles.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No profiles available</Text>
-          </View>
-        ) : (
-          <View style={{ flex: 1 }}>
-            {/* Scrollable profiles - takes remaining space above button */}
-            <BottomSheetScrollView style={{ flex: 1 }}>
-              {profiles.map((profile) => (
-                <View key={profile.profileId}>
-                  {renderItem({ item: profile })}
-                </View>
-              ))}
-            </BottomSheetScrollView>
+          {/* Profile List */}
+          {isLoading || isCheckingPin ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={theme.colors.primary} />
+            </View>
+          ) : profiles.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No profiles available</Text>
+            </View>
+          ) : (
+            <View style={{ flex: 1 }}>
+              {/* Scrollable profiles - takes remaining space above button */}
+              <BottomSheetScrollView style={{ flex: 1 }}>
+                {profiles.map((profile) => (
+                  <View key={profile.profileId}>
+                    {renderItem({ item: profile })}
+                  </View>
+                ))}
+              </BottomSheetScrollView>
 
-            {/* Fixed button at bottom - always visible */}
-            {onAddAccount && (
-              <TouchableOpacity style={styles.addAccountButton} onPress={onAddAccount}>
-                <Ionicons name="add-circle-outline" size={24} color={theme.colors.primary} />
-                <Text style={styles.addAccountText}>Add Account</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-      </BottomSheetView>
-    </BottomSheet>
+              {/* Fixed button at bottom - always visible */}
+              {onAddAccount && (
+                <TouchableOpacity style={styles.addAccountButton} onPress={onAddAccount}>
+                  <Ionicons name="add-circle-outline" size={24} color={theme.colors.primary} />
+                  <Text style={styles.addAccountText}>Add Account</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </BottomSheetView>
+      </BottomSheet>
+
+      {/* Business PIN Input Modal */}
+      <BusinessPinInputModal
+        visible={showPinModal}
+        businessName={pinProfile?.displayName || ''}
+        onSubmit={handlePinSubmit}
+        onCancel={handlePinCancel}
+        isLoading={isLoading}
+        error={pinError}
+        lockoutUntil={pinLockoutUntil}
+      />
+    </>
   );
 };
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,12 +11,15 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { ProfileStackParamList } from '../../../navigation/profileNavigator';
 import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
 import { useAuthContext } from '../../auth/context/AuthContext';
+import apiClient from '../../../_api/apiClient';
+import { BUSINESS_PATHS } from '../../../_api/apiPaths';
+import { logger } from '../../../utils/logger';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -162,6 +165,36 @@ const SecurityPrivacyScreen: React.FC = () => {
   const { theme } = useTheme();
   const { user } = useAuthContext();
 
+  // Business PIN state
+  const isBusinessProfile = user?.profile_type === 'business';
+  const [hasBusinessPin, setHasBusinessPin] = useState(false);
+  const [isLoadingPinStatus, setIsLoadingPinStatus] = useState(false);
+
+  // Check if business PIN is set when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (isBusinessProfile && user?.profileId) {
+        checkBusinessPinStatus();
+      }
+    }, [isBusinessProfile, user?.profileId])
+  );
+
+  const checkBusinessPinStatus = async () => {
+    if (!user?.profileId) return;
+
+    setIsLoadingPinStatus(true);
+    try {
+      const { data } = await apiClient.get<{ pinRequired: boolean; pinSet: boolean }>(
+        BUSINESS_PATHS.CHECK_PIN(user.profileId)
+      );
+      setHasBusinessPin(data.pinSet);
+    } catch (error: any) {
+      logger.warn('[SecurityPrivacy] Failed to check business PIN status:', error.message);
+    } finally {
+      setIsLoadingPinStatus(false);
+    }
+  };
+
   const handleBack = () => {
     navigation.goBack();
   };
@@ -210,6 +243,25 @@ const SecurityPrivacyScreen: React.FC = () => {
   const handleRemoveDevice = (deviceName: string) => {
     console.log('Remove device:', deviceName);
     // Implement device removal
+  };
+
+  const handleSetBusinessPin = () => {
+    navigation.navigate('BusinessPinSetup', { mode: 'create' });
+  };
+
+  const handleRemoveBusinessPin = () => {
+    Alert.alert(
+      'Remove Business PIN',
+      'Are you sure you want to remove your business access PIN? Anyone with your personal credentials will be able to access this business profile.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove PIN',
+          style: 'destructive',
+          onPress: () => navigation.navigate('BusinessPinSetup', { mode: 'remove' }),
+        },
+      ]
+    );
   };
 
   const styles = useMemo(() => StyleSheet.create({
@@ -262,6 +314,26 @@ const SecurityPrivacyScreen: React.FC = () => {
             <SettingItem theme={theme} icon="shield-checkmark-outline" title="Two-Factor Authentication" description="Secure your account with 2FA" hasToggle initialToggleValue={true} onToggleChange={handle2FAToggle} />
             <SettingItem theme={theme} icon="eye-outline" title="Biometric Login" description="Use fingerprint or face recognition" hasToggle initialToggleValue={true} onToggleChange={handleBiometricToggle} />
           </View>
+
+          {/* Business Security - Only show for business profiles */}
+          {isBusinessProfile && (
+            <>
+              <Text style={styles.sectionTitle}>BUSINESS SECURITY</Text>
+              <View style={styles.infoCard}>
+                <SettingItem
+                  theme={theme}
+                  icon="key-outline"
+                  title="Business Access PIN"
+                  description={hasBusinessPin ? 'PIN protection enabled' : 'Add extra security for profile switching'}
+                  hasNavigation
+                  onPress={hasBusinessPin ? handleRemoveBusinessPin : handleSetBusinessPin}
+                />
+              </View>
+              <Text style={{ fontSize: theme.typography.fontSize.sm - 1, color: theme.colors.textSecondary, marginHorizontal: theme.spacing.xs, marginTop: theme.spacing.xs, marginBottom: theme.spacing.sm }}>
+                Business PIN adds extra protection when switching from your personal profile to this business. It's separate from your personal passcode.
+              </Text>
+            </>
+          )}
 
           {/* Privacy & Data Sharing */}
           <Text style={styles.sectionTitle}>PRIVACY & DATA SHARING</Text>

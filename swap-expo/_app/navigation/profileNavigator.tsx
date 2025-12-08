@@ -33,6 +33,7 @@ import PersonalInfoFlow from "../features/profile/kyc/personal-info/PersonalInfo
 import AccountScreen from "../features/profile/Account";
 import PersonalInfoScreen from "../features/profile/PersonalInfo";
 import SecurityPrivacyScreen from "../features/profile/security/SecurityPrivacy";
+import BusinessPinSetup from "../features/profile/security/BusinessPinSetup";
 import PasscodeScreen from "../components2/Passcode";
 import PhoneEntryScreen from "../features/auth/signup/PhoneEntryScreen";
 // Email verification disabled for Haiti market - keeping for future use
@@ -68,6 +69,10 @@ export type ProfileStackParamList = {
   PrivacyPolicy: undefined;
   TermsAndConditions: undefined;
   SecurityPrivacy: undefined;
+  BusinessPinSetup: {
+    businessProfileId?: string;
+    mode?: 'create' | 'remove';
+  } | undefined;
   Passcode: {
     isKycFlow?: boolean;
     sourceRoute?: string;
@@ -325,6 +330,15 @@ export default function ProfileNavigator() {
         component={SecurityPrivacyScreen}
         options={{
           animation: "slide_from_right",
+        }}
+      />
+      <Stack.Screen
+        name="BusinessPinSetup"
+        component={BusinessPinSetup}
+        options={{
+          animation: "slide_from_right",
+          gestureEnabled: true,
+          gestureDirection: "horizontal",
         }}
       />
       <Stack.Screen
