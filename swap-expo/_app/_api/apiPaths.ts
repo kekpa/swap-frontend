@@ -42,6 +42,12 @@ export const AUTH_PATHS = {
   // Multi-account management (Instagram-style)
   AVAILABLE_PROFILES: '/auth/available-profiles',
   SWITCH_PROFILE: '/auth/switch-profile',
+  // Generic PIN check for any profile type (personal or business)
+  CHECK_PROFILE_PIN: (profileId: string) => `/auth/profiles/${profileId}/check-pin`,
+  // Session management (Active Devices)
+  SESSIONS: '/auth/sessions',
+  SESSION_REVOKE: (sessionId: string) => `/auth/sessions/${sessionId}`,
+  SESSIONS_REVOKE_ALL: '/auth/sessions',
 };
 
 /**

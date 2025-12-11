@@ -10,6 +10,8 @@ import { Transaction } from '../types/transaction.types';
 import logger from '../utils/logger';
 import { networkService } from '../services/NetworkService';
 import { useCurrentProfileId } from '../hooks/useCurrentProfileId';
+import { useAuthContext } from '../features/auth/context/AuthContext';
+import { profileContextManager } from '../services/ProfileContextManager';
 
 interface BaseTransactionResult {
   transactions: Transaction[];
@@ -22,6 +24,7 @@ interface BaseTransactionResult {
 
 /**
  * WhatsApp-style fetch wallet transactions with instant cached data display
+ * PROFILE-SAFE: Checks for stale profile in setTimeout to prevent 404 errors after profile switch
  */
 const fetchWalletTransactionsWhatsAppStyle = async (profileId: string, accountId: string, limit: number = 4): Promise<Transaction[]> => {
   try {
@@ -31,34 +34,49 @@ const fetchWalletTransactionsWhatsAppStyle = async (profileId: string, accountId
     // SECURITY FIX: Include profileId for proper data isolation
     const cachedTransactions = await transactionRepository.getTransactionsByAccount(profileId, accountId, limit);
     logger.debug(`[useWalletTransactions] ✅ INSTANT: Loaded ${cachedTransactions.length} transactions from SQLite cache`);
-    
+
     // STEP 2: Return cached data IMMEDIATELY if we have it (WhatsApp behavior)
     if (cachedTransactions.length > 0) {
       logger.debug(`[useWalletTransactions] ⚡ INSTANT: Returning ${cachedTransactions.length} cached transactions immediately`);
-      
+
       // STEP 3: Background sync (non-blocking, like WhatsApp)
+      // PROFILE-SAFE: Capture profileId at schedule time, check for staleness at execution time
+      const capturedProfileId = profileId;
+      const capturedAccountId = accountId;
       setTimeout(async () => {
         try {
+          // PROFILE SWITCH GUARD: Skip if profile changed or switching in progress
+          if (profileContextManager.isProfileStale(capturedProfileId) || profileContextManager.isSwitchingProfile()) {
+            logger.debug(`[useWalletTransactions] ⏸️ BACKGROUND SYNC SKIPPED: Profile changed (was: ${capturedProfileId})`);
+            return;
+          }
+
           logger.debug(`[useWalletTransactions] 🔄 BACKGROUND SYNC: Fetching fresh data from API`);
-          const result = await transactionManager.getTransactionsForAccount(accountId, limit, 0);
+          const result = await transactionManager.getTransactionsForAccount(capturedAccountId, limit, 0);
           const apiTransactions = result?.data || [];
           logger.debug(`[useWalletTransactions] ✅ BACKGROUND SYNC: Loaded ${apiTransactions.length} transactions from server`);
-          
+
+          // PROFILE SWITCH GUARD: Check again after API call
+          if (profileContextManager.isProfileStale(capturedProfileId) || profileContextManager.isSwitchingProfile()) {
+            logger.debug(`[useWalletTransactions] ⏸️ BACKGROUND SYNC SKIPPED: Profile changed during API call`);
+            return;
+          }
+
           // Save to local cache
           // SECURITY FIX: Include profileId for proper data isolation
           if (apiTransactions.length > 0) {
-            await transactionRepository.saveTransactions(apiTransactions, profileId);
+            await transactionRepository.saveTransactions(apiTransactions, capturedProfileId);
             logger.debug(`[useWalletTransactions] ✅ BACKGROUND SYNC: Updated ${apiTransactions.length} transactions in cache`);
-            
+
             // Update TanStack Query cache with fresh data
-            queryClient.setQueryData(queryKeys.transactionsByAccount(profileId, accountId, limit), apiTransactions);
+            queryClient.setQueryData(queryKeys.transactionsByAccount(capturedProfileId, capturedAccountId, limit), apiTransactions);
           }
-          
+
         } catch (error) {
           logger.debug(`[useWalletTransactions] ⚠️ BACKGROUND SYNC: Failed (non-critical):`, error instanceof Error ? error.message : String(error));
         }
       }, 150); // 150ms delay for background sync
-      
+
       return cachedTransactions;
     }
     
@@ -88,10 +106,19 @@ const fetchWalletTransactionsWhatsAppStyle = async (profileId: string, accountId
  *
  * Shows cached transactions instantly, syncs in background.
  * Same pattern as useTimeline and useBalances.
+ * PROFILE-SAFE: Disabled during profile switch to prevent stale queries
  */
 export const useWalletTransactions = (accountId: string, enabled: boolean = true): BaseTransactionResult => {
   const isOffline = !networkService.isOnline();
   const profileId = useCurrentProfileId();
+  const { isProfileSwitching } = useAuthContext();
+
+  // PROFILE SWITCH GUARD: Disable query during profile switch
+  const shouldExecute = enabled && !!accountId && !!profileId && !isProfileSwitching;
+
+  if (isProfileSwitching) {
+    logger.debug(`[useWalletTransactions] ⏸️ SKIPPING: Profile switch in progress`);
+  }
 
   const {
     data: transactions = [],
@@ -110,7 +137,7 @@ export const useWalletTransactions = (accountId: string, enabled: boolean = true
       logger.debug(`[useWalletTransactions] 🎯 WALLET: Loading 4 transactions for account: ${accountId} (profileId: ${profileId})`);
       return fetchWalletTransactionsWhatsAppStyle(profileId, accountId, 4);
     },
-    enabled: enabled && !!accountId && !!profileId,
+    enabled: shouldExecute,
     
     // WHATSAPP-STYLE: Optimized configuration for instant loading
     staleTime: 10 * 60 * 1000, // 10 minutes - longer staleness for better UX
@@ -153,6 +180,7 @@ export const useWalletTransactions = (accountId: string, enabled: boolean = true
  * Endpoint: GET /api/v1/transactions/account/{accountId}?limit=50&offset={offset}
  * Backend Filtering: ✅ Account-specific with pagination
  * Frontend Filtering: ❌ None needed
+ * PROFILE-SAFE: Disabled during profile switch to prevent stale queries
  */
 export const useTransactionList = (
   accountId: string,
@@ -162,6 +190,10 @@ export const useTransactionList = (
 ): BaseTransactionResult & { hasMore: boolean; loadMore: () => void } => {
   const isOffline = !networkService.isOnline();
   const profileId = useCurrentProfileId();
+  const { isProfileSwitching } = useAuthContext();
+
+  // PROFILE SWITCH GUARD: Disable query during profile switch
+  const shouldExecute = enabled && !!accountId && !!profileId && !isProfileSwitching;
 
   const {
     data: result,
@@ -178,27 +210,27 @@ export const useTransactionList = (
       }
 
       logger.debug(`[useTransactionList] 📋 LIST: Loading ${limit} transactions for account: ${accountId} (offset: ${offset}, profileId: ${profileId})`);
-      
+
       try {
         const result = await transactionManager.getTransactionsForAccount(accountId, limit, offset);
         const transactions = result?.data || [];
         const pagination = result?.pagination;
-        
+
         const hasMore = pagination ? pagination.hasMore : transactions.length === limit;
-        
+
         logger.debug(`[useTransactionList] ✅ LIST: Loaded ${transactions.length} transactions (hasMore: ${hasMore})`);
         return { data: transactions, hasMore };
       } catch (error) {
         logger.error(`[useTransactionList] ❌ LIST: Failed to load transactions: ${error}`);
-        
+
         if (isOffline) {
           return { data: [], hasMore: false };
         }
-        
+
         throw error;
       }
     },
-    enabled: enabled && !!accountId && !!profileId,
+    enabled: shouldExecute,
     staleTime: 60 * 1000, // 1 minute
     gcTime: 30 * 60 * 1000, // 30 minutes
     retry: (failureCount) => !isOffline && failureCount < 2,
@@ -231,6 +263,7 @@ export const useTransactionList = (
  * Endpoint: GET /api/v1/transactions?limit={limit}
  * Backend Filtering: ❌ General transactions
  * Frontend Filtering: ⚠️ May be needed for specific use cases
+ * PROFILE-SAFE: Disabled during profile switch to prevent stale queries
  */
 export const useRecentTransactions = (
   entityId: string,
@@ -239,6 +272,10 @@ export const useRecentTransactions = (
 ): BaseTransactionResult => {
   const isOffline = !networkService.isOnline();
   const profileId = useCurrentProfileId();
+  const { isProfileSwitching } = useAuthContext();
+
+  // PROFILE SWITCH GUARD: Disable query during profile switch
+  const shouldExecute = enabled && !!entityId && !!profileId && !isProfileSwitching;
 
   const {
     data: transactions = [],
@@ -250,23 +287,23 @@ export const useRecentTransactions = (
     queryKey: queryKeys.recentTransactions(profileId!, entityId, limit),
     queryFn: async (): Promise<Transaction[]> => {
       logger.debug(`[useRecentTransactions] 📊 GENERAL: Loading ${limit} recent transactions (profileId: ${profileId})`);
-      
+
       try {
         const recentTransactions = await transactionManager.getRecentTransactions(limit);
-        
+
         logger.debug(`[useRecentTransactions] ✅ GENERAL: Loaded ${recentTransactions.length} transactions`);
         return recentTransactions;
       } catch (error) {
         logger.error('[useRecentTransactions] ❌ GENERAL: Failed to load transactions:', error);
-        
+
         if (isOffline) {
           return [];
         }
-        
+
         throw error;
       }
     },
-    enabled: enabled && !!entityId && !!profileId,
+    enabled: shouldExecute,
     staleTime: 30 * 1000,
     gcTime: 10 * 60 * 1000,
     retry: (failureCount) => !isOffline && failureCount < 2,

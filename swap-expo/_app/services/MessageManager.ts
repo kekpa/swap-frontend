@@ -1,6 +1,7 @@
 // Updated: Added comprehensive message handling with proper deduplication - 2025-05-21
 // Updated: Improved WebSocket integration for real-time messaging - 2025-05-21
 // Updated: Simplified for TanStack Query migration - 2025-01-10
+// Updated: Added ProfileContextManager integration for profile switch safety - 2025-01-10
 
 import apiClient from '../_api/apiClient';
 import { API_PATHS } from '../_api/apiPaths';
@@ -11,6 +12,7 @@ import logger from '../utils/logger';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { networkService } from './NetworkService';
 import { eventEmitter } from '../utils/eventEmitter';
+import { profileContextManager, ProfileSwitchStartData, ProfileSwitchCompleteData } from './ProfileContextManager';
 
 interface PendingMessage {
   id: string;
@@ -41,6 +43,11 @@ class MessageManager {
   private lastRequestTime: Map<string, number> = new Map();
   private optimisticMessageMap: Map<string, string> = new Map(); // optimisticId -> serverId
 
+  // Profile switch safety - pause processing during switch
+  private isPausedForProfileSwitch = false;
+  private unsubscribeSwitchStart: (() => void) | null = null;
+  private unsubscribeSwitchComplete: (() => void) | null = null;
+
   constructor() {
     this.initialize();
   }
@@ -48,7 +55,7 @@ class MessageManager {
   // Initialize the message manager
   private initialize(): void {
     logger.info('[MessageManager] Initializing MessageManager service');
-    
+
     // Setup reconnect handler for network state changes
     this.reconnectHandler = () => this.processQueue();
     networkService.onNetworkStateChange((state) => {
@@ -57,14 +64,62 @@ class MessageManager {
         setTimeout(this.reconnectHandler, 1000);
       }
     });
-    
+
     // Start queue processing
     this.startQueueProcessing();
-    
+
     // Load any pending messages from storage
     this.loadQueueFromStorage();
-    
+
+    // Subscribe to profile switch events for safety
+    this.subscribeToProfileSwitch();
+
     logger.info('[MessageManager] Initialization complete');
+  }
+
+  /**
+   * Subscribe to profile switch events to prevent stale data operations
+   *
+   * CRITICAL: This prevents the "stale closure" bug where queue processing
+   * continues with old profile's message context after a switch.
+   */
+  private subscribeToProfileSwitch(): void {
+    // On profile switch START: Pause processing and clear queue
+    this.unsubscribeSwitchStart = profileContextManager.onSwitchStart((data: ProfileSwitchStartData) => {
+      logger.info('[MessageManager] 🔄 Profile switch starting - pausing and clearing queue');
+      this.isPausedForProfileSwitch = true;
+
+      // Clear queue to prevent old profile's messages from processing
+      // These messages belonged to the old profile and should not be sent
+      // after switching to a new profile context
+      this.outgoingQueue.clear();
+      this.pendingMessages.clear();
+      this.messageStatusCache.clear();
+      this.lastRequestTime.clear();
+      this.optimisticMessageMap.clear();
+
+      // Clear persisted queue (async, fire-and-forget)
+      this.saveQueueToStorage().catch(err =>
+        logger.warn('[MessageManager] Failed to clear persisted queue:', err)
+      );
+
+      logger.debug('[MessageManager] ✅ Queue cleared for profile switch');
+    });
+
+    // On profile switch COMPLETE: Resume processing
+    this.unsubscribeSwitchComplete = profileContextManager.onSwitchComplete((data: ProfileSwitchCompleteData) => {
+      logger.info(`[MessageManager] ✅ Profile switch complete - resuming (${data.profileType})`);
+      this.isPausedForProfileSwitch = false;
+
+      // Restart queue processing with new profile context
+      this.startQueueProcessing();
+    });
+
+    // On profile switch FAILED: Resume with old context
+    profileContextManager.onSwitchFailed(() => {
+      logger.warn('[MessageManager] ⚠️ Profile switch failed - resuming with old context');
+      this.isPausedForProfileSwitch = false;
+    });
   }
 
   /**
@@ -196,10 +251,16 @@ class MessageManager {
   }
 
   private async processQueue(): Promise<void> {
+    // Skip processing if paused for profile switch or queue is empty
+    if (this.isPausedForProfileSwitch) {
+      logger.debug('[MessageManager] Queue processing paused for profile switch');
+      return;
+    }
+
     if (this.isProcessingQueue || this.outgoingQueue.size === 0) {
       return;
     }
-    
+
     this.isProcessingQueue = true;
     
     try {
@@ -293,6 +354,16 @@ class MessageManager {
 
     if (this.reconnectHandler) {
       this.reconnectHandler = null;
+    }
+
+    // Unsubscribe from profile switch events
+    if (this.unsubscribeSwitchStart) {
+      this.unsubscribeSwitchStart();
+      this.unsubscribeSwitchStart = null;
+    }
+    if (this.unsubscribeSwitchComplete) {
+      this.unsubscribeSwitchComplete();
+      this.unsubscribeSwitchComplete = null;
     }
 
     logger.debug('[MessageManager] Cleanup completed');

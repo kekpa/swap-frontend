@@ -100,6 +100,13 @@ class LoginService {
         logger.warn('[LoginService] Login succeeded but profile fetch failed');
       }
 
+      // Step 4.5: Sync PIN status from backend (Hybrid PIN Architecture)
+      // If backend says PIN is configured but local doesn't have hash,
+      // mark as configured from backend for first unlock
+      if (profile) {
+        await this.syncPinStatusFromProfile(profile, identifier);
+      }
+
       const sessionData: SessionData = profile ? {
         userId: profile.user_id || profile.id,
         profileId: profile.profile_id || profile.id,
@@ -374,6 +381,61 @@ class LoginService {
       createdAt: new Date().toISOString(),
       lastValidated: new Date().toISOString(),
     };
+  }
+
+  /**
+   * Sync PIN status from backend profile response.
+   *
+   * Part of Hybrid PIN Architecture:
+   * - Backend returns passcode_configured/pin_configured in profile
+   * - If backend has PIN but local doesn't, mark as configured from backend
+   * - First unlock will verify via backend, then save locally
+   *
+   * @param profile - Profile response from /auth/me
+   * @param identifier - User's phone/email for backend verification
+   */
+  private async syncPinStatusFromProfile(profile: any, identifier: string): Promise<void> {
+    try {
+      // Store identifier for backend PIN verification
+      await appLockService.setUserIdentifier(identifier);
+
+      if (profile.type === 'personal') {
+        // Personal profile: Check passcode_configured
+        if (profile.passcode_configured) {
+          const isLocallyConfigured = await appLockService.isConfigured();
+          if (!isLocallyConfigured) {
+            logger.info('[LoginService] Backend has PIN configured, syncing to local');
+            await appLockService.markAsConfiguredFromBackend(
+              profile.passcode_set_at,
+              identifier
+            );
+          } else {
+            logger.debug('[LoginService] PIN already configured locally');
+          }
+        } else {
+          logger.debug('[LoginService] No PIN configured on backend');
+        }
+      } else if (profile.type === 'business') {
+        // Business profile: Check pin_configured
+        if (profile.pin_configured) {
+          const isLocallyConfigured = await appLockService.isBusinessPinConfigured(profile.id);
+          if (!isLocallyConfigured) {
+            logger.info(`[LoginService] Backend has business PIN configured for ${profile.id}, syncing to local`);
+            await appLockService.markBusinessPinConfiguredFromBackend(
+              profile.id,
+              profile.pin_set_at
+            );
+          } else {
+            logger.debug('[LoginService] Business PIN already configured locally');
+          }
+        } else {
+          logger.debug('[LoginService] No business PIN configured on backend');
+        }
+      }
+    } catch (error: any) {
+      // Non-fatal - just log and continue
+      logger.warn('[LoginService] Failed to sync PIN status from backend:', error.message);
+    }
   }
 }
 

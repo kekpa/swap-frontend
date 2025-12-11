@@ -83,9 +83,9 @@ const CountryCodePicker = forwardRef<CountryCodePickerRef, CountryCodePickerProp
     <>
       <TouchableOpacity 
         style={[
-          styles.countryButton, 
-          { 
-            backgroundColor: theme.colors.inputBackground,
+          styles.countryButton,
+          {
+            backgroundColor: theme.colors.card,
             borderColor: theme.colors.border
           }
         ]}

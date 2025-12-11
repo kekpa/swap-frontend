@@ -18,6 +18,7 @@
 import apiClient from '../_api/apiClient';
 import { invalidateQueries } from '../tanstack-query/queryClient';
 import { logger } from '../utils/logger';
+import { storePinForBiometric } from '../utils/pinUserStorage';
 
 export interface StorePasscodeResult {
   success: boolean;
@@ -26,16 +27,20 @@ export interface StorePasscodeResult {
 
 export const KycService = {
   /**
-   * Store passcode in backend
+   * Store passcode in backend and optionally in Keychain for biometric access
    *
    * Backend stores a hash of the passcode (never plain text) for:
    * - Account recovery (SIM swap protection)
    * - Password reset verification (OTP + PIN required)
    *
+   * If profileId is provided, also stores PIN in Keychain for biometric access
+   * during profile switching (industry standard - used by banks).
+   *
    * @param passcode - 6-digit PIN to store
+   * @param profileId - Optional profile ID for biometric storage
    * @returns Result with success status
    */
-  async storePasscode(passcode: string): Promise<StorePasscodeResult> {
+  async storePasscode(passcode: string, profileId?: string): Promise<StorePasscodeResult> {
     try {
       logger.info('[KycService] Storing passcode in backend...');
       await apiClient.post('/auth/store-passcode', { passcode });
@@ -43,6 +48,17 @@ export const KycService = {
       // Invalidate relevant caches
       invalidateQueries(['kyc']);
       invalidateQueries(['auth']);
+
+      // If profileId provided, also store for biometric access
+      if (profileId) {
+        try {
+          await storePinForBiometric(profileId, passcode);
+          logger.info('[KycService] ✅ Passcode also stored for biometric access');
+        } catch (biometricError) {
+          // Non-fatal - biometric storage is optional
+          logger.warn('[KycService] ⚠️ Failed to store for biometric (non-fatal):', biometricError);
+        }
+      }
 
       logger.info('[KycService] ✅ Passcode stored successfully');
       return { success: true };

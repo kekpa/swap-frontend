@@ -63,6 +63,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isGuestMode, setIsGuestMode] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
+  // Initialization state - blocks UI until session check completes
+  // This prevents the "Sign In flash" when user is already logged in
+  const [isInitialized, setIsInitialized] = useState<boolean>(false);
+
   // Multi-account state
   const [availableAccounts, setAvailableAccounts] = useState<Account[]>([]);
 
@@ -149,6 +153,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     } finally {
       setIsLoading(false);
+      // Mark initialization complete - UI can now render based on actual auth state
+      setIsInitialized(true);
     }
   }, []);
 
@@ -572,6 +578,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isGuestMode,
     isLoading,
     user,
+    isInitialized,
     hasPersistedSession,
 
     // Wallet security

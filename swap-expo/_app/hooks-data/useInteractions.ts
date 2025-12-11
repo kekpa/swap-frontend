@@ -102,8 +102,16 @@ export const useInteractions = (
   const authContext = useAuthContext();
   const user = authContext?.user;
   const isAuthenticated = authContext?.isAuthenticated;
+  const isProfileSwitching = authContext?.isProfileSwitching;
   const queryClient = useQueryClient();
   const profileId = useCurrentProfileId();
+
+  // PROFILE SWITCH GUARD: Disable query during profile switch
+  const shouldExecute = enabled && isAuthenticated && !!user && !!profileId && !isProfileSwitching;
+
+  if (isProfileSwitching) {
+    logger.debug('[useInteractions] ⏸️ SKIPPING: Profile switch in progress');
+  }
 
   // Local-first interactions fetcher with deletion sync
   const fetchInteractions = useCallback(async (): Promise<InteractionItem[]> => {
@@ -255,10 +263,11 @@ export const useInteractions = (
   }, [isAuthenticated, user]);
 
   // TanStack Query configuration
+  // PROFILE-SAFE: Disabled during profile switch to prevent stale queries
   const queryResult = useQuery({
     queryKey: queryKeys.interactionsByEntity(profileId || 'anonymous', user?.entityId || 'anonymous'),
     queryFn: fetchInteractions,
-    enabled: enabled && isAuthenticated && !!user && !!profileId,
+    enabled: shouldExecute,
     staleTime: 2 * 60 * 1000, // 2 minutes - interactions can be slightly stale
     gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
     refetchOnMount: false, // Don't refetch on mount to prevent loading glitches

@@ -234,7 +234,8 @@ const PasscodeScreen: React.FC<PasscodeProps> = ({
         alignItems: 'center',
         paddingHorizontal: containerPadding,
         paddingTop: containerPadding,
-        justifyContent: isSmallScreen ? 'flex-start' : 'center'
+        justifyContent: isSmallScreen ? 'flex-start' : 'center',
+        backgroundColor: theme.colors.background,
       },
       passcodeTitle: {
         fontSize: titleFontSize,

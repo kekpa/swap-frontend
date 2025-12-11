@@ -36,7 +36,7 @@ import { navigationRef } from './utils/navigationRef';
 import { tokenManager } from './services/token';
 import appLockService from './services/AppLockService';
 import LockScreen from './features/auth/components/LockScreen';
-import AppLockSetupScreen from './features/auth/components/AppLockSetupScreen';
+import { AppLockSetupContent } from './features/auth/components/AppLockSetupScreen';
 import { authEvents, APP_LOCK_EVENTS } from './_api/apiClient';
 
 // PROFESSIONAL FIX: Suppress technical warnings that don't represent bugs
@@ -47,6 +47,13 @@ LogBox.ignoreLogs([
   'A query that was dehydrated as pending ended up rejecting',
   'Failed to open debugger',
   'Ignoring DevTools', // Suppresses "Ignoring DevTools app debug target" warnings
+  // Auth token refresh errors - these happen on app restart when old tokens are stale
+  // Still logged to terminal, just not shown as red popup
+  'Token expired and refresh failed',
+  'Token refresh failed',
+  '[AuthStateMachine]',
+  '[SessionManager] Token refresh failed',
+  '/auth/refresh',
 ]);
 
 // Configure logging based on environment
@@ -63,43 +70,75 @@ if (__DEV__) {
 }
 
 // Component to handle App Lock Screen
+// PROFILE-AWARE: Personal profile uses personal PIN, business profile uses business PIN
 const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const authContext = useAuthContext();
   const [isAppLocked, setIsAppLocked] = useState(true);
   const [isLockConfigured, setIsLockConfigured] = useState<boolean | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
+  const [isBusinessSetup, setIsBusinessSetup] = useState(false); // Track if we need business PIN setup
+
+  // Determine if current profile is a business profile
+  const isBusinessProfile = authContext.user?.profileType === 'business';
+  const currentProfileId = authContext.user?.profileId;
 
   // Initialize app lock service and check lock state
-  // Note: App Lock is DEVICE-WIDE, not profile-specific
-  // This ensures multi-profile works correctly (business profiles inherit from personal)
+  // PROFILE-AWARE: Check correct PIN based on active profile
   useEffect(() => {
     const initAppLock = async () => {
       await appLockService.initialize();
-      const configured = await appLockService.isConfigured();
-      setIsLockConfigured(configured);
 
-      // If user is authenticated and lock is configured, check if locked
-      if (authContext.isAuthenticated && configured) {
-        setIsAppLocked(appLockService.isLocked());
-        setNeedsSetup(false);
-      } else if (authContext.isAuthenticated && !configured) {
-        // Device doesn't have PIN configured - show setup
-        // Note: We intentionally don't check backend KYC here because:
-        // 1. App Lock is device-wide, not profile-specific
-        // 2. If device lost PIN data (reinstall), user should set up new PIN
-        // 3. This ensures multi-profile works correctly (business profiles inherit)
-        logger.debug('[AppLockHandler] No local PIN configured - showing setup');
-        setNeedsSetup(true);
-        setIsAppLocked(false);
+      // Check personal PIN configuration (always needed)
+      const personalPinConfigured = await appLockService.isConfigured();
+
+      // For business profiles, also check business PIN
+      let businessPinConfigured = false;
+      if (isBusinessProfile && currentProfileId) {
+        businessPinConfigured = await appLockService.isBusinessPinConfigured(currentProfileId);
+        logger.debug(`[AppLockHandler] Business profile detected, PIN configured: ${businessPinConfigured}`);
+      }
+
+      // Determine which PIN to use based on profile
+      if (isBusinessProfile) {
+        // Business profile: use business PIN
+        setIsLockConfigured(businessPinConfigured);
+
+        if (authContext.isAuthenticated && businessPinConfigured) {
+          setIsAppLocked(appLockService.isLocked());
+          setNeedsSetup(false);
+          setIsBusinessSetup(false);
+        } else if (authContext.isAuthenticated && !businessPinConfigured) {
+          // Business profile without PIN - show business PIN setup
+          logger.debug('[AppLockHandler] Business profile without PIN - showing business PIN setup');
+          setNeedsSetup(true);
+          setIsBusinessSetup(true);
+          setIsAppLocked(false);
+        } else {
+          setIsAppLocked(false);
+          setNeedsSetup(false);
+        }
       } else {
-        // Not authenticated = not locked, no setup needed
-        setIsAppLocked(false);
-        setNeedsSetup(false);
+        // Personal profile: use personal PIN (existing behavior)
+        setIsLockConfigured(personalPinConfigured);
+
+        if (authContext.isAuthenticated && personalPinConfigured) {
+          setIsAppLocked(appLockService.isLocked());
+          setNeedsSetup(false);
+          setIsBusinessSetup(false);
+        } else if (authContext.isAuthenticated && !personalPinConfigured) {
+          logger.debug('[AppLockHandler] No local PIN configured - showing setup');
+          setNeedsSetup(true);
+          setIsBusinessSetup(false);
+          setIsAppLocked(false);
+        } else {
+          setIsAppLocked(false);
+          setNeedsSetup(false);
+        }
       }
     };
 
     initAppLock();
-  }, [authContext.isAuthenticated]);
+  }, [authContext.isAuthenticated, isBusinessProfile, currentProfileId]);
 
   // Handle app state changes (background/foreground)
   useEffect(() => {
@@ -177,10 +216,15 @@ const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) =
   // - Not loading
   if (authContext.isAuthenticated && needsSetup && !authContext.isLoading) {
     return (
-      <AppLockSetupScreen
-        userName={authContext.user?.firstName || authContext.user?.businessName || 'there'}
+      <AppLockSetupContent
+        userName={isBusinessSetup
+          ? (authContext.user?.businessName || 'Your Business')
+          : (authContext.user?.firstName || 'there')}
         onComplete={handleSetupComplete}
         onLogout={handleLogout}
+        isBusinessSetup={isBusinessSetup}
+        businessProfileId={isBusinessSetup ? currentProfileId : undefined}
+        // No onSkip here - when showing from AppLockHandler, PIN is required (soft mandatory)
       />
     );
   }
@@ -195,11 +239,15 @@ const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
     return (
       <LockScreen
-        userName={authContext.user?.firstName || authContext.user?.businessName || 'there'}
+        userName={isBusinessProfile
+          ? (authContext.user?.businessName || 'Your Business')
+          : (authContext.user?.firstName || 'there')}
         userIdentifier={userIdentifier}
         onUnlock={handleUnlock}
         onLogout={handleLogout}
         onPinReset={handlePinReset}
+        isBusinessProfile={isBusinessProfile}
+        businessProfileId={isBusinessProfile ? currentProfileId : undefined}
       />
     );
   }

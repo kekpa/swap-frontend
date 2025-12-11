@@ -24,7 +24,14 @@ const Stack = createNativeStackNavigator();
 
 // Define Auth stack param list
 export type AuthStackParamList = {
-  SignIn: undefined;
+  SignIn: {
+    mode?: 'profileSwitch';
+    targetProfileId?: string;
+    targetDisplayName?: string;
+    targetProfileType?: 'personal' | 'business';
+    sourceUsername?: string;
+    sourceIdentifier?: string;
+  } | undefined;
   SignUpScreen: undefined;
   PhoneEntry: {
     returnToTimeline?: boolean;
@@ -38,7 +45,6 @@ export type AuthStackParamList = {
     sourceRoute?: string;
   };
   CompleteProfile: undefined;
-  SignIn: undefined;
   ForgotPassword: undefined;
   ResetPassword: { email: string };
 };

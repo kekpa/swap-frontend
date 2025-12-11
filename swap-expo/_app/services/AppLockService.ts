@@ -58,6 +58,16 @@ const STORAGE_KEYS = {
   FAILED_ATTEMPTS: 'app_lock_failed_attempts',
   LOCKOUT_UNTIL: 'app_lock_lockout_until',
   IS_CONFIGURED: 'app_lock_configured',
+  PIN_SOURCE: 'app_lock_pin_source', // 'local' | 'backend' - tracks if hash exists locally
+  PIN_SET_AT: 'app_lock_pin_set_at', // Timestamp from backend
+  USER_IDENTIFIER: 'app_lock_user_identifier', // Phone/email for backend verification
+  // Business profile PIN storage (per-profile)
+  BUSINESS_PIN_HASH_PREFIX: 'app_lock_business_pin_hash_',
+  BUSINESS_PIN_SALT_PREFIX: 'app_lock_business_pin_salt_',
+  BUSINESS_PIN_CONFIGURED_PREFIX: 'app_lock_business_configured_',
+  BUSINESS_FAILED_ATTEMPTS_PREFIX: 'app_lock_business_failed_',
+  BUSINESS_LOCKOUT_PREFIX: 'app_lock_business_lockout_',
+  BUSINESS_PIN_SOURCE_PREFIX: 'app_lock_business_pin_source_',
 } as const;
 
 // Session timeout: 30 minutes (for inactivity while in app)
@@ -177,6 +187,77 @@ class AppLockService {
   async isConfigured(): Promise<boolean> {
     const configured = await SecureStore.getItemAsync(STORAGE_KEYS.IS_CONFIGURED);
     return configured === 'true';
+  }
+
+  /**
+   * Mark PIN as configured when backend confirms it exists.
+   * Called after password login when backend has PIN but local doesn't.
+   *
+   * This is part of the hybrid PIN sync architecture:
+   * - User logs in with password on new device
+   * - Backend returns passcode_configured: true
+   * - App marks as configured but with source='backend' (no local hash yet)
+   * - First PIN unlock verifies via backend, then saves locally
+   *
+   * @param setAt - When the PIN was originally set (from backend)
+   * @param userIdentifier - Phone/email for backend verification
+   */
+  async markAsConfiguredFromBackend(setAt?: string, userIdentifier?: string): Promise<void> {
+    logger.info('[AppLockService] Marking PIN as configured from backend');
+
+    await SecureStore.setItemAsync(STORAGE_KEYS.IS_CONFIGURED, 'true');
+    await SecureStore.setItemAsync(STORAGE_KEYS.LOCK_METHOD, 'pin');
+    await SecureStore.setItemAsync(STORAGE_KEYS.PIN_SOURCE, 'backend');
+
+    if (setAt) {
+      await SecureStore.setItemAsync(STORAGE_KEYS.PIN_SET_AT, setAt);
+    }
+    if (userIdentifier) {
+      await SecureStore.setItemAsync(STORAGE_KEYS.USER_IDENTIFIER, userIdentifier);
+    }
+
+    this.state.lockMethod = 'pin';
+    logger.debug('[AppLockService] Marked as configured from backend (no local hash yet)');
+  }
+
+  /**
+   * Mark business PIN as configured from backend.
+   * Same pattern as personal PIN but per-business-profile.
+   */
+  async markBusinessPinConfiguredFromBackend(
+    businessProfileId: string,
+    setAt?: string
+  ): Promise<void> {
+    logger.info(`[AppLockService] Marking business PIN as configured from backend for ${businessProfileId}`);
+
+    const keys = this.getBusinessPinKeys(businessProfileId);
+    await SecureStore.setItemAsync(keys.configured, 'true');
+    await SecureStore.setItemAsync(`${STORAGE_KEYS.BUSINESS_PIN_SOURCE_PREFIX}${businessProfileId}`, 'backend');
+
+    logger.debug(`[AppLockService] Business PIN marked as configured from backend for ${businessProfileId}`);
+  }
+
+  /**
+   * Check if PIN verification should use backend (no local hash).
+   */
+  async shouldUseBackendVerification(): Promise<boolean> {
+    const source = await SecureStore.getItemAsync(STORAGE_KEYS.PIN_SOURCE);
+    const hasLocalHash = await SecureStore.getItemAsync(STORAGE_KEYS.PIN_HASH);
+    return source === 'backend' || !hasLocalHash;
+  }
+
+  /**
+   * Get stored user identifier for backend PIN verification
+   */
+  async getUserIdentifier(): Promise<string | null> {
+    return SecureStore.getItemAsync(STORAGE_KEYS.USER_IDENTIFIER);
+  }
+
+  /**
+   * Store user identifier for backend PIN verification
+   */
+  async setUserIdentifier(identifier: string): Promise<void> {
+    await SecureStore.setItemAsync(STORAGE_KEYS.USER_IDENTIFIER, identifier);
   }
 
   /**
@@ -342,6 +423,10 @@ class AppLockService {
 
   /**
    * Unlock with PIN
+   *
+   * Hybrid verification:
+   * 1. If local hash exists → verify locally (instant, works offline)
+   * 2. If no local hash (new device) → verify via backend, then save locally
    */
   async unlockWithPin(pin: string): Promise<UnlockResult> {
     try {
@@ -356,31 +441,102 @@ class AppLockService {
         };
       }
 
-      // Verify PIN
+      // Check if we have local hash
       const [storedHash, salt] = await Promise.all([
         SecureStore.getItemAsync(STORAGE_KEYS.PIN_HASH),
         SecureStore.getItemAsync(STORAGE_KEYS.PIN_SALT),
       ]);
 
-      if (!storedHash || !salt) {
-        return { success: false, error: 'PIN not configured' };
+      // If local hash exists, verify locally (instant, offline-capable)
+      if (storedHash && salt) {
+        const hash = await Crypto.digestStringAsync(
+          Crypto.CryptoDigestAlgorithm.SHA256,
+          salt + pin
+        );
+
+        if (hash === storedHash) {
+          await this.onUnlockSuccess('pin');
+          return { success: true, method: 'pin' };
+        }
+
+        await this.onUnlockFailed();
+        return { success: false, error: 'Incorrect PIN' };
       }
 
-      const hash = await Crypto.digestStringAsync(
-        Crypto.CryptoDigestAlgorithm.SHA256,
-        salt + pin
-      );
-
-      if (hash === storedHash) {
-        await this.onUnlockSuccess('pin');
-        return { success: true, method: 'pin' };
-      }
-
-      await this.onUnlockFailed();
-      return { success: false, error: 'Incorrect PIN' };
+      // No local hash - verify against backend (new device scenario)
+      logger.debug('[AppLockService] No local hash, using backend verification');
+      return this.verifyPinViaBackend(pin);
     } catch (error: any) {
       logger.error('[AppLockService] PIN unlock error:', error.message);
       return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Verify PIN against backend when no local hash exists.
+   * After successful verification, saves PIN locally for future offline unlocks.
+   */
+  private async verifyPinViaBackend(pin: string): Promise<UnlockResult> {
+    try {
+      const identifier = await this.getUserIdentifier();
+      if (!identifier) {
+        logger.error('[AppLockService] No user identifier found for backend verification');
+        return { success: false, error: 'Please log in with your password first' };
+      }
+
+      // Dynamically import to avoid circular dependency
+      const { loginService } = await import('./auth/LoginService');
+
+      logger.debug('[AppLockService] Verifying PIN via backend...');
+      const result = await loginService.loginWithPin(identifier, pin);
+
+      if (result.success) {
+        // Success! Save PIN locally for future offline unlocks
+        await this.savePinLocally(pin);
+        await this.onUnlockSuccess('pin');
+        logger.info('[AppLockService] Backend PIN verification successful, saved locally');
+        return { success: true, method: 'pin' };
+      } else {
+        await this.onUnlockFailed();
+        return { success: false, error: result.message || 'Incorrect PIN' };
+      }
+    } catch (error: any) {
+      logger.error('[AppLockService] Backend PIN verification failed:', error.message);
+
+      // Check if it's a network error
+      if (error.message?.includes('Network') || error.message?.includes('network')) {
+        return { success: false, error: 'Check your internet connection and try again' };
+      }
+
+      return { success: false, error: 'Verification failed. Please try again.' };
+    }
+  }
+
+  /**
+   * Save PIN locally after successful backend verification.
+   * Enables future offline unlocks.
+   */
+  private async savePinLocally(pin: string): Promise<void> {
+    try {
+      // Generate new salt and hash
+      const salt = await Crypto.getRandomBytesAsync(16);
+      const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
+      const hash = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        saltHex + pin
+      );
+
+      // Store securely
+      await Promise.all([
+        SecureStore.setItemAsync(STORAGE_KEYS.PIN_HASH, hash),
+        SecureStore.setItemAsync(STORAGE_KEYS.PIN_SALT, saltHex),
+        SecureStore.setItemAsync(STORAGE_KEYS.PIN_SOURCE, 'local'),
+      ]);
+
+      logger.info('[AppLockService] PIN saved locally after backend verification');
+    } catch (error: any) {
+      // Non-fatal - PIN still works, just won't be available offline
+      logger.warn('[AppLockService] Failed to save PIN locally:', error.message);
     }
   }
 
@@ -542,6 +698,198 @@ class AppLockService {
 
       logger.warn(`[AppLockService] Too many failed attempts (${this.state.failedAttempts}), locked out for ${lockoutDuration / 1000}s`);
     }
+  }
+
+  // --------------------------------------------------------------------------
+  // Business Profile PIN Methods
+  // --------------------------------------------------------------------------
+
+  /**
+   * Get storage keys for a specific business profile
+   */
+  private getBusinessPinKeys(businessProfileId: string) {
+    return {
+      hash: `${STORAGE_KEYS.BUSINESS_PIN_HASH_PREFIX}${businessProfileId}`,
+      salt: `${STORAGE_KEYS.BUSINESS_PIN_SALT_PREFIX}${businessProfileId}`,
+      configured: `${STORAGE_KEYS.BUSINESS_PIN_CONFIGURED_PREFIX}${businessProfileId}`,
+      failedAttempts: `${STORAGE_KEYS.BUSINESS_FAILED_ATTEMPTS_PREFIX}${businessProfileId}`,
+      lockout: `${STORAGE_KEYS.BUSINESS_LOCKOUT_PREFIX}${businessProfileId}`,
+    };
+  }
+
+  /**
+   * Check if business PIN is configured for a specific profile
+   */
+  async isBusinessPinConfigured(businessProfileId: string): Promise<boolean> {
+    const keys = this.getBusinessPinKeys(businessProfileId);
+    const configured = await SecureStore.getItemAsync(keys.configured);
+    return configured === 'true';
+  }
+
+  /**
+   * Setup PIN for a business profile
+   * @param pin 4-6 digit PIN
+   * @param businessProfileId The business profile ID
+   */
+  async setupBusinessPin(
+    pin: string,
+    businessProfileId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      logger.debug(`[AppLockService] Setting up business PIN for profile ${businessProfileId}...`);
+
+      // Business PINs are 4-6 digits
+      if (!/^\d{4,6}$/.test(pin)) {
+        return { success: false, error: 'PIN must be 4-6 digits' };
+      }
+
+      const keys = this.getBusinessPinKeys(businessProfileId);
+
+      // Generate salt and hash PIN
+      const salt = await Crypto.getRandomBytesAsync(16);
+      const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
+      const hash = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        saltHex + pin
+      );
+
+      // Store securely
+      await SecureStore.setItemAsync(keys.salt, saltHex);
+      await SecureStore.setItemAsync(keys.hash, hash);
+      await SecureStore.setItemAsync(keys.configured, 'true');
+
+      logger.info(`[AppLockService] Business PIN configured for profile ${businessProfileId}`);
+
+      return { success: true };
+    } catch (error: any) {
+      logger.error('[AppLockService] Business PIN setup failed:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Check if business profile is in lockout period
+   */
+  async isBusinessLockedOut(businessProfileId: string): Promise<{ lockedOut: boolean; remainingMs: number }> {
+    const keys = this.getBusinessPinKeys(businessProfileId);
+    const lockoutStr = await SecureStore.getItemAsync(keys.lockout);
+
+    if (!lockoutStr) {
+      return { lockedOut: false, remainingMs: 0 };
+    }
+
+    const lockoutUntil = parseInt(lockoutStr, 10);
+    const now = Date.now();
+
+    if (now >= lockoutUntil) {
+      // Lockout expired, clear it
+      await SecureStore.deleteItemAsync(keys.lockout);
+      return { lockedOut: false, remainingMs: 0 };
+    }
+
+    return {
+      lockedOut: true,
+      remainingMs: lockoutUntil - now,
+    };
+  }
+
+  /**
+   * Unlock with business PIN
+   */
+  async unlockWithBusinessPin(pin: string, businessProfileId: string): Promise<UnlockResult> {
+    try {
+      logger.debug(`[AppLockService] Attempting business PIN unlock for profile ${businessProfileId}...`);
+
+      const keys = this.getBusinessPinKeys(businessProfileId);
+
+      // Check lockout
+      const lockout = await this.isBusinessLockedOut(businessProfileId);
+      if (lockout.lockedOut) {
+        return {
+          success: false,
+          error: `Too many attempts. Try again in ${Math.ceil(lockout.remainingMs / 1000)} seconds`,
+        };
+      }
+
+      // Verify PIN
+      const [storedHash, salt] = await Promise.all([
+        SecureStore.getItemAsync(keys.hash),
+        SecureStore.getItemAsync(keys.salt),
+      ]);
+
+      if (!storedHash || !salt) {
+        return { success: false, error: 'Business PIN not configured' };
+      }
+
+      const hash = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        salt + pin
+      );
+
+      if (hash === storedHash) {
+        // Success - clear failed attempts
+        await SecureStore.deleteItemAsync(keys.failedAttempts);
+        await SecureStore.deleteItemAsync(keys.lockout);
+
+        // Update unlock state
+        await this.onUnlockSuccess('pin');
+
+        logger.info(`[AppLockService] Business PIN unlock successful for profile ${businessProfileId}`);
+        return { success: true, method: 'pin' };
+      }
+
+      // Failed - increment attempts
+      await this.onBusinessUnlockFailed(businessProfileId);
+      return { success: false, error: 'Incorrect PIN' };
+    } catch (error: any) {
+      logger.error('[AppLockService] Business PIN unlock error:', error.message);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Handle failed business PIN attempt
+   */
+  private async onBusinessUnlockFailed(businessProfileId: string): Promise<void> {
+    const keys = this.getBusinessPinKeys(businessProfileId);
+
+    // Get current attempts
+    const attemptsStr = await SecureStore.getItemAsync(keys.failedAttempts);
+    const attempts = attemptsStr ? parseInt(attemptsStr, 10) + 1 : 1;
+
+    await SecureStore.setItemAsync(keys.failedAttempts, attempts.toString());
+
+    // Check if lockout needed
+    if (attempts >= MAX_FAILED_ATTEMPTS) {
+      const lockoutDuration = LOCKOUT_DURATION_MS * Math.pow(
+        LOCKOUT_MULTIPLIER,
+        Math.floor(attempts / MAX_FAILED_ATTEMPTS) - 1
+      );
+
+      const lockoutUntil = Date.now() + lockoutDuration;
+      await SecureStore.setItemAsync(keys.lockout, lockoutUntil.toString());
+
+      logger.warn(`[AppLockService] Business profile ${businessProfileId}: Too many failed attempts (${attempts}), locked out for ${lockoutDuration / 1000}s`);
+    }
+  }
+
+  /**
+   * Clear business PIN for a specific profile
+   */
+  async clearBusinessPin(businessProfileId: string): Promise<void> {
+    logger.debug(`[AppLockService] Clearing business PIN for profile ${businessProfileId}...`);
+
+    const keys = this.getBusinessPinKeys(businessProfileId);
+
+    await Promise.all([
+      SecureStore.deleteItemAsync(keys.hash),
+      SecureStore.deleteItemAsync(keys.salt),
+      SecureStore.deleteItemAsync(keys.configured),
+      SecureStore.deleteItemAsync(keys.failedAttempts),
+      SecureStore.deleteItemAsync(keys.lockout),
+    ]);
+
+    logger.info(`[AppLockService] Business PIN cleared for profile ${businessProfileId}`);
   }
 
   // --------------------------------------------------------------------------

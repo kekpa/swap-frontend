@@ -28,6 +28,7 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import { Alert } from 'react-native';
 import { queryKeys } from '../tanstack-query/queryKeys';
 import { clearProfileLocalDB } from '../localdb';
+import { profileContextManager } from './ProfileContextManager';
 
 /**
  * Profile switch states (state machine)
@@ -101,6 +102,7 @@ export interface AvailableProfile {
  */
 export interface ProfileSwitchOptions {
   targetProfileId: string;
+  pin?: string; // Business access PIN (required if business has PIN set)
   requireBiometric?: boolean; // Default: true
   apiClient: any; // Axios instance
   authContext: any; // AuthContext instance
@@ -187,6 +189,12 @@ export class ProfileSwitchOrchestrator {
       // CRITICAL: Set isProfileSwitching flag to prevent stale queries during switch
       authContext.setIsProfileSwitching?.(true);
       console.log('🎭 [ProfileSwitchOrchestrator] 🔒 isProfileSwitching = true (queries disabled)');
+
+      // CRITICAL: Notify ProfileContextManager to abort all pending requests and pause services
+      // This prevents stale closure bugs where background sync uses old profile IDs
+      const currentEntityId = tokenManager.getCurrentEntityId() || '';
+      profileContextManager.onProfileSwitchStart(targetProfileId, currentEntityId);
+      console.log('🎭 [ProfileSwitchOrchestrator] ✅ ProfileContextManager notified - all pending requests aborted');
 
       console.log('🎭 [ProfileSwitchOrchestrator] STEP 0: Starting profile switch');
 
@@ -314,7 +322,7 @@ export class ProfileSwitchOrchestrator {
       this.state = ProfileSwitchState.API_CALL_PENDING;
       this.updateProgress(this.state, 'Switching profile...');
 
-      const apiResponse = await this.callSwitchProfileAPI(apiClient, targetProfileId);
+      const apiResponse = await this.callSwitchProfileAPI(apiClient, targetProfileId, options.pin);
 
       logger.debug('[ProfileSwitchOrchestrator] ✅ API call successful', 'profile_switch');
 
@@ -454,6 +462,14 @@ export class ProfileSwitchOrchestrator {
       }
 
       // ============================================================================
+      // CRITICAL: Notify ProfileContextManager that switch is complete
+      // This allows services to resume with the new profile context
+      // ============================================================================
+      const profileType = newProfile.type === 'business' ? 'business' : 'personal';
+      profileContextManager.onProfileSwitchComplete(newProfile.id, newProfile.entity_id, profileType);
+      console.log('🎭 [ProfileSwitchOrchestrator] ✅ ProfileContextManager notified - services can resume with new context');
+
+      // ============================================================================
       // SUCCESS
       // ============================================================================
       this.state = ProfileSwitchState.SUCCESS;
@@ -476,6 +492,10 @@ export class ProfileSwitchOrchestrator {
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       logger.error('[ProfileSwitchOrchestrator] ❌ Profile switch failed:', error);
+
+      // Notify ProfileContextManager that switch failed - services can resume with old context
+      profileContextManager.onProfileSwitchFailed();
+      console.log('🎭 [ProfileSwitchOrchestrator] ⚠️ ProfileContextManager notified of failure - services resuming with old context');
 
       // Attempt rollback
       await this.rollback(apiClient, authContext);
@@ -543,9 +563,10 @@ export class ProfileSwitchOrchestrator {
   /**
    * Call backend /auth/switch-profile API
    */
-  private async callSwitchProfileAPI(apiClient: any, targetProfileId: string): Promise<any> {
+  private async callSwitchProfileAPI(apiClient: any, targetProfileId: string, pin?: string): Promise<any> {
     const response = await apiClient.post('/auth/switch-profile', {
       targetProfileId,
+      pin, // Business access PIN (if required)
     });
 
     if (!response.data || !response.data.access_token) {

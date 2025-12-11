@@ -2,11 +2,14 @@
  * ProfileSwitcherModal Component
  *
  * Bottom sheet modal for switching between user profiles (personal + business).
- * Enterprise security pattern with biometric authentication on profile switch.
- * Supports optional business PIN verification for extra security.
+ * Enterprise security pattern with inline PIN entry for business profiles.
+ *
+ * When switching to a business profile that requires PIN verification,
+ * shows an inline PIN entry UI within the modal. The PIN is then passed
+ * to the parent's onSelectProfile callback for direct API switch.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useCallback, useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,10 +17,12 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  useWindowDimensions,
+  TextInput,
+  Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import * as LocalAuthentication from 'expo-local-authentication';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
@@ -28,19 +33,20 @@ import { useTheme } from '../theme/ThemeContext';
 import { AvailableProfile } from '../features/auth/hooks/useAvailableProfiles';
 import { getInitials, getAvatarColor } from '../utils/avatarUtils';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
-import BusinessPinInputModal from './BusinessPinInputModal';
 import apiClient from '../_api/apiClient';
-import { BUSINESS_PATHS } from '../_api/apiPaths';
+import { AUTH_PATHS } from '../_api/apiPaths';
 import { logger } from '../utils/logger';
+import { getPinWithBiometric, storePinForBiometric, hasPinForBiometric } from '../utils/pinUserStorage';
 
 interface ProfileSwitcherModalProps {
   visible: boolean;
   profiles: AvailableProfile[];
   currentProfileId: string;
-  onSelectProfile: (profile: AvailableProfile, pin?: string) => void;
+  onSelectProfile: (profile: AvailableProfile, pin?: string) => Promise<{ success: boolean; error?: string }> | void;
   onClose: () => void;
   onAddAccount?: () => void;
   onRemoveAccount?: (profile: AvailableProfile) => void;
+  onPinSetupRequired?: (profile: AvailableProfile) => void; // Called when business profile has no PIN set
   isLoading?: boolean;
 }
 
@@ -58,19 +64,62 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
   onClose,
   onAddAccount,
   onRemoveAccount,
+  onPinSetupRequired,
   isLoading = false,
 }) => {
   const { theme } = useTheme();
   const { isConnected } = useNetworkStatus();
-  const { height } = useWindowDimensions();
   const bottomSheetRef = React.useRef<BottomSheet>(null);
 
-  // PIN modal state
-  const [showPinModal, setShowPinModal] = useState(false);
-  const [pinProfile, setPinProfile] = useState<AvailableProfile | null>(null);
-  const [pinError, setPinError] = useState<string | null>(null);
-  const [pinLockoutUntil, setPinLockoutUntil] = useState<Date | null>(null);
+  // PIN check state
   const [isCheckingPin, setIsCheckingPin] = useState(false);
+
+  // Inline PIN entry state
+  const [pinEntryProfile, setPinEntryProfile] = useState<AvailableProfile | null>(null);
+  const [pin, setPin] = useState<string[]>(['', '', '', '', '', '']);
+  const [isPinError, setIsPinError] = useState(false);
+  const [isSubmittingPin, setIsSubmittingPin] = useState(false);
+  const pinInputRefs = useRef<Array<TextInput | null>>([null, null, null, null, null, null]);
+
+  // Biometric state
+  const [isBiometricAvailable, setIsBiometricAvailable] = useState(false);
+  const [biometricType, setBiometricType] = useState<'face' | 'fingerprint' | 'iris' | null>(null);
+
+  // Check biometric availability on mount
+  useEffect(() => {
+    const checkBiometric = async () => {
+      try {
+        const compatible = await LocalAuthentication.hasHardwareAsync();
+        if (!compatible) {
+          setIsBiometricAvailable(false);
+          return;
+        }
+
+        const enrolled = await LocalAuthentication.isEnrolledAsync();
+        if (!enrolled) {
+          setIsBiometricAvailable(false);
+          return;
+        }
+
+        setIsBiometricAvailable(true);
+
+        // Determine biometric type for icon/text
+        const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+        if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) {
+          setBiometricType('face');
+        } else if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) {
+          setBiometricType('fingerprint');
+        } else if (types.includes(LocalAuthentication.AuthenticationType.IRIS)) {
+          setBiometricType('iris');
+        }
+      } catch (error) {
+        logger.warn('[ProfileSwitcherModal] Biometric check failed:', error);
+        setIsBiometricAvailable(false);
+      }
+    };
+
+    checkBiometric();
+  }, []);
 
   // Calculate snap index based on visible prop
   const snapIndex = React.useMemo(() => (visible ? 0 : -1), [visible]);
@@ -204,15 +253,136 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
           marginLeft: theme.spacing.xs,
           flex: 1,
         },
+        // PIN Entry styles
+        pinEntryContainer: {
+          padding: theme.spacing.lg,
+          alignItems: 'center',
+        },
+        pinEntryHeader: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginBottom: theme.spacing.lg,
+        },
+        pinEntryAvatar: {
+          width: 48,
+          height: 48,
+          borderRadius: 24,
+          marginRight: theme.spacing.md,
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+        pinEntryAvatarText: {
+          fontSize: theme.typography.fontSize.xl,
+          fontWeight: '600',
+          color: theme.colors.white,
+        },
+        pinEntryProfileInfo: {
+          flex: 1,
+        },
+        pinEntryTitle: {
+          fontSize: theme.typography.fontSize.lg,
+          fontWeight: '600',
+          color: theme.colors.textPrimary,
+        },
+        pinEntrySubtitle: {
+          fontSize: theme.typography.fontSize.sm,
+          color: theme.colors.textSecondary,
+        },
+        pinInputContainer: {
+          flexDirection: 'row',
+          justifyContent: 'center',
+          marginBottom: theme.spacing.md,
+        },
+        pinInput: {
+          width: 45,
+          height: 50,
+          borderWidth: 1,
+          borderColor: theme.colors.border,
+          borderRadius: theme.borderRadius.md,
+          backgroundColor: theme.colors.card,
+          textAlign: 'center',
+          fontSize: theme.typography.fontSize.xl,
+          marginHorizontal: 4,
+          color: theme.colors.textPrimary,
+        },
+        pinInputError: {
+          borderColor: theme.colors.error,
+        },
+        pinErrorText: {
+          fontSize: theme.typography.fontSize.sm,
+          color: theme.colors.error,
+          marginBottom: theme.spacing.md,
+          textAlign: 'center',
+        },
+        pinSubmitButton: {
+          backgroundColor: theme.colors.primary,
+          paddingVertical: theme.spacing.md,
+          paddingHorizontal: theme.spacing.xl,
+          borderRadius: theme.borderRadius.md,
+          width: '100%',
+          alignItems: 'center',
+          marginBottom: theme.spacing.sm,
+        },
+        pinSubmitButtonDisabled: {
+          opacity: 0.5,
+        },
+        pinSubmitButtonText: {
+          fontSize: theme.typography.fontSize.md,
+          fontWeight: '600',
+          color: theme.colors.white,
+        },
+        pinBackButton: {
+          paddingVertical: theme.spacing.sm,
+        },
+        pinBackButtonText: {
+          fontSize: theme.typography.fontSize.md,
+          color: theme.colors.primary,
+        },
+        // Biometric styles
+        orDivider: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginVertical: theme.spacing.md,
+          width: '100%',
+        },
+        orDividerLine: {
+          flex: 1,
+          height: 1,
+          backgroundColor: theme.colors.border,
+        },
+        orDividerText: {
+          marginHorizontal: theme.spacing.md,
+          fontSize: theme.typography.fontSize.sm,
+          color: theme.colors.textSecondary,
+        },
+        biometricButton: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingVertical: theme.spacing.md,
+          paddingHorizontal: theme.spacing.xl,
+          borderRadius: theme.borderRadius.md,
+          borderWidth: 1,
+          borderColor: theme.colors.primary,
+          backgroundColor: theme.colors.card,
+          width: '100%',
+          marginBottom: theme.spacing.sm,
+        },
+        biometricButtonText: {
+          fontSize: theme.typography.fontSize.md,
+          fontWeight: '600',
+          color: theme.colors.primary,
+          marginLeft: theme.spacing.sm,
+        },
       }),
     [theme],
   );
 
-  // Check if PIN is required for a business profile
-  const checkPinRequired = useCallback(async (businessProfileId: string): Promise<CheckPinResponse> => {
+  // Check if PIN is required for any profile (personal or business)
+  const checkPinRequired = useCallback(async (profileId: string): Promise<CheckPinResponse> => {
     try {
       const { data } = await apiClient.get<CheckPinResponse>(
-        BUSINESS_PATHS.CHECK_PIN(businessProfileId)
+        AUTH_PATHS.CHECK_PROFILE_PIN(profileId)
       );
       return data;
     } catch (error: any) {
@@ -220,26 +390,6 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
       // Default to no PIN required if check fails
       return { pinRequired: false, pinSet: false };
     }
-  }, []);
-
-  // Handle PIN submission
-  const handlePinSubmit = useCallback((pin: string) => {
-    if (!pinProfile) return;
-
-    logger.debug('[ProfileSwitcherModal] PIN submitted, attempting switch...');
-    setPinError(null);
-
-    // Close PIN modal and trigger profile switch with PIN
-    setShowPinModal(false);
-    onSelectProfile(pinProfile, pin);
-  }, [pinProfile, onSelectProfile]);
-
-  // Handle PIN modal cancel
-  const handlePinCancel = useCallback(() => {
-    setShowPinModal(false);
-    setPinProfile(null);
-    setPinError(null);
-    setPinLockoutUntil(null);
   }, []);
 
   const handleSelectProfile = useCallback(async (profile: AvailableProfile) => {
@@ -258,33 +408,244 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
       return;
     }
 
-    // Check if business profile requires PIN
-    if (profile.type === 'business') {
-      setIsCheckingPin(true);
-      try {
-        const pinStatus = await checkPinRequired(profile.profileId);
-        logger.debug('[ProfileSwitcherModal] PIN status:', pinStatus);
+    // Check if ANY profile requires PIN (both personal and business)
+    setIsCheckingPin(true);
+    try {
+      const pinStatus = await checkPinRequired(profile.profileId);
+      logger.debug('[ProfileSwitcherModal] PIN status:', pinStatus);
 
-        if (pinStatus.pinRequired) {
-          // Show PIN input modal
-          setPinProfile(profile);
-          setPinError(null);
-          setPinLockoutUntil(null);
-          setShowPinModal(true);
-          setIsCheckingPin(false);
-          return;
-        }
-      } catch (error: any) {
-        logger.error('[ProfileSwitcherModal] PIN check failed:', error.message);
-      } finally {
+      if (pinStatus.pinRequired) {
+        // PIN exists - show inline PIN entry
+        logger.debug('[ProfileSwitcherModal] PIN required, showing inline PIN entry...');
         setIsCheckingPin(false);
+        setPinEntryProfile(profile);
+        setPin(['', '', '', '', '', '']);
+        setIsPinError(false);
+        // Focus first PIN input after render
+        setTimeout(() => pinInputRefs.current[0]?.focus(), 100);
+        return;
+      }
+
+      // SECURITY: Business profiles MUST have PIN set before switching
+      // If no PIN exists yet, force user to create one first
+      if (!pinStatus.pinSet && profile.type === 'business') {
+        logger.debug('[ProfileSwitcherModal] Business profile has no PIN, forcing setup...');
+        setIsCheckingPin(false);
+        if (onPinSetupRequired) {
+          onClose(); // Close modal before navigating
+          onPinSetupRequired(profile);
+        } else {
+          // Fallback: Alert user if callback not provided
+          Alert.alert(
+            'Setup Required',
+            'Please set up a passcode for this business account before switching.',
+            [{ text: 'OK' }]
+          );
+        }
+        return;
+      }
+    } catch (error: any) {
+      logger.error('[ProfileSwitcherModal] PIN check failed:', error.message);
+    } finally {
+      setIsCheckingPin(false);
+    }
+
+    // Personal profile without PIN requirement - allow switch
+    logger.debug('[ProfileSwitcherModal] Personal profile, no PIN required, triggering switch...');
+    onSelectProfile(profile);
+  }, [currentProfileId, onClose, onSelectProfile, onPinSetupRequired, checkPinRequired]);
+
+  // Handle PIN input change
+  const handlePinChange = useCallback((text: string, index: number) => {
+    setIsPinError(false); // Clear error on input
+
+    let newPin: string[];
+
+    if (text.length > 1) {
+      // Handle paste of entire PIN
+      const pastedPin = text.slice(0, 6).split('');
+      newPin = [...pin];
+      pastedPin.forEach((digit, idx) => {
+        if (idx < 6) newPin[idx] = digit;
+      });
+      setPin(newPin);
+
+      // Focus last input or blur if complete
+      if (pastedPin.length === 6) {
+        pinInputRefs.current[5]?.blur();
+      } else {
+        const nextIndex = Math.min(index + pastedPin.length, 5);
+        pinInputRefs.current[nextIndex]?.focus();
+      }
+    } else {
+      // Handle single digit input
+      newPin = [...pin];
+      newPin[index] = text;
+      setPin(newPin);
+
+      // Auto-advance to next input
+      if (text !== '' && index < 5) {
+        pinInputRefs.current[index + 1]?.focus();
       }
     }
 
-    // Trigger profile switch (will show biometric prompt)
-    logger.debug('[ProfileSwitcherModal] Triggering profile switch...');
-    onSelectProfile(profile);
-  }, [currentProfileId, onClose, onSelectProfile, checkPinRequired]);
+    // AUTO-SUBMIT: If all 6 digits entered, submit automatically
+    const pinComplete = newPin.every(digit => digit !== '');
+    if (pinComplete && !isSubmittingPin && pinEntryProfile) {
+      // Small delay for visual feedback before submit
+      setTimeout(async () => {
+        const pinString = newPin.join('');
+        if (pinString.length !== 6 || !pinEntryProfile) return;
+
+        // Inline submit logic to avoid circular dependency with handlePinSubmit
+        setIsSubmittingPin(true);
+        setIsPinError(false);
+        logger.debug('[ProfileSwitcherModal] Auto-submitting PIN for profile switch...');
+
+        try {
+          const result = await onSelectProfile(pinEntryProfile, pinString);
+          if (result && !result.success) {
+            logger.warn('[ProfileSwitcherModal] Switch failed:', result.error);
+            setIsPinError(true);
+            setPin(['', '', '', '', '', '']);
+            pinInputRefs.current[0]?.focus();
+          } else {
+            setPinEntryProfile(null);
+            setPin(['', '', '', '', '', '']);
+          }
+        } catch (error: any) {
+          logger.error('[ProfileSwitcherModal] PIN submit error:', error);
+          setIsPinError(true);
+          setPin(['', '', '', '', '', '']);
+          pinInputRefs.current[0]?.focus();
+        } finally {
+          setIsSubmittingPin(false);
+        }
+      }, 100);
+    }
+  }, [pin, isSubmittingPin, pinEntryProfile, onSelectProfile]);
+
+  // Handle backspace in PIN input
+  const handlePinKeyPress = useCallback((e: any, index: number) => {
+    if (e.nativeEvent.key === 'Backspace' && pin[index] === '' && index > 0) {
+      const newPin = [...pin];
+      newPin[index - 1] = '';
+      setPin(newPin);
+      pinInputRefs.current[index - 1]?.focus();
+    }
+  }, [pin]);
+
+  // Handle PIN submission
+  const handlePinSubmit = useCallback(async () => {
+    if (!pinEntryProfile) return;
+
+    const pinString = pin.join('');
+    if (pinString.length !== 6) {
+      setIsPinError(true);
+      return;
+    }
+
+    setIsSubmittingPin(true);
+    setIsPinError(false);
+    logger.debug('[ProfileSwitcherModal] Submitting PIN for profile switch...');
+
+    try {
+      // Call onSelectProfile with PIN - parent returns success/error
+      const result = await onSelectProfile(pinEntryProfile, pinString);
+
+      if (result && !result.success) {
+        // Switch failed - show error and let user retry
+        logger.warn('[ProfileSwitcherModal] Switch failed:', result.error);
+        setIsPinError(true);
+        // Clear PIN for retry
+        setPin(['', '', '', '', '', '']);
+        pinInputRefs.current[0]?.focus();
+      } else {
+        // Success! Store PIN for future biometric access (non-blocking)
+        storePinForBiometric(pinEntryProfile.profileId, pinString).catch((err) => {
+          logger.warn('[ProfileSwitcherModal] Failed to store PIN for biometric (non-fatal):', err);
+        });
+        // Parent will close modal, reset state for next time
+        setPinEntryProfile(null);
+        setPin(['', '', '', '', '', '']);
+      }
+    } catch (error: any) {
+      logger.error('[ProfileSwitcherModal] PIN submit error:', error);
+      setIsPinError(true);
+      setPin(['', '', '', '', '', '']);
+      pinInputRefs.current[0]?.focus();
+    } finally {
+      setIsSubmittingPin(false);
+    }
+  }, [pinEntryProfile, pin, onSelectProfile]);
+
+  // Handle biometric authentication as alternative to PIN
+  // Uses "Biometric Unlocks PIN" pattern - retrieves stored PIN from Keychain using Face ID
+  const handleBiometricAuth = useCallback(async () => {
+    if (!pinEntryProfile) return;
+
+    setIsSubmittingPin(true);
+    setIsPinError(false);
+    logger.debug('[ProfileSwitcherModal] Starting biometric authentication...');
+
+    try {
+      // Retrieve PIN from Keychain using biometric (Face ID / Touch ID)
+      // This triggers the biometric prompt AND returns the actual PIN if successful
+      const storedPin = await getPinWithBiometric(
+        pinEntryProfile.profileId,
+        `Authenticate to switch to ${pinEntryProfile.displayName}`
+      );
+
+      if (storedPin) {
+        logger.info('[ProfileSwitcherModal] Biometric auth successful, switching profile with PIN...');
+
+        // Send the actual PIN to backend - backend verifies the hash as normal
+        const switchResult = await onSelectProfile(pinEntryProfile, storedPin);
+
+        if (switchResult && !switchResult.success) {
+          // PIN was wrong (maybe user changed it?) - clear stored PIN and ask for manual entry
+          logger.warn('[ProfileSwitcherModal] Switch failed after biometric:', switchResult.error);
+          setIsPinError(true);
+          Alert.alert(
+            'PIN Changed',
+            'Your PIN may have been changed. Please enter your current PIN.',
+            [{ text: 'OK' }]
+          );
+        } else {
+          // Success - parent will close modal
+          setPinEntryProfile(null);
+          setPin(['', '', '', '', '', '']);
+        }
+      } else {
+        // Biometric failed/cancelled OR no PIN stored yet
+        // Check if PIN is stored - if not, inform user they need to enter PIN first
+        const hasBiometricPin = await hasPinForBiometric(pinEntryProfile.profileId);
+        if (!hasBiometricPin) {
+          logger.debug('[ProfileSwitcherModal] No PIN stored for biometric, user must enter manually first');
+          Alert.alert(
+            'Enter PIN First',
+            'Enter your PIN once to enable Face ID for this profile.',
+            [{ text: 'OK' }]
+          );
+        } else {
+          // Biometric was cancelled or failed
+          logger.debug('[ProfileSwitcherModal] Biometric auth cancelled or failed');
+        }
+      }
+    } catch (error: any) {
+      logger.error('[ProfileSwitcherModal] Biometric auth error:', error);
+      Alert.alert('Authentication Failed', 'Please try again or use PIN.');
+    } finally {
+      setIsSubmittingPin(false);
+    }
+  }, [pinEntryProfile, onSelectProfile]);
+
+  // Handle back from PIN entry
+  const handleBackFromPinEntry = useCallback(() => {
+    setPinEntryProfile(null);
+    setPin(['', '', '', '', '', '']);
+    setIsPinError(false);
+  }, []);
 
   const handleRemoveAccount = React.useCallback((profile: AvailableProfile, event: any) => {
     // Stop propagation so row click doesn't trigger
@@ -356,75 +717,157 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
   );
 
   return (
-    <>
-      <BottomSheet
-        ref={bottomSheetRef}
-        index={snapIndex}
-        snapPoints={['50%']}
-        enablePanDownToClose={true}
-        backdropComponent={renderBackdrop}
-        backgroundStyle={{ backgroundColor: theme.colors.card }}
-        handleIndicatorStyle={{ backgroundColor: theme.colors.textSecondary }}
-        onChange={(index) => {
-          if (index === -1) {
-            onClose();
-          }
-        }}
-      >
-        <BottomSheetView style={styles.container}>
-          {/* Offline Warning Banner */}
-          {!isConnected && (
-            <View style={styles.offlineWarning}>
-              <Ionicons name="warning" size={20} color="#856404" />
-              <Text style={styles.offlineWarningText}>
-                Offline - Account switching requires internet connection
-              </Text>
-            </View>
-          )}
+    <BottomSheet
+      ref={bottomSheetRef}
+      index={snapIndex}
+      snapPoints={['50%']}
+      enablePanDownToClose={true}
+      backdropComponent={renderBackdrop}
+      backgroundStyle={{ backgroundColor: theme.colors.card }}
+      handleIndicatorStyle={{ backgroundColor: theme.colors.textSecondary }}
+      onChange={(index) => {
+        if (index === -1) {
+          onClose();
+        }
+      }}
+    >
+      <BottomSheetView style={styles.container}>
+        {/* Offline Warning Banner */}
+        {!isConnected && (
+          <View style={styles.offlineWarning}>
+            <Ionicons name="warning" size={20} color="#856404" />
+            <Text style={styles.offlineWarningText}>
+              Offline - Account switching requires internet connection
+            </Text>
+          </View>
+        )}
 
-          {/* Profile List */}
-          {isLoading || isCheckingPin ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={theme.colors.primary} />
+        {/* PIN Entry View */}
+        {pinEntryProfile ? (
+          <View style={styles.pinEntryContainer}>
+            {/* Profile Header */}
+            <View style={styles.pinEntryHeader}>
+              <View style={[styles.pinEntryAvatar, { backgroundColor: getAvatarColor(pinEntryProfile.entityId) }]}>
+                {pinEntryProfile.avatarUrl ? (
+                  <Image
+                    source={{ uri: pinEntryProfile.avatarUrl }}
+                    style={{ width: '100%', height: '100%', borderRadius: 24 }}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <Text style={styles.pinEntryAvatarText}>
+                    {getInitials(pinEntryProfile.displayName)}
+                  </Text>
+                )}
+              </View>
+              <View style={styles.pinEntryProfileInfo}>
+                <Text style={styles.pinEntryTitle}>{pinEntryProfile.displayName}</Text>
+                <Text style={styles.pinEntrySubtitle}>Enter PIN to access</Text>
+              </View>
             </View>
-          ) : profiles.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No profiles available</Text>
-            </View>
-          ) : (
-            <View style={{ flex: 1 }}>
-              {/* Scrollable profiles - takes remaining space above button */}
-              <BottomSheetScrollView style={{ flex: 1 }}>
-                {profiles.map((profile) => (
-                  <View key={profile.profileId}>
-                    {renderItem({ item: profile })}
-                  </View>
-                ))}
-              </BottomSheetScrollView>
 
-              {/* Fixed button at bottom - always visible */}
-              {onAddAccount && (
-                <TouchableOpacity style={styles.addAccountButton} onPress={onAddAccount}>
-                  <Ionicons name="add-circle-outline" size={24} color={theme.colors.primary} />
-                  <Text style={styles.addAccountText}>Add Account</Text>
-                </TouchableOpacity>
+            {/* PIN Inputs */}
+            <View style={styles.pinInputContainer}>
+              {pin.map((digit, index) => (
+                <TextInput
+                  key={index}
+                  ref={(input) => (pinInputRefs.current[index] = input)}
+                  style={[styles.pinInput, isPinError && styles.pinInputError]}
+                  value={digit}
+                  onChangeText={(text) => handlePinChange(text, index)}
+                  onKeyPress={(e) => handlePinKeyPress(e, index)}
+                  keyboardType="number-pad"
+                  maxLength={1}
+                  secureTextEntry
+                  selectTextOnFocus
+                />
+              ))}
+            </View>
+
+            {/* Error Message */}
+            {isPinError && (
+              <Text style={styles.pinErrorText}>Invalid PIN. Please try again.</Text>
+            )}
+
+            {/* Submit Button */}
+            <TouchableOpacity
+              style={[
+                styles.pinSubmitButton,
+                (pin.join('').length !== 6 || isSubmittingPin) && styles.pinSubmitButtonDisabled
+              ]}
+              onPress={handlePinSubmit}
+              disabled={pin.join('').length !== 6 || isSubmittingPin}
+            >
+              {isSubmittingPin ? (
+                <ActivityIndicator size="small" color={theme.colors.white} />
+              ) : (
+                <Text style={styles.pinSubmitButtonText}>Switch Profile</Text>
               )}
-            </View>
-          )}
-        </BottomSheetView>
-      </BottomSheet>
+            </TouchableOpacity>
 
-      {/* Business PIN Input Modal */}
-      <BusinessPinInputModal
-        visible={showPinModal}
-        businessName={pinProfile?.displayName || ''}
-        onSubmit={handlePinSubmit}
-        onCancel={handlePinCancel}
-        isLoading={isLoading}
-        error={pinError}
-        lockoutUntil={pinLockoutUntil}
-      />
-    </>
+            {/* Biometric Option */}
+            {isBiometricAvailable && (
+              <>
+                <View style={styles.orDivider}>
+                  <View style={styles.orDividerLine} />
+                  <Text style={styles.orDividerText}>or</Text>
+                  <View style={styles.orDividerLine} />
+                </View>
+
+                <TouchableOpacity
+                  style={styles.biometricButton}
+                  onPress={handleBiometricAuth}
+                  disabled={isSubmittingPin}
+                >
+                  <Ionicons
+                    name={biometricType === 'face' ? 'scan' : 'finger-print'}
+                    size={24}
+                    color={theme.colors.primary}
+                  />
+                  <Text style={styles.biometricButtonText}>
+                    {biometricType === 'face'
+                      ? (Platform.OS === 'ios' ? 'Use Face ID' : 'Use Face Recognition')
+                      : 'Use Fingerprint'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* Back Button */}
+            <TouchableOpacity style={styles.pinBackButton} onPress={handleBackFromPinEntry}>
+              <Text style={styles.pinBackButtonText}>← Back to profiles</Text>
+            </TouchableOpacity>
+          </View>
+        ) : isLoading || isCheckingPin ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+          </View>
+        ) : profiles.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No profiles available</Text>
+          </View>
+        ) : (
+          <View style={{ flex: 1 }}>
+            {/* Scrollable profiles - takes remaining space above button */}
+            <BottomSheetScrollView style={{ flex: 1 }}>
+              {profiles.map((profile) => (
+                <View key={profile.profileId}>
+                  {renderItem({ item: profile })}
+                </View>
+              ))}
+            </BottomSheetScrollView>
+
+            {/* Fixed button at bottom - always visible */}
+            {onAddAccount && (
+              <TouchableOpacity style={styles.addAccountButton} onPress={onAddAccount}>
+                <Ionicons name="add-circle-outline" size={24} color={theme.colors.primary} />
+                <Text style={styles.addAccountText}>Add Account</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+      </BottomSheetView>
+    </BottomSheet>
   );
 };
 

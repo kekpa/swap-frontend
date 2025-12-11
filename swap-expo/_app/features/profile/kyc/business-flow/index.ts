@@ -4,6 +4,7 @@
 // Updated: Added review screens - 2025-11-11
 // Updated: Added document upload screens - 2025-11-11
 // Updated: Added BusinessKycFlowStart orchestrator - 2025-11-11
+// Updated: Added TeamMemberForm (single-page Revolut-style form) - 2025-12-11
 
 export { default as BusinessKycFlowStart } from './BusinessKycFlowStart';
 export { default as BusinessInfoFlow } from './BusinessInfoFlow';
@@ -16,4 +17,5 @@ export { default as BusinessCountryOfResidence } from './BusinessCountryOfReside
 export { default as BusinessAddress } from './BusinessAddress';
 export { default as BusinessRegistrationDocuments } from './BusinessRegistrationDocuments';
 export { default as BusinessReview } from './BusinessReview';
-export { default as BusinessVerification } from './BusinessVerification'; 
+export { default as BusinessVerification } from './BusinessVerification';
+export { default as TeamMemberForm } from './TeamMemberForm'; 

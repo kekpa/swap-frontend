@@ -130,6 +130,7 @@ const ReviewInformation: React.FC<ReviewInformationProps> = ({
       borderColor: theme.colors.border,
       borderRadius: theme.borderRadius.md,
       marginBottom: theme.spacing.sm,
+      backgroundColor: theme.colors.card,
     },
     infoLabel: {
       fontSize: theme.typography.fontSize.md,

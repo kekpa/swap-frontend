@@ -115,7 +115,8 @@ const BeneficialOwnersList: React.FC = () => {
   };
 
   const handleAddOwner = () => {
-    navigation.navigate('BeneficialOwnerFlow', {
+    // Use new single-page form
+    navigation.navigate('TeamMemberForm', {
       mode: 'add',
       returnToTimeline,
       sourceRoute,
@@ -123,7 +124,8 @@ const BeneficialOwnersList: React.FC = () => {
   };
 
   const handleEditOwner = (owner: TeamMember) => {
-    navigation.navigate('BeneficialOwnerFlow', {
+    // Use new single-page form
+    navigation.navigate('TeamMemberForm', {
       mode: 'edit',
       ownerId: owner.id,
       returnToTimeline,
@@ -171,11 +173,22 @@ const BeneficialOwnersList: React.FC = () => {
       return;
     }
 
-    // Navigate to review
-    navigation.navigate('BeneficialOwnersReview', {
-      returnToTimeline,
-      sourceRoute,
-    });
+    // Check if ANY member has ownership (beneficial owner)
+    const hasOwners = owners.some(o => o.isBeneficialOwner && o.ownershipPercentage);
+
+    if (hasOwners) {
+      // Go to Beneficial Owners Review (legal compliance step)
+      navigation.navigate('BeneficialOwnersReview', {
+        returnToTimeline,
+        sourceRoute,
+      });
+    } else {
+      // Skip review - no owners to review, go directly to next step
+      navigation.navigate('BusinessInfoFlow', {
+        returnToTimeline,
+        sourceRoute,
+      });
+    }
   };
 
   const handleBack = () => {
@@ -201,15 +214,10 @@ const BeneficialOwnersList: React.FC = () => {
   const handleContactSelect = (contact: ContactMatch) => {
     setShowContactPicker(false);
 
-    // Navigate to add flow with pre-filled contact data
-    navigation.navigate('BeneficialOwnerFlow', {
+    // Navigate to new single-page form with pre-filled contact data
+    // Note: Pre-fill data is handled via params in TeamMemberForm
+    navigation.navigate('TeamMemberForm', {
       mode: 'add',
-      prefillData: {
-        firstName: contact.contact.firstName || contact.matchedUser?.displayName?.split(' ')[0] || '',
-        lastName: contact.contact.lastName || contact.matchedUser?.displayName?.split(' ')[1] || '',
-        email: contact.contact.email,
-        phone: contact.contact.phoneNumber,
-      },
       returnToTimeline,
       sourceRoute,
     });
@@ -516,35 +524,26 @@ const BeneficialOwnersList: React.FC = () => {
             {owner.firstName} {owner.middleName ? `${owner.middleName} ` : ''}{owner.lastName}
           </Text>
 
-          {/* Role badges */}
+          {/* Role badges - Clear labels */}
           <View style={styles.roleBadgesContainer}>
             {owner.isAdminTeam && (
               <View style={styles.roleBadge}>
                 <Text style={styles.roleBadgeText}>
-                  {owner.role || 'ADMIN'}
+                  {owner.role === 'OWNER' ? 'Admin' : (owner.role || 'Admin')}
                 </Text>
               </View>
             )}
             {owner.isBeneficialOwner && owner.ownershipPercentage && (
               <View style={styles.ownershipBadge}>
                 <Text style={styles.ownershipBadgeText}>
-                  {owner.ownershipPercentage}% Owner
+                  Owner {owner.ownershipPercentage}%
                 </Text>
               </View>
             )}
           </View>
 
-          {/* Additional details */}
-          {owner.email && (
-            <Text style={styles.ownerDetails}>{owner.email}</Text>
-          )}
-          {owner.phone && (
-            <Text style={styles.ownerDetails}>{owner.phone}</Text>
-          )}
-          {owner.position && (
-            <Text style={styles.ownerDetails}>{owner.position}</Text>
-          )}
-          {owner.nationality && (
+          {/* Additional details - only show nationality if external user (no admin team access) */}
+          {owner.nationality && !owner.isAdminTeam && (
             <Text style={styles.ownerDetails}>Nationality: {owner.nationality}</Text>
           )}
         </View>
@@ -583,7 +582,7 @@ const BeneficialOwnersList: React.FC = () => {
       <ScrollView style={{ flex: 1 }}>
         <View style={styles.content}>
           <Text style={styles.subtitle}>
-            Add your business team members (admins, managers, employees) and legal owners (25%+ ownership).
+            Add people who manage your business or own part of it.
           </Text>
 
           {owners.length === 0 ? (
@@ -637,20 +636,20 @@ const BeneficialOwnersList: React.FC = () => {
             </View>
             <View style={styles.modalBody}>
               <View style={styles.infoRow}>
-                <Text style={styles.infoIcon}>💡</Text>
+                <Text style={styles.infoIcon}>💼</Text>
                 <View style={styles.infoTextContainer}>
-                  <Text style={styles.infoTitle}>Admin Team</Text>
+                  <Text style={styles.infoTitle}>Can manage business</Text>
                   <Text style={styles.infoDescription}>
-                    Platform access and management permissions
+                    People who can use the Swap app for your business (admins, managers, employees)
                   </Text>
                 </View>
               </View>
               <View style={styles.infoRow}>
-                <Text style={styles.infoIcon}>💡</Text>
+                <Text style={styles.infoIcon}>📊</Text>
                 <View style={styles.infoTextContainer}>
-                  <Text style={styles.infoTitle}>Beneficial Owner</Text>
+                  <Text style={styles.infoTitle}>Owns part of business</Text>
                   <Text style={styles.infoDescription}>
-                    Regulatory ownership for compliance (KYC/AML)
+                    People who have ownership stake in your company (any percentage)
                   </Text>
                 </View>
               </View>

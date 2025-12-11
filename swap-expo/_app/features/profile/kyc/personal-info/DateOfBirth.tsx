@@ -160,7 +160,7 @@ const DateOfBirth: React.FC<DateOfBirthProps> = ({
       borderColor: theme.colors.border,
       borderRadius: theme.borderRadius.md,
       padding: theme.spacing.md,
-      backgroundColor: theme.colors.inputBackground,
+      backgroundColor: theme.colors.card,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',

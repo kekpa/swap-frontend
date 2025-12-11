@@ -7,6 +7,7 @@ import { networkService } from './NetworkService';
 import apiClient from '../_api/apiClient';
 import logger from '../utils/logger';
 import { KycStepType } from '../hooks-actions/useKycCompletion';
+import { profileContextManager, ProfileSwitchStartData, ProfileSwitchCompleteData } from './ProfileContextManager';
 
 // Storage instance for KYC offline queue
 const kycQueueStorage = new MMKV({
@@ -33,13 +34,55 @@ class KycOfflineQueue {
   private isProcessing = false;
   private listeners: ((queue: QueuedKycOperation[]) => void)[] = [];
 
+  // Profile switch safety - pause processing during switch
+  private isPausedForProfileSwitch = false;
+  private unsubscribeSwitchStart: (() => void) | null = null;
+  private unsubscribeSwitchComplete: (() => void) | null = null;
+
   constructor() {
     // Listen for network state changes to auto-retry
     networkService.onNetworkStateChange((state) => {
-      if (state.isConnected && !this.isProcessing) {
+      if (state.isConnected && !this.isProcessing && !this.isPausedForProfileSwitch) {
         logger.debug('[KycOfflineQueue] 🌐 ONLINE: Auto-processing queued KYC operations');
         this.processQueue();
       }
+    });
+
+    // Subscribe to profile switch events for safety
+    this.subscribeToProfileSwitch();
+  }
+
+  /**
+   * Subscribe to profile switch events to prevent stale data operations
+   *
+   * CRITICAL: This prevents the "stale closure" bug where queue processing
+   * continues with old profile's KYC context after a switch.
+   */
+  private subscribeToProfileSwitch(): void {
+    // On profile switch START: Pause processing and clear queue
+    this.unsubscribeSwitchStart = profileContextManager.onSwitchStart((data: ProfileSwitchStartData) => {
+      logger.info('[KycOfflineQueue] 🔄 Profile switch starting - pausing and clearing queue');
+      this.isPausedForProfileSwitch = true;
+      this.isProcessing = false;
+
+      // Clear queue to prevent old profile's KYC operations from processing
+      // These operations belonged to the old profile/entity and should not be sent
+      // after switching to a new profile context
+      this.clearQueue();
+
+      logger.debug('[KycOfflineQueue] ✅ Queue cleared for profile switch');
+    });
+
+    // On profile switch COMPLETE: Resume processing
+    this.unsubscribeSwitchComplete = profileContextManager.onSwitchComplete((data: ProfileSwitchCompleteData) => {
+      logger.info(`[KycOfflineQueue] ✅ Profile switch complete - resuming (${data.profileType})`);
+      this.isPausedForProfileSwitch = false;
+    });
+
+    // On profile switch FAILED: Resume with old context
+    profileContextManager.onSwitchFailed(() => {
+      logger.warn('[KycOfflineQueue] ⚠️ Profile switch failed - resuming with old context');
+      this.isPausedForProfileSwitch = false;
     });
   }
 
@@ -108,6 +151,12 @@ class KycOfflineQueue {
    * Process all queued KYC operations
    */
   async processQueue(): Promise<void> {
+    // Skip processing if paused for profile switch
+    if (this.isPausedForProfileSwitch) {
+      logger.debug('[KycOfflineQueue] Queue processing paused for profile switch');
+      return;
+    }
+
     if (this.isProcessing) {
       logger.debug('[KycOfflineQueue] ⏳ BUSY: KYC queue processing already in progress');
       return;
@@ -349,6 +398,32 @@ class KycOfflineQueue {
     };
 
     return stats;
+  }
+
+  /**
+   * Cleanup - unsubscribe from events
+   */
+  cleanup(): void {
+    if (this.unsubscribeSwitchStart) {
+      this.unsubscribeSwitchStart();
+      this.unsubscribeSwitchStart = null;
+    }
+    if (this.unsubscribeSwitchComplete) {
+      this.unsubscribeSwitchComplete();
+      this.unsubscribeSwitchComplete = null;
+    }
+    logger.debug('[KycOfflineQueue] Cleanup completed');
+  }
+
+  /**
+   * Reset all internal state - primarily for testing
+   * @internal
+   */
+  reset(): void {
+    this.isProcessing = false;
+    this.isPausedForProfileSwitch = false;
+    this.listeners = [];
+    logger.debug('[KycOfflineQueue] Reset completed');
   }
 }
 

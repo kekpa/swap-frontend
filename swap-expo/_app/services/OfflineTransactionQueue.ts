@@ -6,6 +6,7 @@ import { CreateDirectTransactionDto } from '../types/transaction.types';
 import { networkService } from './NetworkService';
 import { transactionManager } from './TransactionManager';
 import logger from '../utils/logger';
+import { profileContextManager, ProfileSwitchStartData, ProfileSwitchCompleteData } from './ProfileContextManager';
 
 // Storage instance for offline queue
 const queueStorage = new MMKV({
@@ -34,13 +35,55 @@ class OfflineTransactionQueue {
   private isProcessing = false;
   private listeners: ((queue: QueuedTransaction[]) => void)[] = [];
 
+  // Profile switch safety - pause processing during switch
+  private isPausedForProfileSwitch = false;
+  private unsubscribeSwitchStart: (() => void) | null = null;
+  private unsubscribeSwitchComplete: (() => void) | null = null;
+
   constructor() {
     // Listen for network state changes to auto-retry
     networkService.onNetworkStateChange((state) => {
-      if (state.isOnline && !this.isProcessing) {
+      if (state.isOnline && !this.isProcessing && !this.isPausedForProfileSwitch) {
         logger.debug('[OfflineQueue] 🌐 ONLINE: Auto-processing queued transactions');
         this.processQueue();
       }
+    });
+
+    // Subscribe to profile switch events for safety
+    this.subscribeToProfileSwitch();
+  }
+
+  /**
+   * Subscribe to profile switch events to prevent stale data operations
+   *
+   * CRITICAL: This prevents the "stale closure" bug where queue processing
+   * continues with old profile's transaction context after a switch.
+   */
+  private subscribeToProfileSwitch(): void {
+    // On profile switch START: Pause processing and clear queue
+    this.unsubscribeSwitchStart = profileContextManager.onSwitchStart((data: ProfileSwitchStartData) => {
+      logger.info('[OfflineQueue] 🔄 Profile switch starting - pausing and clearing queue');
+      this.isPausedForProfileSwitch = true;
+      this.isProcessing = false;
+
+      // Clear queue to prevent old profile's transactions from processing
+      // These transactions belonged to the old profile and should not be sent
+      // after switching to a new profile context
+      this.clearQueue();
+
+      logger.debug('[OfflineQueue] ✅ Queue cleared for profile switch');
+    });
+
+    // On profile switch COMPLETE: Resume processing
+    this.unsubscribeSwitchComplete = profileContextManager.onSwitchComplete((data: ProfileSwitchCompleteData) => {
+      logger.info(`[OfflineQueue] ✅ Profile switch complete - resuming (${data.profileType})`);
+      this.isPausedForProfileSwitch = false;
+    });
+
+    // On profile switch FAILED: Resume with old context
+    profileContextManager.onSwitchFailed(() => {
+      logger.warn('[OfflineQueue] ⚠️ Profile switch failed - resuming with old context');
+      this.isPausedForProfileSwitch = false;
     });
   }
 
@@ -101,6 +144,12 @@ class OfflineTransactionQueue {
    * Process all queued transactions
    */
   async processQueue(): Promise<void> {
+    // Skip processing if paused for profile switch
+    if (this.isPausedForProfileSwitch) {
+      logger.debug('[OfflineQueue] Queue processing paused for profile switch');
+      return;
+    }
+
     if (this.isProcessing) {
       logger.debug('[OfflineQueue] ⏳ BUSY: Queue processing already in progress');
       return;
@@ -314,11 +363,27 @@ class OfflineTransactionQueue {
   }
 
   /**
+   * Cleanup - unsubscribe from events
+   */
+  cleanup(): void {
+    if (this.unsubscribeSwitchStart) {
+      this.unsubscribeSwitchStart();
+      this.unsubscribeSwitchStart = null;
+    }
+    if (this.unsubscribeSwitchComplete) {
+      this.unsubscribeSwitchComplete();
+      this.unsubscribeSwitchComplete = null;
+    }
+    logger.debug('[OfflineQueue] Cleanup completed');
+  }
+
+  /**
    * Reset all internal state - primarily for testing
    * @internal
    */
   reset(): void {
     this.isProcessing = false;
+    this.isPausedForProfileSwitch = false;
     this.listeners = [];
     logger.debug('[OfflineQueue] Reset completed');
   }

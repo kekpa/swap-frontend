@@ -131,6 +131,7 @@ export default function RootNavigator() {
   const [orchestratorState, setOrchestratorState] = useState<LoadingState>(loadingOrchestrator.getLoadingState());
 
   const isAuthenticated = authContext?.isAuthenticated || false;
+  const isInitialized = authContext?.isInitialized || false;
 
   // PROFESSIONAL: Listen to LoadingOrchestrator state changes for coordinated navigation
   useEffect(() => {
@@ -150,19 +151,24 @@ export default function RootNavigator() {
   // NOTE: needsLogin handling removed - AuthStateMachine is now the sole coordinator
   // The setTimeout hack was a symptom of competing coordination systems
 
-  // SIMPLE three-state navigation logic:
-  // 1. Not authenticated → Auth stack (immediately, no loading)
-  // 2. Authenticated but loading data → LoadingScreen
-  // 3. Authenticated and ready → App stack
-  const showAuthNavigator = !isAuthenticated;  // Logged out = show auth immediately
-  const showLoadingScreen = isAuthenticated && (!orchestratorState.canShowUI || !isInitialLoadComplete);
-  const showAppNavigator = isAuthenticated && isInitialLoadComplete && orchestratorState.canShowUI;
+  // PROFESSIONAL three-state navigation logic:
+  // 1. Not initialized → LoadingScreen (blocks auth flash during session check)
+  // 2. Initialized & not authenticated → Auth stack
+  // 3. Authenticated but loading data → LoadingScreen
+  // 4. Authenticated and ready → App stack
+  //
+  // This prevents the "Sign In flash" when user is already logged in.
+  // We wait for session check to complete before showing Auth screen.
+  const showAuthNavigator = isInitialized && !isAuthenticated;  // Only show auth AFTER we know session state
+  const showLoadingScreen = !isInitialized || (isAuthenticated && (!orchestratorState.canShowUI || !isInitialLoadComplete));
+  const showAppNavigator = isInitialized && isAuthenticated && isInitialLoadComplete && orchestratorState.canShowUI;
 
   // In development mode, can force app navigator
   const forceAppInDev = isDevelopment && DEV_ALWAYS_AUTHENTICATED;
 
   // Debug logging (detailed for logout investigation)
   console.log('🧭 [RootNavigator] Navigation decision:', {
+    isInitialized,
     isAuthenticated,
     isInitialLoadComplete,
     canShowUI: orchestratorState.canShowUI,

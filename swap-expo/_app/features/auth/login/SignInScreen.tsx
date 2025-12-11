@@ -31,7 +31,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useAuthContext } from "../context/AuthContext";
 import { useTheme } from "../../../theme/ThemeContext";
-import { getProfilePinData, ProfilePinData, getProfileDisplayName } from "../../../utils/pinUserStorage";
+import { getProfilePinData, ProfilePinData, getProfileDisplayName, getLastActiveProfileId, storePinForBiometric } from "../../../utils/pinUserStorage";
 import { Theme } from "../../../theme/theme";
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from "../../../tanstack-query/queryKeys";
@@ -137,19 +137,21 @@ const SignInScreen = ({ route }: any) => {
   
   // Handle input change for PIN
   const handlePinChange = (text: string, index: number) => {
+    let newPin: string[];
+
     if (text.length > 1) {
       // Handle paste of entire PIN
       const pastedPin = text.slice(0, 6).split("");
-      const newPin = [...pin];
-      
+      newPin = [...pin];
+
       pastedPin.forEach((digit, idx) => {
         if (idx < 6) {
           newPin[idx] = digit;
         }
       });
-      
+
       setPin(newPin);
-      
+
       // Focus last input or submit if all filled
       if (pastedPin.length === 6) {
         pinInputRefs.current[5]?.blur();
@@ -159,14 +161,25 @@ const SignInScreen = ({ route }: any) => {
       }
     } else {
       // Handle single digit input
-      const newPin = [...pin];
+      newPin = [...pin];
       newPin[index] = text;
       setPin(newPin);
-      
+
       // Auto-advance to next input
       if (text !== "" && index < 5) {
         pinInputRefs.current[index + 1]?.focus();
       }
+    }
+
+    // AUTO-SUBMIT: If all 6 digits entered, submit automatically
+    const pinComplete = newPin.every(digit => digit !== '');
+    if (pinComplete && hasPinUser && !isLoading) {
+      // Small delay for visual feedback before submit
+      // Pass PIN directly to avoid React state timing issues
+      const pinString = newPin.join('');
+      setTimeout(() => {
+        handleSignIn(pinString);
+      }, 100);
     }
   };
   
@@ -251,9 +264,9 @@ const SignInScreen = ({ route }: any) => {
     }
   };
 
-  const handleSignIn = async () => {
+  const handleSignIn = async (pinOverride?: string) => {
     setIsLoading(true);
-    
+
     if (activeTab === 'password') {
       const identifierToLogin = rememberedUserIdentifier || identifier;
       
@@ -346,7 +359,8 @@ const SignInScreen = ({ route }: any) => {
         Alert.alert("Unified Login Error", errorMessage);
       }
     } else if (activeTab === 'pin') {
-      const currentPin = pin.join("");
+      // Use override if provided (from auto-submit), otherwise read from state
+      const currentPin = pinOverride || pin.join("");
       if (currentPin.length !== 6) {
         Alert.alert("Error", "Please enter your 6-digit PIN.");
         setIsLoading(false);
@@ -366,6 +380,15 @@ const SignInScreen = ({ route }: any) => {
         const response = await authContext.loginWithPin(pinUserIdentifier, currentPin);
         if (response && response.success) {
           console.log("PIN sign in successful, RootNavigator will handle LoadingScreen");
+
+          // Store PIN for future biometric access (non-blocking)
+          // Get the profile ID to associate the PIN with
+          const profileId = targetProfileId || await getLastActiveProfileId();
+          if (profileId) {
+            storePinForBiometric(profileId, currentPin).catch((err) => {
+              console.log('[SignInScreen] Failed to store PIN for biometric (non-fatal):', err);
+            });
+          }
 
           // If in profile switch mode, switch profile after auth
           if (isProfileSwitchMode && targetProfileId) {

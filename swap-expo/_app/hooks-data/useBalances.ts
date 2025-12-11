@@ -14,6 +14,7 @@ import { currencyWalletsRepository, CurrencyWallet } from '../localdb/CurrencyWa
 import { WalletBalance } from '../types/wallet.types';
 import { useCurrentProfileId } from '../hooks/useCurrentProfileId';
 import { useAuthContext } from '../features/auth/context/AuthContext';
+import { profileContextManager } from '../services/ProfileContextManager';
 
 interface UseBalancesOptions {
   enabled?: boolean;
@@ -183,37 +184,52 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
     // STEP 2: Return cached data IMMEDIATELY if we have it (WhatsApp behavior)
     if (cachedWalletBalances.length > 0) {
       logger.debug(`[useBalances] ⚡ INSTANT: Returning ${cachedWalletBalances.length} cached balances immediately`);
-        
+
       // STEP 3: Background sync (non-blocking, like WhatsApp)
+      // PROFILE-SAFE: Capture profileId and entityId at schedule time, check for staleness at execution time
+      const capturedProfileId = profileId!;
+      const capturedEntityId = entityId;
       setTimeout(async () => {
         try {
+          // PROFILE SWITCH GUARD: Skip if profile changed or switching in progress
+          if (profileContextManager.isProfileStale(capturedProfileId) || profileContextManager.isSwitchingProfile()) {
+            logger.debug(`[useBalances] ⏸️ BACKGROUND SYNC SKIPPED: Profile changed (was: ${capturedProfileId})`);
+            return;
+          }
+
           // CRITICAL: Check if ANY wallet mutation is active RIGHT BEFORE syncing
           const mutations = queryClient.getMutationCache().getAll();
           const isWalletMutationActive = mutations.some(mutation => {
             const mutationKey = mutation.options.mutationKey;
             const isWalletMutation = mutationKey && mutationKey.includes('set_primary_wallet');
             const isPending = mutation.state.status === 'pending';
-            
+
             if (isWalletMutation) {
               logger.debug(`[useBalances] 🔍 Found wallet mutation: ${mutationKey}, status: ${mutation.state.status}`);
             }
-            
+
             return isWalletMutation && isPending;
           });
-          
+
           if (isWalletMutationActive) {
             logger.debug(`[useBalances] ⏸️ SKIPPING background sync - wallet mutation in progress`);
             return;
           }
 
           logger.debug(`[useBalances] 🔄 BACKGROUND SYNC: Fetching fresh data from API`);
-          const response = await apiClient.get(API_PATHS.WALLET.BY_ENTITY(entityId));
+          const response = await apiClient.get(API_PATHS.WALLET.BY_ENTITY(capturedEntityId));
           const parsedWallets = parseComplexBackendResponse(response.data);
           const transformedBalances = parsedWallets.map(transformToWalletBalance);
-          
+
+          // PROFILE SWITCH GUARD: Check again after API call
+          if (profileContextManager.isProfileStale(capturedProfileId) || profileContextManager.isSwitchingProfile()) {
+            logger.debug(`[useBalances] ⏸️ BACKGROUND SYNC SKIPPED: Profile changed during API call`);
+            return;
+          }
+
           if (transformedBalances && transformedBalances.length > 0) {
             logger.debug(`[useBalances] ✅ BACKGROUND SYNC: Loaded ${transformedBalances.length} balances from server`);
-            
+
             // Transform API response to CurrencyWallet format for repository
             const repositoryBalances: CurrencyWallet[] = transformedBalances.map((balance: WalletBalance) => ({
           id: balance.wallet_id,
@@ -235,18 +251,18 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
 
             // Save to local SQLite
             // SECURITY FIX: Include profileId for proper data isolation
-        await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances, profileId!);
+        await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances, capturedProfileId);
 
             // Update TanStack Query cache with WalletBalance format
-            queryClient.setQueryData(queryKeys.balancesByEntity(profileId!, entityId), transformedBalances);
-            logger.debug(`[useBalances] ✅ BACKGROUND SYNC: Updated ${transformedBalances.length} balances in cache (profileId: ${profileId})`);
+            queryClient.setQueryData(queryKeys.balancesByEntity(capturedProfileId, capturedEntityId), transformedBalances);
+            logger.debug(`[useBalances] ✅ BACKGROUND SYNC: Updated ${transformedBalances.length} balances in cache (profileId: ${capturedProfileId})`);
           }
         } catch (error) {
           logger.debug(`[useBalances] ⚠️ Background sync failed (non-critical): ${error instanceof Error ? error.message : String(error)}`);
           // Fail silently to not disrupt user experience
         }
       }, 3000); // INCREASED: 3 second delay to ensure API calls complete first
-      
+
       return cachedWalletBalances;
     }
     

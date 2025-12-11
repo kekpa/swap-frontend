@@ -6,6 +6,10 @@
  * - If biometrics available: Show Face ID/Touch ID setup with PIN backup
  * - If no biometrics: Show PIN setup only
  *
+ * ARCHITECTURE: Wrapper Component Pattern (Industry Standard)
+ * - AppLockSetupContent: Core logic component (props-only, no navigation hooks)
+ * - AppLockSetupScreen: Navigation wrapper (handles route params for Stack.Screen usage)
+ *
  * @created 2025-12-01
  */
 
@@ -23,30 +27,60 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeContext';
+import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import PinPad from '../../../components2/PinPad';
 import appLockService, { BiometricCapabilities } from '../../../services/AppLockService';
 import { logger } from '../../../utils/logger';
 import { KycService } from '../../../services/KycService';
+import apiClient from '../../../_api/apiClient';
+import { API_PATHS } from '../../../_api/apiPaths';
 
-interface AppLockSetupScreenProps {
+// ============================================
+// TYPES
+// ============================================
+
+// Route params type for navigation (when used as a screen)
+type BusinessSecuritySetupParams = {
+  isBusinessSetup?: boolean;
+  businessProfileId?: string;
+  businessName?: string;
+  returnRoute?: string;
+};
+
+// Props for the core content component
+interface AppLockSetupContentProps {
   /** Callback when setup is complete */
-  onComplete: () => void;
+  onComplete?: () => void;
   /** Callback when user wants to logout (escape hatch) */
   onLogout?: () => void;
   /** User's name for personalization */
   userName?: string;
+  /** Business mode - for setting up business profile PIN */
+  isBusinessSetup?: boolean;
+  /** Business profile ID (required when isBusinessSetup is true) */
+  businessProfileId?: string;
 }
 
 type SetupStep = 'intro' | 'biometric' | 'pin_create' | 'pin_confirm' | 'complete';
 
-const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
+// ============================================
+// CORE COMPONENT - Props only, no navigation hooks
+// ============================================
+
+const AppLockSetupContent: React.FC<AppLockSetupContentProps> = ({
   onComplete,
   onLogout,
-  userName = 'there',
+  userName: propUserName,
+  isBusinessSetup = false,
+  businessProfileId,
 }) => {
   const { theme } = useTheme();
   const { height: screenHeight } = Dimensions.get('window');
   const isSmallScreen = screenHeight < 700;
+
+  // Derive display name (same for both personal and business)
+  const userName = propUserName ?? 'there';
 
   // State
   const [step, setStep] = useState<SetupStep>('intro');
@@ -56,20 +90,33 @@ const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
   const [confirmPin, setConfirmPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
 
-  // Check biometric capabilities and existing PIN (from KYC sync) on mount
+  // Handle completion
+  const handleComplete = useCallback(() => {
+    onComplete?.();
+  }, [onComplete]);
+
+  // Check biometric capabilities and existing PIN on mount
   useEffect(() => {
     const checkCapabilitiesAndExistingPin = async () => {
       setIsLoading(true);
 
-      // PROFESSIONAL: Check if PIN already exists (synced from KYC passcode)
-      // If user already set up passcode during KYC, we use that for app lock too
-      const isAlreadyConfigured = await appLockService.isConfigured();
+      // Check if PIN already exists based on mode
+      let isAlreadyConfigured = false;
+
+      if (isBusinessSetup && businessProfileId) {
+        // Business mode: check business PIN
+        isAlreadyConfigured = await appLockService.isBusinessPinConfigured(businessProfileId);
+        logger.debug(`[AppLockSetup] Business PIN check for ${businessProfileId}: ${isAlreadyConfigured}`);
+      } else {
+        // Personal mode: check personal PIN (from KYC sync)
+        isAlreadyConfigured = await appLockService.isConfigured();
+      }
+
       if (isAlreadyConfigured) {
-        logger.info('[AppLockSetup] ✅ PIN already configured (likely from KYC passcode sync) - skipping setup');
-        // Go straight to complete and exit
+        logger.info(`[AppLockSetup] ✅ PIN already configured (${isBusinessSetup ? 'business' : 'personal'}) - skipping setup`);
         setStep('complete');
         setIsLoading(false);
-        setTimeout(onComplete, 300); // Quick transition - user already set up PIN
+        setTimeout(handleComplete, 300); // Quick transition
         return;
       }
 
@@ -79,7 +126,7 @@ const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
       logger.debug(`[AppLockSetup] Biometric capabilities: ${JSON.stringify(caps)}`);
     };
     checkCapabilitiesAndExistingPin();
-  }, [onComplete]);
+  }, [handleComplete, isBusinessSetup, businessProfileId]);
 
   const hasBiometrics = biometricCapabilities?.hasHardware && biometricCapabilities?.isEnrolled;
 
@@ -117,19 +164,20 @@ const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
     }
   }, []);
 
-  // Handle PIN creation
+  // Handle PIN creation - always 6 digits for both personal and business
+  const PIN_LENGTH = 6;
+
   useEffect(() => {
-    if (step === 'pin_create' && pin.length === 6) {
+    if (step === 'pin_create' && pin.length === PIN_LENGTH) {
       logger.debug('[AppLockSetup] PIN created (6 digits), moving to confirm step');
-      // Move to confirm step
       setStep('pin_confirm');
     }
   }, [pin, step]);
 
-  // Handle PIN confirmation
+  // Handle PIN confirmation - always 6 digits
   useEffect(() => {
-    if (step === 'pin_confirm' && confirmPin.length === 6) {
-      logger.debug('[AppLockSetup] Confirm PIN entered (6 digits), checking match...');
+    if (step === 'pin_confirm' && confirmPin.length === PIN_LENGTH) {
+      logger.debug('[AppLockSetup] Confirm PIN entered, checking match...');
       if (confirmPin === pin) {
         // PINs match - complete setup
         logger.debug('[AppLockSetup] ✅ PINs match! Completing setup...');
@@ -152,40 +200,67 @@ const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
   const completePinSetup = async () => {
     setIsLoading(true);
 
-    // Step 1: Save PIN locally to AppLockService
-    const result = await appLockService.setupPin(pin);
+    if (isBusinessSetup && businessProfileId) {
+      // BUSINESS MODE: Save business PIN locally + sync to backend
+      logger.info(`[AppLockSetup] Setting up business PIN for profile ${businessProfileId}...`);
 
-    if (result.success) {
-      logger.info('[AppLockSetup] PIN setup successful locally');
+      // Step 1: Save PIN locally to AppLockService (for offline app lock)
+      const localResult = await appLockService.setupBusinessPin(pin, businessProfileId);
 
-      // Step 2: Sync PIN to backend via KycService - SECURITY CRITICAL
-      // Backend stores PIN hash for:
-      // 1. Account recovery (SIM swap protection)
-      // 2. Password reset verification (OTP + PIN required)
-      // Backend hashes the PIN before storing - never stores plain text
-      try {
-        logger.info('[AppLockSetup] Syncing passcode to backend for account security...');
-        const syncResult = await KycService.storePasscode(pin);
-        if (syncResult.success) {
-          logger.info('[AppLockSetup] ✅ Passcode synced to backend!');
-        } else {
-          logger.warn('[AppLockSetup] ⚠️ Backend sync failed (non-fatal):', syncResult.error);
+      if (localResult.success) {
+        logger.info('[AppLockSetup] Business PIN saved locally');
+
+        // Step 2: Sync PIN to backend
+        try {
+          logger.info('[AppLockSetup] Syncing business PIN to backend...');
+          await apiClient.post(API_PATHS.BUSINESS.SET_PIN(businessProfileId), { pin });
+          logger.info('[AppLockSetup] ✅ Business PIN synced to backend!');
+        } catch (syncError: any) {
+          logger.warn('[AppLockSetup] ⚠️ Backend sync failed (non-fatal):', syncError.message);
+          // Non-fatal: Local PIN is saved, backend sync can retry later
         }
-      } catch (syncError) {
-        // Non-fatal: Local PIN is saved, backend sync can retry later
-        logger.warn('[AppLockSetup] ⚠️ Backend sync failed (non-fatal):', syncError);
-      }
 
-      setIsLoading(false);
-      setStep('complete');
-      // Auto-proceed after showing success briefly
-      setTimeout(onComplete, 500);
+        setIsLoading(false);
+        setStep('complete');
+        setTimeout(handleComplete, 500);
+      } else {
+        setIsLoading(false);
+        Alert.alert('Setup Failed', localResult.error || 'Please try again.');
+        setPin('');
+        setConfirmPin('');
+        setStep('pin_create');
+      }
     } else {
-      setIsLoading(false);
-      Alert.alert('Setup Failed', result.error || 'Please try again.');
-      setPin('');
-      setConfirmPin('');
-      setStep('pin_create');
+      // PERSONAL MODE: Existing behavior
+      // Step 1: Save PIN locally to AppLockService
+      const result = await appLockService.setupPin(pin);
+
+      if (result.success) {
+        logger.info('[AppLockSetup] PIN setup successful locally');
+
+        // Step 2: Sync PIN to backend via KycService - SECURITY CRITICAL
+        try {
+          logger.info('[AppLockSetup] Syncing passcode to backend for account security...');
+          const syncResult = await KycService.storePasscode(pin);
+          if (syncResult.success) {
+            logger.info('[AppLockSetup] ✅ Passcode synced to backend!');
+          } else {
+            logger.warn('[AppLockSetup] ⚠️ Backend sync failed (non-fatal):', syncResult.error);
+          }
+        } catch (syncError) {
+          logger.warn('[AppLockSetup] ⚠️ Backend sync failed (non-fatal):', syncError);
+        }
+
+        setIsLoading(false);
+        setStep('complete');
+        setTimeout(handleComplete, 500);
+      } else {
+        setIsLoading(false);
+        Alert.alert('Setup Failed', result.error || 'Please try again.');
+        setPin('');
+        setConfirmPin('');
+        setStep('pin_create');
+      }
     }
   };
 
@@ -356,8 +431,17 @@ const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
     );
   }
 
-  // Intro step
+  // Intro step - same UI for both personal and business
   if (step === 'intro') {
+    const title = 'Secure Your Account';
+    const subtitle = `Hi ${userName}! Set up quick unlock to access your account instantly and securely.`;
+
+    const features = [
+      { icon: 'flash', text: 'Instant unlock - no waiting for network' },
+      { icon: 'lock-closed', text: 'Your money stays protected' },
+      { icon: 'time', text: 'Stay logged in for 30+ days' },
+    ];
+
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} />
@@ -366,36 +450,25 @@ const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
             <Ionicons name="shield-checkmark" size={40} color={theme.colors.primary} />
           </View>
 
-          <Text style={styles.title}>Secure Your Account</Text>
-          <Text style={styles.subtitle}>
-            Hi {userName}! Set up quick unlock to access your account instantly and securely.
-          </Text>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.subtitle}>{subtitle}</Text>
 
           <View style={styles.featureList}>
-            <View style={styles.featureItem}>
-              <View style={styles.featureIcon}>
-                <Ionicons name="flash" size={16} color={theme.colors.primary} />
+            {features.map((feature, index) => (
+              <View key={index} style={styles.featureItem}>
+                <View style={styles.featureIcon}>
+                  <Ionicons name={feature.icon as any} size={16} color={theme.colors.primary} />
+                </View>
+                <Text style={styles.featureText}>{feature.text}</Text>
               </View>
-              <Text style={styles.featureText}>Instant unlock - no waiting for network</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <View style={styles.featureIcon}>
-                <Ionicons name="lock-closed" size={16} color={theme.colors.primary} />
-              </View>
-              <Text style={styles.featureText}>Your money stays protected</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <View style={styles.featureIcon}>
-                <Ionicons name="time" size={16} color={theme.colors.primary} />
-              </View>
-              <Text style={styles.featureText}>Stay logged in for 30+ days</Text>
-            </View>
+            ))}
           </View>
 
           <TouchableOpacity style={styles.primaryButton} onPress={handleContinue}>
             <Text style={styles.primaryButtonText}>Continue</Text>
           </TouchableOpacity>
 
+          {/* Use Different Account option - available for both personal and business */}
           {onLogout && (
             <TouchableOpacity style={styles.secondaryButton} onPress={onLogout}>
               <Text style={styles.secondaryButtonText}>Use Different Account</Text>
@@ -444,25 +517,25 @@ const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
     );
   }
 
-  // PIN create step
+  // PIN create step - same UI for both personal and business
   if (step === 'pin_create') {
+    const pinTitle = hasBiometrics ? 'Create Backup PIN' : 'Create Your PIN';
+    const pinSubtitle = hasBiometrics
+      ? 'This PIN is used when Face ID is unavailable'
+      : 'Enter a 6-digit PIN to secure your account';
+
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} />
         <View style={styles.content}>
           <View style={styles.pinContainer}>
-            <Text style={styles.pinTitle}>
-              {hasBiometrics ? 'Create Backup PIN' : 'Create Your PIN'}
-            </Text>
-            <Text style={styles.pinSubtitle}>
-              {hasBiometrics
-                ? 'This PIN is used when Face ID is unavailable'
-                : 'Enter a 6-digit PIN to secure your account'}
-            </Text>
+            <Text style={styles.pinTitle}>{pinTitle}</Text>
+            <Text style={styles.pinSubtitle}>{pinSubtitle}</Text>
             <PinPad
               value={pin}
               onChange={setPin}
               disabled={isLoading}
+              length={PIN_LENGTH}
             />
           </View>
         </View>
@@ -470,7 +543,7 @@ const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
     );
   }
 
-  // PIN confirm step
+  // PIN confirm step - same UI for both personal and business
   if (step === 'pin_confirm') {
     return (
       <SafeAreaView style={styles.container}>
@@ -497,6 +570,7 @@ const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
               onChange={setConfirmPin}
               error={!!pinError}
               disabled={isLoading}
+              length={PIN_LENGTH}
             />
           </View>
         </View>
@@ -504,8 +578,11 @@ const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
     );
   }
 
-  // Complete step
+  // Complete step - same UI for both personal and business
   if (step === 'complete') {
+    const completeTitle = "You're All Set!";
+    const completeSubtitle = 'Your account is now protected with quick unlock.';
+
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} />
@@ -514,10 +591,8 @@ const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
             <View style={styles.successIcon}>
               <Ionicons name="checkmark" size={40} color={theme.colors.success} />
             </View>
-            <Text style={styles.title}>You're All Set!</Text>
-            <Text style={styles.subtitle}>
-              Your account is now protected with quick unlock.
-            </Text>
+            <Text style={styles.title}>{completeTitle}</Text>
+            <Text style={styles.subtitle}>{completeSubtitle}</Text>
           </View>
         </View>
       </SafeAreaView>
@@ -527,4 +602,42 @@ const AppLockSetupScreen: React.FC<AppLockSetupScreenProps> = ({
   return null;
 };
 
+// ============================================
+// NAVIGATION SCREEN WRAPPER - For Stack.Screen usage
+// Uses navigation hooks safely within navigator context
+// ============================================
+
+const AppLockSetupScreen: React.FC = () => {
+  const route = useRoute<RouteProp<{ params: BusinessSecuritySetupParams }, 'params'>>();
+  const navigation = useNavigation<NativeStackNavigationProp<any>>();
+
+  // Map route params to callbacks
+  const handleComplete = useCallback(() => {
+    if (route.params?.returnRoute) {
+      navigation.navigate(route.params.returnRoute as never, {
+        businessId: route.params?.businessProfileId,
+      } as never);
+    } else {
+      navigation.goBack();
+    }
+  }, [navigation, route.params?.returnRoute, route.params?.businessProfileId]);
+
+  return (
+    <AppLockSetupContent
+      userName={route.params?.businessName}
+      isBusinessSetup={route.params?.isBusinessSetup}
+      businessProfileId={route.params?.businessProfileId}
+      onComplete={handleComplete}
+    />
+  );
+};
+
+// ============================================
+// EXPORTS
+// ============================================
+
+// Named export for embedded usage (App.tsx)
+export { AppLockSetupContent };
+
+// Default export for navigation usage (profileNavigator.tsx)
 export default AppLockSetupScreen;

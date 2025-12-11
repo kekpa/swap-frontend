@@ -13,6 +13,7 @@ import { useAuthContext } from '../features/auth/context/AuthContext';
 import { timelineRepository } from '../localdb/TimelineRepository';
 import { messageRepository } from '../localdb/MessageRepository';
 import { transactionRepository } from '../localdb/TransactionRepository';
+import { profileContextManager } from '../services/ProfileContextManager';
 
 export interface UseTimelineOptions {
   enabled?: boolean;
@@ -105,19 +106,28 @@ export const useTimeline = (
           hasLocalData = true;
           
           logger.debug(`[useTimeline] ✅ INSTANT: Loaded ${localTimeline.length} items from SQLite cache (${localTimelineItems.length} with dates)`, 'timeline_query');
-          
+
           // WHATSAPP BEHAVIOR: Return local data immediately and sync in background
+          // PROFILE-SAFE: Capture profileId at schedule time, check for staleness at execution time
+          const capturedProfileId = user.profileId;
+          const capturedInteractionId = interactionId;
           setTimeout(async () => {
             try {
-              logger.debug(`[useTimeline] 🔄 Background sync starting for: ${interactionId}`, 'timeline_query');
-              
-              const path = API_PATHS.INTERACTION.TIMELINE(interactionId);
+              // PROFILE SWITCH GUARD: Skip if profile changed or switching in progress
+              if (profileContextManager.isProfileStale(capturedProfileId) || profileContextManager.isSwitchingProfile()) {
+                logger.debug(`[useTimeline] ⏸️ BACKGROUND SYNC SKIPPED: Profile changed (was: ${capturedProfileId})`, 'timeline_query');
+                return;
+              }
+
+              logger.debug(`[useTimeline] 🔄 Background sync starting for: ${capturedInteractionId}`, 'timeline_query');
+
+              const path = API_PATHS.INTERACTION.TIMELINE(capturedInteractionId);
               const params: any = { limit };
-              
+
               if (user?.entityId) {
                 params.currentUserEntityId = user.entityId;
               }
-              
+
               logger.debug(`[useTimeline] 🚀 BACKGROUND API CALL: ${path}`, 'timeline_query', { params });
               const response = await apiClient.get(path, { params });
               
@@ -154,8 +164,14 @@ export const useTimeline = (
               }
               
               if (fetchedItems.length > 0) {
+                // PROFILE SWITCH GUARD: Check again after API call
+                if (profileContextManager.isProfileStale(capturedProfileId) || profileContextManager.isSwitchingProfile()) {
+                  logger.debug(`[useTimeline] ⏸️ BACKGROUND SYNC SKIPPED: Profile changed during API call`, 'timeline_query');
+                  return;
+                }
+
                 logger.debug(`[useTimeline] 🔄 Background sync: Got ${fetchedItems.length} items from API`, 'timeline_query');
-                
+
                 // Save to local cache in background
                 const messagesToSave = fetchedItems
                   .filter(item => (item.type === 'message' || item.itemType === 'message') && item.id && item.interaction_id)
@@ -169,7 +185,7 @@ export const useTimeline = (
                     created_at: typeof item.createdAt === 'number' ? new Date(item.createdAt).toISOString() : String(item.createdAt || item.timestamp),
                     metadata: { ...item.metadata, isOptimistic: false }
                   }));
-                  
+
                 const transactionsToSave = fetchedItems
                   .filter(item => (item.type === 'transaction' || item.itemType === 'transaction') && item.id && item.interaction_id)
                   .map(item => ({
@@ -189,17 +205,17 @@ export const useTimeline = (
 
                 // Save to repositories and update TanStack Query cache
                 if (messagesToSave.length > 0) {
-                  await messageRepository.saveMessages(messagesToSave, user.profileId);
+                  await messageRepository.saveMessages(messagesToSave, capturedProfileId);
                 }
 
                 if (transactionsToSave.length > 0) {
-                  await transactionRepository.saveTransactions(transactionsToSave, user.profileId);
+                  await transactionRepository.saveTransactions(transactionsToSave, capturedProfileId);
                 }
-                
+
                 // Update TanStack Query cache with new data
                 const updatedTimeline = timelineRepository.addDateSeparators(fetchedItems);
-                queryClient.setQueryData(queryKeys.timelineWithLimit(interactionId, limit), updatedTimeline);
-                
+                queryClient.setQueryData(queryKeys.timelineWithLimit(capturedInteractionId, limit), updatedTimeline);
+
                 logger.debug(`[useTimeline] ✅ Background sync complete: Updated cache with ${fetchedItems.length} items`, 'timeline_query');
               }
             } catch (apiError) {

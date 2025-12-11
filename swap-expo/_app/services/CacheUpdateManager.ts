@@ -24,6 +24,7 @@ import { queryKeys } from '../tanstack-query/queryKeys';
 import logger from '../utils/logger';
 import { TimelineItem, MessageTimelineItem, TransactionTimelineItem, DateSeparatorItem } from '../types/timeline.types';
 import { timelineRepository } from '../localdb/TimelineRepository';
+import { profileContextManager, ProfileSwitchStartData, ProfileSwitchCompleteData } from './ProfileContextManager';
 
 interface CacheUpdateSubscription {
   id: string;
@@ -40,6 +41,11 @@ class CacheUpdateManager {
   private subscriptions = new Map<string, CacheUpdateSubscription>();
   private initialized = false;
   private entityId: string | null = null;
+
+  // Profile switch safety - pause cache updates during switch
+  private isPausedForProfileSwitch = false;
+  private unsubscribeSwitchStart: (() => void) | null = null;
+  private unsubscribeSwitchComplete: (() => void) | null = null;
 
   /**
    * Initialize with QueryClient and entityId for proper cache key matching
@@ -74,6 +80,7 @@ class CacheUpdateManager {
     this.queryClient = queryClient;
     this.entityId = entityId || null;
     this.setupGlobalListeners();
+    this.subscribeToProfileSwitch();
     this.initialized = true;
 
     console.log('🔥🔥🔥 [CacheUpdateManager] FIRST TIME INITIALIZATION:', {
@@ -84,6 +91,39 @@ class CacheUpdateManager {
 
     logger.info('[CacheUpdateManager] ✅ Professional cache update manager initialized', {
       hasEntityId: !!this.entityId
+    });
+  }
+
+  /**
+   * Subscribe to profile switch events to update entityId on switch
+   *
+   * CRITICAL: This ensures cache updates use the correct entityId after profile switch.
+   * Without this, cache updates would target the wrong entity's data.
+   */
+  private subscribeToProfileSwitch(): void {
+    // On profile switch START: Pause cache updates
+    this.unsubscribeSwitchStart = profileContextManager.onSwitchStart((data: ProfileSwitchStartData) => {
+      logger.info('[CacheUpdateManager] 🔄 Profile switch starting - pausing cache updates');
+      this.isPausedForProfileSwitch = true;
+
+      logger.debug('[CacheUpdateManager] ✅ Cache updates paused for profile switch');
+    });
+
+    // On profile switch COMPLETE: Update entityId and resume
+    this.unsubscribeSwitchComplete = profileContextManager.onSwitchComplete((data: ProfileSwitchCompleteData) => {
+      logger.info(`[CacheUpdateManager] ✅ Profile switch complete - updating entityId (${data.profileType})`);
+
+      // Update entityId to new profile's entity
+      this.entityId = data.entityId;
+      this.isPausedForProfileSwitch = false;
+
+      logger.debug('[CacheUpdateManager] EntityId updated for new profile', { entityId: data.entityId });
+    });
+
+    // On profile switch FAILED: Resume with old context
+    profileContextManager.onSwitchFailed(() => {
+      logger.warn('[CacheUpdateManager] ⚠️ Profile switch failed - resuming with old context');
+      this.isPausedForProfileSwitch = false;
     });
   }
 
@@ -126,6 +166,12 @@ class CacheUpdateManager {
    * Handle new message - UPDATE CACHE DIRECTLY (WhatsApp pattern)
    */
   private handleNewMessage(data: MessageTimelineItem & { interaction_id: string }): void {
+    // Skip if paused for profile switch
+    if (this.isPausedForProfileSwitch) {
+      logger.debug('[CacheUpdateManager] Skipping new message - profile switch in progress');
+      return;
+    }
+
     if (!this.queryClient || !data.interaction_id) {
       logger.warn('[CacheUpdateManager] Missing queryClient or interaction_id');
       return;
@@ -261,6 +307,12 @@ class CacheUpdateManager {
    * Handle transaction updates - UPDATE CACHE DIRECTLY (WhatsApp pattern)
    */
   private handleTransactionUpdate(data: TransactionTimelineItem & { interaction_id: string }): void {
+    // Skip if paused for profile switch
+    if (this.isPausedForProfileSwitch) {
+      logger.debug('[CacheUpdateManager] Skipping transaction update - profile switch in progress');
+      return;
+    }
+
     if (!this.queryClient || !data.interaction_id) {
       logger.warn('[CacheUpdateManager] Missing queryClient or interaction_id');
       return;
@@ -544,19 +596,41 @@ class CacheUpdateManager {
    */
   cleanup(): void {
     logger.debug('[CacheUpdateManager] 🧹 Cleaning up professional real-time manager...');
-    
+
     // Professional pattern: removeAllListeners for events we own
     // Safe because CacheUpdateManager is the sole owner of these real-time events
     eventEmitter.removeAllListeners('message:new');
     eventEmitter.removeAllListeners('transaction:update');
     eventEmitter.removeAllListeners('message:deleted');
     eventEmitter.removeAllListeners('interaction:updated');
-    
+
+    // Unsubscribe from profile switch events
+    if (this.unsubscribeSwitchStart) {
+      this.unsubscribeSwitchStart();
+      this.unsubscribeSwitchStart = null;
+    }
+    if (this.unsubscribeSwitchComplete) {
+      this.unsubscribeSwitchComplete();
+      this.unsubscribeSwitchComplete = null;
+    }
+
     this.subscriptions.clear();
     this.initialized = false;
     this.queryClient = null;
-    
+
     logger.info('[CacheUpdateManager] ✅ Professional cleanup complete');
+  }
+
+  /**
+   * Reset all internal state - primarily for testing
+   * @internal
+   */
+  reset(): void {
+    this.subscriptions.clear();
+    this.initialized = false;
+    this.entityId = null;
+    this.isPausedForProfileSwitch = false;
+    logger.debug('[CacheUpdateManager] Reset completed');
   }
 }
 

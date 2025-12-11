@@ -26,7 +26,9 @@ import { useUserProfile } from '../../hooks-data/useUserProfile';
 import { useBiometricAvailability } from '../../hooks-data/useBiometricAvailability';
 import useAvailableProfiles from '../auth/hooks/useAvailableProfiles';
 import ProfileSwitcherModal from '../../components/ProfileSwitcherModal';
-import { tokenManager } from '../../services/token/TokenManager';
+import { profileSwitchOrchestrator } from '../../services/ProfileSwitchOrchestrator';
+import apiClient from '../../_api/apiClient';
+import { useQueryClient } from '@tanstack/react-query';
 
 // Define a type for the route params ProfileScreen might receive when opened as ProfileModal
 // These params are passed to ProfileModal, not ProfileStackParamList for the 'Profile' screen itself.
@@ -196,6 +198,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   // Multi-profile switching hooks
   const { data: availableProfiles, isLoading: isLoadingProfiles } = useAvailableProfiles();
   const [isProfileSwitcherVisible, setIsProfileSwitcherVisible] = React.useState(false);
+  const queryClient = useQueryClient();
 
   // Debug logging for profile switcher
   React.useEffect(() => {
@@ -593,38 +596,46 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     setIsProfileSwitcherVisible(false);
   };
 
-  const handleProfileSelect = (profile: any, pin?: string) => {
+  const handleProfileSelect = async (profile: any, pin?: string): Promise<{ success: boolean; error?: string }> => {
     logger.info('[ProfileScreen] Profile selected for switching:', {
       targetProfileId: profile.profileId,
       displayName: profile.displayName,
       hasPin: !!pin,
     });
 
-    // Close modal first
-    setIsProfileSwitcherVisible(false);
+    // DON'T close modal here - let modal handle close on success only
+    // This allows user to retry PIN if switch fails
 
-    // Navigate to SignIn screen with profile switch mode using root navigator
-    if (rootNavigation) {
-      // Get identifier BEFORE navigation (while user is still logged in)
-      const sourceIdentifier = tokenManager.getAuthUserIdentifier();
-
-      rootNavigation.navigate('Auth', {
-        screen: 'SignIn',
-        params: {
-          mode: 'profileSwitch',
-          targetProfileId: profile.profileId,
-          targetEntityId: profile.entityId,
-          targetDisplayName: profile.displayName,  // For UX: show target profile name
-          targetProfileType: profile.type,          // For UX: 'personal' | 'business'
-          sourceRoute: 'Profile',
-          sourceUserId: user?.user_id, // Pass source user ID for validation
-          sourceUsername: user?.username, // For "via @username" display
-          sourceIdentifier, // Phone number for PIN auth (captured while still logged in)
-          businessPin: pin, // Optional business access PIN (pre-verified in ProfileSwitcherModal)
-        },
+    try {
+      // Call orchestrator directly with PIN (no navigation to SignIn!)
+      // Require biometric verification if device has biometrics enrolled
+      // This provides 2FA: PIN (something you know) + Biometric (something you are)
+      const result = await profileSwitchOrchestrator.switchProfile({
+        targetProfileId: profile.profileId,
+        pin, // Business access PIN (if required)
+        requireBiometric: isBiometricAvailable, // Dynamic based on device capability
+        apiClient,
+        authContext,
+        queryClient,
+        availableProfiles: availableProfiles || [],
       });
-    } else {
-      logger.error('[ProfileScreen] Root navigator not available for profile switching');
+
+      if (result.success) {
+        logger.info('[ProfileScreen] ✅ Profile switch successful:', {
+          newProfileId: result.newProfileId,
+        });
+        // Close modal on SUCCESS only
+        setIsProfileSwitcherVisible(false);
+        return { success: true };
+      } else {
+        logger.error('[ProfileScreen] ❌ Profile switch failed:', result.error);
+        // DON'T close modal - return error so modal can show it and user can retry
+        return { success: false, error: result.error || 'Failed to switch profile. Please try again.' };
+      }
+    } catch (error: any) {
+      logger.error('[ProfileScreen] ❌ Profile switch error:', error.message);
+      // DON'T close modal - return error so modal can show it and user can retry
+      return { success: false, error: error.message || 'An unexpected error occurred. Please try again.' };
     }
   };
 
@@ -652,6 +663,22 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       // Reload available profiles
       refetchProfiles();
     }
+  };
+
+  // Handle business profile PIN setup requirement
+  // Called when user tries to switch to a business profile that has no PIN set
+  const handlePinSetupRequired = (profile: any) => {
+    logger.info('[ProfileScreen] Business PIN setup required for:', {
+      profileId: profile.profileId,
+      displayName: profile.displayName,
+    });
+
+    // Navigate to BusinessPinSetup screen
+    // After PIN is created, user can switch to this business profile
+    navigation.navigate('BusinessPinSetup', {
+      businessProfileId: profile.profileId,
+      mode: 'create',
+    });
   };
 
   const handleMenuItemPress = (item: string) => {
@@ -964,6 +991,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         onClose={handleProfileSwitcherClose}
         onAddAccount={handleAddAccount}
         onRemoveAccount={handleRemoveAccount}
+        onPinSetupRequired={handlePinSetupRequired}
         isLoading={isLoadingProfiles}
       />
     </View>

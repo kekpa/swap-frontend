@@ -1,6 +1,7 @@
 // Updated: Fixed duplicate transaction handling with proper deduplication - 2025-05-21
 // Updated: Improved error handling and logging for better debugging - 2025-05-21
 // Updated: Simplified for TanStack Query migration - 2025-01-10
+// Updated: Added ProfileContextManager integration for profile switch safety - 2025-01-10
 
 import apiClient from '../_api/apiClient';
 import { API_PATHS } from '../_api/apiPaths';
@@ -11,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { networkService } from './NetworkService';
 import { eventEmitter } from '../utils/eventEmitter';
 import { transactionRepository } from '../localdb/TransactionRepository';
+import { profileContextManager, ProfileSwitchStartData, ProfileSwitchCompleteData } from './ProfileContextManager';
 
 interface PendingTransaction {
   id: string;
@@ -41,6 +43,11 @@ class TransactionManager {
   private lastRequestTime: Map<string, number> = new Map();
   private optimisticTransactionMap: Map<string, string> = new Map(); // optimisticId -> serverId
 
+  // Profile switch safety - pause processing during switch
+  private isPausedForProfileSwitch = false;
+  private unsubscribeSwitchStart: (() => void) | null = null;
+  private unsubscribeSwitchComplete: (() => void) | null = null;
+
   constructor() {
     this.initialize();
   }
@@ -48,14 +55,62 @@ class TransactionManager {
   // Initialize the transaction manager
   private initialize(): void {
     logger.info('[TransactionManager] Initializing TransactionManager service');
-    
+
     // Start queue processing
     this.startQueueProcessing();
-    
+
     // Load any pending transactions from storage
     this.loadQueueFromStorage();
-    
+
+    // Subscribe to profile switch events for safety
+    this.subscribeToProfileSwitch();
+
     logger.info('[TransactionManager] Initialization complete');
+  }
+
+  /**
+   * Subscribe to profile switch events to prevent stale data operations
+   *
+   * CRITICAL: This prevents the "stale closure" bug where queue processing
+   * continues with old profile's transaction context after a switch.
+   */
+  private subscribeToProfileSwitch(): void {
+    // On profile switch START: Pause processing and clear queue
+    this.unsubscribeSwitchStart = profileContextManager.onSwitchStart((data: ProfileSwitchStartData) => {
+      logger.info('[TransactionManager] 🔄 Profile switch starting - pausing and clearing queue');
+      this.isPausedForProfileSwitch = true;
+
+      // Clear queue to prevent old profile's transactions from processing
+      // These transactions belonged to the old profile and should not be sent
+      // after switching to a new profile context
+      this.outgoingQueue.clear();
+      this.pendingTransactions.clear();
+      this.transactionStatusCache.clear();
+      this.lastRequestTime.clear();
+      this.optimisticTransactionMap.clear();
+
+      // Clear persisted queue (async, fire-and-forget)
+      this.saveQueueToStorage().catch(err =>
+        logger.warn('[TransactionManager] Failed to clear persisted queue:', err)
+      );
+
+      logger.debug('[TransactionManager] ✅ Queue cleared for profile switch');
+    });
+
+    // On profile switch COMPLETE: Resume processing
+    this.unsubscribeSwitchComplete = profileContextManager.onSwitchComplete((data: ProfileSwitchCompleteData) => {
+      logger.info(`[TransactionManager] ✅ Profile switch complete - resuming (${data.profileType})`);
+      this.isPausedForProfileSwitch = false;
+
+      // Restart queue processing with new profile context
+      this.startQueueProcessing();
+    });
+
+    // On profile switch FAILED: Resume with old context
+    profileContextManager.onSwitchFailed(() => {
+      logger.warn('[TransactionManager] ⚠️ Profile switch failed - resuming with old context');
+      this.isPausedForProfileSwitch = false;
+    });
   }
   
   /**
@@ -74,19 +129,34 @@ class TransactionManager {
 
   /**
    * Get transactions for a specific account (PROFESSIONAL WALLET FILTERING)
-   * 
+   *
    * This method calls the dedicated backend endpoint for account-specific transaction filtering.
    * When a user selects a wallet card, this provides efficient backend filtering.
-   * 
+   *
    * @param accountId - The account ID to get transactions for
    * @param limit - Number of transactions to return (default: 20)
    * @param offset - Number of transactions to skip (default: 0)
+   * @param signal - Optional AbortSignal for request cancellation (profile switch safety)
    * @returns Paginated list of transactions for the specific account
    */
-  async getTransactionsForAccount(accountId: string, limit: number = 20, offset: number = 0): Promise<any> {
+  async getTransactionsForAccount(
+    accountId: string,
+    limit: number = 20,
+    offset: number = 0,
+    signal?: AbortSignal
+  ): Promise<any> {
     try {
       logger.debug(`[TransactionManager] Getting transactions for account: ${accountId} (limit: ${limit}, offset: ${offset})`);
-      
+
+      // Check if paused for profile switch
+      if (this.isPausedForProfileSwitch) {
+        logger.debug('[TransactionManager] Paused for profile switch - skipping fetch');
+        return {
+          data: [],
+          pagination: { total: 0, limit, offset, hasMore: false }
+        };
+      }
+
       // Check if offline
       const isOffline = networkService.getNetworkState().isOfflineMode;
       if (isOffline) {
@@ -100,14 +170,15 @@ class TransactionManager {
             hasMore: false
           }
         };
-  }
-  
-      // Call the dedicated backend endpoint
+      }
+
+      // Call the dedicated backend endpoint with optional AbortSignal
       const response = await apiClient.get(`${API_PATHS.TRANSACTION.LIST}/account/${accountId}`, {
         params: {
           limit,
           offset
-        }
+        },
+        signal // Pass AbortSignal for cancellation on profile switch
       });
       
       if (response.status === 200) {
@@ -311,10 +382,16 @@ class TransactionManager {
       }
       
   private async processQueue(): Promise<void> {
+    // Skip processing if paused for profile switch or queue is empty
+    if (this.isPausedForProfileSwitch) {
+      logger.debug('[TransactionManager] Queue processing paused for profile switch');
+      return;
+    }
+
     if (this.isProcessingQueue || this.outgoingQueue.size === 0) {
       return;
     }
-    
+
     this.isProcessingQueue = true;
     
     try {
@@ -402,6 +479,16 @@ class TransactionManager {
 
     if (this.reconnectHandler) {
       this.reconnectHandler = null;
+    }
+
+    // Unsubscribe from profile switch events
+    if (this.unsubscribeSwitchStart) {
+      this.unsubscribeSwitchStart();
+      this.unsubscribeSwitchStart = null;
+    }
+    if (this.unsubscribeSwitchComplete) {
+      this.unsubscribeSwitchComplete();
+      this.unsubscribeSwitchComplete = null;
     }
 
     logger.debug('[TransactionManager] Cleanup completed');

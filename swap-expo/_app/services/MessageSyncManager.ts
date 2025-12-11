@@ -19,6 +19,7 @@ import { interactionRepository } from '../localdb/InteractionRepository';
 import { userStateManager } from './UserStateManager';
 import { networkService } from './NetworkService';
 import { MessageTimelineItem } from '../types/timeline.types';
+import { profileContextManager, ProfileSwitchStartData, ProfileSwitchCompleteData } from './ProfileContextManager';
 
 interface SyncStats {
   messagesReceived: number;
@@ -46,6 +47,11 @@ class MessageSyncManager {
   private readonly SYNC_INTERVAL_MS = 30000; // 30 seconds
   private readonly MAX_SYNC_RETRIES = 3;
 
+  // Profile switch safety - pause sync during switch
+  private isPausedForProfileSwitch = false;
+  private unsubscribeSwitchStart: (() => void) | null = null;
+  private unsubscribeSwitchComplete: (() => void) | null = null;
+
   /**
    * Initialize message sync manager
    */
@@ -58,7 +64,50 @@ class MessageSyncManager {
     // Set up periodic background sync
     this.setupPeriodicSync();
 
+    // Subscribe to profile switch events for safety
+    this.subscribeToProfileSwitch();
+
     logger.info('[MessageSyncManager] ✅ Message sync manager initialized');
+  }
+
+  /**
+   * Subscribe to profile switch events to prevent stale data operations
+   *
+   * CRITICAL: This prevents the "stale closure" bug where sync continues
+   * with old profile's message context after a switch.
+   */
+  private subscribeToProfileSwitch(): void {
+    // On profile switch START: Pause sync and cancel any in-progress operations
+    this.unsubscribeSwitchStart = profileContextManager.onSwitchStart((data: ProfileSwitchStartData) => {
+      logger.info('[MessageSyncManager] 🔄 Profile switch starting - pausing sync');
+      this.isPausedForProfileSwitch = true;
+      this.isSyncing = false; // Cancel any in-progress sync
+
+      // Clear old profile's sync state
+      this.lastSyncTime = 0;
+
+      logger.debug('[MessageSyncManager] ✅ Sync paused for profile switch');
+    });
+
+    // On profile switch COMPLETE: Resume with new profile context
+    this.unsubscribeSwitchComplete = profileContextManager.onSwitchComplete((data: ProfileSwitchCompleteData) => {
+      logger.info(`[MessageSyncManager] ✅ Profile switch complete - resuming sync (${data.profileType})`);
+      this.isPausedForProfileSwitch = false;
+
+      // Update to new profile ID
+      this.currentProfileId = data.profileId;
+
+      // Trigger immediate sync with new profile context
+      this.syncMessages().catch(error => {
+        logger.error('[MessageSyncManager] Post-switch sync failed:', error);
+      });
+    });
+
+    // On profile switch FAILED: Resume with old context
+    profileContextManager.onSwitchFailed(() => {
+      logger.warn('[MessageSyncManager] ⚠️ Profile switch failed - resuming with old context');
+      this.isPausedForProfileSwitch = false;
+    });
   }
 
   /**
@@ -103,6 +152,12 @@ class MessageSyncManager {
    * Sync all messages - main synchronization method
    */
   async syncMessages(forceSync = false): Promise<SyncStats> {
+    // Skip sync if paused for profile switch
+    if (this.isPausedForProfileSwitch) {
+      logger.debug('[MessageSyncManager] Sync paused for profile switch, skipping');
+      return this.getLastSyncStats();
+    }
+
     if (this.isSyncing && !forceSync) {
       logger.debug('[MessageSyncManager] Sync already in progress, skipping');
       return this.getLastSyncStats();
@@ -354,6 +409,16 @@ class MessageSyncManager {
     if (this.networkListener) {
       this.networkListener();
       this.networkListener = null;
+    }
+
+    // Unsubscribe from profile switch events
+    if (this.unsubscribeSwitchStart) {
+      this.unsubscribeSwitchStart();
+      this.unsubscribeSwitchStart = null;
+    }
+    if (this.unsubscribeSwitchComplete) {
+      this.unsubscribeSwitchComplete();
+      this.unsubscribeSwitchComplete = null;
     }
 
     this.isSyncing = false;

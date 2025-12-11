@@ -103,16 +103,15 @@ const CountryOfResidence: React.FC<CountryOfResidenceProps> = ({
       marginBottom: theme.spacing.xs 
     },
     pickerContainer: {
-      borderWidth: 0,
-      borderColor: 'transparent',
-      borderRadius: 0,
-      backgroundColor: 'transparent',
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.borderRadius.md,
+      backgroundColor: theme.colors.card,
     },
     picker: {
       width: '100%',
       height: Platform.OS === 'ios' ? 180 : 50,
       color: theme.colors.textPrimary,
-      backgroundColor: 'transparent',
     },
     iosPickerItem: {
       height: 180,

@@ -47,6 +47,7 @@
     "axios": "^1.7.9",
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.7",
+    "eventemitter3": "^5.0.1",
     "expo": "^54",
     "expo-build-properties": "~1.0.9",
     "expo-camera": "~17.0.9",

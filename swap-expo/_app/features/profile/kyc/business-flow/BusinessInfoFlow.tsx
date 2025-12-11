@@ -41,6 +41,7 @@ interface BusinessInformation {
   registrationNumber?: string;
   legalName?: string;
   employeeCount?: string;
+  username?: string;
 }
 
 // Business type options imported from shared constants
@@ -63,6 +64,7 @@ const BusinessInfoFlow: React.FC = () => {
     registrationNumber: '',
     legalName: '',
     employeeCount: '',
+    username: '',
   });
   const [currentScreen, setCurrentScreen] = useState<1 | 2>(1); // Track which screen is shown
   const [isLoading, setIsLoading] = useState(false);
@@ -72,6 +74,8 @@ const BusinessInfoFlow: React.FC = () => {
   const [showEmployeeCount, setShowEmployeeCount] = useState(false);
   const [industries, setIndustries] = useState<Array<{value: string, label: string, code?: string}>>([]);
   const [isLoadingIndustries, setIsLoadingIndustries] = useState(true);
+  const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
+  const [usernameCheckTimeout, setUsernameCheckTimeout] = useState<NodeJS.Timeout | null>(null);
 
   const returnToTimeline = route.params?.returnToTimeline;
   const sourceRoute = route.params?.sourceRoute;
@@ -118,7 +122,12 @@ const BusinessInfoFlow: React.FC = () => {
           registrationNumber: existingInfo.registrationNumber || '',
           legalName: existingInfo.legalName || '',
           employeeCount: existingInfo.employeeCount || '',
+          username: existingInfo.username || '',
         });
+        // If username exists, mark it as available (it's their current one)
+        if (existingInfo.username) {
+          setUsernameStatus('available');
+        }
         console.log('[BusinessInfoFlow] ✅ Loaded existing business information with', existingInfo.industryIds?.length || 0, 'industries');
       }
     } catch (error) {
@@ -126,6 +135,65 @@ const BusinessInfoFlow: React.FC = () => {
     } finally {
       setIsLoadingData(false);
     }
+  };
+
+  // Check username availability with debounce
+  const checkUsernameAvailability = async (username: string) => {
+    if (!username || username.length < 3) {
+      setUsernameStatus('idle');
+      return;
+    }
+
+    setUsernameStatus('checking');
+    try {
+      const response = await apiClient.post('/auth/check-username', { username });
+      setUsernameStatus(response.data.available ? 'available' : 'taken');
+    } catch (error) {
+      console.error('[BusinessInfoFlow] Error checking username:', error);
+      setUsernameStatus('idle');
+    }
+  };
+
+  // Generate username from business name
+  const generateUsernameFromBusinessName = async (businessName: string) => {
+    if (!businessName || businessName.trim().length < 2) return;
+
+    try {
+      const response = await apiClient.post('/auth/generate-username', {
+        source: businessName.trim(),
+        type: 'business',
+      });
+      if (response.data?.username) {
+        setBusinessInfo(prev => ({ ...prev, username: response.data.username }));
+        setUsernameStatus('available'); // Generated usernames are guaranteed unique
+      }
+    } catch (error) {
+      console.error('[BusinessInfoFlow] Error generating username:', error);
+      // Fallback: simple client-side generation
+      const sanitized = businessName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20);
+      if (sanitized.length >= 3) {
+        setBusinessInfo(prev => ({ ...prev, username: sanitized }));
+        checkUsernameAvailability(sanitized);
+      }
+    }
+  };
+
+  // Handle username change with debounced availability check
+  const handleUsernameChange = (text: string) => {
+    // Sanitize: lowercase, alphanumeric only
+    const sanitized = text.toLowerCase().replace(/[^a-z0-9]/g, '');
+    setBusinessInfo(prev => ({ ...prev, username: sanitized }));
+
+    // Clear existing timeout
+    if (usernameCheckTimeout) {
+      clearTimeout(usernameCheckTimeout);
+    }
+
+    // Debounce the availability check
+    const timeout = setTimeout(() => {
+      checkUsernameAvailability(sanitized);
+    }, 500);
+    setUsernameCheckTimeout(timeout);
   };
 
   // Validate and move to screen 2
@@ -189,6 +257,7 @@ const BusinessInfoFlow: React.FC = () => {
         registrationNumber: businessInfo.registrationNumber?.trim() || null,
         legalName: businessInfo.legalName?.trim(),
         employeeCount: businessInfo.employeeCount,
+        username: businessInfo.username?.trim() || null,
       };
 
       // Use professional hook for completion (handles cache invalidation automatically)
@@ -402,6 +471,33 @@ const BusinessInfoFlow: React.FC = () => {
       color: theme.colors.textSecondary,
       marginTop: theme.spacing.xs,
     },
+    usernameInputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    usernameInput: {
+      flex: 1,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      borderRadius: theme.borderRadius.md,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm + 2,
+      fontSize: theme.typography.fontSize.md,
+      color: theme.colors.textPrimary,
+      backgroundColor: theme.colors.card,
+    },
+    usernameStatus: {
+      marginLeft: theme.spacing.sm,
+      width: 24,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    usernameHelperAvailable: {
+      color: theme.colors.success,
+    },
+    usernameHelperTaken: {
+      color: theme.colors.error,
+    },
   }), [theme]);
 
   if (isLoadingData) {
@@ -482,6 +578,12 @@ const BusinessInfoFlow: React.FC = () => {
               style={styles.input}
               value={businessInfo.businessName}
               onChangeText={(text) => setBusinessInfo(prev => ({ ...prev, businessName: text }))}
+              onBlur={() => {
+                // Auto-generate username when business name loses focus (if username is empty)
+                if (businessInfo.businessName && !businessInfo.username) {
+                  generateUsernameFromBusinessName(businessInfo.businessName);
+                }
+              }}
               placeholder="Enter your business name"
               placeholderTextColor={theme.colors.textSecondary}
               autoCapitalize="words"
@@ -499,6 +601,45 @@ const BusinessInfoFlow: React.FC = () => {
               onChangeText={(text) => setBusinessInfo(prev => ({ ...prev, legalName: text }))}
               autoCapitalize="words"
             />
+          </View>
+
+          {/* Username */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>
+              Username <Text style={styles.optionalText}>(public handle)</Text>
+            </Text>
+            <View style={styles.usernameInputContainer}>
+              <TextInput
+                style={styles.usernameInput}
+                value={businessInfo.username}
+                onChangeText={handleUsernameChange}
+                placeholder="caribbeantechhub"
+                placeholderTextColor={theme.colors.textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <View style={styles.usernameStatus}>
+                {usernameStatus === 'checking' && (
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                )}
+                {usernameStatus === 'available' && (
+                  <Ionicons name="checkmark-circle" size={22} color={theme.colors.success} />
+                )}
+                {usernameStatus === 'taken' && (
+                  <Ionicons name="close-circle" size={22} color={theme.colors.error} />
+                )}
+              </View>
+            </View>
+            <Text style={[
+              styles.helperText,
+              usernameStatus === 'available' && styles.usernameHelperAvailable,
+              usernameStatus === 'taken' && styles.usernameHelperTaken,
+            ]}>
+              {usernameStatus === 'available' && 'Username is available'}
+              {usernameStatus === 'taken' && 'Username is taken, please try another'}
+              {usernameStatus === 'idle' && 'Lowercase letters and numbers only'}
+              {usernameStatus === 'checking' && 'Checking availability...'}
+            </Text>
           </View>
 
           {/* Business Phone */}

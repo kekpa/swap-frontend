@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,17 +9,30 @@ import {
   StatusBar,
   Switch,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ProfileStackParamList } from '../../../navigation/profileNavigator';
 import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
 import { useAuthContext } from '../../auth/context/AuthContext';
 import apiClient from '../../../_api/apiClient';
-import { BUSINESS_PATHS } from '../../../_api/apiPaths';
+import { BUSINESS_PATHS, AUTH_PATHS } from '../../../_api/apiPaths';
 import { logger } from '../../../utils/logger';
+
+// Session type from backend
+interface Session {
+  id: string;
+  device_name: string;
+  ip_address: string;
+  profile_type: string;
+  last_active_at: string;
+  created_at: string;
+  is_current: boolean;
+}
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -164,11 +177,70 @@ const SecurityPrivacyScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const { user } = useAuthContext();
+  const queryClient = useQueryClient();
 
   // Business PIN state
   const isBusinessProfile = user?.profile_type === 'business';
   const [hasBusinessPin, setHasBusinessPin] = useState(false);
   const [isLoadingPinStatus, setIsLoadingPinStatus] = useState(false);
+
+  // ============================================================
+  // ACTIVE SESSIONS (Real data from backend)
+  // ============================================================
+  const {
+    data: sessionsData,
+    isLoading: isLoadingSessions,
+    refetch: refetchSessions,
+  } = useQuery({
+    queryKey: ['active-sessions'],
+    queryFn: async (): Promise<Session[]> => {
+      logger.debug('[SecurityPrivacy] Fetching active sessions');
+      const response = await apiClient.get<{ sessions: Session[] }>(AUTH_PATHS.SESSIONS);
+      logger.debug(`[SecurityPrivacy] Loaded ${response.data.sessions?.length || 0} sessions`);
+      return response.data.sessions || [];
+    },
+    staleTime: 30 * 1000, // 30 seconds
+    gcTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Mutation to revoke a specific session
+  const revokeSessionMutation = useMutation({
+    mutationFn: async (sessionId: string) => {
+      logger.debug(`[SecurityPrivacy] Revoking session: ${sessionId}`);
+      await apiClient.delete(AUTH_PATHS.SESSION_REVOKE(sessionId));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['active-sessions'] });
+      Alert.alert('Success', 'Device has been signed out successfully.');
+    },
+    onError: (error: any) => {
+      logger.error('[SecurityPrivacy] Failed to revoke session:', error);
+      Alert.alert('Error', 'Failed to sign out device. Please try again.');
+    },
+  });
+
+  // Mutation to revoke all sessions
+  const revokeAllSessionsMutation = useMutation({
+    mutationFn: async () => {
+      logger.debug('[SecurityPrivacy] Revoking all sessions');
+      await apiClient.delete(AUTH_PATHS.SESSIONS_REVOKE_ALL);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['active-sessions'] });
+      Alert.alert('Success', 'All devices have been signed out.');
+    },
+    onError: (error: any) => {
+      logger.error('[SecurityPrivacy] Failed to revoke all sessions:', error);
+      Alert.alert('Error', 'Failed to sign out all devices. Please try again.');
+    },
+  });
+
+  // Refetch sessions when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      refetchSessions();
+    }, [refetchSessions])
+  );
 
   // Check if business PIN is set when screen comes into focus
   useFocusEffect(
@@ -235,14 +307,68 @@ const SecurityPrivacyScreen: React.FC = () => {
     // Implement transaction verification
   };
 
-  const handleSignOut = (deviceName: string) => {
-    console.log('Sign out from device:', deviceName);
-    // Implement sign out
+  const handleSignOut = (session: Session) => {
+    Alert.alert(
+      'Sign Out Device',
+      `Are you sure you want to sign out from "${session.device_name}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: () => revokeSessionMutation.mutate(session.id),
+        },
+      ]
+    );
   };
 
-  const handleRemoveDevice = (deviceName: string) => {
-    console.log('Remove device:', deviceName);
-    // Implement device removal
+  const handleSignOutAllDevices = () => {
+    Alert.alert(
+      'Sign Out All Devices',
+      'This will sign you out from all devices except this one. You\'ll need to sign in again on those devices.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out All',
+          style: 'destructive',
+          onPress: () => revokeAllSessionsMutation.mutate(),
+        },
+      ]
+    );
+  };
+
+  // Helper function to get device icon based on device name
+  const getDeviceIcon = (deviceName: string): keyof typeof Ionicons.glyphMap => {
+    const name = deviceName.toLowerCase();
+    if (name.includes('iphone') || name.includes('android') || name.includes('pixel') || name.includes('samsung') || name.includes('phone')) {
+      return 'phone-portrait-outline';
+    }
+    if (name.includes('ipad') || name.includes('tablet')) {
+      return 'tablet-portrait-outline';
+    }
+    if (name.includes('mac') || name.includes('windows') || name.includes('linux') || name.includes('desktop')) {
+      return 'desktop-outline';
+    }
+    if (name.includes('laptop')) {
+      return 'laptop-outline';
+    }
+    return 'hardware-chip-outline';
+  };
+
+  // Helper function to format last active time
+  const formatLastActive = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffMins < 1) return 'Last active: Just now';
+    if (diffMins < 60) return `Last active: ${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `Last active: ${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `Last active: ${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return `Last active: ${date.toLocaleDateString()}`;
   };
 
   const handleSetBusinessPin = () => {
@@ -351,9 +477,51 @@ const SecurityPrivacyScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>DEVICE MANAGEMENT</Text>
           <View style={styles.infoCard}>
             <View style={styles.deviceList}>
-              <DeviceItem theme={theme} icon="phone-portrait-outline" name="iPhone 13 Pro" details="iOS 15.4 • Singapore" lastActive="Last active: Just now" isCurrent />
-              <DeviceItem theme={theme} icon="laptop-outline" name="MacBook Pro" details="macOS 12.3 • Singapore" lastActive="Last active: 2 hours ago" onSignOut={() => handleSignOut('MacBook Pro')} />
-              <DeviceItem theme={theme} icon="phone-portrait-outline" name="Google Pixel 6" details="Android 12 • Kuala Lumpur" lastActive="Last active: 3 days ago" onRemove={() => handleRemoveDevice('Google Pixel 6')} />
+              {isLoadingSessions ? (
+                <View style={{ padding: theme.spacing.lg, alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                  <Text style={{ marginTop: theme.spacing.sm, color: theme.colors.textSecondary }}>Loading devices...</Text>
+                </View>
+              ) : sessionsData && sessionsData.length > 0 ? (
+                <>
+                  {sessionsData.map((session) => (
+                    <DeviceItem
+                      key={session.id}
+                      theme={theme}
+                      icon={getDeviceIcon(session.device_name)}
+                      name={session.device_name}
+                      details={`${session.profile_type || 'personal'} • ${session.ip_address || 'Unknown location'}`}
+                      lastActive={session.is_current ? 'Last active: Just now' : formatLastActive(session.last_active_at)}
+                      isCurrent={session.is_current}
+                      onSignOut={!session.is_current ? () => handleSignOut(session) : undefined}
+                    />
+                  ))}
+                  {/* Sign out all devices button */}
+                  {sessionsData.filter(s => !s.is_current).length > 0 && (
+                    <TouchableOpacity
+                      style={{
+                        marginTop: theme.spacing.sm,
+                        paddingVertical: theme.spacing.sm,
+                        alignItems: 'center',
+                        borderTopWidth: 1,
+                        borderTopColor: theme.colors.divider,
+                      }}
+                      onPress={handleSignOutAllDevices}
+                    >
+                      <Text style={{ color: theme.colors.error, fontWeight: '500', fontSize: theme.typography.fontSize.sm }}>
+                        Sign Out All Other Devices
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              ) : (
+                <View style={{ padding: theme.spacing.lg, alignItems: 'center' }}>
+                  <Ionicons name="checkmark-circle-outline" size={32} color={theme.colors.success} />
+                  <Text style={{ marginTop: theme.spacing.sm, color: theme.colors.textSecondary, textAlign: 'center' }}>
+                    Only this device is currently signed in
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         </View>

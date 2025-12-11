@@ -73,6 +73,10 @@ interface LockScreenProps {
   onLogout: () => void;
   /** Callback when PIN reset is complete (password verified, ready for new PIN setup) */
   onPinReset?: () => void;
+  /** Whether the current profile is a business profile */
+  isBusinessProfile?: boolean;
+  /** The business profile ID (required if isBusinessProfile is true) */
+  businessProfileId?: string;
 }
 
 type UnlockMode = 'biometric' | 'pin';
@@ -83,6 +87,8 @@ const LockScreen: React.FC<LockScreenProps> = ({
   onUnlock,
   onLogout,
   onPinReset,
+  isBusinessProfile = false,
+  businessProfileId,
 }) => {
   const { theme } = useTheme();
   const { height: screenHeight } = Dimensions.get('window');
@@ -222,16 +228,30 @@ const LockScreen: React.FC<LockScreenProps> = ({
     setError(null);
 
     try {
-      const result = await appLockService.unlockWithPin(enteredPin);
+      // PROFILE-AWARE: Use business PIN for business profiles, personal PIN otherwise
+      let result;
+      if (isBusinessProfile && businessProfileId) {
+        logger.debug('[LockScreen] Using business PIN for profile:', businessProfileId);
+        result = await appLockService.unlockWithBusinessPin(enteredPin, businessProfileId);
+      } else {
+        result = await appLockService.unlockWithPin(enteredPin);
+      }
 
       if (result.success) {
-        logger.info('[LockScreen] PIN unlock successful');
+        logger.info(`[LockScreen] PIN unlock successful (${isBusinessProfile ? 'business' : 'personal'})`);
         onUnlock();
       } else {
         // Check for lockout
-        const lockout = appLockService.isLockedOut();
-        if (lockout.lockedOut) {
-          setLockoutSeconds(Math.ceil(lockout.remainingMs / 1000));
+        if (isBusinessProfile && businessProfileId) {
+          const lockout = await appLockService.isBusinessLockedOut(businessProfileId);
+          if (lockout.lockedOut) {
+            setLockoutSeconds(Math.ceil(lockout.remainingMs / 1000));
+          }
+        } else {
+          const lockout = appLockService.isLockedOut();
+          if (lockout.lockedOut) {
+            setLockoutSeconds(Math.ceil(lockout.remainingMs / 1000));
+          }
         }
         setError(result.error || 'Incorrect PIN');
         setPin(''); // Clear PIN on error
@@ -242,7 +262,7 @@ const LockScreen: React.FC<LockScreenProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, onUnlock]);
+  }, [isLoading, onUnlock, isBusinessProfile, businessProfileId]);
 
   const handleSwitchToPin = () => {
     setMode('pin');

@@ -1,12 +1,14 @@
 // Updated: Refactored caching and fetching for distinct platform-matched and phone-only contacts - 2025-05-29
 // Updated: Fixed race condition in contact sync - multiple callers now wait for same sync operation - 2025-05-29
 // Updated: Added authentication validation to prevent 401 cascade failures - 2025-01-03
+// Updated: Added ProfileContextManager integration for profile switch safety - 2025-01-10
 import * as Contacts from 'expo-contacts';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import logger from '../utils/logger';
 import apiClient from '../_api/apiClient';
 import { getAccessToken } from './token';
+import { profileContextManager, ProfileSwitchStartData, ProfileSwitchCompleteData } from './ProfileContextManager';
 // import { API_PATHS } from '../_api/apiPaths'; // Original import
 
 // Placeholder for API paths until they are formally added to apiPaths.ts
@@ -76,8 +78,47 @@ class ContactsService {
   private cachedPhoneOnlyNormalizedContacts: NormalizedContact[] | null = null;
   private cachedRawDeviceContacts: DeviceContact[] | null = null;
 
+  // Profile switch safety - cancel sync during switch
+  private isPausedForProfileSwitch = false;
+  private unsubscribeSwitchStart: (() => void) | null = null;
+  private unsubscribeSwitchComplete: (() => void) | null = null;
+
   constructor() {
     this.loadContactsFromCache();
+    this.subscribeToProfileSwitch();
+  }
+
+  /**
+   * Subscribe to profile switch events to cancel in-progress sync
+   *
+   * CRITICAL: Contact sync uses the user's token which is profile-specific.
+   * If a sync is in progress during profile switch, it will fail with wrong token.
+   */
+  private subscribeToProfileSwitch(): void {
+    // On profile switch START: Pause sync operations
+    this.unsubscribeSwitchStart = profileContextManager.onSwitchStart((data: ProfileSwitchStartData) => {
+      logger.info('[ContactsService] 🔄 Profile switch starting - pausing sync operations');
+      this.isPausedForProfileSwitch = true;
+
+      // Cancel any in-progress sync by clearing the promise
+      // (The actual sync will see isPausedForProfileSwitch and return early)
+      this.syncInProgress = false;
+      this.activeSyncPromise = null;
+
+      logger.debug('[ContactsService] ✅ Sync paused for profile switch');
+    });
+
+    // On profile switch COMPLETE: Resume sync capability
+    this.unsubscribeSwitchComplete = profileContextManager.onSwitchComplete((data: ProfileSwitchCompleteData) => {
+      logger.info(`[ContactsService] ✅ Profile switch complete - resuming sync capability (${data.profileType})`);
+      this.isPausedForProfileSwitch = false;
+    });
+
+    // On profile switch FAILED: Resume with old context
+    profileContextManager.onSwitchFailed(() => {
+      logger.warn('[ContactsService] ⚠️ Profile switch failed - resuming with old context');
+      this.isPausedForProfileSwitch = false;
+    });
   }
 
   private async loadContactsFromCache(): Promise<void> {
@@ -275,9 +316,23 @@ class ContactsService {
   }
 
   private async performSyncOperation(forceRefreshDeviceContacts: boolean): Promise<ContactSyncResult> {
+    // Check if paused for profile switch
+    if (this.isPausedForProfileSwitch) {
+      logger.debug('[ContactsService] Sync paused for profile switch - aborting');
+      return {
+        sessionId: '',
+        totalContacts: 0,
+        newContacts: 0,
+        updatedContacts: 0,
+        matchedContacts: 0,
+        matches: [],
+        errors: ['Sync aborted - profile switch in progress']
+      };
+    }
+
     try {
       logger.info(`[ContactsService] Starting contact sync (forceRefreshDevice: ${forceRefreshDeviceContacts})...`);
-      
+
       // CRITICAL: Ensure we have valid authentication before syncing to prevent 401 cascade
       try {
         const token = await getAccessToken();
@@ -479,6 +534,21 @@ class ContactsService {
   }
 
   /**
+   * Cleanup - unsubscribe from events
+   */
+  cleanup(): void {
+    if (this.unsubscribeSwitchStart) {
+      this.unsubscribeSwitchStart();
+      this.unsubscribeSwitchStart = null;
+    }
+    if (this.unsubscribeSwitchComplete) {
+      this.unsubscribeSwitchComplete();
+      this.unsubscribeSwitchComplete = null;
+    }
+    logger.debug('[ContactsService] Cleanup completed');
+  }
+
+  /**
    * Reset all internal state - primarily for testing
    */
   reset(): void {
@@ -489,6 +559,7 @@ class ContactsService {
     this.cachedMatchedPlatformContacts = null;
     this.cachedPhoneOnlyNormalizedContacts = null;
     this.cachedRawDeviceContacts = null;
+    this.isPausedForProfileSwitch = false;
     logger.debug('[ContactsService] Reset completed');
   }
 }

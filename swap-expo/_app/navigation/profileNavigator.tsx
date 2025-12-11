@@ -34,6 +34,7 @@ import AccountScreen from "../features/profile/Account";
 import PersonalInfoScreen from "../features/profile/PersonalInfo";
 import SecurityPrivacyScreen from "../features/profile/security/SecurityPrivacy";
 import BusinessPinSetup from "../features/profile/security/BusinessPinSetup";
+import AppLockSetupScreen from "../features/auth/components/AppLockSetupScreen";
 import PasscodeScreen from "../components2/Passcode";
 import PhoneEntryScreen from "../features/auth/signup/PhoneEntryScreen";
 // Email verification disabled for Haiti market - keeping for future use
@@ -54,6 +55,7 @@ import {
   BusinessRegistrationDocuments,
   BusinessReview,
   BusinessVerification,
+  TeamMemberForm,
 } from "../features/profile/kyc/business-flow";
 // import Support from "../features/profile/support";
 
@@ -158,6 +160,12 @@ export type ProfileStackParamList = {
     returnToTimeline?: boolean;
     sourceRoute?: string;
   };
+  TeamMemberForm: {
+    mode: 'add' | 'edit';
+    ownerId?: string;
+    returnToTimeline?: boolean;
+    sourceRoute?: string;
+  };
   BeneficialOwnerAddress: {
     ownerId: string;
     returnToTimeline?: boolean;
@@ -187,6 +195,13 @@ export type ProfileStackParamList = {
   BusinessVerification: {
     returnToTimeline?: boolean;
     sourceRoute?: string;
+  };
+  // Business Security Setup - Used for PIN setup during business onboarding
+  BusinessSecuritySetup: {
+    isBusinessSetup?: boolean;
+    businessProfileId?: string;
+    businessName?: string;
+    returnRoute?: string;
   };
 };
 
@@ -419,6 +434,15 @@ export default function ProfileNavigator() {
         }}
       />
       <Stack.Screen
+        name="TeamMemberForm"
+        component={TeamMemberForm}
+        options={{
+          animation: "slide_from_right",
+          gestureEnabled: true,
+          gestureDirection: "horizontal"
+        }}
+      />
+      <Stack.Screen
         name="BeneficialOwnerAddress"
         component={BeneficialOwnerAddress}
         options={{
@@ -475,6 +499,15 @@ export default function ProfileNavigator() {
       <Stack.Screen
         name="BusinessVerification"
         component={BusinessVerification}
+        options={{
+          animation: "slide_from_right",
+          gestureEnabled: true,
+          gestureDirection: "horizontal"
+        }}
+      />
+      <Stack.Screen
+        name="BusinessSecuritySetup"
+        component={AppLockSetupScreen}
         options={{
           animation: "slide_from_right",
           gestureEnabled: true,

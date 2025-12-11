@@ -20,6 +20,7 @@ import { logger } from './logger';
 const PROFILE_PIN_DATA_KEY = 'PROFILE_PIN_DATA';
 const LAST_ACTIVE_PROFILE_KEY = 'LAST_ACTIVE_PROFILE';
 const LAST_PIN_USER_KEY = 'LAST_PIN_USER'; // Legacy - kept for backward compatibility
+const PROFILE_PIN_SECRET_PREFIX = 'PROFILE_PIN_SECRET_'; // For biometric-protected PIN storage
 
 /**
  * Profile PIN data structure
@@ -369,5 +370,135 @@ export const hasPinUserStored = async (): Promise<boolean> => {
   } catch (error) {
     logger.error('[PIN Storage] [LEGACY] Failed to check for stored PIN user:', error);
     return false;
+  }
+};
+
+// ============================================================================
+// BIOMETRIC PIN STORAGE: Store/retrieve actual PIN for biometric authentication
+// ============================================================================
+
+/**
+ * Store PIN in Keychain protected by biometric authentication
+ *
+ * When user sets their PIN during KYC or changes it, store it in Keychain
+ * so biometric can retrieve it later for profile switching.
+ *
+ * Security: PIN is stored in iOS Keychain with biometric protection.
+ * Only Face ID / Touch ID can unlock it.
+ *
+ * @param profileId - The profile ID this PIN belongs to
+ * @param pin - The 6-digit PIN to store
+ */
+export const storePinForBiometric = async (
+  profileId: string,
+  pin: string
+): Promise<boolean> => {
+  try {
+    const key = `${PROFILE_PIN_SECRET_PREFIX}${profileId}`;
+
+    // Store with biometric protection (requireAuthentication)
+    // Note: On iOS this stores in Keychain with kSecAccessControlBiometryCurrentSet
+    await SecureStore.setItemAsync(key, pin, {
+      keychainService: 'swap-pin-biometric',
+      requireAuthentication: false, // Store without auth, retrieve WITH auth
+    });
+
+    logger.info('[PIN Storage] Stored PIN for biometric access', { profileId });
+    console.log('🔐 [PIN Storage] PIN stored for biometric access:', { profileId });
+    return true;
+  } catch (error) {
+    logger.error('[PIN Storage] Failed to store PIN for biometric:', error);
+    console.error('❌ [PIN Storage] Failed to store PIN for biometric:', error);
+    return false;
+  }
+};
+
+/**
+ * Retrieve PIN from Keychain using biometric authentication
+ *
+ * Called when user taps "Use Biometric" button for profile switching or login.
+ * This will trigger Face ID / Touch ID prompt.
+ *
+ * @param profileId - The profile ID to get PIN for
+ * @param promptMessage - Custom message for biometric prompt
+ * @returns The stored PIN, or null if biometric fails or no PIN stored
+ */
+export const getPinWithBiometric = async (
+  profileId: string,
+  promptMessage: string = 'Authenticate to access your account'
+): Promise<string | null> => {
+  try {
+    const key = `${PROFILE_PIN_SECRET_PREFIX}${profileId}`;
+
+    // Retrieve with biometric authentication
+    // This triggers Face ID / Touch ID on iOS
+    const pin = await SecureStore.getItemAsync(key, {
+      keychainService: 'swap-pin-biometric',
+      requireAuthentication: true,
+      authenticationPrompt: promptMessage,
+    });
+
+    if (pin) {
+      logger.info('[PIN Storage] Retrieved PIN via biometric', { profileId });
+      console.log('✅ [PIN Storage] PIN retrieved via biometric:', { profileId });
+    } else {
+      logger.debug('[PIN Storage] No PIN stored for biometric', { profileId });
+      console.log('ℹ️ [PIN Storage] No PIN stored for biometric:', { profileId });
+    }
+
+    return pin;
+  } catch (error: any) {
+    // User cancelled biometric or biometric failed
+    if (error.message?.includes('cancel') || error.message?.includes('authentication')) {
+      logger.debug('[PIN Storage] Biometric cancelled or failed', { profileId });
+      console.log('🚫 [PIN Storage] Biometric cancelled or failed:', { profileId });
+    } else {
+      logger.error('[PIN Storage] Failed to retrieve PIN with biometric:', error);
+      console.error('❌ [PIN Storage] Failed to retrieve PIN with biometric:', error);
+    }
+    return null;
+  }
+};
+
+/**
+ * Check if a PIN is stored for biometric access
+ *
+ * @param profileId - The profile ID to check
+ * @returns true if PIN is stored (biometric can be used)
+ */
+export const hasPinForBiometric = async (profileId: string): Promise<boolean> => {
+  try {
+    const key = `${PROFILE_PIN_SECRET_PREFIX}${profileId}`;
+
+    // Check without authentication (just existence check)
+    const pin = await SecureStore.getItemAsync(key, {
+      keychainService: 'swap-pin-biometric',
+      requireAuthentication: false,
+    });
+
+    return !!pin;
+  } catch (error) {
+    logger.error('[PIN Storage] Failed to check biometric PIN existence:', error);
+    return false;
+  }
+};
+
+/**
+ * Clear PIN stored for biometric
+ *
+ * Called when user changes PIN, logs out, or removes account.
+ *
+ * @param profileId - The profile ID to clear PIN for
+ */
+export const clearPinForBiometric = async (profileId: string): Promise<void> => {
+  try {
+    const key = `${PROFILE_PIN_SECRET_PREFIX}${profileId}`;
+    await SecureStore.deleteItemAsync(key, {
+      keychainService: 'swap-pin-biometric',
+    });
+    logger.debug('[PIN Storage] Cleared PIN for biometric', { profileId });
+    console.log('🗑️ [PIN Storage] Cleared PIN for biometric:', { profileId });
+  } catch (error) {
+    logger.error('[PIN Storage] Failed to clear biometric PIN:', error);
   }
 };

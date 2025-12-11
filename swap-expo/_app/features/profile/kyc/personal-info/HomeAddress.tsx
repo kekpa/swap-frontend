@@ -129,6 +129,7 @@ const HomeAddress: React.FC<HomeAddressProps> = ({
       borderRadius: theme.borderRadius.md,
       fontSize: theme.typography.fontSize.md,
       color: theme.colors.textPrimary,
+      backgroundColor: theme.colors.card,
     },
     continueButton: {
       backgroundColor: theme.colors.primary,

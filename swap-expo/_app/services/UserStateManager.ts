@@ -15,6 +15,7 @@
 
 import logger from '../utils/logger';
 import { websocketService } from './websocketService';
+import { profileContextManager, ProfileSwitchStartData, ProfileSwitchCompleteData } from './ProfileContextManager';
 
 interface UserState {
   isOnline: boolean;
@@ -34,6 +35,50 @@ class UserStateManager {
   };
 
   private stateChangeListeners: Array<(state: UserState) => void> = [];
+
+  // Profile switch safety
+  private unsubscribeSwitchStart: (() => void) | null = null;
+  private unsubscribeSwitchComplete: (() => void) | null = null;
+
+  constructor() {
+    // Subscribe to profile switch events
+    this.subscribeToProfileSwitch();
+  }
+
+  /**
+   * Subscribe to profile switch events to rejoin correct WebSocket room
+   *
+   * CRITICAL: When profile switches, user must join the new entity's room
+   * to receive messages/notifications for the correct profile.
+   */
+  private subscribeToProfileSwitch(): void {
+    // On profile switch START: Clear current state
+    this.unsubscribeSwitchStart = profileContextManager.onSwitchStart((data: ProfileSwitchStartData) => {
+      logger.info('[UserStateManager] 🔄 Profile switch starting - clearing current state');
+
+      // Clear current chat context (user shouldn't stay in old profile's chat)
+      this.userState = {
+        ...this.userState,
+        currentChat: null,
+        profileId: null,
+      };
+
+      logger.debug('[UserStateManager] ✅ State cleared for profile switch');
+    });
+
+    // On profile switch COMPLETE: Reinitialize with new profile
+    this.unsubscribeSwitchComplete = profileContextManager.onSwitchComplete((data: ProfileSwitchCompleteData) => {
+      logger.info(`[UserStateManager] ✅ Profile switch complete - reinitializing (${data.profileType})`);
+
+      // Reinitialize with new profile's entity ID
+      this.initialize(data.entityId);
+    });
+
+    // On profile switch FAILED: Resume with old context (no action needed)
+    profileContextManager.onSwitchFailed(() => {
+      logger.warn('[UserStateManager] ⚠️ Profile switch failed - keeping old context');
+    });
+  }
 
   /**
    * Initialize user state and global subscription
@@ -172,7 +217,7 @@ class UserStateManager {
    */
   cleanup(): void {
     logger.debug('[UserStateManager] 🧹 Cleaning up user state');
-    
+
     this.userState = {
       isOnline: false,
       currentChat: null,
@@ -181,7 +226,33 @@ class UserStateManager {
       profileId: null,
     };
 
+    // Unsubscribe from profile switch events
+    if (this.unsubscribeSwitchStart) {
+      this.unsubscribeSwitchStart();
+      this.unsubscribeSwitchStart = null;
+    }
+    if (this.unsubscribeSwitchComplete) {
+      this.unsubscribeSwitchComplete();
+      this.unsubscribeSwitchComplete = null;
+    }
+
     this.stateChangeListeners = [];
+  }
+
+  /**
+   * Reset all internal state - primarily for testing
+   * @internal
+   */
+  reset(): void {
+    this.userState = {
+      isOnline: false,
+      currentChat: null,
+      appState: 'background',
+      lastSeen: Date.now(),
+      profileId: null,
+    };
+    this.stateChangeListeners = [];
+    logger.debug('[UserStateManager] Reset completed');
   }
 
   private notifyStateChange(): void {

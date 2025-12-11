@@ -69,13 +69,16 @@ export interface UserData {
 
 // Progressive Auth Context interface - WhatsApp style
 export interface AuthContextType {
-  // Core Authentication State  
+  // Core Authentication State
   authLevel: AuthLevel;
   isAuthenticated: boolean;
   isGuestMode: boolean;
   isLoading: boolean;
   user: User | null;
-  
+
+  // Initialization State (blocks UI until session check completes)
+  isInitialized: boolean;
+
   // Session Management
   hasPersistedSession: boolean;
 

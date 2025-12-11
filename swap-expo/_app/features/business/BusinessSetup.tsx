@@ -69,14 +69,17 @@ export const BusinessSetup = () => {
       if (response.data && response.data.id) {
         Alert.alert(
           'Success',
-          'Business created successfully! Complete KYC to start accepting payments.',
+          'Business created successfully! Set up a PIN to secure your business.',
           [
             {
               text: 'Continue',
               onPress: () => {
-                // Navigate to business KYC flow
-                navigation.navigate('BusinessKycFlowStart', {
-                  businessId: response.data.id,
+                // Navigate to business security setup first, then KYC
+                navigation.navigate('BusinessSecuritySetup', {
+                  isBusinessSetup: true,
+                  businessProfileId: response.data.id,
+                  businessName: businessName.trim(),
+                  returnRoute: 'BusinessKycFlowStart',
                 });
               },
             },
