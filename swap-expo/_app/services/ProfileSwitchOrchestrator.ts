@@ -529,12 +529,22 @@ export class ProfileSwitchOrchestrator {
 
       logger.error('[ProfileSwitchOrchestrator] ❌ Profile switch failed:', error);
 
-      // Notify ProfileContextManager that switch failed - services can resume with old context
-      profileContextManager.onProfileSwitchFailed();
-      console.log('🎭 [ProfileSwitchOrchestrator] ⚠️ ProfileContextManager notified of failure - services resuming with old context');
+      // PROFESSIONAL FIX: Distinguish PIN errors from system errors
+      // PIN errors (401/403) should NOT trigger rollback - user just entered wrong PIN
+      // They stay in the modal and can retry. Rollback is only for system/network errors.
+      const httpStatus = error?.response?.status;
+      const isPinError = httpStatus === 401 || httpStatus === 403;
 
-      // Attempt rollback
-      await this.rollback(apiClient, authContext);
+      if (isPinError) {
+        // PIN error - don't rollback, just return error to modal for retry
+        logger.debug('[ProfileSwitchOrchestrator] PIN error detected - skipping rollback, user can retry');
+        console.log('🎭 [ProfileSwitchOrchestrator] ⚠️ PIN error - no rollback needed, user can retry in modal');
+      } else {
+        // System/network error - rollback to previous state
+        profileContextManager.onProfileSwitchFailed();
+        console.log('🎭 [ProfileSwitchOrchestrator] ⚠️ System error - rolling back to previous profile');
+        await this.rollback(apiClient, authContext);
+      }
 
       return {
         success: false,

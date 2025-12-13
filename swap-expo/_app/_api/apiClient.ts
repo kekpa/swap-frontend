@@ -525,6 +525,28 @@ apiClient.interceptors.response.use(
     // Handle unauthorized errors (401)
     if (error.response?.status === 401) {
       logger.warn('[WARN] [auth] Authentication error detected. Token may be invalid or expired.');
+
+      // PROFESSIONAL FIX: Paths that return 401 for AUTHENTICATION failures, not token expiration
+      // These should NOT trigger automatic token refresh - just return the error to the caller
+      // Industry pattern: Auth errors (wrong credentials/PIN) vs Token expiration are different
+      const AUTH_FAILURE_PATHS = [
+        '/auth/login',
+        '/auth/register',
+        '/auth/verify',
+        '/auth/switch-profile',  // PIN failure is auth error, not token expiration
+        '/auth/verify-pin',      // Any PIN verification endpoint
+        '/auth/business/login',
+      ];
+
+      const url = originalRequest.url || '';
+      const isAuthFailurePath = AUTH_FAILURE_PATHS.some(path => url.includes(path));
+
+      if (isAuthFailurePath) {
+        // Don't auto-refresh for authentication failures (wrong credentials/PIN)
+        // Just return the error to the caller so it can display proper error messages
+        logger.debug(`[auth] Auth failure on ${url} - returning error without token refresh`);
+        return Promise.reject(error);
+      }
       
       // For auth paths, don't use cached data - these need fresh auth
       if (!isAuthPath && isUiPath && !originalRequest._retry) {

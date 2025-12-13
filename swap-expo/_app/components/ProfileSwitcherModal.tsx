@@ -713,7 +713,7 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
     <BottomSheet
       ref={bottomSheetRef}
       index={snapIndex}
-      snapPoints={['65%', '90%']}
+      snapPoints={['50%', '95%']}
       enablePanDownToClose={true}
       backdropComponent={renderBackdrop}
       backgroundStyle={{ backgroundColor: theme.colors.card }}
@@ -735,9 +735,12 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
           </View>
         )}
 
-        {/* PIN Entry View */}
+        {/* PIN Entry View - wrapped in ScrollView for smaller screens */}
         {pinEntryProfile ? (
-          <View style={styles.pinEntryContainer}>
+          <BottomSheetScrollView
+            contentContainerStyle={styles.pinEntryContainer}
+            showsVerticalScrollIndicator={false}
+          >
             {/* Profile Header */}
             <View style={styles.pinEntryHeader}>
               <View style={[styles.pinEntryAvatar, { backgroundColor: getAvatarColor(pinEntryProfile.entityId) }]}>
@@ -821,7 +824,7 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
             <TouchableOpacity style={styles.pinBackButton} onPress={handleBackFromPinEntry}>
               <Text style={styles.pinBackButtonText}>← Back to profiles</Text>
             </TouchableOpacity>
-          </View>
+          </BottomSheetScrollView>
         ) : isLoading || isCheckingPin ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -831,24 +834,34 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
             <Text style={styles.emptyText}>No profiles available</Text>
           </View>
         ) : (
-          <View style={{ flex: 1 }}>
-            {/* Scrollable profiles - takes remaining space above button */}
-            <BottomSheetScrollView style={{ flex: 1 }}>
-              {profiles.map((profile) => (
-                <View key={profile.profileId}>
-                  {renderItem({ item: profile })}
-                </View>
-              ))}
-            </BottomSheetScrollView>
+          /* PROFESSIONAL PATTERN: Button inside ScrollView (Revolut, N26, Google Pay pattern)
+           * This ensures the Add Account button is always visible at the bottom of the list
+           * and scrolls naturally with profiles if the list grows. Avoids flex: 1 layout conflicts. */
+          <BottomSheetScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: 20 }}
+          >
+            {/* Profile items */}
+            {profiles.map((profile) => (
+              <View key={profile.profileId}>
+                {renderItem({ item: profile })}
+              </View>
+            ))}
 
-            {/* Fixed button at bottom - always visible */}
+            {/* Add Account as last list item - always visible at bottom of list */}
             {onAddAccount && (
-              <TouchableOpacity style={styles.addAccountButton} onPress={onAddAccount}>
+              <TouchableOpacity
+                style={[
+                  styles.addAccountButton,
+                  { marginTop: 8, borderTopWidth: 1, borderTopColor: theme.colors.border }
+                ]}
+                onPress={onAddAccount}
+              >
                 <Ionicons name="add-circle-outline" size={24} color={theme.colors.primary} />
                 <Text style={styles.addAccountText}>Add Account</Text>
               </TouchableOpacity>
             )}
-          </View>
+          </BottomSheetScrollView>
         )}
       </BottomSheetView>
     </BottomSheet>
