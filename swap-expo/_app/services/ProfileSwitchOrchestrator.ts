@@ -484,12 +484,44 @@ export class ProfileSwitchOrchestrator {
         state: this.state,
       };
 
-    } catch (error) {
+    } catch (error: any) {
       // ============================================================================
       // ERROR: Rollback to previous state
       // ============================================================================
       this.state = ProfileSwitchState.FAILED;
-      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      // Extract error details from API response
+      let errorMessage = error instanceof Error ? error.message : String(error);
+
+      // Check for API response with lockout info (from backend)
+      if (error?.response?.data) {
+        const responseData = error.response.data;
+
+        // Handle PIN lockout with countdown
+        if (responseData.lockedUntil) {
+          const lockedUntilDate = new Date(responseData.lockedUntil);
+          const remainingMs = lockedUntilDate.getTime() - Date.now();
+          if (remainingMs > 0) {
+            const remainingSeconds = Math.ceil(remainingMs / 1000);
+            const remainingMinutes = Math.ceil(remainingSeconds / 60);
+            if (remainingMinutes > 1) {
+              errorMessage = `Too many attempts. Try again in ${remainingMinutes} minutes.`;
+            } else {
+              errorMessage = `Too many attempts. Try again in ${remainingSeconds} seconds.`;
+            }
+          } else {
+            errorMessage = responseData.message || 'Too many attempts. Please try again.';
+          }
+        } else if (responseData.message) {
+          // Use backend's error message
+          errorMessage = responseData.message;
+
+          // Append attempts remaining if available
+          if (typeof responseData.attemptsRemaining === 'number' && responseData.attemptsRemaining > 0) {
+            errorMessage += ` (${responseData.attemptsRemaining} attempts remaining)`;
+          }
+        }
+      }
 
       logger.error('[ProfileSwitchOrchestrator] ❌ Profile switch failed:', error);
 

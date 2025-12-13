@@ -78,6 +78,7 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
   const [pinEntryProfile, setPinEntryProfile] = useState<AvailableProfile | null>(null);
   const [pin, setPin] = useState<string[]>(['', '', '', '', '', '']);
   const [isPinError, setIsPinError] = useState(false);
+  const [pinErrorMessage, setPinErrorMessage] = useState<string | null>(null);
   const [isSubmittingPin, setIsSubmittingPin] = useState(false);
   const pinInputRefs = useRef<Array<TextInput | null>>([null, null, null, null, null, null]);
 
@@ -120,6 +121,14 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
 
     checkBiometric();
   }, []);
+
+  // Auto-expand modal to 80% when PIN entry is active (so keypad doesn't cover content)
+  useEffect(() => {
+    if (pinEntryProfile && bottomSheetRef.current) {
+      // Snap to index 1 (80%) when PIN entry starts
+      bottomSheetRef.current.snapToIndex(1);
+    }
+  }, [pinEntryProfile]);
 
   // Calculate snap index based on visible prop
   const snapIndex = React.useMemo(() => (visible ? 0 : -1), [visible]);
@@ -455,9 +464,26 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
     onSelectProfile(profile);
   }, [currentProfileId, onClose, onSelectProfile, onPinSetupRequired, checkPinRequired]);
 
+  // Process error message and add guidance for lockout scenarios
+  const processErrorMessage = useCallback((errorMsg: string, isBusinessProfile: boolean): string => {
+    let message = errorMsg || 'Invalid PIN';
+
+    // Add guidance for lockout scenarios
+    if (message.toLowerCase().includes('too many') || message.toLowerCase().includes('locked')) {
+      if (isBusinessProfile) {
+        message += '\n\nContact your business administrator to reset your PIN, or reach out to Swap support.';
+      } else {
+        message += '\n\nYou can also use your password to log in again.';
+      }
+    }
+
+    return message;
+  }, []);
+
   // Handle PIN input change
   const handlePinChange = useCallback((text: string, index: number) => {
     setIsPinError(false); // Clear error on input
+    setPinErrorMessage(null);
 
     let newPin: string[];
 
@@ -506,15 +532,22 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
           const result = await onSelectProfile(pinEntryProfile, pinString);
           if (result && !result.success) {
             logger.warn('[ProfileSwitcherModal] Switch failed:', result.error);
+            const errorMessage = processErrorMessage(
+              result.error || 'Invalid PIN. Please try again.',
+              pinEntryProfile.type === 'business'
+            );
+            setPinErrorMessage(errorMessage);
             setIsPinError(true);
             setPin(['', '', '', '', '', '']);
             pinInputRefs.current[0]?.focus();
           } else {
             setPinEntryProfile(null);
             setPin(['', '', '', '', '', '']);
+            setPinErrorMessage(null);
           }
         } catch (error: any) {
           logger.error('[ProfileSwitcherModal] PIN submit error:', error);
+          setPinErrorMessage('Failed to verify PIN. Please try again.');
           setIsPinError(true);
           setPin(['', '', '', '', '', '']);
           pinInputRefs.current[0]?.focus();
@@ -523,7 +556,7 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
         }
       }, 100);
     }
-  }, [pin, isSubmittingPin, pinEntryProfile, onSelectProfile]);
+  }, [pin, isSubmittingPin, pinEntryProfile, onSelectProfile, processErrorMessage]);
 
   // Handle backspace in PIN input
   const handlePinKeyPress = useCallback((e: any, index: number) => {
@@ -541,6 +574,7 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
 
     const pinString = pin.join('');
     if (pinString.length !== 6) {
+      setPinErrorMessage('Please enter all 6 digits.');
       setIsPinError(true);
       return;
     }
@@ -556,6 +590,11 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
       if (result && !result.success) {
         // Switch failed - show error and let user retry
         logger.warn('[ProfileSwitcherModal] Switch failed:', result.error);
+        const errorMessage = processErrorMessage(
+          result.error || 'Invalid PIN. Please try again.',
+          pinEntryProfile.type === 'business'
+        );
+        setPinErrorMessage(errorMessage);
         setIsPinError(true);
         // Clear PIN for retry
         setPin(['', '', '', '', '', '']);
@@ -568,16 +607,18 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
         // Parent will close modal, reset state for next time
         setPinEntryProfile(null);
         setPin(['', '', '', '', '', '']);
+        setPinErrorMessage(null);
       }
     } catch (error: any) {
       logger.error('[ProfileSwitcherModal] PIN submit error:', error);
+      setPinErrorMessage('Failed to verify PIN. Please try again.');
       setIsPinError(true);
       setPin(['', '', '', '', '', '']);
       pinInputRefs.current[0]?.focus();
     } finally {
       setIsSubmittingPin(false);
     }
-  }, [pinEntryProfile, pin, onSelectProfile]);
+  }, [pinEntryProfile, pin, onSelectProfile, processErrorMessage]);
 
   // Handle biometric authentication as alternative to PIN
   // Uses "Biometric Unlocks PIN" pattern - retrieves stored PIN from Keychain using Face ID
@@ -605,6 +646,11 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
         if (switchResult && !switchResult.success) {
           // PIN was wrong (maybe user changed it?) - clear stored PIN and ask for manual entry
           logger.warn('[ProfileSwitcherModal] Switch failed after biometric:', switchResult.error);
+          const errorMessage = processErrorMessage(
+            switchResult.error || 'PIN verification failed',
+            pinEntryProfile.type === 'business'
+          );
+          setPinErrorMessage(errorMessage);
           setIsPinError(true);
           Alert.alert(
             'PIN Changed',
@@ -638,13 +684,14 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
     } finally {
       setIsSubmittingPin(false);
     }
-  }, [pinEntryProfile, onSelectProfile]);
+  }, [pinEntryProfile, onSelectProfile, processErrorMessage]);
 
   // Handle back from PIN entry
   const handleBackFromPinEntry = useCallback(() => {
     setPinEntryProfile(null);
     setPin(['', '', '', '', '', '']);
     setIsPinError(false);
+    setPinErrorMessage(null);
   }, []);
 
   const handleRemoveAccount = React.useCallback((profile: AvailableProfile, event: any) => {
@@ -720,8 +767,11 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
     <BottomSheet
       ref={bottomSheetRef}
       index={snapIndex}
-      snapPoints={['50%']}
+      snapPoints={['55%', '80%']}
       enablePanDownToClose={true}
+      keyboardBehavior="extend"
+      keyboardBlurBehavior="restore"
+      android_keyboardInputMode="adjustResize"
       backdropComponent={renderBackdrop}
       backgroundStyle={{ backgroundColor: theme.colors.card }}
       handleIndicatorStyle={{ backgroundColor: theme.colors.textSecondary }}
@@ -785,8 +835,8 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
             </View>
 
             {/* Error Message */}
-            {isPinError && (
-              <Text style={styles.pinErrorText}>Invalid PIN. Please try again.</Text>
+            {isPinError && pinErrorMessage && (
+              <Text style={styles.pinErrorText}>{pinErrorMessage}</Text>
             )}
 
             {/* Submit Button */}

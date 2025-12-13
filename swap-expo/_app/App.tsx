@@ -232,8 +232,8 @@ const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) =
   // Show lock screen if:
   // - Lock is configured
   // - User is authenticated
-  // - App is locked
-  if (isLockConfigured && authContext.isAuthenticated && isAppLocked && !authContext.isLoading) {
+  // - App is locked (check SERVICE directly for synchronous guarantee - no race condition)
+  if (isLockConfigured && authContext.isAuthenticated && appLockService.isLocked() && !authContext.isLoading) {
     // Get user identifier for password verification (prefer email, then username)
     const userIdentifier = authContext.user?.email || authContext.user?.username;
 

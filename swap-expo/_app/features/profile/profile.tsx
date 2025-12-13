@@ -608,12 +608,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
     try {
       // Call orchestrator directly with PIN (no navigation to SignIn!)
-      // Require biometric verification if device has biometrics enrolled
-      // This provides 2FA: PIN (something you know) + Biometric (something you are)
+      // PIN OR Biometric - not both! If PIN provided, skip biometric.
+      // If no PIN, use biometric as the authentication method.
       const result = await profileSwitchOrchestrator.switchProfile({
         targetProfileId: profile.profileId,
         pin, // Business access PIN (if required)
-        requireBiometric: isBiometricAvailable, // Dynamic based on device capability
+        requireBiometric: pin ? false : isBiometricAvailable, // Skip biometric if PIN provided
         apiClient,
         authContext,
         queryClient,

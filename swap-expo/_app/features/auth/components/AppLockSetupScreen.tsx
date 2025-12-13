@@ -89,6 +89,7 @@ const AppLockSetupContent: React.FC<AppLockSetupContentProps> = ({
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
+  const [biometricEnabled, setBiometricEnabled] = useState(false); // Track if biometric was successfully enabled
 
   // Handle completion
   const handleComplete = useCallback(() => {
@@ -150,6 +151,7 @@ const AppLockSetupContent: React.FC<AppLockSetupContentProps> = ({
     if (result.success) {
       logger.info('[AppLockSetup] Biometric setup successful (local-only, not synced to backend)');
       // Note: Biometric is local-only, not tracked in backend KYC steps
+      setBiometricEnabled(true); // Track that biometric was successfully enabled
       // Now setup backup PIN
       setStep('pin_create');
     } else {
@@ -468,10 +470,10 @@ const AppLockSetupContent: React.FC<AppLockSetupContentProps> = ({
             <Text style={styles.primaryButtonText}>Continue</Text>
           </TouchableOpacity>
 
-          {/* Use Different Account option - available for both personal and business */}
+          {/* Log out option - available for both personal and business */}
           {onLogout && (
             <TouchableOpacity style={styles.secondaryButton} onPress={onLogout}>
-              <Text style={styles.secondaryButtonText}>Use Different Account</Text>
+              <Text style={styles.secondaryButtonText}>Log out</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -524,6 +526,15 @@ const AppLockSetupContent: React.FC<AppLockSetupContentProps> = ({
       ? 'This PIN is used when Face ID is unavailable'
       : 'Enter a 6-digit PIN to secure your account';
 
+    // Skip is only allowed if biometric was successfully enabled
+    const handleSkipPin = () => {
+      if (biometricEnabled) {
+        logger.info('[AppLockSetup] User skipped backup PIN (biometric already enabled)');
+        setStep('complete');
+        setTimeout(handleComplete, 500);
+      }
+    };
+
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle={theme.name.includes('dark') ? 'light-content' : 'dark-content'} />
@@ -537,6 +548,20 @@ const AppLockSetupContent: React.FC<AppLockSetupContentProps> = ({
               disabled={isLoading}
               length={PIN_LENGTH}
             />
+
+            {/* Skip button - only show if biometric was enabled */}
+            {biometricEnabled && (
+              <TouchableOpacity style={styles.secondaryButton} onPress={handleSkipPin}>
+                <Text style={styles.secondaryButtonText}>Skip for Now</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Log out option */}
+            {onLogout && (
+              <TouchableOpacity style={styles.secondaryButton} onPress={onLogout}>
+                <Text style={styles.secondaryButtonText}>Log out</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </SafeAreaView>
@@ -572,6 +597,13 @@ const AppLockSetupContent: React.FC<AppLockSetupContentProps> = ({
               disabled={isLoading}
               length={PIN_LENGTH}
             />
+
+            {/* Log out option */}
+            {onLogout && (
+              <TouchableOpacity style={styles.secondaryButton} onPress={onLogout}>
+                <Text style={styles.secondaryButtonText}>Log out</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </SafeAreaView>

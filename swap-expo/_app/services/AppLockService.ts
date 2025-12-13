@@ -728,7 +728,7 @@ class AppLockService {
 
   /**
    * Setup PIN for a business profile
-   * @param pin 4-6 digit PIN
+   * @param pin 6-digit PIN
    * @param businessProfileId The business profile ID
    */
   async setupBusinessPin(
@@ -738,9 +738,9 @@ class AppLockService {
     try {
       logger.debug(`[AppLockService] Setting up business PIN for profile ${businessProfileId}...`);
 
-      // Business PINs are 4-6 digits
-      if (!/^\d{4,6}$/.test(pin)) {
-        return { success: false, error: 'PIN must be 4-6 digits' };
+      // Business PINs are 6 digits
+      if (!/^\d{6}$/.test(pin)) {
+        return { success: false, error: 'PIN must be 6 digits' };
       }
 
       const keys = this.getBusinessPinKeys(businessProfileId);

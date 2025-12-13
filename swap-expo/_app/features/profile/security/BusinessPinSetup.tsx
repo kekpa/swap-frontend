@@ -88,8 +88,8 @@ const BusinessPinSetup: React.FC = () => {
     setPin(value);
     setError(null);
 
-    // Auto-process when PIN is complete (4-6 digits)
-    if (value.length >= 4) {
+    // Auto-process when PIN is complete (6 digits)
+    if (value.length === 6) {
       // Small delay to show the last digit
       setTimeout(() => processPin(value), 100);
     }
@@ -221,7 +221,7 @@ const BusinessPinSetup: React.FC = () => {
       case 'check':
         return 'Enter your current business access PIN to continue.';
       case 'create':
-        return 'Enter a 4-6 digit PIN for extra security when accessing this business profile.';
+        return 'Enter a 6-digit PIN for extra security when accessing this business profile.';
       case 'confirm':
         return 'Re-enter your PIN to confirm.';
       case 'remove':

@@ -123,7 +123,8 @@ const PinPad: React.FC<PinPadProps> = ({
         margin: keyMargin,
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: theme.colors.background,
+        backgroundColor: disabled ? theme.colors.inputBorder : theme.colors.card,
+        ...theme.shadows.small,
       },
     });
   }, [theme, isSmallScreen, isTinyScreen, error, disabled]);
