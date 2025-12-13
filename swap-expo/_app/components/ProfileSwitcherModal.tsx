@@ -9,7 +9,7 @@
  * to the parent's onSelectProfile callback for direct API switch.
  */
 
-import React, { useCallback, useState, useRef, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  TextInput,
   Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -37,6 +36,7 @@ import apiClient from '../_api/apiClient';
 import { AUTH_PATHS } from '../_api/apiPaths';
 import { logger } from '../utils/logger';
 import { getPinWithBiometric, storePinForBiometric, hasPinForBiometric } from '../utils/pinUserStorage';
+import PinPad from '../components2/PinPad';
 
 interface ProfileSwitcherModalProps {
   visible: boolean;
@@ -76,11 +76,10 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
 
   // Inline PIN entry state
   const [pinEntryProfile, setPinEntryProfile] = useState<AvailableProfile | null>(null);
-  const [pin, setPin] = useState<string[]>(['', '', '', '', '', '']);
+  const [pin, setPin] = useState('');
   const [isPinError, setIsPinError] = useState(false);
   const [pinErrorMessage, setPinErrorMessage] = useState<string | null>(null);
   const [isSubmittingPin, setIsSubmittingPin] = useState(false);
-  const pinInputRefs = useRef<Array<TextInput | null>>([null, null, null, null, null, null]);
 
   // Biometric state
   const [isBiometricAvailable, setIsBiometricAvailable] = useState(false);
@@ -428,10 +427,8 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
         logger.debug('[ProfileSwitcherModal] PIN required, showing inline PIN entry...');
         setIsCheckingPin(false);
         setPinEntryProfile(profile);
-        setPin(['', '', '', '', '', '']);
+        setPin('');
         setIsPinError(false);
-        // Focus first PIN input after render
-        setTimeout(() => pinInputRefs.current[0]?.focus(), 100);
         return;
       }
 
@@ -480,56 +477,24 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
     return message;
   }, []);
 
-  // Handle PIN input change
-  const handlePinChange = useCallback((text: string, index: number) => {
-    setIsPinError(false); // Clear error on input
+  // Handle PIN input change from PinPad
+  const handlePinChange = useCallback((newPin: string) => {
+    setIsPinError(false);
     setPinErrorMessage(null);
-
-    let newPin: string[];
-
-    if (text.length > 1) {
-      // Handle paste of entire PIN
-      const pastedPin = text.slice(0, 6).split('');
-      newPin = [...pin];
-      pastedPin.forEach((digit, idx) => {
-        if (idx < 6) newPin[idx] = digit;
-      });
-      setPin(newPin);
-
-      // Focus last input or blur if complete
-      if (pastedPin.length === 6) {
-        pinInputRefs.current[5]?.blur();
-      } else {
-        const nextIndex = Math.min(index + pastedPin.length, 5);
-        pinInputRefs.current[nextIndex]?.focus();
-      }
-    } else {
-      // Handle single digit input
-      newPin = [...pin];
-      newPin[index] = text;
-      setPin(newPin);
-
-      // Auto-advance to next input
-      if (text !== '' && index < 5) {
-        pinInputRefs.current[index + 1]?.focus();
-      }
-    }
+    setPin(newPin);
 
     // AUTO-SUBMIT: If all 6 digits entered, submit automatically
-    const pinComplete = newPin.every(digit => digit !== '');
-    if (pinComplete && !isSubmittingPin && pinEntryProfile) {
+    if (newPin.length === 6 && !isSubmittingPin && pinEntryProfile) {
       // Small delay for visual feedback before submit
       setTimeout(async () => {
-        const pinString = newPin.join('');
-        if (pinString.length !== 6 || !pinEntryProfile) return;
+        if (newPin.length !== 6 || !pinEntryProfile) return;
 
-        // Inline submit logic to avoid circular dependency with handlePinSubmit
         setIsSubmittingPin(true);
         setIsPinError(false);
         logger.debug('[ProfileSwitcherModal] Auto-submitting PIN for profile switch...');
 
         try {
-          const result = await onSelectProfile(pinEntryProfile, pinString);
+          const result = await onSelectProfile(pinEntryProfile, newPin);
           if (result && !result.success) {
             logger.warn('[ProfileSwitcherModal] Switch failed:', result.error);
             const errorMessage = processErrorMessage(
@@ -538,42 +503,29 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
             );
             setPinErrorMessage(errorMessage);
             setIsPinError(true);
-            setPin(['', '', '', '', '', '']);
-            pinInputRefs.current[0]?.focus();
+            setPin('');
           } else {
             setPinEntryProfile(null);
-            setPin(['', '', '', '', '', '']);
+            setPin('');
             setPinErrorMessage(null);
           }
         } catch (error: any) {
           logger.error('[ProfileSwitcherModal] PIN submit error:', error);
           setPinErrorMessage('Failed to verify PIN. Please try again.');
           setIsPinError(true);
-          setPin(['', '', '', '', '', '']);
-          pinInputRefs.current[0]?.focus();
+          setPin('');
         } finally {
           setIsSubmittingPin(false);
         }
       }, 100);
     }
-  }, [pin, isSubmittingPin, pinEntryProfile, onSelectProfile, processErrorMessage]);
+  }, [isSubmittingPin, pinEntryProfile, onSelectProfile, processErrorMessage]);
 
-  // Handle backspace in PIN input
-  const handlePinKeyPress = useCallback((e: any, index: number) => {
-    if (e.nativeEvent.key === 'Backspace' && pin[index] === '' && index > 0) {
-      const newPin = [...pin];
-      newPin[index - 1] = '';
-      setPin(newPin);
-      pinInputRefs.current[index - 1]?.focus();
-    }
-  }, [pin]);
-
-  // Handle PIN submission
+  // Handle PIN submission (manual button press)
   const handlePinSubmit = useCallback(async () => {
     if (!pinEntryProfile) return;
 
-    const pinString = pin.join('');
-    if (pinString.length !== 6) {
+    if (pin.length !== 6) {
       setPinErrorMessage('Please enter all 6 digits.');
       setIsPinError(true);
       return;
@@ -584,11 +536,9 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
     logger.debug('[ProfileSwitcherModal] Submitting PIN for profile switch...');
 
     try {
-      // Call onSelectProfile with PIN - parent returns success/error
-      const result = await onSelectProfile(pinEntryProfile, pinString);
+      const result = await onSelectProfile(pinEntryProfile, pin);
 
       if (result && !result.success) {
-        // Switch failed - show error and let user retry
         logger.warn('[ProfileSwitcherModal] Switch failed:', result.error);
         const errorMessage = processErrorMessage(
           result.error || 'Invalid PIN. Please try again.',
@@ -596,25 +546,21 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
         );
         setPinErrorMessage(errorMessage);
         setIsPinError(true);
-        // Clear PIN for retry
-        setPin(['', '', '', '', '', '']);
-        pinInputRefs.current[0]?.focus();
+        setPin('');
       } else {
         // Success! Store PIN for future biometric access (non-blocking)
-        storePinForBiometric(pinEntryProfile.profileId, pinString).catch((err) => {
+        storePinForBiometric(pinEntryProfile.profileId, pin).catch((err) => {
           logger.warn('[ProfileSwitcherModal] Failed to store PIN for biometric (non-fatal):', err);
         });
-        // Parent will close modal, reset state for next time
         setPinEntryProfile(null);
-        setPin(['', '', '', '', '', '']);
+        setPin('');
         setPinErrorMessage(null);
       }
     } catch (error: any) {
       logger.error('[ProfileSwitcherModal] PIN submit error:', error);
       setPinErrorMessage('Failed to verify PIN. Please try again.');
       setIsPinError(true);
-      setPin(['', '', '', '', '', '']);
-      pinInputRefs.current[0]?.focus();
+      setPin('');
     } finally {
       setIsSubmittingPin(false);
     }
@@ -660,7 +606,7 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
         } else {
           // Success - parent will close modal
           setPinEntryProfile(null);
-          setPin(['', '', '', '', '', '']);
+          setPin('');
         }
       } else {
         // Biometric failed/cancelled OR no PIN stored yet
@@ -689,7 +635,7 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
   // Handle back from PIN entry
   const handleBackFromPinEntry = useCallback(() => {
     setPinEntryProfile(null);
-    setPin(['', '', '', '', '', '']);
+    setPin('');
     setIsPinError(false);
     setPinErrorMessage(null);
   }, []);
@@ -767,11 +713,8 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
     <BottomSheet
       ref={bottomSheetRef}
       index={snapIndex}
-      snapPoints={['55%', '80%']}
+      snapPoints={['65%', '90%']}
       enablePanDownToClose={true}
-      keyboardBehavior="extend"
-      keyboardBlurBehavior="restore"
-      android_keyboardInputMode="adjustResize"
       backdropComponent={renderBackdrop}
       backgroundStyle={{ backgroundColor: theme.colors.card }}
       handleIndicatorStyle={{ backgroundColor: theme.colors.textSecondary }}
@@ -816,23 +759,14 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
               </View>
             </View>
 
-            {/* PIN Inputs */}
-            <View style={styles.pinInputContainer}>
-              {pin.map((digit, index) => (
-                <TextInput
-                  key={index}
-                  ref={(input) => (pinInputRefs.current[index] = input)}
-                  style={[styles.pinInput, isPinError && styles.pinInputError]}
-                  value={digit}
-                  onChangeText={(text) => handlePinChange(text, index)}
-                  onKeyPress={(e) => handlePinKeyPress(e, index)}
-                  keyboardType="number-pad"
-                  maxLength={1}
-                  secureTextEntry
-                  selectTextOnFocus
-                />
-              ))}
-            </View>
+            {/* PIN Pad - Custom keypad instead of native keyboard */}
+            <PinPad
+              value={pin}
+              onChange={handlePinChange}
+              length={6}
+              error={isPinError}
+              disabled={isSubmittingPin}
+            />
 
             {/* Error Message */}
             {isPinError && pinErrorMessage && (
@@ -843,10 +777,10 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
             <TouchableOpacity
               style={[
                 styles.pinSubmitButton,
-                (pin.join('').length !== 6 || isSubmittingPin) && styles.pinSubmitButtonDisabled
+                (pin.length !== 6 || isSubmittingPin) && styles.pinSubmitButtonDisabled
               ]}
               onPress={handlePinSubmit}
-              disabled={pin.join('').length !== 6 || isSubmittingPin}
+              disabled={pin.length !== 6 || isSubmittingPin}
             >
               {isSubmittingPin ? (
                 <ActivityIndicator size="small" color={theme.colors.white} />

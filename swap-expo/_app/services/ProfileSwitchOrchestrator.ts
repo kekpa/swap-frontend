@@ -497,9 +497,13 @@ export class ProfileSwitchOrchestrator {
       if (error?.response?.data) {
         const responseData = error.response.data;
 
+        // Backend ErrorHandlingInterceptor returns errors in errors[0] format
+        // Extract the first error object, or fall back to responseData for backwards compatibility
+        const errorObj = responseData.errors?.[0] || responseData;
+
         // Handle PIN lockout with countdown
-        if (responseData.lockedUntil) {
-          const lockedUntilDate = new Date(responseData.lockedUntil);
+        if (errorObj.lockedUntil) {
+          const lockedUntilDate = new Date(errorObj.lockedUntil);
           const remainingMs = lockedUntilDate.getTime() - Date.now();
           if (remainingMs > 0) {
             const remainingSeconds = Math.ceil(remainingMs / 1000);
@@ -510,15 +514,15 @@ export class ProfileSwitchOrchestrator {
               errorMessage = `Too many attempts. Try again in ${remainingSeconds} seconds.`;
             }
           } else {
-            errorMessage = responseData.message || 'Too many attempts. Please try again.';
+            errorMessage = errorObj.message || 'Too many attempts. Please try again.';
           }
-        } else if (responseData.message) {
+        } else if (errorObj.message) {
           // Use backend's error message
-          errorMessage = responseData.message;
+          errorMessage = errorObj.message;
 
           // Append attempts remaining if available
-          if (typeof responseData.attemptsRemaining === 'number' && responseData.attemptsRemaining > 0) {
-            errorMessage += ` (${responseData.attemptsRemaining} attempts remaining)`;
+          if (typeof errorObj.attemptsRemaining === 'number' && errorObj.attemptsRemaining > 0) {
+            errorMessage += ` (${errorObj.attemptsRemaining} attempts remaining)`;
           }
         }
       }
