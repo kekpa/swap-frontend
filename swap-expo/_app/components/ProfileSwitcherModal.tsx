@@ -851,10 +851,7 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
             {/* Add Account as last list item - always visible at bottom of list */}
             {onAddAccount && (
               <TouchableOpacity
-                style={[
-                  styles.addAccountButton,
-                  { marginTop: 8, borderTopWidth: 1, borderTopColor: theme.colors.border }
-                ]}
+                style={[styles.addAccountButton, { marginTop: 8 }]}
                 onPress={onAddAccount}
               >
                 <Ionicons name="add-circle-outline" size={24} color={theme.colors.primary} />

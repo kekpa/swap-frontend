@@ -4,6 +4,7 @@
 import { SQLiteDatabase } from 'expo-sqlite';
 import { databaseManager } from './DatabaseManager';
 import logger from '../utils/logger';
+import { getAvatarColor } from '../utils/avatarUtils';
 
 // Search result interfaces
 interface SearchResult {
@@ -235,7 +236,7 @@ class FullTextSearchRepository {
           date: '', // Contacts don't have dates
           entityId: row.entity_id,
           initials: this.getInitials(displayName),
-          avatarColor: this.getAvatarColor(displayName),
+          avatarColor: getAvatarColor(row.entity_id || displayName),
           relevanceScore: 90 - index, // Slightly lower than transactions
         };
       });
@@ -433,15 +434,6 @@ class FullTextSearchRepository {
       return `${words[0][0]}${words[1][0]}`.toUpperCase();
     }
     return name.substring(0, 2).toUpperCase();
-  }
-
-  /**
-   * Generate consistent avatar color
-   */
-  private getAvatarColor(name: string): string {
-    const colors = ['#3B82F6', '#8B5CF6', '#EF4444', '#F97316', '#10B981', '#06B6D4', '#8B5A2B', '#EC4899'];
-    const charCode = name.charCodeAt(0) || 0;
-    return colors[Math.abs(charCode) % colors.length];
   }
 
   /**

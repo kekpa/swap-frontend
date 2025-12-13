@@ -17,8 +17,9 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, CommonActions } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
+import { useQueryClient } from '@tanstack/react-query';
 import { ProfileStackParamList } from '../../../navigation/profileNavigator';
 import { useTheme } from '../../../theme/ThemeContext';
 import { useAuthContext } from '../../auth/context/AuthContext';
@@ -26,6 +27,7 @@ import PinPad from '../../../components2/PinPad';
 import apiClient from '../../../_api/apiClient';
 import { BUSINESS_PATHS } from '../../../_api/apiPaths';
 import { logger } from '../../../utils/logger';
+import { profileSwitchOrchestrator } from '../../../services/ProfileSwitchOrchestrator';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList, 'BusinessPinSetup'>;
 type RoutePropType = RouteProp<ProfileStackParamList, 'BusinessPinSetup'>;
@@ -36,7 +38,8 @@ const BusinessPinSetup: React.FC = () => {
   const navigation = useNavigation<NavigationProp>();
   const route = useRoute<RoutePropType>();
   const { theme } = useTheme();
-  const { user } = useAuthContext();
+  const { user, setUser, setIsAuthenticated, setIsProfileSwitching } = useAuthContext();
+  const queryClient = useQueryClient();
 
   const businessProfileId = route.params?.businessProfileId || user?.profileId;
   const initialMode = route.params?.mode || 'create';
@@ -144,13 +147,35 @@ const BusinessPinSetup: React.FC = () => {
 
     setIsLoading(true);
     try {
+      // Save PIN to backend first
       await apiClient.post(BUSINESS_PATHS.SET_PIN(businessProfileId), { pin: newPin });
 
-      Alert.alert(
-        'PIN Set Successfully',
-        'Your business access PIN has been saved. You will need to enter this PIN when switching to this business profile.',
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
-      );
+      // Auto-switch to business profile immediately (no re-entry needed)
+      const result = await profileSwitchOrchestrator.switchProfile({
+        targetProfileId: businessProfileId,
+        pin: newPin,
+        requireBiometric: false, // Skip biometric - they just created the PIN
+        apiClient,
+        authContext: { user, setUser, setIsAuthenticated, setIsProfileSwitching },
+        queryClient,
+      });
+
+      if (result.success) {
+        // Success - navigate to Home as the new business profile
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'HomeTabs' as any }],
+          })
+        );
+      } else {
+        // Switch failed but PIN is saved - user can manually switch
+        Alert.alert(
+          'PIN Saved',
+          `Your PIN was created but we couldn't switch automatically: ${result.error}. Please try switching manually.`,
+          [{ text: 'OK', onPress: () => navigation.goBack() }]
+        );
+      }
     } catch (error: any) {
       logger.error('[BusinessPinSetup] Failed to set PIN:', error.message);
       setError(error.response?.data?.message || 'Failed to set PIN. Please try again.');
@@ -234,7 +259,7 @@ const BusinessPinSetup: React.FC = () => {
       StyleSheet.create({
         container: {
           flex: 1,
-          backgroundColor: theme.colors.card,
+          backgroundColor: theme.colors.background,
         },
         header: {
           flexDirection: 'row',
@@ -325,7 +350,7 @@ const BusinessPinSetup: React.FC = () => {
       <SafeAreaView style={styles.container}>
         <StatusBar
           barStyle={theme.isDark ? 'light-content' : 'dark-content'}
-          backgroundColor={theme.colors.card}
+          backgroundColor={theme.colors.background}
         />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -338,7 +363,7 @@ const BusinessPinSetup: React.FC = () => {
     <SafeAreaView style={styles.container}>
       <StatusBar
         barStyle={theme.isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={theme.colors.card}
+        backgroundColor={theme.colors.background}
       />
 
       {/* Header */}
