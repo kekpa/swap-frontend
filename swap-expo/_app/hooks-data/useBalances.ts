@@ -327,7 +327,7 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
  */
 interface WalletEligibilityResponse {
   eligible: boolean;
-  reason?: 'KYC_REQUIRED' | 'PROFILE_INCOMPLETE' | 'BLOCKED';
+  reason?: 'KYC_REQUIRED' | 'PROFILE_INCOMPLETE' | 'KYC_REJECTED' | 'ACCOUNT_SUSPENDED' | 'BLOCKED';
   kycStatus: 'none' | 'partial' | 'verified';
   profileComplete: boolean;
   nextStep: 'complete-profile' | 'verify-identity' | 'ready';

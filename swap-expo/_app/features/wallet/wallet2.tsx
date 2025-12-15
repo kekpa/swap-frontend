@@ -31,7 +31,9 @@ import { WalletBalance } from '../../types/wallet.types';
 import { networkService } from '../../services/NetworkService';
 import { WalletStackCard } from './components';
 import WalletOnboarding from './components/WalletOnboarding';
+import WalletLimitedBanner from './components/WalletLimitedBanner';
 import logger from '../../utils/logger';
+import { useTransactionLimits, TransactionLimits } from '../../hooks-data/useTransactionLimits';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useWalletTransactions } from '../../hooks-data/useRecentTransactions';
 import { useHeaderOffset } from '../../hooks/useHeaderOffset';
@@ -164,9 +166,13 @@ const WalletDashboard: React.FC = () => {
   const [selectedWallet, setSelectedWallet] = useState<WalletBalance | null>(null);
 
   // NEW: Wallet state machine for KYC-gated access
+  // - 'limited-access': User has KYC under review, can use wallet with limits
   const [walletState, setWalletState] = useState<
-    'loading' | 'no-access' | 'needs-init' | 'ready' | 'locked'
+    'loading' | 'no-access' | 'limited-access' | 'needs-init' | 'ready' | 'locked'
   >('loading');
+
+  // Transaction limits for limited-access users
+  const [transactionLimits, setTransactionLimits] = useState<TransactionLimits | undefined>(undefined);
 
   // NEW: Hook for checking wallet eligibility
   const {
@@ -175,6 +181,12 @@ const WalletDashboard: React.FC = () => {
     error: eligibilityError,
     refetch: refetchEligibility,
   } = useWalletEligibility(entityId, { enabled: !!entityId });
+
+  // NEW: Hook for fetching transaction limits (for limited-access users)
+  const {
+    data: tierEligibility,
+    isLoading: isLoadingLimits,
+  } = useTransactionLimits(entityId, { enabled: !!entityId });
 
   // Wallet initialization mutation (for retry button)
   const initializeWalletMutation = useInitializeWallet();
@@ -277,26 +289,41 @@ const WalletDashboard: React.FC = () => {
         return;
       }
 
-      // User is eligible - check wallet status
-      if (!eligibility.hasWallets) {
-        // KYC is partial (under review) - user is waiting for approval
-        if (eligibility.kycStatus === 'partial') {
-          logger.debug('[WalletDashboard] KYC under review - waiting for approval');
-          setWalletState('no-access'); // Will show WalletOnboarding with KYC_UNDER_REVIEW
+      // User is eligible - check wallet status and KYC status
+      // Check if user has limited access (KYC under review)
+      if (tierEligibility?.kycStatus === 'under_review' || eligibility.kycStatus === 'partial') {
+        logger.debug('[WalletDashboard] KYC under review - granting limited access with limits');
+
+        // Store limits for display
+        if (tierEligibility?.limits) {
+          setTransactionLimits(tierEligibility.limits);
+        }
+
+        if (!eligibility.hasWallets) {
+          // Wallets still being created
+          logger.debug('[WalletDashboard] KYC under review but wallets not ready yet');
+          setWalletState('needs-init');
           return;
         }
+
+        // User has wallets and is under review - limited access
+        setWalletState('limited-access');
+        return;
+      }
+
+      if (!eligibility.hasWallets) {
         // KYC verified but wallet not yet created (rare edge case - Kafka creating wallet)
         logger.debug('[WalletDashboard] User eligible, KYC verified, wallet being created by Kafka');
         setWalletState('needs-init');
         return;
       }
 
-      // User has wallets - show biometric lock
+      // User has wallets and full KYC approval - show biometric lock
       setWalletState('locked');
     };
 
     checkWalletAccess();
-  }, [entityId, user, eligibility, isLoadingEligibility, eligibilityError]);
+  }, [entityId, user, eligibility, isLoadingEligibility, eligibilityError, tierEligibility]);
 
   const [isWalletUnlocked, setIsWalletUnlocked] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -1113,6 +1140,112 @@ const WalletDashboard: React.FC = () => {
         kycStatus={eligibility.kycStatus}
         profileComplete={eligibility.profileComplete}
       />
+    );
+  }
+
+  // NEW: Limited access state - show wallet with limits banner (skip biometric)
+  if (walletState === 'limited-access') {
+    // For limited-access users, show wallet directly with a banner
+    // They don't need biometric since they have restricted functionality
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
+
+        <SearchHeader
+          onSearch={handleSearch}
+          placeholder="Search for transactions"
+          onProfilePress={handleProfilePress}
+          rightIcons={[{ name: "add-circle", onPress: handleNewInteraction, color: theme.colors.primary }]}
+          showProfile={true}
+          avatarUrl={user?.avatarUrl}
+          initials={getHeaderInitials()}
+          showSearch={false}
+          brandName="Swap"
+          transparent={true}
+          scrollY={scrollY}
+          entityId={user?.entityId}
+        />
+
+        <Animated.ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollViewContent}
+          showsVerticalScrollIndicator={false}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: false }
+          )}
+          scrollEventThrottle={16}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleActualRefresh}
+              colors={[theme.colors.primary]}
+              tintColor={theme.colors.primary}
+            />
+          }
+        >
+          <View>
+            {/* Limited access banner */}
+            <WalletLimitedBanner
+              limits={transactionLimits}
+              primaryCurrency={selectedWallet?.currency_code || 'USD'}
+            />
+
+            <WalletStackCard
+              wallets={currencyBalances}
+              selectedWalletId={selectedWallet?.wallet_id}
+              isBalanceVisible={isBalanceVisible}
+              onToggleVisibility={toggleBalanceVisibility}
+              onWalletSelect={handleWalletSelect}
+            />
+
+            <View style={styles.actionsContainer}>
+              <TouchableOpacity style={styles.actionButton} onPress={handleAddMoney}>
+                <Ionicons name="add" size={24} color={theme.colors.primary} />
+                <Text style={styles.actionText}>Add</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => (navigation as any).navigate("Contacts", {
+                  screen: "InteractionsHistory",
+                  params: {
+                    navigateToNewChat: true
+                  }
+                })}
+              >
+                <Ionicons name="send-outline" size={24} color={theme.colors.primary} />
+                <Text style={styles.actionText}>Send</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.transactionsHeader}>
+              <View>
+                <Text style={styles.transactionsTitle}>Recent Transactions</Text>
+                {selectedWallet && (
+                  <Text style={styles.accountLabel}>
+                    {selectedWallet.currency_code} Wallet
+                  </Text>
+                )}
+              </View>
+              <TouchableOpacity onPress={() => navigation.navigate('TransactionList' as any, { selectedWallet })}>
+                <Text style={styles.seeAllButton}>See All</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.transactionsList}>
+              {filteredTransactions.length > 0 ? (
+                <>
+                  {filteredTransactions.map((item: WalletTransaction) => renderTransactionItem(item))}
+                </>
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>No transactions yet</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        </Animated.ScrollView>
+      </SafeAreaView>
     );
   }
 

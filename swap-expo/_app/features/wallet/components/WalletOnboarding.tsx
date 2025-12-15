@@ -17,7 +17,7 @@ import { useAuthContext } from '../../auth/context/AuthContext';
 import logger from '../../../utils/logger';
 
 interface WalletOnboardingProps {
-  reason: 'KYC_REQUIRED' | 'PROFILE_INCOMPLETE' | 'BLOCKED';
+  reason: 'KYC_REQUIRED' | 'PROFILE_INCOMPLETE' | 'KYC_REJECTED' | 'ACCOUNT_SUSPENDED' | 'BLOCKED';
   kycStatus: 'none' | 'partial' | 'verified';
   profileComplete: boolean;
 }
@@ -126,6 +126,53 @@ const WalletOnboarding: React.FC<WalletOnboardingProps> = ({
           });
         },
         estimatedTime: '3-5 minutes',
+      };
+    }
+
+    // KYC_REJECTED case - user can resubmit documents
+    if (reason === 'KYC_REJECTED') {
+      return {
+        icon: 'close-circle-outline' as const,
+        iconColor: theme.colors.error,
+        title: 'Verification Unsuccessful',
+        subtitle: 'We couldn\'t verify your identity with the documents provided. You can submit new documents to try again.',
+        benefits: [
+          '📄 Upload clearer photos of your ID',
+          '🔄 Make sure all details are visible',
+          '✅ Resubmit for another review',
+        ],
+        primaryCta: 'Resubmit Documents',
+        primaryAction: () => {
+          logger.debug('[WalletOnboarding] Navigating to resubmit KYC documents');
+          (navigation as any).navigate('ProfileModal', {
+            sourceRoute: 'Wallet'
+          });
+        },
+        estimatedTime: '3-5 minutes to resubmit',
+      };
+    }
+
+    // ACCOUNT_SUSPENDED case - frozen, contact support
+    if (reason === 'ACCOUNT_SUSPENDED') {
+      return {
+        icon: 'warning-outline' as const,
+        iconColor: theme.colors.error,
+        title: 'Account Suspended',
+        subtitle: 'Your account has been temporarily suspended. Please contact our support team for assistance.',
+        benefits: [
+          '📞 Our support team is here to help',
+          '🔍 We\'ll review your account status',
+          '⏱️ Most issues resolved within 24-48 hours',
+        ],
+        primaryCta: 'Contact Support',
+        primaryAction: () => {
+          logger.debug('[WalletOnboarding] Opening support for suspended account');
+          // Navigate to support or open support chat
+          (navigation as any).navigate('ProfileModal', {
+            sourceRoute: 'Wallet'
+          });
+        },
+        estimatedTime: 'Support available 24/7',
       };
     }
 
