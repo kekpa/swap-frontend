@@ -599,4 +599,114 @@ export const useSetPrimaryWallet = () => {
       }
     },
   });
-}; 
+};
+
+/**
+ * Hook for creating a new currency wallet
+ * Uses GET_OR_CREATE endpoint - creates if doesn't exist, returns existing if it does
+ */
+export const useCreateCurrencyWallet = () => {
+  const queryClient = useQueryClient();
+  const profileId = useCurrentProfileId();
+
+  return useMutation({
+    mutationKey: ['create_currency_wallet'],
+    mutationFn: async ({
+      accountId,
+      currencyId,
+      entityId
+    }: {
+      accountId: string;
+      currencyId: string;
+      entityId: string;
+    }) => {
+      logger.debug(`[useCreateCurrencyWallet] 🔄 Creating wallet for currency: ${currencyId}`);
+
+      // Create wallet endpoint - POST for resource creation (RESTful best practice)
+      const response = await apiClient.post(API_PATHS.WALLET.GET_OR_CREATE(accountId, currencyId));
+
+      logger.debug(`[useCreateCurrencyWallet] ✅ Wallet created/retrieved successfully`);
+
+      // Handle the response data
+      let walletData = response.data?.data || response.data;
+
+      // If the data is a JSON string, parse it
+      if (typeof walletData === 'string') {
+        try {
+          walletData = JSON.parse(walletData);
+        } catch (parseError) {
+          logger.error('[useCreateCurrencyWallet] ❌ Failed to parse wallet data JSON:', parseError);
+          throw new Error('Invalid JSON response from createCurrencyWallet');
+        }
+      }
+
+      // Validate that we have a wallet object with required fields
+      if (!walletData || typeof walletData !== 'object' || !walletData.wallet_id) {
+        logger.error('[useCreateCurrencyWallet] ❌ Invalid wallet data structure:', walletData);
+        throw new Error('Invalid wallet data structure from createCurrencyWallet');
+      }
+
+      // Transform to WalletBalance format
+      const transformedWallet = transformToWalletBalance(walletData);
+      logger.debug(`[useCreateCurrencyWallet] ✅ Created wallet: ${transformedWallet.currency_code} (${transformedWallet.wallet_id})`);
+
+      return { wallet: transformedWallet, entityId };
+    },
+    onSuccess: ({ wallet, entityId }) => {
+      if (!profileId) {
+        logger.warn('[useCreateCurrencyWallet] ⚠️ No profileId available for cache update');
+        return;
+      }
+
+      // Get current balances and add the new wallet
+      const currentBalances = queryClient.getQueryData<WalletBalance[]>(queryKeys.balancesByEntity(profileId, entityId));
+
+      if (currentBalances) {
+        // Check if wallet already exists (avoid duplicates)
+        const walletExists = currentBalances.some(b => b.wallet_id === wallet.wallet_id);
+
+        if (!walletExists) {
+          const updatedBalances = [...currentBalances, wallet];
+          queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), updatedBalances);
+          logger.debug(`[useCreateCurrencyWallet] ✅ Added ${wallet.currency_code} wallet to cache (now ${updatedBalances.length} wallets)`);
+        } else {
+          logger.debug(`[useCreateCurrencyWallet] ℹ️ Wallet ${wallet.currency_code} already exists in cache`);
+        }
+      } else {
+        // No existing balances, set the new wallet as the only one
+        queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), [wallet]);
+        logger.debug(`[useCreateCurrencyWallet] ✅ Created initial wallet cache with ${wallet.currency_code}`);
+      }
+
+      // Also save to local SQLite cache
+      const repositoryWallet: CurrencyWallet = {
+        id: wallet.wallet_id,
+        account_id: wallet.account_id,
+        currency_id: wallet.currency_id,
+        currency_code: wallet.currency_code,
+        currency_symbol: wallet.currency_symbol,
+        currency_name: wallet.currency_name,
+        balance: wallet.balance,
+        reserved_balance: wallet.reserved_balance || 0,
+        available_balance: wallet.available_balance || wallet.balance,
+        balance_last_updated: wallet.balance_last_updated || undefined,
+        is_active: wallet.is_active ?? true,
+        is_primary: wallet.isPrimary ?? false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_synced: true,
+      };
+
+      currencyWalletsRepository.saveCurrencyWallets([repositoryWallet], profileId)
+        .then(() => {
+          logger.debug(`[useCreateCurrencyWallet] ✅ Saved ${wallet.currency_code} wallet to local cache`);
+        })
+        .catch((error) => {
+          logger.warn(`[useCreateCurrencyWallet] ⚠️ Failed to save wallet to local cache:`, error);
+        });
+    },
+    onError: (error) => {
+      logger.error('[useCreateCurrencyWallet] ❌ Failed to create wallet:', error);
+    },
+  });
+};

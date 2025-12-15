@@ -26,6 +26,7 @@ export * from './useKycQuery'; // Renamed from useKycStatus
 
 // Reference data hooks
 export * from './useCountries';
+export * from './useCurrencies';
 
 // Standardized query utilities
 export * from './useStandardQuery';

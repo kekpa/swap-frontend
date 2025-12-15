@@ -17,7 +17,11 @@ import {
   Alert,
   Animated,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
+
+// Screen dimensions for animations
+const { height: screenHeight } = Dimensions.get('window');
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -164,6 +168,20 @@ const WalletDashboard: React.FC = () => {
   const [isBalanceVisible, setIsBalanceVisible] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedWallet, setSelectedWallet] = useState<WalletBalance | null>(null);
+  const [isStackExpanded, setIsStackExpanded] = useState(false); // Disable scroll when stack is expanded
+
+  // Animation for content below wallet stack (0 = visible, 1 = hidden off-screen)
+  const contentAnimatedValue = useRef(new Animated.Value(0)).current;
+
+  // Animate content visibility when stack expands/collapses
+  useEffect(() => {
+    Animated.spring(contentAnimatedValue, {
+      toValue: isStackExpanded ? 1 : 0,
+      tension: 100,  // Match WalletStackCard spring parameters
+      friction: 8,
+      useNativeDriver: true,
+    }).start();
+  }, [isStackExpanded, contentAnimatedValue]);
 
   // NEW: Wallet state machine for KYC-gated access
   // - 'limited-access': User has KYC under review, can use wallet with limits
@@ -197,16 +215,28 @@ const WalletDashboard: React.FC = () => {
 
     setIsRetrying(true);
     try {
-      logger.debug('[WalletDashboard] 🔄 Retrying wallet creation...');
+      logger.debug('[WalletDashboard] 🔄 Initializing wallet...');
       await initializeWalletMutation.mutateAsync(entityId);
-      logger.debug('[WalletDashboard] ✅ Wallet creation retry successful');
+      logger.debug('[WalletDashboard] ✅ Wallet initialization successful');
+
+      // CRITICAL: Invalidate balance cache so WalletStackCard shows the new wallet
+      if (user?.profileId) {
+        logger.debug('[WalletDashboard] 🔄 Invalidating balance cache...');
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.balancesByEntity(user.profileId, entityId)
+        });
+        // Force immediate refetch to get fresh wallet data
+        await refreshBalances();
+        logger.debug('[WalletDashboard] ✅ Balance cache refreshed');
+      }
+
       // Refetch eligibility to update state
       refetchEligibility();
     } catch (error) {
-      logger.error('[WalletDashboard] ❌ Wallet creation retry failed:', error);
+      logger.error('[WalletDashboard] ❌ Wallet initialization failed:', error);
       Alert.alert(
-        'Wallet Creation Failed',
-        'Unable to create your wallet. Please try again or contact support.',
+        'Setup Issue',
+        'We couldn\'t set up your wallet right now. Please try again.',
         [{ text: 'OK' }]
       );
     } finally {
@@ -934,6 +964,47 @@ const WalletDashboard: React.FC = () => {
       fontSize: theme.typography.fontSize.md,
       marginTop: theme.spacing.sm,
     },
+
+    // Wallet Setup Screen Styles (needs-init state)
+    walletSetupContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: theme.spacing.md,
+    },
+    walletSetupTitle: {
+      fontSize: theme.typography.fontSize.xl,
+      fontWeight: '600',
+      color: theme.colors.textPrimary,
+      textAlign: 'center',
+      marginTop: theme.spacing.lg,
+      marginBottom: theme.spacing.sm,
+    },
+    walletSetupDescription: {
+      fontSize: theme.typography.fontSize.md,
+      color: theme.colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: 22,
+      paddingHorizontal: theme.spacing.xl,
+      marginBottom: theme.spacing.xl,
+    },
+    walletSetupButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.borderRadius.lg,
+      paddingHorizontal: theme.spacing.xl,
+      paddingVertical: theme.spacing.md,
+      gap: theme.spacing.sm,
+      minWidth: 160,
+    },
+    walletSetupButtonText: {
+      color: theme.colors.white,
+      fontSize: theme.typography.fontSize.md,
+      fontWeight: '600',
+    },
+
     emptyContainer: {
       padding: theme.spacing.lg,
       alignItems: 'center',
@@ -1170,6 +1241,7 @@ const WalletDashboard: React.FC = () => {
           style={styles.scrollView}
           contentContainerStyle={styles.scrollViewContent}
           showsVerticalScrollIndicator={false}
+          scrollEnabled={!isStackExpanded}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { y: scrollY } } }],
             { useNativeDriver: false }
@@ -1185,11 +1257,7 @@ const WalletDashboard: React.FC = () => {
           }
         >
           <View>
-            {/* Limited access banner */}
-            <WalletLimitedBanner
-              limits={transactionLimits}
-              primaryCurrency={selectedWallet?.currency_code || 'USD'}
-            />
+            {/* Limited access banner moved to Home page card slider */}
 
             <WalletStackCard
               wallets={currencyBalances}
@@ -1197,52 +1265,71 @@ const WalletDashboard: React.FC = () => {
               isBalanceVisible={isBalanceVisible}
               onToggleVisibility={toggleBalanceVisibility}
               onWalletSelect={handleWalletSelect}
+              onExpandChange={setIsStackExpanded}
             />
 
-            <View style={styles.actionsContainer}>
-              <TouchableOpacity style={styles.actionButton} onPress={handleAddMoney}>
-                <Ionicons name="add" size={24} color={theme.colors.primary} />
-                <Text style={styles.actionText}>Add</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => (navigation as any).navigate("Contacts", {
-                  screen: "InteractionsHistory",
-                  params: {
-                    navigateToNewChat: true
-                  }
-                })}
-              >
-                <Ionicons name="send-outline" size={24} color={theme.colors.primary} />
-                <Text style={styles.actionText}>Send</Text>
-              </TouchableOpacity>
-            </View>
+            {/* Animated content - slides down and fades when stack expands */}
+            <Animated.View
+              style={{
+                transform: [
+                  {
+                    translateY: contentAnimatedValue.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, screenHeight * 0.7],
+                    }),
+                  },
+                ],
+                opacity: contentAnimatedValue.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [1, 0],
+                }),
+              }}
+            >
+              <View style={styles.actionsContainer}>
+                <TouchableOpacity style={styles.actionButton} onPress={handleAddMoney}>
+                  <Ionicons name="add" size={24} color={theme.colors.primary} />
+                  <Text style={styles.actionText}>Add</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => (navigation as any).navigate("Contacts", {
+                    screen: "InteractionsHistory",
+                    params: {
+                      navigateToNewChat: true
+                    }
+                  })}
+                >
+                  <Ionicons name="send-outline" size={24} color={theme.colors.primary} />
+                  <Text style={styles.actionText}>Send</Text>
+                </TouchableOpacity>
+              </View>
 
-            <View style={styles.transactionsHeader}>
-              <View>
-                <Text style={styles.transactionsTitle}>Recent Transactions</Text>
-                {selectedWallet && (
-                  <Text style={styles.accountLabel}>
-                    {selectedWallet.currency_code} Wallet
-                  </Text>
+              <View style={styles.transactionsHeader}>
+                <View>
+                  <Text style={styles.transactionsTitle}>Recent Transactions</Text>
+                  {selectedWallet && (
+                    <Text style={styles.accountLabel}>
+                      {selectedWallet.currency_code} Wallet
+                    </Text>
+                  )}
+                </View>
+                <TouchableOpacity onPress={() => navigation.navigate('TransactionList' as any, { selectedWallet })}>
+                  <Text style={styles.seeAllButton}>See All</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.transactionsList}>
+                {filteredTransactions.length > 0 ? (
+                  <>
+                    {filteredTransactions.map((item: WalletTransaction) => renderTransactionItem(item))}
+                  </>
+                ) : (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>No transactions yet</Text>
+                  </View>
                 )}
               </View>
-              <TouchableOpacity onPress={() => navigation.navigate('TransactionList' as any, { selectedWallet })}>
-                <Text style={styles.seeAllButton}>See All</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.transactionsList}>
-              {filteredTransactions.length > 0 ? (
-                <>
-                  {filteredTransactions.map((item: WalletTransaction) => renderTransactionItem(item))}
-                </>
-              ) : (
-                <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>No transactions yet</Text>
-                </View>
-              )}
-            </View>
+            </Animated.View>
           </View>
         </Animated.ScrollView>
       </SafeAreaView>
@@ -1253,28 +1340,25 @@ const WalletDashboard: React.FC = () => {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.background} />
-        <View style={styles.loadingContainer}>
-          <Ionicons name="wallet-outline" size={64} color={theme.colors.primary} />
-          <Text style={styles.loadingText}>Setting up your wallet</Text>
-          <Text style={[styles.subtitle, { marginTop: 8, fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', paddingHorizontal: 20 }]}>
-            Your wallet is being created. This usually takes just a moment.
-          </Text>
-          <Text style={[styles.subtitle, { marginTop: 16, fontSize: 13, color: theme.colors.textSecondary, textAlign: 'center', paddingHorizontal: 20 }]}>
-            If this persists, tap the button below to retry.
+        <View style={styles.walletSetupContainer}>
+          <Ionicons name="wallet-outline" size={56} color={theme.colors.primary} />
+          <Text style={styles.walletSetupTitle}>Almost There!</Text>
+          <Text style={styles.walletSetupDescription}>
+            Your wallet is being set up. This usually takes just a moment.
           </Text>
 
           <TouchableOpacity
-            style={[styles.authRetryButton, isRetrying && { opacity: 0.6 }]}
+            style={[styles.walletSetupButton, isRetrying && { opacity: 0.6 }]}
             onPress={handleRetryWalletCreation}
             disabled={isRetrying}
           >
             {isRetrying ? (
               <ActivityIndicator size="small" color={theme.colors.white} />
             ) : (
-              <Ionicons name="refresh" size={24} color={theme.colors.white} />
+              <Ionicons name="arrow-forward" size={20} color={theme.colors.white} />
             )}
-            <Text style={styles.authRetryText}>
-              {isRetrying ? 'Creating Wallet...' : 'Retry Wallet Creation'}
+            <Text style={styles.walletSetupButtonText}>
+              {isRetrying ? 'Setting up...' : 'Get Started'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -1365,6 +1449,7 @@ const WalletDashboard: React.FC = () => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollViewContent}
         showsVerticalScrollIndicator={false}
+        scrollEnabled={!isStackExpanded}
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
           { useNativeDriver: false }
@@ -1386,63 +1471,82 @@ const WalletDashboard: React.FC = () => {
             isBalanceVisible={isBalanceVisible}
             onToggleVisibility={toggleBalanceVisibility}
             onWalletSelect={handleWalletSelect}
+            onExpandChange={setIsStackExpanded}
           />
 
-          <View style={styles.actionsContainer}>
-            <TouchableOpacity style={styles.actionButton} onPress={handleAddMoney}>
-              <Ionicons name="add" size={24} color={theme.colors.primary} />
-              <Text style={styles.actionText}>Add</Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.actionButton} 
-              onPress={() => (navigation as any).navigate("Contacts", { 
-                screen: "InteractionsHistory", 
-                params: { 
-                  navigateToNewChat: true 
-                } 
-              })}
-            >
-              <Ionicons name="send-outline" size={24} color={theme.colors.primary} />
-              <Text style={styles.actionText}>Send</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Animated content - slides down and fades when stack expands */}
+          <Animated.View
+            style={{
+              transform: [
+                {
+                  translateY: contentAnimatedValue.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, screenHeight * 0.7],
+                  }),
+                },
+              ],
+              opacity: contentAnimatedValue.interpolate({
+                inputRange: [0, 1],
+                outputRange: [1, 0],
+              }),
+            }}
+          >
+            <View style={styles.actionsContainer}>
+              <TouchableOpacity style={styles.actionButton} onPress={handleAddMoney}>
+                <Ionicons name="add" size={24} color={theme.colors.primary} />
+                <Text style={styles.actionText}>Add</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => (navigation as any).navigate("Contacts", {
+                  screen: "InteractionsHistory",
+                  params: {
+                    navigateToNewChat: true
+                  }
+                })}
+              >
+                <Ionicons name="send-outline" size={24} color={theme.colors.primary} />
+                <Text style={styles.actionText}>Send</Text>
+              </TouchableOpacity>
+            </View>
 
-          <View style={styles.transactionsHeader}>
-            <View>
-              <Text style={styles.transactionsTitle}>Recent Transactions</Text>
-              {selectedWallet && (
-                <Text style={styles.accountLabel}>
-                  {selectedWallet.currency_code} Wallet
-                </Text>
+            <View style={styles.transactionsHeader}>
+              <View>
+                <Text style={styles.transactionsTitle}>Recent Transactions</Text>
+                {selectedWallet && (
+                  <Text style={styles.accountLabel}>
+                    {selectedWallet.currency_code} Wallet
+                  </Text>
+                )}
+              </View>
+              <TouchableOpacity onPress={() => navigation.navigate('TransactionList' as any, { selectedWallet })}>
+                <Text style={styles.seeAllButton}>See All</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.transactionsList}>
+              {/* PROFESSIONAL: Clean backend filtering with no fallback */}
+              {filteredTransactions.length > 0 ? (
+                <>
+                  {filteredTransactions.map((item: WalletTransaction) => renderTransactionItem(item))}
+                </>
+              ) : isLoadingWalletTransactions ? (
+                /* Only show full loading on first load with no cached data */
+                <View style={styles.loadingContainer}>
+                  <Text style={styles.loadingText}>Loading transactions...</Text>
+                </View>
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>
+                    {selectedWallet
+                      ? `No recent transactions for ${selectedWallet.currency_code} wallet`
+                      : 'No recent transactions'
+                    }
+                  </Text>
+                </View>
               )}
             </View>
-            <TouchableOpacity onPress={() => navigation.navigate('TransactionList' as any, { selectedWallet })}>
-              <Text style={styles.seeAllButton}>See All</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.transactionsList}>
-            {/* PROFESSIONAL: Clean backend filtering with no fallback */}
-            {filteredTransactions.length > 0 ? (
-              <>
-                {filteredTransactions.map((item: WalletTransaction) => renderTransactionItem(item))}
-              </>
-            ) : isLoadingWalletTransactions ? (
-              /* Only show full loading on first load with no cached data */
-              <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>Loading transactions...</Text>
-              </View>
-            ) : (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>
-                  {selectedWallet 
-                    ? `No recent transactions for ${selectedWallet.currency_code} wallet`
-                    : 'No recent transactions'
-                  }
-                </Text>
-              </View>
-            )}
-          </View>
+          </Animated.View>
         </View>
       </Animated.ScrollView>
     </SafeAreaView>

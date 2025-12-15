@@ -16,6 +16,7 @@ import SearchOverlay from '../header/SearchOverlay';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuthContext } from '../auth/context/AuthContext';
 import { useBalances } from '../../hooks-data/useBalances';
+import { useTransactionLimits, formatLimit } from '../../hooks-data/useTransactionLimits';
 import QuickActionsRow from './components/QuickActionsRow';
 import DiscoveryCard from './components/DiscoveryCard';
 import DiscoveryCardsSlider, { DiscoveryCardData } from './components/DiscoveryCardsSlider';
@@ -42,6 +43,13 @@ export default function HomeScreen() {
   // Get primary wallet balance
   const { data: wallets = [], isLoading } = useBalances(user?.entityId);
   const primaryWallet = wallets.find(w => w.isPrimary) || wallets[0];
+
+  // Get KYC status and transaction limits for Account Review card
+  const { data: tierEligibility } = useTransactionLimits(user?.entityId || '', {
+    enabled: !!user?.entityId,
+  });
+  const isUnderReview = tierEligibility?.kycStatus === 'under_review' || tierEligibility?.kycStatus === 'partial';
+  const primaryCurrency = primaryWallet?.currency_code || 'USD';
 
   const handleSearch = (query: string) => {
     console.log('Search:', query);
@@ -152,6 +160,24 @@ export default function HomeScreen() {
   const handleSecuritySetup = () => showComingSoon();
   const handleLearnMore = () => showComingSoon();
 
+  // Account review card handler - navigate to profile to check KYC status
+  const handleAccountReview = () => {
+    (navigation as any).navigate('ProfileModal', { sourceRoute: 'Home' });
+  };
+
+  // Get daily limit for display (Account Review card)
+  const getDailyLimit = () => {
+    if (!tierEligibility?.limits || !tierEligibility.limits[primaryCurrency]) {
+      // Default fallback for under_review free tier
+      return primaryCurrency === 'HTG' ? 'G65,000' : '$500';
+    }
+    const sendLimit = tierEligibility.limits[primaryCurrency]?.send;
+    if (!sendLimit || sendLimit.daily_limit === null) {
+      return 'Unlimited';
+    }
+    return formatLimit(sendLimit.daily_limit, primaryCurrency);
+  };
+
   // Format balance
   const formatBalance = (balance: number) => {
     return balance.toLocaleString('en-US', {
@@ -162,6 +188,19 @@ export default function HomeScreen() {
 
   // Discovery cards data for slider
   const discoveryCards: DiscoveryCardData[] = [
+    // Account Review card - only show when KYC is under review
+    ...(isUnderReview ? [{
+      id: 'account-review',
+      component: (
+        <DiscoveryCard
+          icon="time-outline"
+          iconColor={theme.colors.warning}
+          title="Account Under Review"
+          description={`Daily limit: ${getDailyLimit()} while we verify your documents`}
+          onPress={handleAccountReview}
+        />
+      ),
+    }] : []),
     {
       id: 'coming-soon',
       component: (

@@ -1,6 +1,6 @@
 // Created: Hook for fetching transaction limits from TierLimitsService - 2025-01-XX
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '../_api/apiClient';
+import apiClient from '../_api/apiClient';
 import logger from '../utils/logger';
 
 /**

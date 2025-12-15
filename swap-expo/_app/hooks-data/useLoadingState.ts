@@ -9,7 +9,6 @@ import { useMemo } from 'react';
 import { useBalances } from './useBalances';
 import { useInteractions } from './useInteractions';
 import { useAuthContext } from '../features/auth/context/AuthContext';
-import { useKycStatus } from './useKycQuery';
 import logger from '../utils/logger';
 
 interface LoadingState {
@@ -40,15 +39,13 @@ export const useLoadingState = (): UseLoadingStateResult => {
   const authContext = useAuthContext();
   const entityId = authContext?.user?.entityId || '';
 
-  // PROFESSIONAL FIX: Only load balances when user is authenticated, has entity ID, AND KYC is approved
+  // Load balances when user is authenticated and has entity ID
+  // Note: KYC restrictions are enforced at the transaction level, not viewing level
+  // Users with in_review/pending KYC should still see their wallet balance (with tier limits)
   const isAuthenticated = authContext?.isAuthenticated || false;
 
-  // Check KYC status before enabling balance loading
-  const { data: kycStatus } = useKycStatus(entityId, { enabled: isAuthenticated && !!entityId });
-  const isKycApproved = kycStatus?.kyc_status === 'approved';
-
-  // CRUCIAL: Only load balances if user is authenticated, has entityId, AND has completed KYC
-  const shouldLoadBalances = isAuthenticated && entityId && entityId !== '' && isKycApproved;
+  // Users can view balances regardless of KYC status
+  const shouldLoadBalances = isAuthenticated && entityId && entityId !== '';
 
 
   // Get loading states from individual hooks - with authentication guard
@@ -104,7 +101,7 @@ export const useLoadingState = (): UseLoadingStateResult => {
     }
 
     return { completedTasks: completed, errors: errorList };
-  }, [balancesData, isLoadingBalances, interactionsData, isLoadingInteractions, userProfileData, isLoadingUserData, balancesError, interactionsError, shouldLoadBalances, kycStatus]);
+  }, [balancesData, isLoadingBalances, interactionsData, isLoadingInteractions, userProfileData, isLoadingUserData, balancesError, interactionsError, shouldLoadBalances]);
 
   // Calculate progress and loading state with memoization
   const { progress, isLoading, isInitialLoadComplete, loadingState } = useMemo(() => {

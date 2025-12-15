@@ -93,6 +93,7 @@ export const KYC_PATHS = {
  */
 export const REFERENCE_DATA_PATHS = {
   COUNTRIES: '/countries',
+  CURRENCIES: '/currencies',
 };
 
 /**
