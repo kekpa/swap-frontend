@@ -661,10 +661,10 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
                   ],
                   // Z-INDEX: Always in FRONT (above all wallet cards)
                   zIndex: 3100,
-                  // Shadow for depth
-                  shadowColor: '#8B5CF6',
+                  // Shadow for depth (gray to match AddCurrencyCard)
+                  shadowColor: '#000',
                   shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.15,
+                  shadowOpacity: 0.1,
                   shadowRadius: 8,
                   elevation: 6,
                 },
@@ -711,10 +711,10 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
                   ],
                   // Z-INDEX: Always behind wallet cards (pendingWallet appears in front now)
                   zIndex: 3000 - addCurrencyIndex * 100,
-                  // Subtle shadow
-                  shadowColor: '#8B5CF6',
+                  // Subtle shadow (gray to match AddCurrencyCard styling)
+                  shadowColor: '#000',
                   shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.1,
+                  shadowOpacity: 0.08,
                   shadowRadius: 4,
                   elevation: 2,
                 },

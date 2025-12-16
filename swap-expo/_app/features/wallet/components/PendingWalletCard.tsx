@@ -5,6 +5,7 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AvailableCurrency } from './NewCurrencySheet';
+import { useTheme } from '../../../theme/ThemeContext';
 
 interface PendingWalletCardProps {
   currency?: AvailableCurrency;
@@ -17,26 +18,28 @@ const PendingWalletCard: React.FC<PendingWalletCardProps> = React.memo(({
   isLoading = false,
   style,
 }) => {
+  const { theme } = useTheme();
+
   const styles = useMemo(() => StyleSheet.create({
     card: {
       height: 140, // Match WalletCard height
       borderRadius: 20, // Match WalletCard border radius
       overflow: 'hidden',
-      backgroundColor: '#E8E0F0', // Light purple tint to indicate pending state
+      backgroundColor: theme.colors.surfaceVariant, // Theme-aware background
       borderWidth: 1.5,
-      borderColor: '#C4B5DC', // Purple-tinted border
+      borderColor: theme.colors.border, // Theme-aware border
       borderStyle: 'dashed', // Dashed border to indicate "pending/placeholder"
       // Content at TOP so it's visible when peeking
       justifyContent: 'flex-start',
       paddingTop: 16,
       paddingHorizontal: 16,
       // Subtle shadow
-      shadowColor: '#8B5CF6',
+      shadowColor: '#000',
       shadowOffset: {
         width: 0,
         height: 2,
       },
-      shadowOpacity: 0.1,
+      shadowOpacity: 0.08,
       shadowRadius: 4,
       elevation: 2,
     },
@@ -48,7 +51,7 @@ const PendingWalletCard: React.FC<PendingWalletCardProps> = React.memo(({
       width: 32,
       height: 32,
       borderRadius: 16,
-      backgroundColor: 'rgba(139, 92, 246, 0.2)', // Purple tint
+      backgroundColor: theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)', // Theme-aware icon bg
       justifyContent: 'center',
       alignItems: 'center',
       marginRight: 10,
@@ -57,17 +60,17 @@ const PendingWalletCard: React.FC<PendingWalletCardProps> = React.memo(({
       flex: 1,
     },
     label: {
-      color: '#6B4FA0', // Purple text
+      color: theme.colors.textSecondary, // Theme-aware text
       fontSize: 15,
       fontWeight: '600',
       letterSpacing: 0.3,
     },
     sublabel: {
-      color: '#8B7AAD',
+      color: theme.colors.textTertiary || theme.colors.textSecondary, // Theme-aware sublabel
       fontSize: 12,
       marginTop: 2,
     },
-  }), []);
+  }), [theme]);
 
   // Determine what to show based on state
   const getContent = () => {
@@ -76,7 +79,7 @@ const PendingWalletCard: React.FC<PendingWalletCardProps> = React.memo(({
       return (
         <>
           <View style={styles.iconContainer}>
-            <ActivityIndicator size="small" color="#8B5CF6" />
+            <ActivityIndicator size="small" color={theme.colors.textSecondary} />
           </View>
           <View style={styles.textContainer}>
             <Text style={styles.label}>Adding {currency.code}...</Text>
@@ -102,7 +105,7 @@ const PendingWalletCard: React.FC<PendingWalletCardProps> = React.memo(({
       return (
         <>
           <View style={styles.iconContainer}>
-            <Ionicons name="wallet-outline" size={18} color="#8B5CF6" />
+            <Ionicons name="wallet-outline" size={18} color={theme.colors.textSecondary} />
           </View>
           <View style={styles.textContainer}>
             <Text style={styles.label}>Select a currency...</Text>
