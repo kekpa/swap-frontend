@@ -99,47 +99,28 @@ const WalletCard: React.FC<WalletCardProps> = React.memo(({
 
   // Memoize card color calculation to avoid recalculating on every render
   const cardColor = useMemo(() => {
-    // Get base color based on currency
     let baseColor;
-    switch (currencyCode) {
-      case 'HTG':
-        baseColor = '#8B5CF6'; // Enhanced purple for HTG
-        break;
-      case 'USD':
-        baseColor = '#10B981'; // Enhanced emerald for USD
-        break;
-      case 'EUR':
-        baseColor = '#F59E0B'; // Enhanced amber for EUR
-        break;
-      case 'GBP':
-        baseColor = '#8B5CF6'; // Purple for GBP
-        break;
-      case 'CAD':
-        baseColor = '#EF4444'; // Red for CAD
-        break;
-      case 'JPY':
-        baseColor = '#3B82F6'; // Blue for JPY
-        break;
-      case 'AUD':
-        baseColor = '#06B6D4'; // Cyan for AUD
-        break;
-      default:
-        // Generate a consistent color based on currency code hash
-        const hash = currencyCode.split('').reduce((a, b) => {
-          a = ((a << 5) - a) + b.charCodeAt(0);
-          return a & a;
-        }, 0);
-        const colorPalette = [
-          '#F59E0B', // Amber
-          '#8B5CF6', // Purple  
-          '#EF4444', // Red
-          '#10B981', // Emerald
-          '#3B82F6', // Blue
-          '#6366F1', // Indigo
-          '#EC4899', // Pink
-          '#06B6D4', // Cyan
-        ];
-        baseColor = colorPalette[Math.abs(hash) % colorPalette.length];
+
+    // Use color from database if available
+    if (wallet.currency_color) {
+      baseColor = wallet.currency_color;
+    } else {
+      // Fallback: Generate a consistent color based on currency code hash
+      const hash = currencyCode.split('').reduce((a, b) => {
+        a = ((a << 5) - a) + b.charCodeAt(0);
+        return a & a;
+      }, 0);
+      const colorPalette = [
+        '#F59E0B', // Amber
+        '#8B5CF6', // Purple
+        '#EF4444', // Red
+        '#10B981', // Emerald
+        '#3B82F6', // Blue
+        '#6366F1', // Indigo
+        '#EC4899', // Pink
+        '#06B6D4', // Cyan
+      ];
+      baseColor = colorPalette[Math.abs(hash) % colorPalette.length];
     }
 
     // Apply stacking brightness degradation for 3D effect
@@ -151,9 +132,9 @@ const WalletCard: React.FC<WalletCardProps> = React.memo(({
         return `rgb(${Math.floor(rgb.r * darkenFactor)}, ${Math.floor(rgb.g * darkenFactor)}, ${Math.floor(rgb.b * darkenFactor)})`;
       }
     }
-    
+
     return baseColor;
-  }, [currencyCode, isStacked, stackIndex]);
+  }, [wallet.currency_color, currencyCode, isStacked, stackIndex]);
 
   // Smart content layout based on card position
   const getCardTitle = () => {

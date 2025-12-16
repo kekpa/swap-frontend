@@ -15,12 +15,13 @@ export interface WalletBalance {
   currency_code: string;
   currency_symbol: string;
   currency_name: string;
+  currency_color: string | null;
   balance: number;
   reserved_balance: number;
   available_balance: number;
   balance_last_updated: string | null;
   is_active: boolean;
-  
+
   // UI-specific fields
   isPrimary?: boolean; // Primary wallet for the currency
   last_updated?: string; // For local caching
