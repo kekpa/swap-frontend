@@ -29,6 +29,7 @@ interface WalletApiResponse {
   currency_code: string;
   currency_symbol: string;
   currency_name: string;
+  currency_color: string | null;
   balance: number;
   reserved_balance: number;
   available_balance: number;
@@ -108,6 +109,7 @@ const transformToWalletBalance = (apiWallet: WalletApiResponse): WalletBalance =
     currency_code: apiWallet.currency_code,
     currency_symbol: apiWallet.currency_symbol,
     currency_name: apiWallet.currency_name,
+    currency_color: apiWallet.currency_color || null,
     balance: apiWallet.balance,
     available_balance: apiWallet.available_balance,
     reserved_balance: apiWallet.reserved_balance,
@@ -173,6 +175,7 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
       currency_code: wallet.currency_code,
       currency_symbol: wallet.currency_symbol,
       currency_name: wallet.currency_name,
+      currency_color: wallet.currency_color || null,
       balance: wallet.balance,
       reserved_balance: wallet.reserved_balance,
       available_balance: wallet.available_balance,
@@ -238,6 +241,7 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
           currency_code: balance.currency_code,
           currency_symbol: balance.currency_symbol,
           currency_name: balance.currency_name,
+          currency_color: balance.currency_color || undefined,
           balance: balance.balance,
               reserved_balance: balance.reserved_balance || 0,
               available_balance: balance.available_balance || balance.balance,
@@ -281,6 +285,7 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
       currency_code: balance.currency_code,
       currency_symbol: balance.currency_symbol,
       currency_name: balance.currency_name,
+      currency_color: balance.currency_color || undefined,
       balance: balance.balance,
       reserved_balance: balance.reserved_balance || 0,
       available_balance: balance.available_balance || balance.balance,
@@ -465,6 +470,7 @@ export const useInitializeWallet = () => {
         currency_code: balance.currency_code,
         currency_symbol: balance.currency_symbol,
         currency_name: balance.currency_name,
+        currency_color: balance.currency_color || undefined,
         balance: balance.balance,
         reserved_balance: balance.reserved_balance || 0,
         available_balance: balance.available_balance || balance.balance,
@@ -650,6 +656,16 @@ export const useCreateCurrencyWallet = () => {
       const transformedWallet = transformToWalletBalance(walletData);
       logger.debug(`[useCreateCurrencyWallet] ✅ Created wallet: ${transformedWallet.currency_code} (${transformedWallet.wallet_id})`);
 
+      // Set the new wallet as primary so it shows on top (better UX - user sees what they just added)
+      try {
+        await apiClient.patch(`/wallets/${transformedWallet.wallet_id}/primary`);
+        transformedWallet.isPrimary = true;
+        logger.debug(`[useCreateCurrencyWallet] ✅ Set ${transformedWallet.currency_code} as primary wallet`);
+      } catch (primaryError) {
+        // Non-critical - wallet was still created, just not set as primary
+        logger.warn(`[useCreateCurrencyWallet] ⚠️ Failed to set as primary:`, primaryError);
+      }
+
       return { wallet: transformedWallet, entityId };
     },
     onSuccess: ({ wallet, entityId }) => {
@@ -666,19 +682,27 @@ export const useCreateCurrencyWallet = () => {
         const walletExists = currentBalances.some(b => b.wallet_id === wallet.wallet_id);
 
         if (!walletExists) {
-          const updatedBalances = [...currentBalances, wallet];
+          // Clear primary from all existing wallets, add new wallet as primary
+          const updatedBalances = currentBalances.map(b => ({ ...b, isPrimary: false }));
+          updatedBalances.push({ ...wallet, isPrimary: true });
           queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), updatedBalances);
-          logger.debug(`[useCreateCurrencyWallet] ✅ Added ${wallet.currency_code} wallet to cache (now ${updatedBalances.length} wallets)`);
+          logger.debug(`[useCreateCurrencyWallet] ✅ Added ${wallet.currency_code} wallet as primary (now ${updatedBalances.length} wallets)`);
         } else {
-          logger.debug(`[useCreateCurrencyWallet] ℹ️ Wallet ${wallet.currency_code} already exists in cache`);
+          // Wallet exists - just update primary status
+          const updatedBalances = currentBalances.map(b => ({
+            ...b,
+            isPrimary: b.wallet_id === wallet.wallet_id
+          }));
+          queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), updatedBalances);
+          logger.debug(`[useCreateCurrencyWallet] ℹ️ Wallet ${wallet.currency_code} already exists, set as primary`);
         }
       } else {
-        // No existing balances, set the new wallet as the only one
-        queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), [wallet]);
-        logger.debug(`[useCreateCurrencyWallet] ✅ Created initial wallet cache with ${wallet.currency_code}`);
+        // No existing balances, set the new wallet as the only one (and primary)
+        queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), [{ ...wallet, isPrimary: true }]);
+        logger.debug(`[useCreateCurrencyWallet] ✅ Created initial wallet cache with ${wallet.currency_code} as primary`);
       }
 
-      // Also save to local SQLite cache
+      // Also save to local SQLite cache and update primary status
       const repositoryWallet: CurrencyWallet = {
         id: wallet.wallet_id,
         account_id: wallet.account_id,
@@ -686,16 +710,23 @@ export const useCreateCurrencyWallet = () => {
         currency_code: wallet.currency_code,
         currency_symbol: wallet.currency_symbol,
         currency_name: wallet.currency_name,
+        currency_color: wallet.currency_color || undefined,
         balance: wallet.balance,
         reserved_balance: wallet.reserved_balance || 0,
         available_balance: wallet.available_balance || wallet.balance,
         balance_last_updated: wallet.balance_last_updated || undefined,
         is_active: wallet.is_active ?? true,
-        is_primary: wallet.isPrimary ?? false,
+        is_primary: true, // New wallets are set as primary for better UX
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         is_synced: true,
       };
+
+      // Update primary status in local SQLite (clears others, sets this one)
+      currencyWalletsRepository.updatePrimaryWallet(wallet.wallet_id, profileId)
+        .catch((error) => {
+          logger.warn(`[useCreateCurrencyWallet] ⚠️ Failed to update primary in local cache:`, error);
+        });
 
       currencyWalletsRepository.saveCurrencyWallets([repositoryWallet], profileId)
         .then(() => {
@@ -707,6 +738,144 @@ export const useCreateCurrencyWallet = () => {
     },
     onError: (error) => {
       logger.error('[useCreateCurrencyWallet] ❌ Failed to create wallet:', error);
+    },
+  });
+};
+
+/**
+ * Hook for deactivating (soft-deleting) a currency wallet
+ *
+ * Business Rules:
+ * - Wallet must have 0 balance and 0 reserved_balance
+ * - Cannot be the user's only wallet
+ * - Transaction history is preserved (soft delete)
+ * - Re-adding the same currency later will reactivate the wallet
+ */
+export const useDeactivateWallet = () => {
+  const queryClient = useQueryClient();
+  const profileId = useCurrentProfileId();
+
+  return useMutation({
+    mutationKey: ['deactivate_wallet'],
+    mutationFn: async ({
+      walletId,
+      entityId
+    }: {
+      walletId: string;
+      entityId: string;
+    }): Promise<{ newPrimaryWalletId: string | null; entityId: string }> => {
+      logger.debug(`[useDeactivateWallet] 🗑️ Deactivating wallet: ${walletId}`);
+
+      const response = await apiClient.delete(`/wallets/${walletId}`);
+
+      logger.debug(`[useDeactivateWallet] ✅ Wallet deactivated successfully`, response.data);
+
+      return {
+        newPrimaryWalletId: response.data?.newPrimaryWalletId || null,
+        entityId,
+      };
+    },
+    onMutate: async ({ walletId, entityId }) => {
+      if (!profileId) {
+        logger.warn('[useDeactivateWallet] ⚠️ No profileId available, skipping optimistic update');
+        return { previousBalances: undefined };
+      }
+
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: queryKeys.balancesByEntity(profileId, entityId) });
+
+      // Snapshot the previous value
+      const previousBalances = queryClient.getQueryData<WalletBalance[]>(queryKeys.balancesByEntity(profileId, entityId));
+
+      // Optimistically remove the wallet from the list
+      if (previousBalances) {
+        const optimisticBalances = previousBalances.filter(balance => balance.wallet_id !== walletId);
+
+        // If the removed wallet was primary, set the next one as primary
+        const removedWallet = previousBalances.find(b => b.wallet_id === walletId);
+        if (removedWallet?.isPrimary && optimisticBalances.length > 0) {
+          optimisticBalances[0] = { ...optimisticBalances[0], isPrimary: true };
+        }
+
+        queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), optimisticBalances);
+        logger.debug(`[useDeactivateWallet] ⚡ OPTIMISTIC: Removed wallet ${walletId} from cache`);
+      }
+
+      return { previousBalances };
+    },
+    onError: (err, { entityId }, context) => {
+      if (!profileId) {
+        logger.warn('[useDeactivateWallet] ⚠️ No profileId available for rollback');
+        return;
+      }
+
+      // Rollback to previous state on error
+      if (context?.previousBalances) {
+        queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), context.previousBalances);
+        logger.debug(`[useDeactivateWallet] ⚠️ ROLLBACK: Restored wallet due to error`);
+      }
+
+      logger.error('[useDeactivateWallet] ❌ Failed to deactivate wallet:', err);
+    },
+    onSuccess: async ({ newPrimaryWalletId, entityId }) => {
+      if (!profileId) {
+        logger.warn('[useDeactivateWallet] ⚠️ No profileId available for cache update');
+        return;
+      }
+
+      // If a new primary wallet was set, update the cache
+      if (newPrimaryWalletId) {
+        const currentBalances = queryClient.getQueryData<WalletBalance[]>(queryKeys.balancesByEntity(profileId, entityId));
+        if (currentBalances) {
+          const updatedBalances = currentBalances.map(balance => ({
+            ...balance,
+            isPrimary: balance.wallet_id === newPrimaryWalletId,
+          }));
+          queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), updatedBalances);
+          logger.debug(`[useDeactivateWallet] ✅ Updated primary wallet to ${newPrimaryWalletId}`);
+        }
+      }
+
+      // Refresh local SQLite cache
+      try {
+        const response = await apiClient.get(API_PATHS.WALLET.BY_ENTITY(entityId));
+        const parsedWallets = parseComplexBackendResponse(response.data);
+        const transformedBalances = parsedWallets.map(transformToWalletBalance);
+
+        // Transform to repository format and save
+        const repositoryBalances: CurrencyWallet[] = transformedBalances.map((balance: WalletBalance) => ({
+          id: balance.wallet_id,
+          account_id: balance.account_id,
+          currency_id: balance.currency_id,
+          currency_code: balance.currency_code,
+          currency_symbol: balance.currency_symbol,
+          currency_name: balance.currency_name,
+          currency_color: balance.currency_color || undefined,
+          balance: balance.balance,
+          reserved_balance: balance.reserved_balance || 0,
+          available_balance: balance.available_balance || balance.balance,
+          balance_last_updated: balance.balance_last_updated || undefined,
+          is_active: balance.is_active ?? true,
+          is_primary: balance.isPrimary ?? false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          is_synced: true,
+        }));
+
+        await currencyWalletsRepository.clearAllCurrencyWallets();
+        await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances, profileId);
+        logger.debug(`[useDeactivateWallet] ✅ Refreshed local cache with ${repositoryBalances.length} wallets`);
+      } catch (error) {
+        logger.warn(`[useDeactivateWallet] ⚠️ Failed to refresh local cache:`, error);
+      }
+    },
+    onSettled: (_, error, { entityId }) => {
+      if (!profileId) return;
+
+      // Only invalidate on error to trigger a full refetch
+      if (error) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.balancesByEntity(profileId, entityId) });
+      }
     },
   });
 };

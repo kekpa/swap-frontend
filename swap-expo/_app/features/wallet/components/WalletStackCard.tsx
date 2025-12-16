@@ -4,6 +4,7 @@
 // Updated: Added smooth transitions for primary wallet switching and card reordering - 2025-06-28
 // Updated: Added offline-aware functionality with NetworkService integration - 2025-01-10
 // Updated: Added "New Currency" card for creating additional currency wallets - 2025-12-15
+// Updated: Added swipe-to-delete for removing currency wallets (Revolut-style) - 2025-12-16
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   View,
@@ -13,7 +14,10 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   Text,
+  Alert,
 } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeContext';
 import { WalletBalance } from '../../../types/wallet.types';
 import WalletCard from './WalletCard';
@@ -22,7 +26,7 @@ import AddCurrencyCard from './AddCurrencyCard';
 import PendingWalletCard from './PendingWalletCard';
 import NewCurrencySheet, { AvailableCurrency } from './NewCurrencySheet';
 import { networkService } from '../../../services/NetworkService';
-import { useCreateCurrencyWallet } from '../../../hooks-data/useBalances';
+import { useCreateCurrencyWallet, useDeactivateWallet } from '../../../hooks-data/useBalances';
 import { useAuthContext } from '../../auth/context/AuthContext';
 import logger from '../../../utils/logger';
 
@@ -74,6 +78,10 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
   const { theme } = useTheme();
   const authContext = useAuthContext();
   const createWalletMutation = useCreateCurrencyWallet();
+  const deactivateWalletMutation = useDeactivateWallet();
+
+  // Ref for Swipeable to close it programmatically
+  const swipeableRef = useRef<Swipeable | null>(null);
 
   // State for "New Currency" feature
   const [showCurrencySheet, setShowCurrencySheet] = useState(false);
@@ -400,6 +408,72 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
     }
   }, [authContext?.user?.entityId, wallets, createWalletMutation]);
 
+  /**
+   * Handler for deleting (deactivating) a wallet
+   * Shows confirmation alert, then calls the mutation
+   */
+  const handleDeleteWallet = useCallback(async (wallet: WalletBalance) => {
+    if (!authContext?.user?.entityId) {
+      logger.error('[WalletStackCard] Cannot delete wallet: no entityId');
+      return;
+    }
+
+    // Close the swipeable
+    swipeableRef.current?.close();
+
+    // Show confirmation alert
+    Alert.alert(
+      'Remove Currency',
+      `Remove ${wallet.currency_code} wallet?\n\nYou can add it back later and your transaction history will be preserved.`,
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            logger.info(`[WalletStackCard] 🗑️ Removing ${wallet.currency_code} wallet...`);
+
+            try {
+              await deactivateWalletMutation.mutateAsync({
+                walletId: wallet.wallet_id,
+                entityId: authContext.user!.entityId,
+              });
+              logger.info(`[WalletStackCard] ✅ ${wallet.currency_code} wallet removed successfully`);
+            } catch (error: any) {
+              logger.error(`[WalletStackCard] ❌ Failed to remove ${wallet.currency_code} wallet:`, error);
+
+              // Show user-friendly error message
+              const errorMessage = error?.response?.data?.message || error?.message || 'Please try again.';
+              Alert.alert('Error', `Failed to remove wallet. ${errorMessage}`);
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  }, [authContext?.user?.entityId, deactivateWalletMutation]);
+
+  /**
+   * Renders the delete action button for swipe gesture
+   * Only shown when swiping left on the primary card
+   */
+  const renderDeleteAction = useCallback((wallet: WalletBalance) => {
+    return (
+      <TouchableOpacity
+        style={deleteActionStyles.container}
+        onPress={() => handleDeleteWallet(wallet)}
+        activeOpacity={0.8}
+      >
+        <View style={deleteActionStyles.button}>
+          <Ionicons name="close" size={28} color="#FFFFFF" />
+        </View>
+      </TouchableOpacity>
+    );
+  }, [handleDeleteWallet]);
+
   // Memoize height calculations for CARDS-BEHIND animation
   // Collapsed: Primary card + peek offset for cards behind (they peek at the TOP)
   // Expanded: Primary slides down, cards behind spread with adaptive spacing
@@ -439,11 +513,10 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
       position: 'absolute',
       top: 0, // All cards start from same reference point
       left: 0,
-      right: 0,
-      // Cards maintain full width - no width scaling
+      width: CARD_WIDTH, // Explicit width - Apple Wallet pattern for consistent sizing
     },
     cardTouchable: {
-      width: '100%', // Ensure full width for touch area
+      width: CARD_WIDTH, // Explicit width to ensure Swipeable and TouchableOpacity behave identically
     },
     emptyCard: {
       padding: 20,
@@ -486,6 +559,31 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
     },
   }), []);
 
+  // Styles for delete action (separate from main styles for clarity)
+  const deleteActionStyles = useMemo(() => StyleSheet.create({
+    container: {
+      justifyContent: 'center',
+      alignItems: 'center',
+      width: 80,
+      height: CARD_HEIGHT, // Match card height
+      marginRight: 8,
+    },
+    button: {
+      backgroundColor: theme.colors.error || '#EF4444', // Red for destructive action
+      width: 56,
+      height: 56,
+      borderRadius: 28, // Circular button
+      justifyContent: 'center',
+      alignItems: 'center',
+      // Shadow for depth
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 4,
+    },
+  }), [theme.colors.error]);
+
   // SAFETY CHECK - MOVED TO AFTER ALL HOOKS ARE CALLED
   const primaryWallet = sortedWallets[0];
   const allWallets = sortedWallets;
@@ -508,6 +606,23 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
     logger.warn('[WalletStackCard] No valid wallets found after safety filtering');
     return <WalletCardSkeleton />;
   }
+
+  /**
+   * Determines if a wallet can be deleted (Revolut-style rules)
+   * - Must have balance = 0 and reserved_balance = 0
+   * - Cannot be the only wallet
+   */
+  const canDeleteWallet = (wallet: WalletBalance): boolean => {
+    // Must have zero balance
+    if (wallet.balance > 0 || wallet.reserved_balance > 0) {
+      return false;
+    }
+    // Cannot delete if it's the only wallet
+    if (safeWallets.length <= 1) {
+      return false;
+    }
+    return true;
+  };
 
   // Collapse handler for tap-outside-to-close
   const handleCollapseStack = useCallback(() => {
@@ -609,31 +724,64 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
                     // (pendingWallet uses z-index 3100 to appear above all)
                     zIndex: 3000 - effectiveIndex * 100,
 
+                    // Consistent shadows when collapsed, depth variance when expanded
                     shadowColor: '#000',
-                    shadowOffset: { width: 0, height: isPrimaryCard ? 8 : 2 },
-                    shadowOpacity: isPrimaryCard ? 0.2 : 0.1,
-                    shadowRadius: isPrimaryCard ? 12 : 4,
-                    elevation: isPrimaryCard ? 12 : 4,
+                    shadowOffset: { width: 0, height: isExpanded ? (isPrimaryCard ? 8 : 4) : 4 },
+                    shadowOpacity: isExpanded ? (isPrimaryCard ? 0.2 : 0.15) : 0.15,
+                    shadowRadius: isExpanded ? (isPrimaryCard ? 12 : 6) : 6,
+                    elevation: isExpanded ? (isPrimaryCard ? 12 : 6) : 6,
                   },
                 ]}
               >
-                <TouchableOpacity
-                  activeOpacity={0.95}
-                  onPress={() => handleCardPress(wallet)}
-                  style={styles.cardTouchable}
-                  disabled={isOfflineMode && isTransitioning}
-                  pointerEvents={isExpanded && isPrimaryCard ? 'none' : 'auto'}
-                >
-                  <WalletCard
-                    wallet={wallet}
-                    isPrimary={wallet.isPrimary}
-                    isSelected={selectedWalletId === wallet.wallet_id}
-                    isStacked={!isExpanded}
-                    stackIndex={targetIndex}
-                    isBalanceVisible={isBalanceVisible}
-                    onToggleVisibility={wallet.isPrimary ? onToggleVisibility : () => {}}
-                  />
-                </TouchableOpacity>
+                {/* Swipe-to-delete: Only wrap PRIMARY card when:
+                  1. Stack is collapsed (!isExpanded)
+                  2. No pending wallet (!hasPending)
+                  3. Wallet can be deleted (balance = 0 and not only wallet) */}
+                {isPrimaryCard && !isExpanded && !hasPending && canDeleteWallet(wallet) ? (
+                  <Swipeable
+                    ref={swipeableRef}
+                    renderRightActions={() => renderDeleteAction(wallet)}
+                    friction={1.5}
+                    rightThreshold={40}
+                    overshootRight={false}
+                    containerStyle={styles.cardTouchable}
+                    childrenContainerStyle={styles.cardTouchable}
+                  >
+                    <TouchableOpacity
+                      activeOpacity={0.95}
+                      onPress={() => handleCardPress(wallet)}
+                      disabled={isOfflineMode && isTransitioning}
+                    >
+                      <WalletCard
+                        wallet={wallet}
+                        isPrimary={wallet.isPrimary}
+                        isSelected={selectedWalletId === wallet.wallet_id}
+                        isStacked={!isExpanded}
+                        stackIndex={targetIndex}
+                        isBalanceVisible={isBalanceVisible}
+                        onToggleVisibility={wallet.isPrimary ? onToggleVisibility : () => {}}
+                      />
+                    </TouchableOpacity>
+                  </Swipeable>
+                ) : (
+                  <TouchableOpacity
+                    activeOpacity={0.95}
+                    onPress={() => handleCardPress(wallet)}
+                    style={styles.cardTouchable}
+                    disabled={isOfflineMode && isTransitioning}
+                    pointerEvents={isExpanded && isPrimaryCard ? 'none' : 'auto'}
+                  >
+                    <WalletCard
+                      wallet={wallet}
+                      isPrimary={wallet.isPrimary}
+                      isSelected={selectedWalletId === wallet.wallet_id}
+                      isStacked={!isExpanded}
+                      stackIndex={targetIndex}
+                      isBalanceVisible={isBalanceVisible}
+                      onToggleVisibility={wallet.isPrimary ? onToggleVisibility : () => {}}
+                    />
+                  </TouchableOpacity>
+                )}
               </Animated.View>
             );
           })}

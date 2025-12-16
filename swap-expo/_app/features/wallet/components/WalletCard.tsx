@@ -1,10 +1,14 @@
 // Created: WalletCard component for new wallet-centric architecture - 2025-01-03
 // Based on AccountCard but displays WalletBalance instead of AccountBalance
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeContext';
 import { WalletBalance } from '../../../types/wallet.types';
+
+// Explicit card width for consistent sizing (Apple Wallet pattern)
+const { width: screenWidth } = Dimensions.get('window');
+const CARD_WIDTH = screenWidth - 32;
 
 interface WalletCardProps {
   wallet: WalletBalance;
@@ -148,6 +152,7 @@ const WalletCard: React.FC<WalletCardProps> = React.memo(({
   // Memoize styles to avoid recreating StyleSheet on every render
   const styles = useMemo(() => StyleSheet.create({
     card: {
+      width: CARD_WIDTH, // Explicit pixel width - Apple Wallet pattern for consistent sizing
       height: 140,
       borderRadius: 20,
       overflow: 'hidden',

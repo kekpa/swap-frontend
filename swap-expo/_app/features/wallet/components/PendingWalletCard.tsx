@@ -2,10 +2,14 @@
 // Shows "Select a currency..." initially, then "Adding USD..." with loading spinner
 // Matches WalletCard dimensions (140px height) and styling conventions
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AvailableCurrency } from './NewCurrencySheet';
 import { useTheme } from '../../../theme/ThemeContext';
+
+// Explicit card width for consistent sizing (Apple Wallet pattern)
+const { width: screenWidth } = Dimensions.get('window');
+const CARD_WIDTH = screenWidth - 32;
 
 interface PendingWalletCardProps {
   currency?: AvailableCurrency;
@@ -22,10 +26,11 @@ const PendingWalletCard: React.FC<PendingWalletCardProps> = React.memo(({
 
   const styles = useMemo(() => StyleSheet.create({
     card: {
+      width: CARD_WIDTH, // Explicit pixel width - Apple Wallet pattern for consistent sizing
       height: 140, // Match WalletCard height
       borderRadius: 20, // Match WalletCard border radius
       overflow: 'hidden',
-      backgroundColor: theme.colors.surfaceVariant, // Theme-aware background
+      backgroundColor: theme.colors.grayUltraLight, // Light gray background
       borderWidth: 1.5,
       borderColor: theme.colors.border, // Theme-aware border
       borderStyle: 'dashed', // Dashed border to indicate "pending/placeholder"

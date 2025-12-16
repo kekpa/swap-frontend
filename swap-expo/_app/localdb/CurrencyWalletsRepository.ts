@@ -13,6 +13,7 @@ export interface CurrencyWallet {
   currency_code: string;
   currency_symbol: string;
   currency_name: string;
+  currency_color?: string | null;
   balance: number;
   reserved_balance: number;
   available_balance: number;
@@ -99,9 +100,9 @@ export class CurrencyWalletsRepository {
       const statement = await db.prepareAsync(`
         INSERT OR REPLACE INTO currency_wallets (
           id, account_id, currency_id, currency_code, currency_symbol, currency_name,
-          balance, reserved_balance, available_balance, balance_last_updated,
+          currency_color, balance, reserved_balance, available_balance, balance_last_updated,
           is_active, is_primary, created_at, updated_at, is_synced, profile_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       await statement.executeAsync(
@@ -111,6 +112,7 @@ export class CurrencyWalletsRepository {
         wallet.currency_code,
         wallet.currency_symbol,
         wallet.currency_name,
+        wallet.currency_color || null,
         wallet.balance,
         wallet.reserved_balance,
         wallet.available_balance,
@@ -160,6 +162,7 @@ export class CurrencyWalletsRepository {
         currency_code: row.currency_code as string,
         currency_symbol: row.currency_symbol as string,
         currency_name: row.currency_name as string,
+        currency_color: row.currency_color as string | null,
         balance: Number(row.balance),
         reserved_balance: Number(row.reserved_balance),
         available_balance: Number(row.available_balance),
@@ -318,6 +321,7 @@ export class CurrencyWalletsRepository {
         currency_code: row.currency_code as string,
         currency_symbol: row.currency_symbol as string,
         currency_name: row.currency_name as string,
+        currency_color: row.currency_color as string | null,
         balance: Number(row.balance),
         reserved_balance: Number(row.reserved_balance),
         available_balance: Number(row.available_balance),

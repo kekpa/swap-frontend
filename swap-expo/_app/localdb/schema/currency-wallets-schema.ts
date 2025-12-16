@@ -22,6 +22,7 @@ export const initializeCurrencyWalletsSchema = async (database: SQLite.SQLiteDat
         currency_code TEXT NOT NULL,
         currency_symbol TEXT NOT NULL,
         currency_name TEXT NOT NULL,
+        currency_color TEXT,
         balance REAL NOT NULL DEFAULT 0,
         reserved_balance REAL NOT NULL DEFAULT 0,
         available_balance REAL NOT NULL DEFAULT 0,
@@ -33,6 +34,14 @@ export const initializeCurrencyWalletsSchema = async (database: SQLite.SQLiteDat
         is_synced INTEGER NOT NULL DEFAULT 0
       );
     `);
+
+    // Add currency_color column if it doesn't exist (migration for existing databases)
+    try {
+      await database.execAsync(`ALTER TABLE currency_wallets ADD COLUMN currency_color TEXT;`);
+      logger.debug('[CurrencyWalletsSchema] Added currency_color column');
+    } catch {
+      // Column already exists, ignore error
+    }
     
     // Create indexes for better query performance
     await database.execAsync(`

@@ -131,48 +131,4 @@ export interface WalletSelectionOption {
   isPrimary: boolean;
 }
 
-// LEGACY COMPATIBILITY: Types to help transition from account-centric to wallet-centric
-// These should be removed once all components are updated
-
-/**
- * @deprecated Use WalletBalance instead. This maps old AccountBalance to new WalletBalance.
- */
-export interface AccountBalance extends WalletBalance {
-  // Map old field names to new ones for backward compatibility
-  id: string; // maps to wallet_id
-  account_type: string; // derived from account info
-}
-
-/**
- * Helper to convert WalletBalance to legacy AccountBalance format
- * @deprecated Remove this once all components use WalletBalance directly
- */
-export function walletToLegacyAccount(wallet: WalletBalance): AccountBalance {
-  return {
-    ...wallet,
-    id: wallet.wallet_id, // Map wallet_id to id for legacy compatibility
-    account_type: 'wallet', // Default account type
-  };
-}
-
-/**
- * Helper to convert legacy AccountBalance to WalletBalance format
- */
-export function legacyAccountToWallet(account: AccountBalance): WalletBalance {
-  return {
-    wallet_id: account.id || account.wallet_id,
-    account_id: account.account_id,
-    entity_id: account.entity_id,
-    currency_id: account.currency_id,
-    currency_code: account.currency_code,
-    currency_symbol: account.currency_symbol,
-    currency_name: account.currency_name || account.currency_code,
-    balance: account.balance,
-    reserved_balance: account.reserved_balance || 0,
-    available_balance: account.available_balance || account.balance,
-    balance_last_updated: account.balance_last_updated,
-    is_active: true,
-    isPrimary: account.isPrimary,
-    last_updated: account.last_updated,
-  };
-} 
+ 

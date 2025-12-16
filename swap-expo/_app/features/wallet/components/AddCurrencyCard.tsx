@@ -2,9 +2,13 @@
 // Matches WalletCard dimensions (140px height) and styling conventions
 // Design: Neutral styling with theme support for light/dark mode
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeContext';
+
+// Explicit card width for consistent sizing (Apple Wallet pattern)
+const { width: screenWidth } = Dimensions.get('window');
+const CARD_WIDTH = screenWidth - 32;
 
 interface AddCurrencyCardProps {
   onPress: () => void;
@@ -23,10 +27,11 @@ const AddCurrencyCard: React.FC<AddCurrencyCardProps> = React.memo(({
   // LAYOUT: Content at TOP so it's visible when peeking behind other cards in the stack
   const styles = useMemo(() => StyleSheet.create({
     card: {
+      width: CARD_WIDTH, // Explicit pixel width - Apple Wallet pattern for consistent sizing
       height: 140, // Match WalletCard height
       borderRadius: 20, // Match WalletCard border radius
       overflow: 'hidden',
-      backgroundColor: theme.colors.surfaceVariant, // Theme-aware background
+      backgroundColor: theme.colors.grayUltraLight, // Light gray background
       borderWidth: 1.5,
       borderColor: theme.colors.border, // Theme-aware border
       // Content at TOP, not centered - so text is visible when peeking
