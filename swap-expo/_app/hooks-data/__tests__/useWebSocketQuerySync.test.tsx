@@ -45,7 +45,7 @@ const testEntityId = 'entity-123';
 const testMessageData = {
   id: 'msg-001',
   interaction_id: 'interaction-456',
-  sender_entity_id: 'entity-789',
+  from_entity_id: 'entity-789',
   content: 'Hello world!',
   timestamp: '2024-01-01T12:00:00Z',
 };
@@ -202,7 +202,7 @@ describe('useWebSocketQuerySync', () => {
         {
           id: 'interaction-456',
           name: 'Test Chat',
-          last_message_snippet: 'Old message',
+          last_activity_snippet: 'Old message',
           unread_count: 0,
         },
       ]);
@@ -218,8 +218,8 @@ describe('useWebSocketQuerySync', () => {
       });
 
       const interactions = queryClient.getQueryData(['interactions', testEntityId]) as any[];
-      expect(interactions[0].last_message_snippet).toBe('Hello world!');
-      expect(interactions[0].last_message_at).toBe('2024-01-01T12:00:00Z');
+      expect(interactions[0].last_activity_snippet).toBe('Hello world!');
+      expect(interactions[0].last_activity_at).toBe('2024-01-01T12:00:00Z');
     });
 
     it('should increment unread count for messages from other entities', () => {
@@ -239,7 +239,7 @@ describe('useWebSocketQuerySync', () => {
           // Message from another entity
           messageCallback({
             ...testMessageData,
-            sender_entity_id: 'other-entity',
+            from_entity_id: 'other-entity',
           });
         }
       });
@@ -265,7 +265,7 @@ describe('useWebSocketQuerySync', () => {
           // Message from self
           messageCallback({
             ...testMessageData,
-            sender_entity_id: testEntityId,
+            from_entity_id: testEntityId,
           });
         }
       });

@@ -135,8 +135,8 @@ export const useUnifiedSearch = (
         const otherMember = interaction.members?.find(m => m.entity_id !== user?.entityId);
         if (otherMember?.display_name?.toLowerCase().includes(queryLower)) return true;
 
-        // Search last message snippet
-        if (interaction.last_message_snippet?.toLowerCase().includes(queryLower)) return true;
+        // Search last activity snippet
+        if (interaction.last_activity_snippet?.toLowerCase().includes(queryLower)) return true;
 
         return false;
       })
@@ -156,11 +156,11 @@ export const useUnifiedSearch = (
           avatarUrl: otherMember?.avatar_url,
           initials: getInitials(displayName),
           avatarColor: getAvatarColor(entityIdForColor),
-          secondaryText: interaction.last_message_snippet
-            ? interaction.last_message_snippet.substring(0, 50) +
-              (interaction.last_message_snippet.length > 50 ? '...' : '')
-            : 'No messages yet',
-          date: formatRelativeDate(interaction.last_message_at),
+          secondaryText: interaction.last_activity_snippet
+            ? interaction.last_activity_snippet.substring(0, 50) +
+              (interaction.last_activity_snippet.length > 50 ? '...' : '')
+            : 'No activity yet',
+          date: formatRelativeDate(interaction.last_activity_at),
           originalData: {
             ...interaction,
             isInteraction: true,
@@ -230,7 +230,7 @@ export const useUnifiedSearch = (
 
     const seen = new Map<string, SearchResult>();
 
-    // Process local interactions first (they have last_message_snippet context)
+    // Process local interactions first (they have last_activity_snippet context)
     localInteractionResults.forEach(result => {
       // Use the contact's entity_id for deduplication, not the interaction id
       const entityId = result.originalData?.contactEntityId || result.id;

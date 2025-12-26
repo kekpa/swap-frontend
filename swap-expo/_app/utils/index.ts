@@ -33,8 +33,8 @@ export * from './localStoragePolyfill';
 // Pin user storage
 export * from './pinUserStorage';
 
-// Refresh manager
-export * from './refreshManager';
+// NOTE: refreshManager.ts was replaced by RefreshContext.tsx
+// Use: import { useRefresh } from '../contexts/RefreshContext'
 
 // Default export for logger (most common usage)
 export { default } from './logger';

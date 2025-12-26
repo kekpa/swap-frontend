@@ -24,12 +24,12 @@ export interface RecentConversation {
     entityType: 'individual' | 'business';
     isVerified: boolean;
   };
-  lastMessage: {
+  lastActivity: {
     id: string;
     content: string;
     timestamp: string;
-    senderId: string;
-    messageType: 'text' | 'image' | 'payment' | 'system';
+    fromEntityId: string;
+    activityType: 'text' | 'image' | 'payment' | 'transaction' | 'system';
     status: 'sent' | 'delivered' | 'read';
   };
   unreadCount: number;
@@ -234,9 +234,9 @@ export const useSearchConversations = (entityId?: string, searchQuery?: string) 
   
   const query = searchQuery.toLowerCase().trim();
   
-  return conversations.filter(conversation => 
+  return conversations.filter(conversation =>
     conversation.otherEntityInfo.displayName.toLowerCase().includes(query) ||
-    conversation.lastMessage.content.toLowerCase().includes(query)
+    conversation.lastActivity.content.toLowerCase().includes(query)
   );
 };
 

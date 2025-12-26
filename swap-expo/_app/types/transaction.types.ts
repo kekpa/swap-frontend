@@ -59,6 +59,11 @@ export interface Transaction {
   to_entity_id?: string;
   from_entity_id?: string;
   currency_symbol?: string;
+  currency_code?: string;
+
+  // Wallet IDs for filtering transactions by currency-specific wallet
+  from_wallet_id?: string;
+  to_wallet_id?: string;
   
   // Frontend-specific fields
   from_account?: {
@@ -136,11 +141,13 @@ export interface TransactionSummary {
 
 // Created: Transaction DTO types for client - 2025-05-18
 export interface CreateDirectTransactionDto {
-  recipient_id: string;        // Profile-ID of the recipient
+  to_entity_id: string;        // Entity ID of the recipient
+  from_entity_id?: string;     // Entity ID of the sender (optional, defaults to auth user)
   amount: number;              // Monetary amount (decimal)
-  currency_id: string;         // Currency code e.g. 'USD'
+  currency_id: string;         // Currency UUID
   description?: string;        // Optional memo
   metadata?: Record<string, any>;
-  from_account_id?: string; // Added: Source account ID
-  to_account_id?: string;   // Added: Destination account ID (optional on backend)
+  from_wallet_id?: string;     // Source wallet ID
+  to_wallet_id?: string;       // Destination wallet ID
+  idempotency_key?: string;    // Prevent duplicate transactions
 } 

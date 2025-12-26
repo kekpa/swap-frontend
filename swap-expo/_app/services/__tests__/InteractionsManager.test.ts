@@ -31,9 +31,9 @@ const testInteraction1: InteractionListItem = {
   id: 'interaction-001',
   name: 'Test Chat',
   is_group: false,
-  last_message_snippet: 'Hello there!',
-  last_message_at: '2024-01-15T12:00:00Z',
-  last_message_sender_id: 'entity-other',
+  last_activity_snippet: 'Hello there!',
+  last_activity_at: '2024-01-15T12:00:00Z',
+  last_activity_from_entity_id: 'entity-other',
   updated_at: '2024-01-15T12:00:00Z',
   members: [
     { entity_id: 'entity-current', display_name: 'John Doe', entity_type: 'personal' },
@@ -45,9 +45,9 @@ const testInteraction2: InteractionListItem = {
   id: 'interaction-002',
   name: 'Business Chat',
   is_group: false,
-  last_message_snippet: 'Invoice attached',
-  last_message_at: '2024-01-15T14:00:00Z',
-  last_message_sender_id: 'entity-business',
+  last_activity_snippet: 'Invoice attached',
+  last_activity_at: '2024-01-15T14:00:00Z',
+  last_activity_from_entity_id: 'entity-business',
   updated_at: '2024-01-15T14:00:00Z',
   members: [
     { entity_id: 'entity-current', display_name: 'John Doe', entity_type: 'personal' },
@@ -59,8 +59,8 @@ const testGroupInteraction: InteractionListItem = {
   id: 'interaction-003',
   name: 'Team Group',
   is_group: true,
-  last_message_snippet: 'Meeting at 3pm',
-  last_message_at: '2024-01-15T10:00:00Z',
+  last_activity_snippet: 'Meeting at 3pm',
+  last_activity_at: '2024-01-15T10:00:00Z',
   updated_at: '2024-01-15T10:00:00Z',
   members: [
     { entity_id: 'entity-current', display_name: 'John Doe', entity_type: 'personal' },
@@ -184,7 +184,7 @@ describe('InteractionsManager', () => {
       expect(manager.getDisplayChats()).toHaveLength(1);
     });
 
-    it('should sort interactions by last_message_at (most recent first)', () => {
+    it('should sort interactions by last_activity_at (most recent first)', () => {
       const manager = InteractionsManager.getInstance();
       manager.setUserContext(testUser, testTheme);
 
@@ -220,7 +220,7 @@ describe('InteractionsManager', () => {
 
       const updatedInteraction = {
         ...testInteraction1,
-        last_message_snippet: 'Updated message',
+        last_activity_snippet: 'Updated message',
       };
       manager.updateInteraction(updatedInteraction);
 
@@ -603,7 +603,7 @@ describe('InteractionsManager', () => {
       const todayInteraction: InteractionListItem = {
         ...testInteraction1,
         id: 'today',
-        last_message_at: new Date().toISOString(),
+        last_activity_at: new Date().toISOString(),
       };
 
       const manager = InteractionsManager.getInstance();
@@ -625,11 +625,11 @@ describe('InteractionsManager', () => {
       expect(chats[0].time).toMatch(/Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec/);
     });
 
-    it('should handle missing last_message_at', () => {
+    it('should handle missing last_activity_at', () => {
       const noMessageTimeInteraction: InteractionListItem = {
         ...testInteraction1,
         id: 'no-time',
-        last_message_at: undefined,
+        last_activity_at: undefined,
         updated_at: '2024-01-15T12:00:00Z',
       };
 
@@ -645,7 +645,7 @@ describe('InteractionsManager', () => {
       const noSnippetInteraction: InteractionListItem = {
         ...testInteraction1,
         id: 'no-snippet',
-        last_message_snippet: undefined,
+        last_activity_snippet: undefined,
       };
 
       const manager = InteractionsManager.getInstance();
@@ -660,7 +660,7 @@ describe('InteractionsManager', () => {
       const noSnippetGroup: InteractionListItem = {
         ...testGroupInteraction,
         id: 'no-snippet-group',
-        last_message_snippet: undefined,
+        last_activity_snippet: undefined,
       };
 
       const manager = InteractionsManager.getInstance();
@@ -746,7 +746,7 @@ describe('InteractionsManager', () => {
       const invalidDateInteraction: InteractionListItem = {
         ...testInteraction1,
         id: 'invalid-date',
-        last_message_at: 'not-a-date',
+        last_activity_at: 'not-a-date',
       };
 
       const manager = InteractionsManager.getInstance();

@@ -1,6 +1,7 @@
 // Created: Network connectivity and offline mode detection service - 2025-01-10
 
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
+import EventEmitter from 'eventemitter3';
 import logger from '../utils/logger';
 
 export interface NetworkState {
@@ -10,52 +11,7 @@ export interface NetworkState {
   isOfflineMode: boolean;
 }
 
-// Simple EventEmitter replacement for React Native
-class SimpleEventEmitter {
-  private listeners: { [event: string]: Function[] } = {};
-
-  on(event: string, callback: Function): void {
-    if (!this.listeners[event]) {
-      this.listeners[event] = [];
-    }
-    this.listeners[event].push(callback);
-  }
-
-  off(event: string, callback: Function): void {
-    if (!this.listeners[event]) return;
-    
-    const index = this.listeners[event].indexOf(callback);
-    if (index > -1) {
-      this.listeners[event].splice(index, 1);
-    }
-  }
-
-  once(event: string, callback: Function): void {
-    const onceWrapper = (...args: any[]) => {
-      this.off(event, onceWrapper);
-      callback(...args);
-    };
-    this.on(event, onceWrapper);
-  }
-
-  emit(event: string, ...args: any[]): void {
-    if (!this.listeners[event]) return;
-    
-    this.listeners[event].forEach(callback => {
-      try {
-        callback(...args);
-      } catch (error) {
-        logger.error('[SimpleEventEmitter] Error in event callback:', error);
-      }
-    });
-  }
-
-  removeAllListeners(): void {
-    this.listeners = {};
-  }
-}
-
-class NetworkService extends SimpleEventEmitter {
+class NetworkService extends EventEmitter {
   private static instance: NetworkService;
   private currentNetworkState: NetworkState = {
     isConnected: false,

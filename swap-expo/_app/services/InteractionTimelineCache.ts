@@ -1,58 +1,24 @@
-// Created: TimelineManager service for centralized timeline business logic - 2025-01-24
+// InteractionTimelineCache - In-memory cache for timeline items per interaction
+// Renamed from TimelineManager for clarity (2025-12-23)
 
+import EventEmitter from 'eventemitter3';
 import { TimelineItem, MessageTimelineItem, TransactionTimelineItem, DateSeparatorTimelineItem } from '../types/timeline.types';
 import { MessageType as APIMessageType, MessageStatus } from '../types/message.types';
 import logger from '../utils/logger';
 
-// Simple EventEmitter implementation for React Native
-class SimpleEventEmitter {
-  private listeners: { [event: string]: Function[] } = {};
-
-  on(event: string, listener: Function): void {
-    if (!this.listeners[event]) {
-      this.listeners[event] = [];
-    }
-    this.listeners[event].push(listener);
-  }
-
-  removeListener(event: string, listener: Function): void {
-    if (!this.listeners[event]) return;
-    this.listeners[event] = this.listeners[event].filter(l => l !== listener);
-  }
-
-  removeAllListeners(event?: string): void {
-    if (event) {
-      delete this.listeners[event];
-    } else {
-      this.listeners = {};
-    }
-  }
-
-  emit(event: string, ...args: any[]): void {
-    if (!this.listeners[event]) return;
-    this.listeners[event].forEach(listener => {
-      try {
-        listener(...args);
-      } catch (error) {
-        console.error(`Error in event listener for ${event}:`, error);
-      }
-    });
-  }
-}
-
-export interface TimelineManagerOptions {
+export interface InteractionTimelineCacheOptions {
   maxItems?: number;
   enableOptimisticUpdates?: boolean;
   enableDateSeparators?: boolean;
 }
 
-export class TimelineManager extends SimpleEventEmitter {
-  private static instances = new Map<string, TimelineManager>();
+export class InteractionTimelineCache extends EventEmitter {
+  private static instances = new Map<string, InteractionTimelineCache>();
   private timelineItems = new Map<string, TimelineItem>();
   private interactionId: string;
-  private options: TimelineManagerOptions;
+  private options: InteractionTimelineCacheOptions;
 
-  private constructor(interactionId: string, options: TimelineManagerOptions = {}) {
+  private constructor(interactionId: string, options: InteractionTimelineCacheOptions = {}) {
     super();
     this.interactionId = interactionId;
     this.options = {
@@ -64,11 +30,11 @@ export class TimelineManager extends SimpleEventEmitter {
   }
 
   /**
-   * Get or create a TimelineManager instance for an interaction
+   * Get or create an InteractionTimelineCache instance for an interaction
    */
-  static getInstance(interactionId: string, options?: TimelineManagerOptions): TimelineManager {
+  static getInstance(interactionId: string, options?: InteractionTimelineCacheOptions): InteractionTimelineCache {
     if (!this.instances.has(interactionId)) {
-      this.instances.set(interactionId, new TimelineManager(interactionId, options));
+      this.instances.set(interactionId, new InteractionTimelineCache(interactionId, options));
     }
     return this.instances.get(interactionId)!;
   }
@@ -77,7 +43,7 @@ export class TimelineManager extends SimpleEventEmitter {
    * Set timeline items from API or local storage
    */
   setTimelineItems(items: TimelineItem[]): void {
-    logger.debug(`[TimelineManager] Setting ${items.length} timeline items for interaction ${this.interactionId}`, 'timeline_manager');
+    logger.debug(`[InteractionTimelineCache] Setting ${items.length} timeline items for interaction ${this.interactionId}`, 'timeline_manager');
     
     // Clear existing items
     this.timelineItems.clear();
@@ -99,11 +65,11 @@ export class TimelineManager extends SimpleEventEmitter {
   /**
    * Add a message to the timeline with optimistic update handling
    */
-  addMessage(messageData: Partial<MessageTimelineItem> & { 
-    interaction_id: string; 
+  addMessage(messageData: Partial<MessageTimelineItem> & {
+    interaction_id: string;
     id: string;
     content: string;
-    sender_entity_id: string;
+    from_entity_id: string;
     created_at?: string;
   }): void {
     const isOptimistic = messageData.metadata?.isOptimistic === true;
@@ -111,7 +77,7 @@ export class TimelineManager extends SimpleEventEmitter {
     const optimisticId = messageData.metadata?.optimisticId;
     const idempotencyKey = messageData.metadata?.idempotency_key;
     
-    logger.debug(`[TimelineManager] Adding ${isOptimistic ? 'optimistic' : 'authoritative'} message ${messageId}`, 'timeline_manager');
+    logger.debug(`[InteractionTimelineCache] Adding ${isOptimistic ? 'optimistic' : 'authoritative'} message ${messageId}`, 'timeline_manager');
 
     // Handle optimistic message replacement
     if (!isOptimistic && this.options.enableOptimisticUpdates) {
@@ -119,7 +85,7 @@ export class TimelineManager extends SimpleEventEmitter {
       if (optimisticId && this.timelineItems.has(optimisticId)) {
         const optimisticMsg = this.timelineItems.get(optimisticId);
         if (optimisticMsg?.metadata?.isOptimistic) {
-          logger.debug(`[TimelineManager] Replacing optimistic message ${optimisticId} with authoritative ${messageId}`, 'timeline_manager');
+          logger.debug(`[InteractionTimelineCache] Replacing optimistic message ${optimisticId} with authoritative ${messageId}`, 'timeline_manager');
           this.timelineItems.delete(optimisticId);
         }
       }
@@ -131,7 +97,7 @@ export class TimelineManager extends SimpleEventEmitter {
           item.metadata?.idempotency_key === idempotencyKey
         );
         if (optimisticMatch) {
-          logger.debug(`[TimelineManager] Replacing optimistic message by idempotency_key ${idempotencyKey}`, 'timeline_manager');
+          logger.debug(`[InteractionTimelineCache] Replacing optimistic message by idempotency_key ${idempotencyKey}`, 'timeline_manager');
           this.timelineItems.delete(optimisticMatch.id);
         }
       }
@@ -146,7 +112,7 @@ export class TimelineManager extends SimpleEventEmitter {
       createdAt: messageData.createdAt || messageData.created_at || new Date().toISOString(),
       timestamp: messageData.timestamp || messageData.created_at || new Date().toISOString(),
       content: messageData.content,
-      sender_entity_id: messageData.sender_entity_id,
+      from_entity_id: messageData.from_entity_id,
       message_type: messageData.message_type || APIMessageType.TEXT,
       metadata: {
         ...messageData.metadata,
@@ -168,7 +134,7 @@ export class TimelineManager extends SimpleEventEmitter {
    * Add a transaction to the timeline
    */
   addTransaction(transactionData: any): void {
-    logger.debug(`[TimelineManager] Adding transaction ${transactionData.id}`, 'timeline_manager');
+    logger.debug(`[InteractionTimelineCache] Adding transaction ${transactionData.id}`, 'timeline_manager');
     
     const createdAtDate = transactionData.created_at instanceof Date 
       ? transactionData.created_at 
@@ -297,7 +263,7 @@ export class TimelineManager extends SimpleEventEmitter {
       const itemsToRemove = items.slice(0, items.length - this.options.maxItems);
       itemsToRemove.forEach(item => this.timelineItems.delete(item.id));
       
-      logger.debug(`[TimelineManager] Removed ${itemsToRemove.length} old items to enforce limit`, 'timeline_manager');
+      logger.debug(`[InteractionTimelineCache] Removed ${itemsToRemove.length} old items to enforce limit`, 'timeline_manager');
     }
   }
 
@@ -411,7 +377,7 @@ export class TimelineManager extends SimpleEventEmitter {
       instance.removeAllListeners();
       instance.clear();
       this.instances.delete(interactionId);
-      logger.debug(`[TimelineManager] Destroyed instance for interaction ${interactionId}`, 'timeline_manager');
+      logger.debug(`[InteractionTimelineCache] Destroyed instance for interaction ${interactionId}`, 'timeline_manager');
     }
   }
 
@@ -419,7 +385,7 @@ export class TimelineManager extends SimpleEventEmitter {
    * Clear all TimelineManager instances (called on logout)
    */
   static clearAllInstances(): void {
-    logger.debug(`[TimelineManager] Clearing all ${this.instances.size} timeline instances`, 'timeline_manager');
+    logger.debug(`[InteractionTimelineCache] Clearing all ${this.instances.size} timeline instances`, 'timeline_manager');
     
     this.instances.forEach((instance, interactionId) => {
       instance.removeAllListeners();
@@ -427,10 +393,14 @@ export class TimelineManager extends SimpleEventEmitter {
     });
     
     this.instances.clear();
-    logger.debug('[TimelineManager] All timeline instances cleared', 'timeline_manager');
+    logger.debug('[InteractionTimelineCache] All timeline instances cleared', 'timeline_manager');
   }
 }
 
 // Export singleton getter for easy access
-export const getTimelineManager = (interactionId: string, options?: TimelineManagerOptions) => 
-  TimelineManager.getInstance(interactionId, options); 
+export const getInteractionTimelineCache = (interactionId: string, options?: InteractionTimelineCacheOptions) =>
+  InteractionTimelineCache.getInstance(interactionId, options);
+
+// Backwards compatibility alias (deprecated)
+export const TimelineManager = InteractionTimelineCache;
+export const getTimelineManager = getInteractionTimelineCache; 

@@ -48,6 +48,12 @@ export const AUTH_PATHS = {
   SESSIONS: '/auth/sessions',
   SESSION_REVOKE: (sessionId: string) => `/auth/sessions/${sessionId}`,
   SESSIONS_REVOKE_ALL: '/auth/sessions',
+  // Biometric authentication (secure device-based login)
+  BIOMETRIC_ENABLE: '/auth/biometric/enable',
+  BIOMETRIC_LOGIN: '/auth/biometric/login',
+  BIOMETRIC_DISABLE: '/auth/biometric',
+  BIOMETRIC_STATUS: '/auth/biometric/status',
+  BIOMETRIC_DEVICES: '/auth/biometric/devices',
 };
 
 /**
@@ -125,7 +131,7 @@ export const TRANSACTION_PATHS = {
   CURRENCY_DETAILS: (id: string) => `/transactions/currencies/${id}`,
   REQUESTS: '/transactions/requests',
   REQUEST_DETAILS: (id: string) => `/transactions/requests/${id}`,
-  TOTAL_SENT: (senderId: string, recipientId: string) => `/transactions/total-sent/${senderId}/${recipientId}`,
+  TOTAL_SENT: (fromEntityId: string, toEntityId: string) => `/transactions/total-sent/${fromEntityId}/${toEntityId}`,
   DIRECT: '/transactions/direct',
 };
 

@@ -20,10 +20,12 @@ import { useNavigation, CommonActions, RouteProp, useRoute } from '@react-naviga
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
-import { CreateDirectTransactionDto } from '../../../types/transaction.types';
 import { useAuthContext } from '../../auth/context/AuthContext';
-import { useSendMoney } from '../../../hooks-data/useSendMoney';
 import logger from '../../../utils/logger';
+// LOCAL-FIRST ARCHITECTURE: SQLite is the source of truth
+import { unifiedTimelineService } from '../../../services/UnifiedTimelineService';
+import { backgroundSyncService } from '../../../services/BackgroundSyncService';
+import { useInteraction } from '../../../tanstack-query/mutations/useInteraction';
 
 interface ReviewTransferScreenProps {
   route: RouteProp<{
@@ -34,14 +36,9 @@ interface ReviewTransferScreenProps {
       recipientInitial: string;
       recipientColor: string;
       message: string;
-      recipientId: string; // The entity ID of the recipient
+      toEntityId: string; // The entity ID of the recipient
       fromAccount: any; // Sender account object
       currency: string; // Currency code/ID
-      // Legacy support for backward compatibility
-      contactId?: string;
-      contactName?: string;
-      contactInitials?: string;
-      contactAvatarColor?: string;
       reference?: string;
     };
   }, 'params'>;
@@ -50,12 +47,13 @@ interface ReviewTransferScreenProps {
 const ReviewTransferScreen: React.FC<ReviewTransferScreenProps> = ({ route }) => {
   const navigation = useNavigation<StackNavigationProp<any>>();
   const { theme } = useTheme();
-  const { user: currentUser } = useAuthContext();
+  const { user: currentUser, currentProfileId } = useAuthContext();
   const [editingMessage, setEditingMessage] = React.useState(false);
   const [messageText, setMessageText] = React.useState('');
-  
-  // Optimistic send money mutation with instant UI updates
-  const sendMoneyMutation = useSendMoney();
+  const [isSending, setIsSending] = React.useState(false);
+
+  // LOCAL-FIRST: ONE hook for interaction management
+  const { ensureInteraction } = useInteraction();
   
   const params = route.params || {
     amount: 0,
@@ -65,12 +63,12 @@ const ReviewTransferScreen: React.FC<ReviewTransferScreenProps> = ({ route }) =>
     message: '',
   };
   
-  // Normalize parameters - handle both new and legacy formats
-  const contactName = params.recipientName || params.contactName || 'Unknown';
-  const contactInitial = params.recipientInitial || params.contactInitials || 'U';
-  const contactColor = params.recipientColor || params.contactAvatarColor || theme.colors.secondary;
+  // Normalize parameters
+  const contactName = params.recipientName || 'Unknown';
+  const contactInitial = params.recipientInitial || 'U';
+  const contactColor = params.recipientColor || theme.colors.secondary;
   const reference = params.message || params.reference || '';
-  const recipientEntityId = params.recipientId || params.contactId || '';
+  const toEntityId = params.toEntityId || '';
   
   const fromAccount = params.fromAccount;
   const currencyId = params.currency || 'USD';
@@ -107,85 +105,101 @@ const ReviewTransferScreen: React.FC<ReviewTransferScreenProps> = ({ route }) =>
   };
 
   const handleSend = async () => {
-    if (sendMoneyMutation.isPending) return;
+    if (isSending) return;
 
-    // CRITICAL: Ensure we're using the current user's entity ID as sender
-    const senderEntityId = currentUser?.entityId;
+    const fromEntityId = currentUser?.entityId;
 
-    // Use the normalized recipient entity ID
-    // recipientEntityId is already extracted from params above
-    
-    // Debug logging to track the JWT token issue
-    logger.debug(`[ReviewTransferScreen] 🚀 OPTIMISTIC: Starting transaction - currentUser=${senderEntityId}, recipient=${recipientEntityId}, fromAccount=${fromAccount?.entity_id}`, "ReviewTransferScreen");
-    
-    if (!senderEntityId) {
-      alert('Authentication error: No sender entity ID found');
+    logger.debug(`[ReviewTransferScreen] 🚀 LOCAL-FIRST: Starting transaction`, "ReviewTransferScreen");
+
+    // Validation
+    if (!fromEntityId || !currentProfileId) {
+      alert('Authentication error: Please log in again');
       return;
     }
-    
-    if (!recipientEntityId) {
+
+    if (!toEntityId) {
       alert('Error: No recipient selected');
       return;
     }
-    
-    if (senderEntityId === recipientEntityId) {
+
+    if (fromEntityId === toEntityId) {
       alert('Error: Cannot send transaction to yourself');
       return;
     }
 
+    if (!fromAccount?.id) {
+      alert('Error: No wallet selected');
+      return;
+    }
+
+    setIsSending(true);
+
     try {
-      // ⚡ INSTANT: Execute optimistic mutation
-      const result = await sendMoneyMutation.mutateAsync({
-        recipient_id: recipientEntityId,
-        amount: amount,
-        currency_id: currencyId,
+      // STEP 1: Get or create interaction ID (ONE function handles both)
+      const interactionId = await ensureInteraction(toEntityId);
+      if (!interactionId) {
+        throw new Error('Failed to establish connection with recipient');
+      }
+      logger.debug(`[ReviewTransferScreen] ✅ Interaction: ${interactionId}`, "ReviewTransferScreen");
+
+      // STEP 2: LOCAL-FIRST - Write to SQLite INSTANTLY (UI updates immediately)
+      // Uses from_entity_id/to_entity_id for consistency with Supabase
+      const { localId, success, error } = await unifiedTimelineService.sendTransaction({
+        interactionId,
+        profileId: currentProfileId,
+        fromEntityId,      // Who is sending money
+        toEntityId,        // Who is receiving money
+        amount,
+        currencyId,
+        currencyCode,
+        currencySymbol,
         description: messageText,
+        fromWalletId: fromAccount.id,
+        transactionType: 'p2p',
         metadata: {
-          sender_entity_id: senderEntityId,
-          from_account_id: fromAccount?.id,
+          sender_account_id: fromAccount.id,
+          recipient_name: contactName,
         },
-        // Additional fields for optimistic updates
-        senderAccountId: fromAccount?.id || '',
-        senderEntityId: senderEntityId,
-        recipientName: contactName,
-        recipientInitials: contactInitial,
       });
 
-      logger.debug(`[ReviewTransferScreen] ✅ OPTIMISTIC: Transaction succeeded - ${result.id}`, "ReviewTransferScreen");
+      if (!success) {
+        throw new Error(error || 'Failed to create transaction');
+      }
 
-      // Navigate to ContactInteractionHistory2 with transfer completion
+      logger.debug(`[ReviewTransferScreen] ✅ LOCAL-FIRST: Transaction ${localId} written to SQLite`, "ReviewTransferScreen");
+
+      // STEP 3: Trigger background sync immediately
+      backgroundSyncService.triggerSync();
+
+      // STEP 4: Navigate IMMEDIATELY (don't wait for API!)
       navigation.navigate('ContactInteractionHistory2' as any, {
-        contactId: recipientEntityId,
+        contactId: toEntityId,
         contactName: contactName,
         contactInitials: contactInitial,
         contactAvatarColor: contactColor,
-        interactionId: result.interaction_id,
+        interactionId,
         forceRefresh: true,
         showTransferCompletedModal: true,
         transferDetails: {
-          amount: result.amount,
+          amount,
           recipientName: contactName,
           recipientInitial: contactInitial,
           recipientColor: contactColor,
           message: messageText,
-          transactionId: result.id,
-          status: result.status,
-          createdAt: result.created_at,
-          contactId: recipientEntityId,
-          interactionId: result.interaction_id,
+          transactionId: localId,
+          status: 'processing', // Will update via SQLite reactive query
+          createdAt: new Date().toISOString(),
+          contactId: toEntityId,
+          interactionId,
+          currencyCode,
         },
       } as any);
 
     } catch (error: any) {
-      logger.error(`[ReviewTransferScreen] ❌ OPTIMISTIC: Transaction failed:`, error);
-      
-      // Enhanced error handling
-      if (error?.message?.includes('queued for offline sync')) {
-        alert(`Transaction queued for when you're back online. ${contactName} will receive the money once connected.`);
-        navigation.goBack();
-      } else {
-        alert(`Transfer failed: ${error.message || 'Unknown error'}`);
-      }
+      logger.error(`[ReviewTransferScreen] ❌ Transaction failed:`, error);
+      alert(`Transfer failed: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -412,12 +426,12 @@ const ReviewTransferScreen: React.FC<ReviewTransferScreenProps> = ({ route }) =>
 
       {/* Send Button */}
       <View style={{flex:1}} />
-      <TouchableOpacity 
-        style={[styles.sendButton, sendMoneyMutation.isPending && styles.sendButtonDisabled]} 
+      <TouchableOpacity
+        style={[styles.sendButton, isSending && styles.sendButtonDisabled]}
         onPress={handleSend}
-        disabled={sendMoneyMutation.isPending}
+        disabled={isSending}
       >
-        {sendMoneyMutation.isPending ? (
+        {isSending ? (
           <View style={styles.sendButtonContent}>
             <ActivityIndicator size="small" color={theme.colors.white} style={{ marginRight: 8 }} />
             <Text style={styles.sendButtonText}>Sending...</Text>

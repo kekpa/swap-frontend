@@ -13,6 +13,7 @@ import SearchHeader from '../header/SearchHeader';
 import { useTheme } from '../../theme/ThemeContext';
 import { Theme } from '../../theme/theme';
 import { useAuthContext } from '../auth/context/AuthContext';
+import { useRefreshByUser } from '../../hooks/useRefreshByUser';
 
 interface Merchant {
   id: string; name: string; logo: string; points: number; backgroundColor?: string; 
@@ -27,7 +28,13 @@ const OffersDiscoveryScreen: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<OffersTab>('discover');
-  const [refreshing, setRefreshing] = useState(false);
+
+  // Industry-standard refresh hook (local state, no shared global state)
+  // TODO: Replace with real API call when offers backend is implemented
+  const { refreshing, onRefresh } = useRefreshByUser(async () => {
+    // Currently uses mock data - will be replaced with actual TanStack Query refetch
+    await new Promise(resolve => setTimeout(resolve, 500));
+  });
   
   const merchants: Merchant[] = [
     { id: '1', name: 'Amazon', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a9/Amazon_logo.svg/1024px-Amazon_logo.svg.png', points: 1400, },
@@ -45,17 +52,6 @@ const OffersDiscoveryScreen: React.FC = () => {
   const handleEarnPress = () => navigation.navigate('Challenges');
   const handleMyPointsPress = () => navigation.navigate('OffersHome');
   
-  // TODO: Replace with real API call when offers backend is implemented
-  // Currently uses mock data - refresh simulates API latency for demo purposes
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    // Simulate API latency (replace with actual TanStack Query refetch)
-    setTimeout(() => {
-      console.log('[OffersDiscovery] Refresh triggered - mock data (no backend yet)');
-      setRefreshing(false);
-    }, 1500);
-  }, []);
-
   const getHeaderInitials = () => {
     // For business users, use business name initials
     if (user?.businessName) {

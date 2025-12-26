@@ -22,10 +22,10 @@ import { sessionManager, SessionData } from './SessionManager';
 import { authStateMachine, AuthEvent } from '../../utils/AuthStateMachine';
 import { loadingOrchestrator } from '../../utils/LoadingOrchestrator';
 import appLockService from '../AppLockService';
+import { getFullDeviceInfo } from '../../utils/deviceInfo';
 
-// Secure store keys for biometric credentials
-const BIOMETRIC_IDENTIFIER_KEY = 'biometricIdentifier';
-const BIOMETRIC_PASSWORD_KEY = 'biometricPassword';
+// Secure store key for biometric device token (NOT password - security best practice)
+const BIOMETRIC_TOKEN_KEY = 'biometricDeviceToken';
 
 export interface LoginResult {
   success: boolean;
@@ -61,8 +61,24 @@ class LoginService {
     logger.debug('[LoginService] Starting unified login for:', identifier);
 
     try {
-      // Step 1: Call unified login endpoint
-      const response = await apiClient.post('/auth/unified-login', { identifier, password });
+      // Get device info for session tracking
+      const deviceInfo = await getFullDeviceInfo();
+      logger.debug('[LoginService] Device info:', deviceInfo);
+
+      // Step 1: Call unified login endpoint with device headers
+      const response = await apiClient.post(
+        '/auth/unified-login',
+        { identifier, password },
+        {
+          headers: {
+            'X-Device-Name': deviceInfo.device_name,
+            'X-Device-Type': deviceInfo.device_type,
+            'X-Device-Fingerprint': deviceInfo.fingerprint,
+            'X-OS-Name': deviceInfo.os_name,
+            'X-OS-Version': deviceInfo.os_version,
+          },
+        }
+      );
 
       if (response.status !== 200 && response.status !== 201) {
         return {
@@ -180,7 +196,22 @@ class LoginService {
     logger.debug('[LoginService] Attempting PIN login for:', identifier);
 
     try {
-      const response = await apiClient.post(AUTH_PATHS.PIN_LOGIN, { identifier, pin });
+      // Get device info for session tracking
+      const deviceInfo = await getFullDeviceInfo();
+
+      const response = await apiClient.post(
+        AUTH_PATHS.PIN_LOGIN,
+        { identifier, pin },
+        {
+          headers: {
+            'X-Device-Name': deviceInfo.device_name,
+            'X-Device-Type': deviceInfo.device_type,
+            'X-Device-Fingerprint': deviceInfo.fingerprint,
+            'X-OS-Name': deviceInfo.os_name,
+            'X-OS-Version': deviceInfo.os_version,
+          },
+        }
+      );
       const authData = response.data;
 
       if (!authData?.access_token) {
@@ -210,6 +241,13 @@ class LoginService {
       const sessionData = this.createSessionFromProfile(profile, identifier);
 
       sessionManager.setSession(sessionData);
+
+      // Sync PIN status from backend (Hybrid PIN Architecture)
+      // If user logged in with PIN, backend has confirmed PIN exists
+      // Mark local as configured so we don't show "Secure Your Account" again
+      if (profile) {
+        await this.syncPinStatusFromProfile(profile, identifier);
+      }
 
       // Notify state machine
       authStateMachine.transition(AuthEvent.LOGIN_SUCCESS, {
@@ -254,83 +292,180 @@ class LoginService {
 
   /**
    * Login with biometric (Face ID / Touch ID)
-   * Uses stored credentials from previous login
+   * Uses secure device token from backend (NOT password storage)
+   *
+   * Flow:
+   * 1. Retrieve biometric token from SecureStore
+   * 2. Send to /auth/biometric/login with device fingerprint
+   * 3. Backend verifies token and returns JWT
    */
   async loginWithBiometric(): Promise<LoginResult> {
     logger.debug('[LoginService] Attempting biometric login');
 
     try {
-      const credentials = await this.getBiometricCredentials();
-      if (!credentials) {
+      const biometricToken = await SecureStore.getItemAsync(BIOMETRIC_TOKEN_KEY);
+      if (!biometricToken) {
         return {
           success: false,
-          message: 'No biometric credentials found. Please set up biometric login first.'
+          message: 'Biometric not set up. Please enable biometric in settings.',
         };
       }
 
-      const result = await this.login(credentials.identifier, credentials.password);
+      const deviceInfo = await getFullDeviceInfo();
+      const response = await apiClient.post(
+        AUTH_PATHS.BIOMETRIC_LOGIN,
+        { biometricToken },
+        {
+          headers: {
+            'X-Device-Fingerprint': deviceInfo.fingerprint,
+            'X-Device-Name': deviceInfo.device_name,
+            'X-Device-Type': deviceInfo.device_type,
+            'X-OS-Name': deviceInfo.os_name,
+          },
+        }
+      );
 
-      // If login failed with stored credentials, provide clearer error
-      if (!result.success) {
-        return {
-          success: false,
-          message: 'Your saved login is no longer valid. Please sign in with your password.'
-        };
+      const authData = response.data;
+      if (!authData.access_token) {
+        return { success: false, message: 'Biometric login failed' };
       }
 
-      return result;
+      // Same token handling as regular login
+      tokenManager.setAccessToken(authData.access_token);
+      if (authData.refresh_token) {
+        tokenManager.setRefreshToken(authData.refresh_token);
+      }
+      if (authData.profile_id) {
+        apiClient.setProfileId(authData.profile_id);
+      }
 
+      // Fetch profile and set session
+      const profile = await this.fetchUserProfile();
+      const sessionData = this.createSessionFromProfile(profile, '');
+      sessionManager.setSession(sessionData);
+
+      // Notify state machine
+      authStateMachine.transition(AuthEvent.LOGIN_SUCCESS, {
+        event: AuthEvent.LOGIN_SUCCESS,
+        timestamp: Date.now(),
+        authData: {
+          userId: sessionData.userId,
+          profileId: sessionData.profileId,
+          accessToken: authData.access_token,
+        },
+      });
+
+      loadingOrchestrator.coordinateAuthToAppTransition();
+
+      // Auto-unlock app lock
+      try {
+        await appLockService.unlock();
+        logger.debug('[LoginService] App lock auto-unlocked after biometric login');
+      } catch (e) {
+        // Non-fatal
+      }
+
+      logger.debug('[LoginService] Biometric login successful');
+      return { success: true, user: sessionData };
     } catch (error: any) {
       logger.error('[LoginService] Biometric login error:', error);
+
+      // If token expired/revoked, clear local token
+      if (error.response?.status === 401) {
+        await SecureStore.deleteItemAsync(BIOMETRIC_TOKEN_KEY);
+        return {
+          success: false,
+          message: 'Biometric session expired. Please log in with password and re-enable biometric.',
+        };
+      }
+
       return {
         success: false,
-        message: error.message || 'Biometric login failed'
+        message: error.response?.data?.message || error.message || 'Biometric login failed',
       };
     }
   }
 
   /**
-   * Setup biometric login by storing credentials
+   * Enable biometric login for this device
+   * Called from SecurityPrivacy.tsx after user is already logged in
+   *
+   * Flow:
+   * 1. Call /auth/biometric/enable with device fingerprint
+   * 2. Backend generates secure token, returns it
+   * 3. Store token in SecureStore
    */
-  async setupBiometricLogin(identifier: string, password: string): Promise<void> {
-    try {
-      await SecureStore.setItemAsync(BIOMETRIC_IDENTIFIER_KEY, identifier);
-      await SecureStore.setItemAsync(BIOMETRIC_PASSWORD_KEY, password);
-      logger.debug('[LoginService] Biometric credentials stored');
-    } catch (error) {
-      logger.error('[LoginService] Failed to store biometric credentials:', error);
-      throw new Error('Failed to set up biometric login');
-    }
-  }
+  async enableBiometricLogin(): Promise<{ success: boolean; message?: string }> {
+    logger.debug('[LoginService] Enabling biometric login');
 
-  /**
-   * Get stored biometric credentials
-   */
-  async getBiometricCredentials(): Promise<LoginCredentials | null> {
     try {
-      const identifier = await SecureStore.getItemAsync(BIOMETRIC_IDENTIFIER_KEY);
-      const password = await SecureStore.getItemAsync(BIOMETRIC_PASSWORD_KEY);
+      const deviceInfo = await getFullDeviceInfo();
+      const response = await apiClient.post(
+        AUTH_PATHS.BIOMETRIC_ENABLE,
+        {},
+        {
+          headers: {
+            'X-Device-Name': deviceInfo.device_name,
+            'X-Device-Type': deviceInfo.device_type,
+            'X-Device-Fingerprint': deviceInfo.fingerprint,
+            'X-OS-Name': deviceInfo.os_name,
+          },
+        }
+      );
 
-      if (identifier && password) {
-        return { identifier, password };
+      if (response.data?.biometricToken) {
+        await SecureStore.setItemAsync(BIOMETRIC_TOKEN_KEY, response.data.biometricToken);
+        logger.info('[LoginService] Biometric enabled and token stored');
+        return { success: true };
       }
-      return null;
-    } catch (error) {
-      logger.warn('[LoginService] Failed to get biometric credentials:', error);
-      return null;
+
+      return { success: false, message: 'No token received from server' };
+    } catch (error: any) {
+      logger.error('[LoginService] Failed to enable biometric:', error);
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Failed to enable biometric',
+      };
     }
   }
 
   /**
-   * Clear biometric credentials (on logout)
+   * Disable biometric login for this device
+   */
+  async disableBiometricLogin(): Promise<void> {
+    logger.debug('[LoginService] Disabling biometric login');
+
+    try {
+      const deviceInfo = await getFullDeviceInfo();
+      await apiClient.delete(AUTH_PATHS.BIOMETRIC_DISABLE, {
+        headers: { 'X-Device-Fingerprint': deviceInfo.fingerprint },
+      });
+    } catch (error) {
+      logger.warn('[LoginService] Failed to disable biometric on server:', error);
+    }
+
+    // Always clear local token
+    await SecureStore.deleteItemAsync(BIOMETRIC_TOKEN_KEY);
+    logger.debug('[LoginService] Biometric token cleared');
+  }
+
+  /**
+   * Check if biometric is enabled for this device
+   */
+  async isBiometricEnabled(): Promise<boolean> {
+    const token = await SecureStore.getItemAsync(BIOMETRIC_TOKEN_KEY);
+    return !!token;
+  }
+
+  /**
+   * Clear biometric token (on logout)
    */
   async clearBiometricCredentials(): Promise<void> {
     try {
-      await SecureStore.deleteItemAsync(BIOMETRIC_IDENTIFIER_KEY);
-      await SecureStore.deleteItemAsync(BIOMETRIC_PASSWORD_KEY);
-      logger.debug('[LoginService] Biometric credentials cleared');
+      await SecureStore.deleteItemAsync(BIOMETRIC_TOKEN_KEY);
+      logger.debug('[LoginService] Biometric token cleared');
     } catch (error) {
-      logger.warn('[LoginService] Failed to clear biometric credentials:', error);
+      logger.warn('[LoginService] Failed to clear biometric token:', error);
     }
   }
 

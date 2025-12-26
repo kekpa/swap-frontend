@@ -15,6 +15,7 @@ import { WalletBalance } from '../types/wallet.types';
 import { useCurrentProfileId } from '../hooks/useCurrentProfileId';
 import { useAuthContext } from '../features/auth/context/AuthContext';
 import { profileContextManager } from '../services/ProfileContextManager';
+import { parseWalletResponse } from '../utils/apiResponseParser';
 
 interface UseBalancesOptions {
   enabled?: boolean;
@@ -38,64 +39,8 @@ interface WalletApiResponse {
   is_primary: boolean;
 }
 
-/**
- * Helper function to parse complex nested JSON structure from backend
- */
-const parseComplexBackendResponse = (data: any): WalletApiResponse[] => {
-  logger.debug('[useBalances] 🔍 Parsing complex backend response:', typeof data === 'string' ? data.substring(0, 200) + '...' : JSON.stringify(data).substring(0, 200) + '...');
-  
-  let result = data;
-  
-  // Handle multiple levels of JSON string parsing
-  let parseAttempts = 0;
-  while (typeof result === 'string' && parseAttempts < 5) {
-    try {
-      logger.debug(`[useBalances] 🔄 Parsing JSON string (attempt ${parseAttempts + 1})`);
-      result = JSON.parse(result);
-      parseAttempts++;
-    } catch (parseError) {
-      logger.error(`[useBalances] ❌ Failed to parse JSON string (attempt ${parseAttempts + 1}):`, parseError instanceof Error ? parseError : new Error(String(parseError)));
-      break;
-    }
-  }
-  
-  // Handle different response structures
-  if (Array.isArray(result)) {
-    logger.debug('[useBalances] ✅ Found direct array response');
-    return result;
-  }
-  
-  if (result && typeof result === 'object') {
-    // Check for nested data structures
-    const keys = Object.keys(result);
-    logger.debug(`[useBalances] 🔍 Object keys: ${keys.join(', ')}`);
-    
-    // Look for array-like structure (numbered keys)
-    const numberedKeys = keys.filter(key => /^\d+$/.test(key)).sort((a, b) => parseInt(a) - parseInt(b));
-    if (numberedKeys.length > 0) {
-      logger.debug(`[useBalances] ✅ Found numbered keys structure with ${numberedKeys.length.toString()} items`);
-      return numberedKeys.map(key => {
-        const item = result[key];
-        return typeof item === 'string' ? JSON.parse(item) : item;
-      });
-    }
-    
-    // Check for data property
-    if (result.data) {
-      logger.debug('[useBalances] ✅ Found data property, recursing');
-      return parseComplexBackendResponse(result.data);
-    }
-
-    // Check for result property (backend uses {result: [...], meta: {...}} format)
-    if (result.result) {
-      logger.debug('[useBalances] ✅ Found result property, recursing');
-      return parseComplexBackendResponse(result.result);
-    }
-  }
-
-  logger.warn(`[useBalances] ⚠️ Unexpected response structure, returning empty array`);
-  return [];
-};
+// NOTE: parseWalletResponse imported from '../utils/apiResponseParser'
+// This shared utility handles all backend response formats consistently
 
 /**
  * Transform API response to WalletBalance format
@@ -152,18 +97,25 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
   // WhatsApp-style fetchBalances function
   const fetchBalances = async (): Promise<WalletBalance[]> => {
     // DEBUG: Log entityId at query execution time
-    console.log('💰 [useBalances] queryFn executing with:', { entityId, profileId, isValidEntityId, shouldExecute });
+    console.log('💰 [useBalances FETCH 1/6] queryFn executing with:', { entityId, profileId, isValidEntityId, shouldExecute, isProfileSwitching });
 
     // CRITICAL: Double-check entityId before making API calls
     if (!isValidEntityId) {
-      console.log('💰 [useBalances] ❌ ABORT: Invalid entityId:', entityId);
+      console.log('💰 [useBalances FETCH] ❌ ABORT: Invalid entityId:', entityId);
       return [];
     }
 
-    console.log('💰 [useBalances] 🚀 Starting balance fetch for entity:', entityId);
-  
+    if (!profileId) {
+      console.log('💰 [useBalances FETCH] ❌ ABORT: No profileId available');
+      return [];
+    }
+
+    console.log('💰 [useBalances FETCH 2/6] 🚀 Starting balance fetch for entity:', entityId, 'profileId:', profileId);
+
     // STEP 1: ALWAYS load from local cache first (INSTANT display like WhatsApp)
-    const cachedBalances = await currencyWalletsRepository.getAllCurrencyWallets();
+    console.log('💰 [useBalances FETCH 3/6] Calling getAllCurrencyWallets with profileId:', profileId);
+    const cachedBalances = await currencyWalletsRepository.getAllCurrencyWallets(profileId);
+    console.log('💰 [useBalances FETCH 4/6] SQLite returned', cachedBalances.length, 'wallets');
     logger.debug(`[useBalances] ✅ INSTANT: Loaded ${cachedBalances.length} balances from SQLite cache`);
     
     // Convert cached data to WalletBalance format
@@ -221,7 +173,7 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
 
           logger.debug(`[useBalances] 🔄 BACKGROUND SYNC: Fetching fresh data from API`);
           const response = await apiClient.get(API_PATHS.WALLET.BY_ENTITY(capturedEntityId));
-          const parsedWallets = parseComplexBackendResponse(response.data);
+          const parsedWallets = parseWalletResponse(response.data);
           const transformedBalances = parsedWallets.map(transformToWalletBalance);
 
           // PROFILE SWITCH GUARD: Check again after API call
@@ -273,7 +225,7 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
     // STEP 4: No cache - fetch from API (first time only)
     logger.debug(`[useBalances] 📡 FIRST TIME: No cache found, fetching from API`);
     const response = await apiClient.get(API_PATHS.WALLET.BY_ENTITY(entityId));
-    const parsedWallets = parseComplexBackendResponse(response.data);
+    const parsedWallets = parseWalletResponse(response.data);
     const apiBalances = parsedWallets.map(transformToWalletBalance);
     logger.debug(`[useBalances] ✅ FIRST TIME: Loaded ${apiBalances.length} balances from server`);
     
@@ -313,15 +265,24 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
     networkMode: 'always',
     // Return cached data immediately if available
     initialData: () => {
+      console.log('💰 [useBalances INITIAL] Running initialData(), shouldExecute:', shouldExecute, 'profileId:', profileId, 'entityId:', entityId);
+
       if (!shouldExecute || !profileId) {
+        console.log('💰 [useBalances INITIAL] ❌ Returning empty array - shouldExecute:', shouldExecute, 'profileId:', profileId);
         return []; // Return empty array for unauthenticated or invalid entityId/profileId
       }
 
-      const cached = queryClient.getQueryData<WalletBalance[]>(queryKeys.balancesByEntity(profileId, entityId));
+      const queryKey = queryKeys.balancesByEntity(profileId, entityId);
+      console.log('💰 [useBalances INITIAL] Checking TanStack cache with queryKey:', JSON.stringify(queryKey));
+      const cached = queryClient.getQueryData<WalletBalance[]>(queryKey);
+      console.log('💰 [useBalances INITIAL] TanStack cache result:', cached ? `${cached.length} wallets` : 'null/undefined');
+
       if (cached && cached.length > 0) {
+        console.log('💰 [useBalances INITIAL] ✅ Returning', cached.length, 'cached wallets');
         logger.debug(`[useBalances] ⚡ INITIAL: Using ${cached.length} cached balances (profileId: ${profileId})`);
         return cached;
       }
+      console.log('💰 [useBalances INITIAL] ⚠️ No cache found, returning undefined (will trigger queryFn)');
       return undefined;
     },
   });
@@ -406,7 +367,7 @@ export const useInitializeWallet = () => {
 
               // Fetch the actual wallet data
               const walletsResponse = await apiClient.get(API_PATHS.WALLET.BY_ENTITY(entityId));
-              const parsedWallets = parseComplexBackendResponse(walletsResponse.data);
+              const parsedWallets = parseWalletResponse(walletsResponse.data);
               const transformedBalances = parsedWallets.map(transformToWalletBalance);
 
               return {
@@ -839,7 +800,7 @@ export const useDeactivateWallet = () => {
       // Refresh local SQLite cache
       try {
         const response = await apiClient.get(API_PATHS.WALLET.BY_ENTITY(entityId));
-        const parsedWallets = parseComplexBackendResponse(response.data);
+        const parsedWallets = parseWalletResponse(response.data);
         const transformedBalances = parsedWallets.map(transformToWalletBalance);
 
         // Transform to repository format and save

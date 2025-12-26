@@ -107,9 +107,13 @@ export interface ThemeColors {
 
   // Semantic/feedback colors
   success: string;          // Success state (green)
+  successLight: string;     // Light success background
   warning: string;          // Warning state (yellow/amber)
+  warningLight: string;     // Light warning background
   error: string;            // Error state (red)
+  errorLight: string;       // Light error background
   info: string;             // Information state (blue)
+  infoLight: string;        // Light info background
 
   // UI-specific colors
   background: string;       // Main app background 
@@ -304,10 +308,14 @@ const lightBaseColors: Partial<ThemeColors> = {
   grayUltraLight: PALETTE.neutral.gray100,
   
   success: PALETTE.semantic.success,
+  successLight: '#D1FAE5',        // Light green background
   warning: PALETTE.semantic.warning,
+  warningLight: '#FEF3C7',        // Light amber/yellow background
   error: PALETTE.semantic.error,
+  errorLight: '#FEE2E2',          // Light red background
   info: PALETTE.semantic.info,
-  
+  infoLight: '#DBEAFE',           // Light blue background
+
   background: PALETTE.neutral.gray100,  // #F3F4F6 - Main app background for light theme
   card: PALETTE.neutral.white,
   statusBar: PALETTE.neutral.white,
@@ -361,10 +369,14 @@ const darkBaseColors: Partial<ThemeColors> = {
   grayUltraLight: PALETTE.neutral.gray700,
   
   success: PALETTE.semantic.success,
+  successLight: '#064E3B',        // Dark green background for dark mode
   warning: PALETTE.semantic.warning,
+  warningLight: '#78350F',        // Dark amber background for dark mode
   error: PALETTE.semantic.error,
+  errorLight: '#7F1D1D',          // Dark red background for dark mode
   info: PALETTE.semantic.info,
-  
+  infoLight: '#1E3A8A',           // Dark blue background for dark mode
+
   background: PALETTE.neutral.gray900,
   card: PALETTE.neutral.gray800,
   statusBar: PALETTE.neutral.gray900,  

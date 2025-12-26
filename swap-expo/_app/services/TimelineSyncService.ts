@@ -1,25 +1,26 @@
 /**
- * MessageSyncManager - Professional message persistence & synchronization
- * 
- * 🚀 PHASE 2.5: WhatsApp/Signal-level message reliability
- * 
- * Handles:
- * - Offline message storage
- * - Background sync when coming online
- * - Missed message detection and recovery
- * - Message delivery confirmation
- * - Conflict resolution for concurrent messages
- * 
- * Industry Pattern: WhatsApp, Signal, Telegram offline-first messaging
+ * TimelineSyncService - Inbound timeline sync (polling)
+ *
+ * Purpose: Fetch missed messages and transactions from backend API.
+ * Direction: INBOUND (pulls data from server to local SQLite)
+ * Trigger: Every 30 seconds + on network reconnect
+ *
+ * This is the PULL counterpart to BackgroundSyncService (PUSH).
+ *
+ * @author Swap Engineering Team
+ * @date 2025-12-23 (Refactored from MessageSyncManager)
  */
 
 import logger from '../utils/logger';
-import { messageRepository } from '../localdb/MessageRepository';
 import { interactionRepository } from '../localdb/InteractionRepository';
+import { unifiedTimelineRepository } from '../localdb/UnifiedTimelineRepository';
+import { LocalTimelineItem } from '../localdb/schema/local-timeline-schema';
 import { userStateManager } from './UserStateManager';
 import { networkService } from './NetworkService';
-import { MessageTimelineItem } from '../types/timeline.types';
 import { profileContextManager, ProfileSwitchStartData, ProfileSwitchCompleteData } from './ProfileContextManager';
+import apiClient from '../_api/apiClient';
+import { INTERACTION_PATHS } from '../_api/apiPaths';
+import { MessageTimelineItem } from '../types/timeline.types';
 
 interface SyncStats {
   messagesReceived: number;
@@ -38,7 +39,7 @@ interface MissedMessageCheck {
   };
 }
 
-class MessageSyncManager {
+class TimelineSyncService {
   private isSyncing = false;
   private lastSyncTime = 0;
   private syncInterval: NodeJS.Timeout | null = null;
@@ -56,7 +57,7 @@ class MessageSyncManager {
    * Initialize message sync manager
    */
   initialize(): void {
-    logger.debug('[MessageSyncManager] 🚀 Initializing message sync manager...');
+    logger.debug('[TimelineSyncService] 🚀 Initializing message sync manager...');
 
     // Set up network state listener for automatic sync
     this.setupNetworkListener();
@@ -67,7 +68,7 @@ class MessageSyncManager {
     // Subscribe to profile switch events for safety
     this.subscribeToProfileSwitch();
 
-    logger.info('[MessageSyncManager] ✅ Message sync manager initialized');
+    logger.info('[TimelineSyncService] ✅ Message sync manager initialized');
   }
 
   /**
@@ -79,19 +80,19 @@ class MessageSyncManager {
   private subscribeToProfileSwitch(): void {
     // On profile switch START: Pause sync and cancel any in-progress operations
     this.unsubscribeSwitchStart = profileContextManager.onSwitchStart((data: ProfileSwitchStartData) => {
-      logger.info('[MessageSyncManager] 🔄 Profile switch starting - pausing sync');
+      logger.info('[TimelineSyncService] 🔄 Profile switch starting - pausing sync');
       this.isPausedForProfileSwitch = true;
       this.isSyncing = false; // Cancel any in-progress sync
 
       // Clear old profile's sync state
       this.lastSyncTime = 0;
 
-      logger.debug('[MessageSyncManager] ✅ Sync paused for profile switch');
+      logger.debug('[TimelineSyncService] ✅ Sync paused for profile switch');
     });
 
     // On profile switch COMPLETE: Resume with new profile context
     this.unsubscribeSwitchComplete = profileContextManager.onSwitchComplete((data: ProfileSwitchCompleteData) => {
-      logger.info(`[MessageSyncManager] ✅ Profile switch complete - resuming sync (${data.profileType})`);
+      logger.info(`[TimelineSyncService] ✅ Profile switch complete - resuming sync (${data.profileType})`);
       this.isPausedForProfileSwitch = false;
 
       // Update to new profile ID
@@ -99,13 +100,13 @@ class MessageSyncManager {
 
       // Trigger immediate sync with new profile context
       this.syncMessages().catch(error => {
-        logger.error('[MessageSyncManager] Post-switch sync failed:', error);
+        logger.error('[TimelineSyncService] Post-switch sync failed:', error);
       });
     });
 
     // On profile switch FAILED: Resume with old context
     profileContextManager.onSwitchFailed(() => {
-      logger.warn('[MessageSyncManager] ⚠️ Profile switch failed - resuming with old context');
+      logger.warn('[TimelineSyncService] ⚠️ Profile switch failed - resuming with old context');
       this.isPausedForProfileSwitch = false;
     });
   }
@@ -116,7 +117,7 @@ class MessageSyncManager {
    */
   setCurrentProfileId(profileId: string | null): void {
     this.currentProfileId = profileId;
-    logger.debug(`[MessageSyncManager] Profile ID updated: ${profileId || 'null'}`);
+    logger.debug(`[TimelineSyncService] Profile ID updated: ${profileId || 'null'}`);
   }
 
   /**
@@ -125,9 +126,9 @@ class MessageSyncManager {
   private setupNetworkListener(): void {
     this.networkListener = networkService.onNetworkStateChange((state) => {
       if (!state.isOfflineMode && state.isConnected) {
-        logger.info('[MessageSyncManager] 🌐 Network back online - triggering sync');
+        logger.info('[TimelineSyncService] 🌐 Network back online - triggering sync');
         this.syncMessages().catch(error => {
-          logger.error('[MessageSyncManager] Auto-sync failed:', error);
+          logger.error('[TimelineSyncService] Auto-sync failed:', error);
         });
       }
     });
@@ -140,9 +141,9 @@ class MessageSyncManager {
     this.syncInterval = setInterval(() => {
       const networkState = networkService.getNetworkState();
       if (!networkState.isOfflineMode && networkState.isConnected) {
-        logger.debug('[MessageSyncManager] 🔄 Periodic sync triggered');
+        logger.debug('[TimelineSyncService] 🔄 Periodic sync triggered');
         this.syncMessages().catch(error => {
-          logger.error('[MessageSyncManager] Periodic sync failed:', error);
+          logger.error('[TimelineSyncService] Periodic sync failed:', error);
         });
       }
     }, this.SYNC_INTERVAL_MS);
@@ -154,12 +155,12 @@ class MessageSyncManager {
   async syncMessages(forceSync = false): Promise<SyncStats> {
     // Skip sync if paused for profile switch
     if (this.isPausedForProfileSwitch) {
-      logger.debug('[MessageSyncManager] Sync paused for profile switch, skipping');
+      logger.debug('[TimelineSyncService] Sync paused for profile switch, skipping');
       return this.getLastSyncStats();
     }
 
     if (this.isSyncing && !forceSync) {
-      logger.debug('[MessageSyncManager] Sync already in progress, skipping');
+      logger.debug('[TimelineSyncService] Sync already in progress, skipping');
       return this.getLastSyncStats();
     }
 
@@ -167,11 +168,11 @@ class MessageSyncManager {
     this.isSyncing = true;
 
     try {
-      logger.info('[MessageSyncManager] 🔄 Starting message synchronization...');
+      logger.info('[TimelineSyncService] 🔄 Starting message synchronization...');
 
       // 1. Get all active interactions
       const interactions = await interactionRepository.getInteractionsWithMembers(this.currentProfileId || '');
-      logger.debug(`[MessageSyncManager] Found ${interactions.length} interactions to sync`);
+      logger.debug(`[TimelineSyncService] Found ${interactions.length} interactions to sync`);
 
       // 2. Check for missed messages in each interaction
       const missedMessageChecks = await Promise.all(
@@ -198,16 +199,12 @@ class MessageSyncManager {
 
       this.lastSyncTime = stats.lastSyncTime;
 
-      logger.info('[MessageSyncManager] ✅ Sync completed:', {
-        messagesReceived: stats.messagesReceived,
-        duration: `${stats.syncDuration}ms`,
-        interactions: interactions.length,
-      });
+      logger.info(`[TimelineSyncService] ✅ Sync completed: ${stats.messagesReceived} messages, ${stats.syncDuration}ms, ${interactions.length} interactions`);
 
       return stats;
 
     } catch (error) {
-      logger.error('[MessageSyncManager] ❌ Sync failed:', error);
+      logger.error('[TimelineSyncService] ❌ Sync failed:', error);
       throw error;
     } finally {
       this.isSyncing = false;
@@ -216,23 +213,26 @@ class MessageSyncManager {
 
   /**
    * Check for missed messages in a specific interaction
+   * Fetches timeline data from backend API and returns items to sync to local SQLite
    */
   private async checkMissedMessages(interactionId: string): Promise<MissedMessageCheck> {
     try {
-      // Get the latest message time from local storage
-      const latestLocalMessage = await messageRepository.getLatestMessageForInteraction(interactionId);
-      const lastKnownTime = latestLocalMessage?.timestamp || new Date(0).toISOString();
+      // Get the latest item time from local_timeline (sorted by created_at DESC, so first is latest)
+      const latestItems = await unifiedTimelineRepository.getTimeline(interactionId, this.currentProfileId || '', 1, 0);
+      const lastKnownTime = latestItems.length > 0 ? latestItems[0].created_at : new Date(0).toISOString();
 
-      logger.debug(`[MessageSyncManager] Checking missed messages for ${interactionId} since ${lastKnownTime}`);
+      logger.debug(`[TimelineSyncService] Fetching timeline for ${interactionId} since ${lastKnownTime}`);
 
-      // TODO: API call to check for messages since lastKnownTime
-      // const response = await api.get(`/interactions/${interactionId}/messages`, {
-      //   params: { since: lastKnownTime, limit: 100 }
-      // });
+      // Fetch timeline from backend API
+      const response = await apiClient.get(INTERACTION_PATHS.TIMELINE(interactionId), {
+        params: { since: lastKnownTime, limit: 100 }
+      });
 
-      // Placeholder for API response
-      const apiMessages: MessageTimelineItem[] = [];
-      
+      // Handle response - could be { items: [...] } or direct array
+      const apiMessages: MessageTimelineItem[] = response.data?.items || response.data || [];
+
+      logger.debug(`[TimelineSyncService] Received ${apiMessages.length} items from API for ${interactionId}`);
+
       const checkResult = {
         hasMissedMessages: apiMessages.length > 0,
         missedCount: apiMessages.length,
@@ -240,7 +240,7 @@ class MessageSyncManager {
       };
 
       if (checkResult.hasMissedMessages) {
-        logger.info(`[MessageSyncManager] 📩 Found ${checkResult.missedCount} missed messages in ${interactionId}`);
+        logger.info(`[TimelineSyncService] 📩 Found ${checkResult.missedCount} missed messages in ${interactionId}`);
       }
 
       return {
@@ -250,7 +250,7 @@ class MessageSyncManager {
       };
 
     } catch (error) {
-      logger.error(`[MessageSyncManager] Failed to check missed messages for ${interactionId}:`, error);
+      logger.error(`[TimelineSyncService] Failed to fetch timeline for ${interactionId}:`, error);
       return {
         interactionId,
         lastKnownMessageTime: new Date(0).toISOString(),
@@ -264,25 +264,80 @@ class MessageSyncManager {
   }
 
   /**
-   * Sync missed messages for a specific interaction
+   * Sync timeline items (messages AND transactions) for a specific interaction
+   * Uses unified local_timeline table with BATCH upserts for performance
+   *
+   * PERFORMANCE: Uses batchUpsertFromServer to insert N items with 1 event (not N events)
+   * Result: 7 items = 1 database transaction, 1 event, 1 re-render
    */
   private async syncMissedMessages(missedCheck: MissedMessageCheck): Promise<{ messagesReceived: number }> {
     try {
       const { interactionId, checkResult } = missedCheck;
       const { newMessages } = checkResult;
 
-      logger.debug(`[MessageSyncManager] Syncing ${newMessages.length} missed messages for ${interactionId}`);
+      logger.debug(`[TimelineSyncService] Syncing ${newMessages.length} timeline items for ${interactionId}`);
 
-      // Store missed messages in local database
+      // DEBUG: Log first item to verify field names from API response (FLAT structure)
       if (newMessages.length > 0) {
-        await messageRepository.saveMessages(newMessages);
-        logger.info(`[MessageSyncManager] ✅ Stored ${newMessages.length} missed messages for ${interactionId}`);
+        const firstItem = newMessages[0] as any;
+        logger.debug(`[TimelineSyncService] 🔍 API item: type=${firstItem.type}, amount=${firstItem.amount}, currency=${firstItem.currency}, createdAt=${firstItem.createdAt}`);
+      }
+
+      // Store timeline items in unified local_timeline table
+      // This handles BOTH messages AND transactions from the backend
+      if (newMessages.length > 0 && this.currentProfileId) {
+        // Map ALL items first (no awaits in loop)
+        const localItems = newMessages.map((item) => {
+          // Map backend interaction_timeline item to LocalTimelineItem format
+          // FIXED: Backend returns FLAT structure (fields at root level, not nested in 'data')
+          // API response: { id, type, createdAt, amount, currency, status, from_entity_id, to_entity_id }
+          const localItem: Partial<LocalTimelineItem> & { id: string } = {
+            id: item.id,
+            server_id: item.id,
+            interaction_id: interactionId,
+            profile_id: this.currentProfileId!,
+            // Determine item type from backend 'type' field
+            item_type: (item as any).type === 'transaction' ? 'transaction' : 'message',
+            created_at: (item as any).createdAt || item.created_at || new Date().toISOString(),
+            // Entity IDs - aligned with Supabase (who sent / who received)
+            from_entity_id: (item as any).from_entity_id || '',
+            to_entity_id: (item as any).to_entity_id || null,
+            // Transaction fields - direct from root (API returns flat structure)
+            amount: (item as any).amount || null,
+            currency_code: (item as any).currency || null,  // API uses 'currency' not 'currency_code'
+            currency_id: (item as any).currency_id || null,
+            // Wallet IDs for wallet page filtering (which currency wallet sent/received)
+            from_wallet_id: (item as any).from_wallet_id || null,
+            to_wallet_id: (item as any).to_wallet_id || null,
+            transaction_type: (item as any).transaction_type || null,
+            // Message fields
+            content: (item as any).content || null,
+            message_type: (item as any).message_type || 'text',
+            // Sync status - already synced since it came from server
+            sync_status: 'synced',
+            local_status: (item as any).type === 'transaction'
+              ? ((item as any).status || 'completed')
+              : 'delivered',
+            // Store full item as metadata for debugging
+            metadata: item as any,
+          };
+          return localItem;
+        });
+
+        // BATCH UPSERT: 1 transaction, 1 event, 1 re-render (not N)
+        await unifiedTimelineRepository.batchUpsertFromServer(
+          localItems,
+          interactionId,
+          this.currentProfileId
+        );
+
+        logger.info(`[TimelineSyncService] ✅ Batch stored ${newMessages.length} timeline items for ${interactionId}`);
       }
 
       return { messagesReceived: newMessages.length };
 
     } catch (error) {
-      logger.error(`[MessageSyncManager] Failed to sync missed messages for ${missedCheck.interactionId}:`, error);
+      logger.error(`[TimelineSyncService] Failed to sync timeline items for ${missedCheck.interactionId}:`, error);
       return { messagesReceived: 0 };
     }
   }
@@ -292,41 +347,42 @@ class MessageSyncManager {
    */
   async syncInteraction(interactionId: string): Promise<void> {
     try {
-      logger.debug(`[MessageSyncManager] 🎯 Syncing specific interaction: ${interactionId}`);
+      logger.debug(`[TimelineSyncService] 🎯 Syncing specific interaction: ${interactionId}`);
 
       const missedCheck = await this.checkMissedMessages(interactionId);
       
       if (missedCheck.checkResult.hasMissedMessages) {
         await this.syncMissedMessages(missedCheck);
-        logger.info(`[MessageSyncManager] ✅ Interaction ${interactionId} sync completed`);
+        logger.info(`[TimelineSyncService] ✅ Interaction ${interactionId} sync completed`);
       } else {
-        logger.debug(`[MessageSyncManager] ✅ Interaction ${interactionId} up to date`);
+        logger.debug(`[TimelineSyncService] ✅ Interaction ${interactionId} up to date`);
       }
 
     } catch (error) {
-      logger.error(`[MessageSyncManager] Failed to sync interaction ${interactionId}:`, error);
+      logger.error(`[TimelineSyncService] Failed to sync interaction ${interactionId}:`, error);
       throw error;
     }
   }
 
   /**
    * Handle message delivery confirmation
-   * 🚀 PHASE 2.6: Delivery confirmation system integration point
+   * Uses unified local_timeline - no legacy messageRepository
    */
   async confirmMessageDelivery(messageId: string, deliveryStatus: 'delivered' | 'read'): Promise<void> {
     try {
-      logger.debug(`[MessageSyncManager] 📨 Confirming message delivery: ${messageId} -> ${deliveryStatus}`);
+      logger.debug(`[TimelineSyncService] 📨 Confirming message delivery: ${messageId} -> ${deliveryStatus}`);
 
-      // Update local message status
-      await messageRepository.updateMessageStatus(messageId, deliveryStatus);
+      // Update local_status in unified local_timeline table
+      // sync_status stays 'synced' (item came from server), local_status updates to delivery status
+      await unifiedTimelineRepository.updateSyncStatus(messageId, 'synced', deliveryStatus);
 
       // TODO: Send delivery confirmation to backend
       // await api.post(`/messages/${messageId}/delivery`, { status: deliveryStatus });
 
-      logger.debug(`[MessageSyncManager] ✅ Message delivery confirmed: ${messageId}`);
+      logger.debug(`[TimelineSyncService] ✅ Message delivery confirmed: ${messageId}`);
 
     } catch (error) {
-      logger.error(`[MessageSyncManager] Failed to confirm delivery for ${messageId}:`, error);
+      logger.error(`[TimelineSyncService] Failed to confirm delivery for ${messageId}:`, error);
     }
   }
 
@@ -335,7 +391,7 @@ class MessageSyncManager {
    */
   async retryFailedMessages(): Promise<void> {
     try {
-      logger.debug('[MessageSyncManager] 🔄 Retrying failed messages...');
+      logger.debug('[TimelineSyncService] 🔄 Retrying failed messages...');
 
       // TODO: Get failed messages from local storage
       // const failedMessages = await messageRepository.getFailedMessages();
@@ -345,10 +401,10 @@ class MessageSyncManager {
       //   await this.retrySendMessage(message);
       // }
 
-      logger.info('[MessageSyncManager] ✅ Failed message retry completed');
+      logger.info('[TimelineSyncService] ✅ Failed message retry completed');
 
     } catch (error) {
-      logger.error('[MessageSyncManager] Failed message retry failed:', error);
+      logger.error('[TimelineSyncService] Failed message retry failed:', error);
     }
   }
 
@@ -397,7 +453,7 @@ class MessageSyncManager {
    * Cleanup sync manager
    */
   cleanup(): void {
-    logger.debug('[MessageSyncManager] 🧹 Cleaning up...');
+    logger.debug('[TimelineSyncService] 🧹 Cleaning up...');
 
     // Clear periodic sync
     if (this.syncInterval) {
@@ -424,7 +480,7 @@ class MessageSyncManager {
     this.isSyncing = false;
     this.lastSyncTime = 0;
 
-    logger.info('[MessageSyncManager] ✅ Cleanup complete');
+    logger.info('[TimelineSyncService] ✅ Cleanup complete');
   }
 
   /**
@@ -434,10 +490,14 @@ class MessageSyncManager {
   reset(): void {
     this.cleanup();
     this.currentProfileId = null;
-    logger.debug('[MessageSyncManager] Reset completed');
+    logger.debug('[TimelineSyncService] Reset completed');
   }
 }
 
 // Export singleton instance
-export const messageSyncManager = new MessageSyncManager();
-export default messageSyncManager;
+export const timelineSyncService = new TimelineSyncService();
+
+// Backward compatibility alias
+export const messageSyncManager = timelineSyncService;
+
+export default timelineSyncService;

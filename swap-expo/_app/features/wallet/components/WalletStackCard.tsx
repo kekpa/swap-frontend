@@ -584,6 +584,13 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
     },
   }), [theme.colors.error]);
 
+  // Collapse handler for tap-outside-to-close - MUST be before early returns to follow React Hooks rules
+  const handleCollapseStack = useCallback(() => {
+    if (isExpanded) {
+      toggleExpansion();
+    }
+  }, [isExpanded, toggleExpansion]);
+
   // SAFETY CHECK - MOVED TO AFTER ALL HOOKS ARE CALLED
   const primaryWallet = sortedWallets[0];
   const allWallets = sortedWallets;
@@ -623,13 +630,6 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
     }
     return true;
   };
-
-  // Collapse handler for tap-outside-to-close
-  const handleCollapseStack = useCallback(() => {
-    if (isExpanded) {
-      toggleExpansion();
-    }
-  }, [isExpanded, toggleExpansion]);
 
   return (
     <View style={styles.container}>

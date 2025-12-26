@@ -34,9 +34,6 @@ export * from './errors';
 // Background sync exports
 export * from './sync';
 
-// Optimistic updates exports
-export * from './optimistic';
-
 // Configuration exports
 export * from './config';
 
@@ -45,9 +42,6 @@ export * from './monitoring';
 
 // Prefetch exports
 export * from './prefetch';
-
-// API layer exports
-export * from './api';
 
 /**
  * Quick setup guide:
@@ -76,12 +70,15 @@ export * from './api';
  * const { data: transactions } = useRecentTransactions(entityId, 20);
  * ```
  * 
- * 3. Use mutation hooks:
+ * 3. Use local-first services for messages/transactions:
  * ```tsx
- * import { useTransferMoney, useSendMessage } from ../tanstack-query/mutations';
- * 
- * const transferMutation = useTransferMoney();
- * const sendMessageMutation = useSendMessage();
+ * import { unifiedTimelineService } from '../services';
+ *
+ * // Send message (local-first - instant UI update)
+ * await unifiedTimelineService.sendMessage({ interactionId, content, ... });
+ *
+ * // Send transaction (local-first - instant UI update)
+ * await unifiedTimelineService.sendTransaction({ interactionId, amount, ... });
  * ```
  * 
  * 4. Use prefetching:

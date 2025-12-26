@@ -52,7 +52,7 @@ export interface MessageReceipt {
 export interface BaseMessage {
   id: string;                // Unique message ID
   interaction_id: string;    // Associated interaction/conversation ID
-  sender_entity_id: string;  // Entity that sent the message
+  from_entity_id: string;    // Entity that sent the message
   created_at: string;        // ISO timestamp of creation
   updated_at?: string;       // ISO timestamp of last update
   timestamp: string;         // Client-facing display timestamp
@@ -178,7 +178,7 @@ export interface MessagesResponse {
  */
 export interface SendMessageRequest {
   interaction_id: string;
-  recipient_id?: string;
+  to_entity_id?: string;
   content?: string;
   message_type: MessageType;
   media_url?: string;
@@ -202,7 +202,7 @@ export interface PendingMessage {
   interaction_id: string;
   content?: string;
   message_type: MessageType;
-  sender_entity_id: string;
+  from_entity_id: string;
   media_url?: string;
   media_type?: string;
   metadata?: Record<string, any>;

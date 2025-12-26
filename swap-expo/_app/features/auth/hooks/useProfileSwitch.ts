@@ -20,6 +20,8 @@ import { clearProfileLocalDB } from '../../../localdb';
 export interface ProfileSwitchRequest {
   targetProfileId: string;
   pin?: string; // Optional - required only if business has PIN set
+  biometricVerified?: boolean; // True if user authenticated via biometric (skip PIN)
+  deviceFingerprint?: string; // Device fingerprint for biometric verification
 }
 
 // Profile switch response
@@ -118,11 +120,17 @@ const switchProfileAPI = async (request: ProfileSwitchRequest): Promise<ProfileS
   try {
     logger.debug('[useProfileSwitch] 🔄 Calling backend to switch profile:', {
       targetProfileId: request.targetProfileId,
+      biometricVerified: request.biometricVerified,
     });
 
     const { data } = await apiClient.post<ProfileSwitchResponse>(
       AUTH_PATHS.SWITCH_PROFILE,
-      request
+      {
+        targetProfileId: request.targetProfileId,
+        pin: request.pin,
+        biometricVerified: request.biometricVerified,
+        deviceFingerprint: request.deviceFingerprint,
+      }
     );
 
     logger.info('[useProfileSwitch] ✅ Profile switch successful:', {
@@ -154,10 +162,16 @@ export const useProfileSwitch = () => {
 
   return useMutation({
     mutationFn: async (request: ProfileSwitchRequest) => {
-      // Step 1: Biometric authentication
-      const authResult = await authenticateWithBiometric();
-      if (!authResult.success) {
-        throw new Error(authResult.error || 'Authentication failed');
+      // Skip biometric if already verified (e.g., ProfileSwitcherModal already did Face ID)
+      // This prevents double biometric prompts in the unified auth flow
+      if (!request.biometricVerified) {
+        // Step 1: Biometric authentication (only if not already verified)
+        const authResult = await authenticateWithBiometric();
+        if (!authResult.success) {
+          throw new Error(authResult.error || 'Authentication failed');
+        }
+      } else {
+        logger.debug('[useProfileSwitch] Skipping biometric - already verified by caller');
       }
 
       // Step 2: Call backend API

@@ -9,7 +9,7 @@ export { SendMoneyScreen, ReviewTransferScreen, TransferCompletedScreen };
 // Define the parameter types for the navigator
 export type SendMoneyStackParamList = {
   SendMoney: {
-    recipientId?: string;
+    toEntityId?: string;
     recipientName?: string;
     recipientInitial?: string;
     recipientColor?: string;

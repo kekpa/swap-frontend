@@ -1,4 +1,4 @@
-import React, { useEffect, Suspense, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createStackNavigator } from "@react-navigation/stack";
 import { useAuthContext } from "../features/auth/context/AuthContext";
 import { useLoadingState } from '../hooks-data/useLoadingState';
@@ -8,46 +8,22 @@ import AppNavigator from "./appNavigator";
 import ProfileNavigator from "./profileNavigator";
 import LoadingScreen from "../features/auth/login/LoadingScreen";
 import { CardStyleInterpolators, TransitionPresets } from "@react-navigation/stack";
-import { View, ActivityIndicator, Text } from "react-native";
 import { useTheme } from "../theme/ThemeContext";
 
-// Lazy load heavy modal screens for better performance
-const NewInteractionScreen = React.lazy(() => import("../features/interactions/NewInteraction2"));
-const TransactionDetailsScreen = React.lazy(() => import("../features/wallet/TransactionDetailsScreen"));
-const ContactInteractionHistoryScreen2 = React.lazy(() => import("../features/interactions/ContactInteractionHistory2"));
-const SendMoneyScreen = React.lazy(() => import("../features/interactions/sendMoney2/SendMoneyScreen"));
-const ReviewTransferScreen = React.lazy(() => import("../features/interactions/sendMoney2/ReviewTransferScreen"));
-const TransferCompletedScreen = React.lazy(() => import("../features/interactions/sendMoney2/TransferCompletedScreen"));
-const TempAddMoneyScreen = React.lazy(() => import("../features/wallet/AddMoney/AddMoney2/TempAddMoney"));
+// Direct imports - clean, simple, no Suspense needed
+import NewInteractionScreen from "../features/interactions/NewInteraction2";
+import TransactionDetailsScreen from "../features/wallet/TransactionDetailsScreen";
+import ContactInteractionHistoryScreen2 from "../features/interactions/ContactInteractionHistory2";
+import SendMoneyScreen from "../features/interactions/sendMoney2/SendMoneyScreen";
+import ReviewTransferScreen from "../features/interactions/sendMoney2/ReviewTransferScreen";
+import TransferCompletedScreen from "../features/interactions/sendMoney2/TransferCompletedScreen";
+import TempAddMoneyScreen from "../features/wallet/AddMoney/AddMoney2/TempAddMoney";
 
 // Development bypass settings - rely on AuthContext now
 const DEV_ALWAYS_AUTHENTICATED = false;
 const isDevelopment = process.env.NODE_ENV === "development" || process.env.EXPO_PUBLIC_ENV === "development";
 
 const Stack = createStackNavigator<RootStackParamList>();
-
-// Loading fallback component for lazy-loaded screens
-const ScreenLoadingFallback: React.FC<{ name: string }> = ({ name }) => {
-  const { theme } = useTheme();
-  
-  return (
-    <View style={{
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: theme.colors.background,
-    }}>
-      <ActivityIndicator size="large" color={theme.colors.primary} />
-      <Text style={{
-        color: theme.colors.textSecondary,
-        marginTop: 16,
-        fontSize: 16,
-      }}>
-        Loading {name}...
-      </Text>
-    </View>
-  );
-};
 
 // Define ParamList for the Root Stack
 export type RootStackParamList = {
@@ -96,14 +72,14 @@ export type RootStackParamList = {
     transferDetails?: any; // Consider creating a specific type for this
   };
   SendMoney: {
-    recipientId?: string;
+    toEntityId?: string;
     recipientName?: string;
     recipientInitial?: string;
     recipientColor?: string;
   };
   ReviewTransfer: {
     amount: string | number;
-    recipientId: string;
+    toEntityId: string;
     recipientName: string;
     recipientInitial: string;
     recipientColor: string;
@@ -202,11 +178,7 @@ export default function RootNavigator() {
           />
           <Stack.Screen
             name="NewInteraction"
-            children={() => (
-              <Suspense fallback={<ScreenLoadingFallback name="New Interaction" />}>
-                <NewInteractionScreen />
-              </Suspense>
-            )}
+            component={NewInteractionScreen}
             options={{
               presentation: 'modal',
               cardStyleInterpolator: CardStyleInterpolators.forModalPresentationIOS,
@@ -216,11 +188,7 @@ export default function RootNavigator() {
           />
           <Stack.Screen
             name="AddMoneyModal"
-            children={() => (
-              <Suspense fallback={<ScreenLoadingFallback name="Add Money" />}>
-                <TempAddMoneyScreen />
-              </Suspense>
-            )}
+            component={TempAddMoneyScreen}
             options={{
               presentation: 'modal',
               cardStyleInterpolator: CardStyleInterpolators.forModalPresentationIOS,
@@ -230,11 +198,7 @@ export default function RootNavigator() {
           />
           <Stack.Screen
             name="TransactionDetails"
-            children={() => (
-              <Suspense fallback={<ScreenLoadingFallback name="Transaction Details" />}>
-                <TransactionDetailsScreen />
-              </Suspense>
-            )}
+            component={TransactionDetailsScreen}
             options={{
               presentation: 'modal',
               cardStyleInterpolator: CardStyleInterpolators.forModalPresentationIOS,
@@ -244,11 +208,7 @@ export default function RootNavigator() {
           />
           <Stack.Screen
             name="ContactInteractionHistory2"
-            children={() => (
-              <Suspense fallback={<ScreenLoadingFallback name="Chat History" />}>
-                <ContactInteractionHistoryScreen2 />
-              </Suspense>
-            )}
+            component={ContactInteractionHistoryScreen2}
             options={{
               ...TransitionPresets.SlideFromRightIOS,
               gestureEnabled: true,
@@ -257,11 +217,7 @@ export default function RootNavigator() {
           />
           <Stack.Screen
             name="SendMoney"
-            children={() => (
-              <Suspense fallback={<ScreenLoadingFallback name="Send Money" />}>
-                <SendMoneyScreen />
-              </Suspense>
-            )}
+            component={SendMoneyScreen}
             options={{
               ...TransitionPresets.SlideFromRightIOS,
               gestureEnabled: true,
@@ -270,11 +226,7 @@ export default function RootNavigator() {
           />
           <Stack.Screen
             name="ReviewTransfer"
-            children={() => (
-              <Suspense fallback={<ScreenLoadingFallback name="Review Transfer" />}>
-                <ReviewTransferScreen />
-              </Suspense>
-            )}
+            component={ReviewTransferScreen}
             options={{
               ...TransitionPresets.SlideFromRightIOS,
               gestureEnabled: true,
@@ -283,15 +235,11 @@ export default function RootNavigator() {
           />
           <Stack.Screen
             name="TransferCompleted"
-            children={() => (
-              <Suspense fallback={<ScreenLoadingFallback name="Transfer Complete" />}>
-                <TransferCompletedScreen />
-              </Suspense>
-            )}
+            component={TransferCompletedScreen}
             options={{
               presentation: 'modal',
               ...TransitionPresets.ModalPresentationIOS,
-              gestureEnabled: false, // Typically don't want to dismiss a completion screen
+              gestureEnabled: false,
             }}
           />
           {/* Auth screen available for profile switching even when authenticated */}

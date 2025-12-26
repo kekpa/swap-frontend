@@ -23,10 +23,9 @@ import SearchHeader from '../header/SearchHeader';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuthContext } from '../auth/context/AuthContext';
 import { useInteractions, InteractionItem } from '../../hooks-data/useInteractions';
-import { usePrefetchTimeline } from '../../hooks-data/useTimeline';
-import { useDeleteInteraction, useArchivedCount } from '../../hooks-data/useDeleteInteraction';
-// Real-time updates hook for WebSocket-driven cache invalidation
-import { useRealtimeUpdates } from '../../hooks/useRealtimeUpdates';
+// NOTE: usePrefetchTimeline removed - local-first architecture doesn't need prefetch (SQLite is instant)
+import { useDeleteInteraction, useArchivedCount } from '../../hooks-actions/useDeleteInteraction';
+// NOTE: useRealtimeUpdates removed - BackgroundSyncService handles local-first updates
 import { websocketService } from '../../services/websocketService';
 import { userStateManager } from '../../services/UserStateManager';
 // EntitySearchResult type - keeping for compatibility
@@ -42,6 +41,7 @@ interface EntitySearchResult {
 }
 import logger from '../../utils/logger';
 import { getAvatarColor } from '../../utils/avatarUtils';
+import { useRefreshByUser } from '../../hooks/useRefreshByUser';
 import { MaterialIcons } from '@expo/vector-icons';
 import { RootStackParamList } from '../../navigation/rootNavigator';
 import { CompositeScreenProps } from '@react-navigation/native';
@@ -67,8 +67,8 @@ type InteractionsHistoryRouteProp = RouteProp<RootStackParamList, 'App'>;
 interface DisplayChat {
   id: string;
   name: string;
-  message: string; // This will be lastMessageSnippet from InteractionItem or a default
-  time: string;    // This will be formatted from last_message_at or a default
+  message: string; // This will be lastActivitySnippet from InteractionItem or a default
+  time: string;    // This will be formatted from last_activity_at or a default
   avatar: string;  // Initials or derived from avatar_url
   avatarColor?: string; // For colored initial avatars
   isVerified?: boolean;
@@ -171,8 +171,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
   const user = authContext.user;
   const isAuthenticated = authContext.isAuthenticated;
 
-  // Enable real-time updates via WebSocket (matches ContactInteractionHistory2 pattern)
-  useRealtimeUpdates();
+  // NOTE: Real-time updates handled by BackgroundSyncService (local-first architecture)
 
   // Delete/Archive interaction mutation
   const deleteInteractionMutation = useDeleteInteraction();
@@ -195,14 +194,13 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     isRefetching
   } = useInteractions({ enabled: !!user });
 
-  // 🚀 PROFESSIONAL REAL-TIME: CacheUpdateManager handles all real-time updates automatically
-  // No manual hook needed - global listeners in CacheUpdateManager update interactions list
+  // NOTE: Real-time updates and prefetching not needed with local-first architecture
+  // SQLite reads are instant (<10ms), no preloading required
 
-  // 🚀 PROFESSIONAL: Add intelligent conversation preloading
-  const prefetchTimeline = usePrefetchTimeline();
+  // Industry-standard refresh hook - per-screen local state (TanStack Query pattern)
+  const { refreshing, onRefresh } = useRefreshByUser(refreshInteractions);
 
   const [activeTab, setActiveTab] = useState<InteractionTab>(InteractionTab.All);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Search state - Google Maps style
   const [isSearchActive, setIsSearchActive] = useState(false);
@@ -228,25 +226,6 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
   
   // Component lifecycle with mount stability
   const componentId = useRef(Date.now());
-  
-  // 🚀 PROFESSIONAL: Intelligent conversation preloading
-  useEffect(() => {
-    if (interactionsList && interactionsList.length > 0) {
-      // Preload the top 3 most recent conversations for instant loading
-      const topInteractions = interactionsList.slice(0, 3);
-      
-      logger.debug(`[InteractionsHistory] Preloading top ${topInteractions.length} conversations for instant UX`, "InteractionsHistory");
-    
-      // Preload in background with small delays to avoid overwhelming
-      topInteractions.forEach((interaction, index) => {
-        setTimeout(() => {
-          prefetchTimeline(interaction.id).catch(error => {
-            logger.debug(`[InteractionsHistory] Preload failed for ${interaction.id}: ${String(error)}`, "InteractionsHistory");
-          });
-        }, index * 100); // Stagger by 100ms each
-      });
-    }
-  }, [interactionsList, prefetchTimeline]);
   
   useEffect(() => {
     isMounted.current = true;
@@ -418,26 +397,6 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     }
     return swipeableRefs[id];
   }, [swipeableRefs]);
-
-  // 🚀 SIMPLIFIED: Remove complex refresh throttling - TanStack Query handles this
-  const onRefresh = useCallback(async () => {
-    if (isRefreshing) {
-      logger.debug("[InteractionsHistory] Refresh already in progress", "InteractionsHistory");
-      return;
-    }
-    
-    logger.debug("[InteractionsHistory] Starting manual refresh", "InteractionsHistory");
-    setIsRefreshing(true);
-    
-    try {
-      await refreshInteractions();
-      logger.debug("[InteractionsHistory] Manual refresh completed successfully", "InteractionsHistory");
-    } catch (error) {
-      logger.error("Failed to refresh interactions", error, "InteractionsHistory");
-    } finally {
-      setIsRefreshing(false);
-    }
-  }, [isRefreshing, refreshInteractions]);
 
   // 🚀 SIMPLIFIED: Remove complex useFocusEffect logic
   useFocusEffect(
@@ -633,10 +592,10 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
       return [];
     }
 
-    // Sort by last_message_at for real-time reordering (most recent first)
+    // Sort by last_activity_at for real-time reordering (most recent first)
     const sortedInteractions = [...interactionsList].sort((a, b) => {
-      const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-      const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+      const aTime = a.last_activity_at ? new Date(a.last_activity_at).getTime() : 0;
+      const bTime = b.last_activity_at ? new Date(b.last_activity_at).getTime() : 0;
       return bTime - aTime; // Most recent first
     });
     
@@ -670,14 +629,14 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         interactionType = 'business';
       }
 
-      const messageSnippet = interaction.last_message_snippet || (interaction.is_group ? 'Group created' : 'Interaction started');
-      const lastMessageTime = interaction.last_message_at || interaction.updated_at || '';
+      const activitySnippet = interaction.last_activity_snippet || (interaction.is_group ? 'Group created' : 'Interaction started');
+      const lastActivityTime = interaction.last_activity_at || interaction.updated_at || '';
 
       const displayChatItem = {
         id: interaction.id,
         name: chatName,
-        message: messageSnippet,
-        time: formatTime(lastMessageTime),
+        message: activitySnippet,
+        time: formatTime(lastActivityTime),
         avatar: avatarText,
         avatarColor: avatarColor,
         isGroup: interaction.is_group,
@@ -1387,7 +1346,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
-            refreshing={isRefreshing || isRefetching}
+            refreshing={refreshing}
             onRefresh={onRefresh}
             colors={[theme.colors.primary]}
             tintColor={theme.colors.primary}

@@ -24,8 +24,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useTheme } from '../../theme/ThemeContext';
-import { useArchivedInteractions, useUnarchiveInteraction } from '../../hooks-data/useDeleteInteraction';
+import { useArchivedInteractions, useUnarchiveInteraction } from '../../hooks-actions/useDeleteInteraction';
 import { logger } from '../../utils/logger';
+import { useRefreshByUser } from '../../hooks/useRefreshByUser';
 import { getAvatarColor } from '../../utils/avatarUtils';
 
 // Helper function to get name initials
@@ -68,9 +69,11 @@ const ArchivedInteractions: React.FC = () => {
   const {
     data: archivedData,
     isLoading,
-    isRefetching,
     refetch,
   } = useArchivedInteractions();
+
+  // Industry-standard refresh hook (local state, no shared global state)
+  const { refreshing, onRefresh } = useRefreshByUser(refetch);
 
   // Unarchive mutation
   const unarchiveMutation = useUnarchiveInteraction();
@@ -171,7 +174,7 @@ const ArchivedInteractions: React.FC = () => {
                 {interaction.name || 'Unknown'}
               </Text>
               <Text style={[styles.time, { color: theme.colors.textSecondary }]}>
-                {formatTime(interaction.last_message_at)}
+                {formatTime(interaction.last_activity_at)}
               </Text>
             </View>
             <Text
@@ -179,7 +182,7 @@ const ArchivedInteractions: React.FC = () => {
               numberOfLines={1}
               ellipsizeMode="tail"
             >
-              {interaction.last_message_snippet || 'No messages'}
+              {interaction.last_activity_snippet || 'No activity'}
             </Text>
           </View>
         </TouchableOpacity>
@@ -233,8 +236,8 @@ const ArchivedInteractions: React.FC = () => {
           style={styles.scrollView}
           refreshControl={
             <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={refetch}
+              refreshing={refreshing}
+              onRefresh={onRefresh}
               colors={[theme.colors.primary]}
               tintColor={theme.colors.primary}
             />

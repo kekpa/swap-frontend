@@ -581,6 +581,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isInitialized,
     hasPersistedSession,
 
+    // Computed convenience properties (derived from user - single source of truth)
+    currentProfileId: user?.profileId ?? null,
+
     // Wallet security
     isWalletUnlocked,
     lastWalletUnlock,

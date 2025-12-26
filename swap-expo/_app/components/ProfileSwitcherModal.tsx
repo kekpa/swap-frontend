@@ -37,12 +37,20 @@ import { AUTH_PATHS } from '../_api/apiPaths';
 import { logger } from '../utils/logger';
 import { getPinWithBiometric, storePinForBiometric, hasPinForBiometric } from '../utils/pinUserStorage';
 import PinPad from '../components2/PinPad';
+import { loginService } from '../services/auth/LoginService';
+import { getDeviceFingerprint } from '../utils/deviceInfo';
+
+// Options for profile switch (biometric or PIN)
+export interface ProfileSwitchOptions {
+  biometricVerified?: boolean;
+  deviceFingerprint?: string;
+}
 
 interface ProfileSwitcherModalProps {
   visible: boolean;
   profiles: AvailableProfile[];
   currentProfileId: string;
-  onSelectProfile: (profile: AvailableProfile, pin?: string) => Promise<{ success: boolean; error?: string }> | void;
+  onSelectProfile: (profile: AvailableProfile, pin?: string | null, options?: ProfileSwitchOptions) => Promise<{ success: boolean; error?: string }> | void;
   onClose: () => void;
   onAddAccount?: () => void;
   onRemoveAccount?: (profile: AvailableProfile) => void;
@@ -84,6 +92,7 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
   // Biometric state
   const [isBiometricAvailable, setIsBiometricAvailable] = useState(false);
   const [biometricType, setBiometricType] = useState<'face' | 'fingerprint' | 'iris' | null>(null);
+  const [hasBackendBiometric, setHasBackendBiometric] = useState(false); // True biometric (token-based)
 
   // Check biometric availability on mount
   useEffect(() => {
@@ -112,6 +121,12 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
         } else if (types.includes(LocalAuthentication.AuthenticationType.IRIS)) {
           setBiometricType('iris');
         }
+
+        // Check if user has enabled backend biometric (token-based)
+        // This determines if we can skip PIN entirely
+        const backendEnabled = await loginService.isBiometricEnabled();
+        setHasBackendBiometric(backendEnabled);
+        logger.debug('[ProfileSwitcherModal] Backend biometric enabled:', backendEnabled);
       } catch (error) {
         logger.warn('[ProfileSwitcherModal] Biometric check failed:', error);
         setIsBiometricAvailable(false);
@@ -406,7 +421,9 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
       entityId: profile.entityId,
       displayName: profile.displayName,
       type: profile.type,
-      currentProfileId
+      currentProfileId,
+      hasBackendBiometric,
+      isBiometricAvailable
     });
 
     if (profile.profileId === currentProfileId) {
@@ -414,6 +431,45 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
       logger.debug('[ProfileSwitcherModal] Same profile selected, closing modal');
       onClose();
       return;
+    }
+
+    // UNIFIED AUTH: If user has backend biometric enabled, try biometric first
+    // This skips PIN entirely - biometric proves auth_user identity for ALL profiles
+    if (hasBackendBiometric && isBiometricAvailable) {
+      logger.debug('[ProfileSwitcherModal] Backend biometric enabled, attempting biometric auth...');
+      setIsSubmittingPin(true);
+
+      try {
+        const authResult = await LocalAuthentication.authenticateAsync({
+          promptMessage: `Switch to ${profile.displayName}`,
+          fallbackLabel: 'Use PIN',
+          disableDeviceFallback: true, // Force use our PIN UI, not device passcode
+        });
+
+        if (authResult.success) {
+          logger.info('[ProfileSwitcherModal] Biometric auth successful, switching profile...');
+          const fingerprint = await getDeviceFingerprint();
+
+          const switchResult = await onSelectProfile(profile, null, {
+            biometricVerified: true,
+            deviceFingerprint: fingerprint,
+          });
+
+          if (switchResult && !switchResult.success) {
+            logger.warn('[ProfileSwitcherModal] Switch failed after biometric:', switchResult.error);
+            // Biometric valid but switch failed - show error
+            Alert.alert('Switch Failed', switchResult.error || 'Failed to switch profile');
+          }
+          setIsSubmittingPin(false);
+          return;
+        } else {
+          // User cancelled biometric or it failed - fall through to PIN check
+          logger.debug('[ProfileSwitcherModal] Biometric cancelled/failed, falling back to PIN...');
+        }
+      } catch (error: any) {
+        logger.error('[ProfileSwitcherModal] Biometric auth error:', error);
+      }
+      setIsSubmittingPin(false);
     }
 
     // Check if ANY profile requires PIN (both personal and business)
@@ -459,7 +515,7 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
     // Personal profile without PIN requirement - allow switch
     logger.debug('[ProfileSwitcherModal] Personal profile, no PIN required, triggering switch...');
     onSelectProfile(profile);
-  }, [currentProfileId, onClose, onSelectProfile, onPinSetupRequired, checkPinRequired]);
+  }, [currentProfileId, onClose, onSelectProfile, onPinSetupRequired, checkPinRequired, hasBackendBiometric, isBiometricAvailable]);
 
   // Process error message and add guidance for lockout scenarios
   const processErrorMessage = useCallback((errorMsg: string, isBusinessProfile: boolean): string => {
@@ -567,17 +623,56 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
   }, [pinEntryProfile, pin, onSelectProfile, processErrorMessage]);
 
   // Handle biometric authentication as alternative to PIN
-  // Uses "Biometric Unlocks PIN" pattern - retrieves stored PIN from Keychain using Face ID
+  // If backend biometric is enabled: True biometric (skip PIN entirely)
+  // If backend biometric is not enabled: "Biometric Unlocks PIN" pattern
   const handleBiometricAuth = useCallback(async () => {
     if (!pinEntryProfile) return;
 
     setIsSubmittingPin(true);
     setIsPinError(false);
-    logger.debug('[ProfileSwitcherModal] Starting biometric authentication...');
+    logger.debug('[ProfileSwitcherModal] Starting biometric authentication...', { hasBackendBiometric });
 
     try {
+      // TRUE BIOMETRIC: If user has backend biometric enabled, skip PIN entirely
+      if (hasBackendBiometric) {
+        logger.debug('[ProfileSwitcherModal] Using true biometric (backend token)...');
+
+        const authResult = await LocalAuthentication.authenticateAsync({
+          promptMessage: `Switch to ${pinEntryProfile.displayName}`,
+          fallbackLabel: 'Use PIN',
+          disableDeviceFallback: true,
+        });
+
+        if (authResult.success) {
+          logger.info('[ProfileSwitcherModal] True biometric auth successful, switching profile...');
+          const fingerprint = await getDeviceFingerprint();
+
+          const switchResult = await onSelectProfile(pinEntryProfile, null, {
+            biometricVerified: true,
+            deviceFingerprint: fingerprint,
+          });
+
+          if (switchResult && !switchResult.success) {
+            logger.warn('[ProfileSwitcherModal] Switch failed after biometric:', switchResult.error);
+            const errorMessage = processErrorMessage(
+              switchResult.error || 'Authentication failed',
+              pinEntryProfile.type === 'business'
+            );
+            setPinErrorMessage(errorMessage);
+            setIsPinError(true);
+          } else {
+            setPinEntryProfile(null);
+            setPin('');
+          }
+        } else {
+          logger.debug('[ProfileSwitcherModal] Biometric cancelled/failed');
+        }
+        setIsSubmittingPin(false);
+        return;
+      }
+
+      // FALLBACK: "Biometric Unlocks PIN" pattern (for users without backend biometric)
       // Retrieve PIN from Keychain using biometric (Face ID / Touch ID)
-      // This triggers the biometric prompt AND returns the actual PIN if successful
       const storedPin = await getPinWithBiometric(
         pinEntryProfile.profileId,
         `Authenticate to switch to ${pinEntryProfile.displayName}`
@@ -630,7 +725,7 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
     } finally {
       setIsSubmittingPin(false);
     }
-  }, [pinEntryProfile, onSelectProfile, processErrorMessage]);
+  }, [pinEntryProfile, onSelectProfile, processErrorMessage, hasBackendBiometric]);
 
   // Handle back from PIN entry
   const handleBackFromPinEntry = useCallback(() => {

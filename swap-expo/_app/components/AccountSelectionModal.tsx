@@ -1,13 +1,16 @@
-// Created: AccountSelectionModal component for selecting sender/recipient accounts - 2025-05-18
+// Updated: Migrated to @gorhom/bottom-sheet for consistent UX - 2025-12-16
 import React from 'react';
 import {
-  Modal,
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
+import BottomSheet, {
+  BottomSheetBackdrop,
+  BottomSheetFlatList,
+} from '@gorhom/bottom-sheet';
+import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 
@@ -41,21 +44,38 @@ const AccountSelectionModal: React.FC<AccountSelectionModalProps> = ({
   highlightCurrency,
 }) => {
   const { theme } = useTheme();
+  const bottomSheetRef = React.useRef<BottomSheet>(null);
+
+  // Programmatically control BottomSheet when visible changes
+  // Note: BottomSheet's index prop only sets initial state - must use ref methods for updates
+  React.useEffect(() => {
+    if (visible) {
+      bottomSheetRef.current?.snapToIndex(0);
+    } else {
+      bottomSheetRef.current?.close();
+    }
+  }, [visible]);
+
+  // Backdrop component with press to close
+  const renderBackdrop = React.useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        disappearsOnIndex={-1}
+        appearsOnIndex={0}
+        opacity={0.5}
+        pressBehavior="close"
+      />
+    ),
+    []
+  );
 
   const styles = React.useMemo(
     () =>
       StyleSheet.create({
-        backdrop: {
-          flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.4)',
-          justifyContent: 'flex-end',
-        },
         container: {
+          flex: 1,
           backgroundColor: theme.colors.card,
-          borderTopLeftRadius: theme.borderRadius.xl,
-          borderTopRightRadius: theme.borderRadius.xl,
-          maxHeight: '60%',
-          paddingBottom: theme.spacing.lg,
         },
         header: {
           padding: theme.spacing.md,
@@ -70,34 +90,16 @@ const AccountSelectionModal: React.FC<AccountSelectionModalProps> = ({
           fontWeight: '600',
           color: theme.colors.textPrimary,
         },
-        accountRow: {
-          flexDirection: 'row',
-          justifyContent: 'space-between',
+        emptyContainer: {
+          padding: theme.spacing.xl,
           alignItems: 'center',
-          paddingHorizontal: theme.spacing.md,
-          paddingVertical: theme.spacing.sm + 4,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.colors.border,
         },
-        accountInfo: {
-          flexDirection: 'column',
-          flexShrink: 1,
+        emptyText: {
+          fontSize: theme.typography.fontSize.md,
+          color: theme.colors.textSecondary,
         },
-        accountName: { 
-          fontSize: theme.typography.fontSize.md, 
-          fontWeight: '600',
-          color: theme.colors.textPrimary, 
-          flexShrink: 1 
-        },
-        accountType: {
-          fontSize: theme.typography.fontSize.sm,
-          color: theme.colors.textTertiary,
-          marginTop: 2,
-        },
-        accountBalance: { 
-          fontSize: theme.typography.fontSize.md, 
-          fontWeight: '500',
-          color: theme.colors.textSecondary 
+        contentContainer: {
+          paddingBottom: theme.spacing.lg,
         },
       }),
     [theme],
@@ -105,20 +107,32 @@ const AccountSelectionModal: React.FC<AccountSelectionModalProps> = ({
 
   const renderItem = React.useCallback(({ item }: { item: AccountItem }) => {
     return (
-      <AccountItem 
-        item={item} 
-        onSelect={onSelectAccount} 
-        highlightCurrency={highlightCurrency} 
-        theme={theme} 
+      <AccountItemRow
+        item={item}
+        onSelect={onSelectAccount}
+        highlightCurrency={highlightCurrency}
+        theme={theme}
       />
     );
   }, [onSelectAccount, highlightCurrency, theme]);
 
+  const keyExtractor = React.useCallback((item: AccountItem) => item.id, []);
+
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
-      <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose}>
-        {/* Empty TouchableOpacity to capture taps outside */}
-      </TouchableOpacity>
+    <BottomSheet
+      ref={bottomSheetRef}
+      index={-1}
+      snapPoints={['50%']}
+      enablePanDownToClose={true}
+      backdropComponent={renderBackdrop}
+      backgroundStyle={{ backgroundColor: theme.colors.card }}
+      handleIndicatorStyle={{ backgroundColor: theme.colors.textSecondary }}
+      onChange={(index) => {
+        if (index === -1) {
+          onClose();
+        }
+      }}
+    >
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerText}>{title}</Text>
@@ -126,35 +140,40 @@ const AccountSelectionModal: React.FC<AccountSelectionModalProps> = ({
             <Ionicons name="close" size={24} color={theme.colors.textSecondary} />
           </TouchableOpacity>
         </View>
-        <FlashList 
-          data={accounts} 
-          keyExtractor={(item) => item.id} 
-          renderItem={renderItem}
-          estimatedItemSize={70}
-          getItemType={() => 'account'}
-        />
+        {accounts.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No accounts available</Text>
+          </View>
+        ) : (
+          <BottomSheetFlatList
+            data={accounts}
+            keyExtractor={keyExtractor}
+            renderItem={renderItem}
+            contentContainerStyle={styles.contentContainer}
+          />
+        )}
       </View>
-    </Modal>
+    </BottomSheet>
   );
 };
 
-// Memoize the AccountItem component for better performance
-const AccountItem = React.memo<{ item: AccountItem; onSelect: (account: AccountItem) => void; highlightCurrency?: string; theme: any }>(({ item, onSelect, highlightCurrency, theme }) => {
+// Memoize the AccountItemRow component for better performance
+const AccountItemRow = React.memo<{ item: AccountItem; onSelect: (account: AccountItem) => void; highlightCurrency?: string; theme: any }>(({ item, onSelect, highlightCurrency, theme }) => {
   const isHighlight = highlightCurrency && item.currency_id === highlightCurrency;
-  
+
   // Format account display
   const currencyDisplay = item.currency_code || item.currency_id;
   const currencySymbol = item.currency_symbol || '';
-  
+
   // Show account type if available
-  const accountTypeText = item.account_type?.name ? 
+  const accountTypeText = item.account_type?.name ?
     ` • ${item.account_type.name}` : '';
-  
+
   // Show either balance (for own accounts) or last4 (for recipient accounts)
-  const balanceDisplay = item.is_recipient ? 
-    (item.account_number_last4 ? `•••• ${item.account_number_last4}` : '') : 
+  const balanceDisplay = item.is_recipient ?
+    (item.account_number_last4 ? `•••• ${item.account_number_last4}` : '') :
     `${currencySymbol}${item.balance.toFixed(2)}`;
-  
+
   // Remove redundant "Account" from display name
   const displayName = item.account_name.replace(/ Account$/, '');
 
@@ -173,24 +192,24 @@ const AccountItem = React.memo<{ item: AccountItem; onSelect: (account: AccountI
       flexDirection: 'column' as const,
       flexShrink: 1,
     },
-    accountName: { 
-      fontSize: theme.typography.fontSize.md, 
+    accountName: {
+      fontSize: theme.typography.fontSize.md,
       fontWeight: '600' as const,
-      color: theme.colors.textPrimary, 
-      flexShrink: 1 
+      color: theme.colors.textPrimary,
+      flexShrink: 1
     },
     accountType: {
       fontSize: theme.typography.fontSize.sm,
       color: theme.colors.textTertiary,
       marginTop: 2,
     },
-    accountBalance: { 
-      fontSize: theme.typography.fontSize.md, 
+    accountBalance: {
+      fontSize: theme.typography.fontSize.md,
       fontWeight: '500' as const,
-      color: theme.colors.textSecondary 
+      color: theme.colors.textSecondary
     },
   };
-    
+
   return (
     <TouchableOpacity
       style={styles.accountRow}
@@ -205,4 +224,4 @@ const AccountItem = React.memo<{ item: AccountItem; onSelect: (account: AccountI
   );
 });
 
-export default React.memo(AccountSelectionModal); 
+export default React.memo(AccountSelectionModal);

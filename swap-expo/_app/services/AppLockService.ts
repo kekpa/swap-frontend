@@ -526,14 +526,17 @@ class AppLockService {
         saltHex + pin
       );
 
-      // Store securely
+      // Store securely - include IS_CONFIGURED and LOCK_METHOD for proper state
       await Promise.all([
         SecureStore.setItemAsync(STORAGE_KEYS.PIN_HASH, hash),
         SecureStore.setItemAsync(STORAGE_KEYS.PIN_SALT, saltHex),
         SecureStore.setItemAsync(STORAGE_KEYS.PIN_SOURCE, 'local'),
+        SecureStore.setItemAsync(STORAGE_KEYS.IS_CONFIGURED, 'true'),
+        SecureStore.setItemAsync(STORAGE_KEYS.LOCK_METHOD, 'pin'),
       ]);
 
-      logger.info('[AppLockService] PIN saved locally after backend verification');
+      this.state.lockMethod = 'pin';
+      logger.info('[AppLockService] PIN saved locally after backend verification (configured=true)');
     } catch (error: any) {
       // Non-fatal - PIN still works, just won't be available offline
       logger.warn('[AppLockService] Failed to save PIN locally:', error.message);

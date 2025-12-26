@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { ProfileStackParamList } from '../../../navigation/profileNavigator';
 import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
@@ -22,6 +23,7 @@ import { useAuthContext } from '../../auth/context/AuthContext';
 import apiClient from '../../../_api/apiClient';
 import { BUSINESS_PATHS, AUTH_PATHS } from '../../../_api/apiPaths';
 import { logger } from '../../../utils/logger';
+import { loginService } from '../../../services/auth/LoginService';
 
 // Session type from backend
 interface Session {
@@ -184,6 +186,32 @@ const SecurityPrivacyScreen: React.FC = () => {
   const [hasBusinessPin, setHasBusinessPin] = useState(false);
   const [isLoadingPinStatus, setIsLoadingPinStatus] = useState(false);
 
+  // Biometric state
+  const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
+  const [isBiometricAvailable, setIsBiometricAvailable] = useState(false);
+  const [isBiometricLoading, setIsBiometricLoading] = useState(false);
+
+  // Check biometric availability and status on mount
+  useEffect(() => {
+    const checkBiometric = async () => {
+      try {
+        // Check if device supports biometric
+        const compatible = await LocalAuthentication.hasHardwareAsync();
+        const enrolled = await LocalAuthentication.isEnrolledAsync();
+        setIsBiometricAvailable(compatible && enrolled);
+
+        // Check if biometric is enabled in our app
+        if (compatible && enrolled) {
+          const enabled = await loginService.isBiometricEnabled();
+          setIsBiometricEnabled(enabled);
+        }
+      } catch (error) {
+        logger.warn('[SecurityPrivacy] Failed to check biometric status:', error);
+      }
+    };
+    checkBiometric();
+  }, []);
+
   // ============================================================
   // ACTIVE SESSIONS (Real data from backend)
   // ============================================================
@@ -297,9 +325,44 @@ const SecurityPrivacyScreen: React.FC = () => {
     // Implement 2FA functionality
   };
 
-  const handleBiometricToggle = (value: boolean) => {
-    console.log('Biometric toggled:', value);
-    // Implement biometric functionality
+  const handleBiometricToggle = async (value: boolean) => {
+    if (isBiometricLoading) return;
+
+    setIsBiometricLoading(true);
+    try {
+      if (value) {
+        // Enable biometric - first verify user's identity with device biometric
+        const authResult = await LocalAuthentication.authenticateAsync({
+          promptMessage: 'Verify your identity to enable biometric login',
+          disableDeviceFallback: false,
+        });
+
+        if (!authResult.success) {
+          logger.debug('[SecurityPrivacy] Biometric verification cancelled/failed');
+          setIsBiometricLoading(false);
+          return; // User cancelled or failed verification
+        }
+
+        // Enable on backend
+        const result = await loginService.enableBiometricLogin();
+        if (result.success) {
+          setIsBiometricEnabled(true);
+          Alert.alert('Success', 'Biometric login has been enabled for this device.');
+        } else {
+          Alert.alert('Error', result.message || 'Failed to enable biometric login.');
+        }
+      } else {
+        // Disable biometric
+        await loginService.disableBiometricLogin();
+        setIsBiometricEnabled(false);
+        Alert.alert('Disabled', 'Biometric login has been disabled.');
+      }
+    } catch (error: any) {
+      logger.error('[SecurityPrivacy] Biometric toggle error:', error);
+      Alert.alert('Error', 'An error occurred. Please try again.');
+    } finally {
+      setIsBiometricLoading(false);
+    }
   };
 
   const handleTransactionVerification = (value: boolean) => {
@@ -438,7 +501,17 @@ const SecurityPrivacyScreen: React.FC = () => {
           <View style={styles.infoCard}>
             <SettingItem theme={theme} icon="lock-closed-outline" title="Change Passcode" description="Update your 6-digit passcode" hasNavigation onPress={handleChangePasscode} />
             <SettingItem theme={theme} icon="shield-checkmark-outline" title="Two-Factor Authentication" description="Secure your account with 2FA" hasToggle initialToggleValue={true} onToggleChange={handle2FAToggle} />
-            <SettingItem theme={theme} icon="eye-outline" title="Biometric Login" description="Use fingerprint or face recognition" hasToggle initialToggleValue={true} onToggleChange={handleBiometricToggle} />
+            {isBiometricAvailable && (
+              <SettingItem
+                theme={theme}
+                icon="eye-outline"
+                title="Biometric Login"
+                description={isBiometricLoading ? 'Setting up...' : 'Use fingerprint or face recognition'}
+                hasToggle
+                initialToggleValue={isBiometricEnabled}
+                onToggleChange={handleBiometricToggle}
+              />
+            )}
           </View>
 
           {/* Business Security - Only show for business profiles */}

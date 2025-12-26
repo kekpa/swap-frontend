@@ -14,9 +14,9 @@
  */
 
 import logger from '../utils/logger';
-import { messageSyncManager } from './MessageSyncManager';
+import { timelineSyncService } from './TimelineSyncService';
 import { userStateManager } from './UserStateManager';
-import { messageRepository } from '../localdb/MessageRepository';
+import { unifiedTimelineRepository } from '../localdb/UnifiedTimelineRepository';
 
 type DeliveryStatus = 'sent' | 'delivered' | 'read' | 'failed';
 
@@ -122,8 +122,9 @@ class DeliveryConfirmationManager {
     status: DeliveryStatus
   ): Promise<void> {
     try {
-      // Update local database immediately
-      await messageRepository.updateMessageStatus(messageId, status);
+      // Update local_status in unified local_timeline table
+      // sync_status stays 'synced' (item from server), local_status updates to delivery status
+      await unifiedTimelineRepository.updateSyncStatus(messageId, 'synced', status);
 
       // Update local state tracking
       this.messageStates.set(messageId, {

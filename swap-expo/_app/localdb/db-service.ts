@@ -5,11 +5,10 @@ import { Platform } from 'react-native';
 import { MessageType } from '../types/message.types';
 import logger from '../utils/logger';
 import { Database } from './db-interfaces';
-import { 
-  initializeInteractionSchema, 
-  initializeMessageSchema, 
-  initializeTransactionSchema, 
-  initializeTimelineSchema
+import {
+  initializeInteractionSchema,
+  initializeTransactionSchema,
+  initializeLocalTimelineSchema
 } from './schema';
 
 let database: SQLite.SQLiteDatabase | null = null; 
@@ -110,18 +109,14 @@ export const initDb = async (): Promise<void> => {
     logger.debug('[SQLite_API] Initializing Interaction schema...');
     await initializeInteractionSchema(dbInstance);
     logger.info('[SQLite_API] Interaction schema initialized.');
-    
-    logger.debug('[SQLite_API] Initializing Message schema...');
-    await initializeMessageSchema(dbInstance);
-    logger.info('[SQLite_API] Message schema initialized.');
-    
+
     logger.debug('[SQLite_API] Initializing Transaction schema...');
     await initializeTransactionSchema(dbInstance);
     logger.info('[SQLite_API] Transaction schema initialized.');
-    
-    logger.debug('[SQLite_API] Initializing Timeline schema (view)...');
-    await initializeTimelineSchema(dbInstance);
-    logger.info('[SQLite_API] Timeline schema (view) initialized.');
+
+    logger.debug('[SQLite_API] Initializing LocalTimeline schema...');
+    await initializeLocalTimelineSchema(dbInstance);
+    logger.info('[SQLite_API] LocalTimeline schema initialized.');
     
     // Account Balance schema removed - using CurrencyWallets instead
     logger.debug('[SQLite_API] Account Balance schema skipped (using CurrencyWallets)');
@@ -139,11 +134,10 @@ export const initDb = async (): Promise<void> => {
 interface InsertableMessage {
   id: string;
   interaction_id: string;
-  sender_entity_id?: string;
-  sender_id?: string; 
+  from_entity_id?: string;
   content?: string;
   message_type?: MessageType | string;
-  created_at?: string; 
+  created_at?: string;
   metadata?: any;
 }
 
@@ -170,7 +164,7 @@ export const ensureInteractionExists = async (interactionId: string): Promise<vo
     if (existingCount === 0) {
       // Insert minimal placeholder
       await database.runAsync(
-        `INSERT INTO interactions (id, updated_at, last_message_at) VALUES (?, ?, ?);`,
+        `INSERT INTO interactions (id, updated_at, last_activity_at) VALUES (?, ?, ?);`,
         [interactionId, new Date().toISOString(), new Date().toISOString()],
       );
       logger.debug(`[SQLite_API] ensureInteractionExists: inserted placeholder interaction row for ${interactionId}`);
@@ -197,12 +191,12 @@ export const insertMessage = async (msg: InsertableMessage): Promise<void> => {
   await ensureInteractionExists(msg.interaction_id);
 
   const sql = `INSERT OR REPLACE INTO messages (
-      id, interaction_id, sender_entity_id, content, message_type, created_at, metadata
+      id, interaction_id, from_entity_id, content, message_type, created_at, metadata
     ) VALUES (?,?,?,?,?,?,?);`;
   const params: SQLite.SQLiteBindValue[] = [
     msg.id,
     msg.interaction_id,
-    msg.sender_entity_id || msg.sender_id || null,
+    msg.from_entity_id || null,
     msg.content || '',
     String(msg.message_type || 'text'),
     msg.created_at || new Date().toISOString(),

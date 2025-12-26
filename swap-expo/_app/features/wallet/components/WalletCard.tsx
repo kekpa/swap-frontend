@@ -248,19 +248,25 @@ const WalletCard: React.FC<WalletCardProps> = React.memo(({
     if (!isBalanceVisible) {
       return '••••.••';
     }
-    
+
     // Use available_balance instead of total balance to show what's actually spendable
     const amount = availableBalance;
-    
+
     // Smart formatting based on amount
+    // Use K/M notation only for larger amounts - show full numbers up to 99,999
     if (amount >= 1000000) {
+      // 1M+ shows as "1.2M"
       return (amount / 1000000).toFixed(1) + 'M';
-    } else if (amount >= 10000) {
+    } else if (amount >= 100000) {
+      // 100K-999K shows as "150K" (no decimal for cleaner look)
       return (amount / 1000).toFixed(0) + 'K';
-    } else if (amount >= 1000) {
-      return (amount / 1000).toFixed(1) + 'K';
     } else {
-      return amount.toFixed(2);
+      // Under 100K: show with locale formatting (commas)
+      // e.g., 1000 → "1,000.00", 25000 → "25,000.00"
+      return amount.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
     }
   }, [availableBalance, isBalanceVisible, walletId]);
 

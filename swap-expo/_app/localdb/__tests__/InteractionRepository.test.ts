@@ -63,8 +63,8 @@ const testInteraction = {
   is_active: true,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
-  last_message_snippet: 'Hello!',
-  last_message_at: '2024-01-01T12:00:00Z',
+  last_activity_snippet: 'Hello!',
+  last_activity_at: '2024-01-01T12:00:00Z',
   unread_count: 2,
   icon_url: null,
   metadata: JSON.stringify({ type: 'direct' }),
@@ -215,8 +215,8 @@ describe('InteractionRepository', () => {
         1, // is_active = true -> 1
         testInteraction.created_at,
         testInteraction.updated_at,
-        testInteraction.last_message_snippet,
-        testInteraction.last_message_at,
+        testInteraction.last_activity_snippet,
+        testInteraction.last_activity_at,
         testInteraction.unread_count,
         testInteraction.icon_url,
         JSON.stringify(testInteraction.metadata),
@@ -238,8 +238,8 @@ describe('InteractionRepository', () => {
         1, // is_active default
         expect.any(String), // created_at
         expect.any(String), // updated_at
-        null, // last_message_snippet
-        null, // last_message_at
+        null, // last_activity_snippet
+        null, // last_activity_at
         0, // unread_count default
         null, // icon_url
         null, // metadata
@@ -683,8 +683,8 @@ describe('InteractionRepository', () => {
         1, // is_active = true
         '2024-01-01T00:00:00Z', // created_at
         '2024-01-01T00:00:00Z', // updated_at
-        'Hello!', // last_message_snippet
-        '2024-01-01T12:00:00Z', // last_message_at
+        'Hello!', // last_activity_snippet
+        '2024-01-01T12:00:00Z', // last_activity_at
         2, // unread_count
         null, // icon_url
         null, // metadata should be null
@@ -708,8 +708,8 @@ describe('InteractionRepository', () => {
         1, // is_active = true
         '2024-01-01T00:00:00Z', // created_at
         '2024-01-01T00:00:00Z', // updated_at
-        'Hello!', // last_message_snippet
-        '2024-01-01T12:00:00Z', // last_message_at
+        'Hello!', // last_activity_snippet
+        '2024-01-01T12:00:00Z', // last_activity_at
         2, // unread_count
         null, // icon_url
         JSON.stringify(testInteraction.metadata), // metadata (double-stringified)
@@ -733,8 +733,8 @@ describe('InteractionRepository', () => {
         0, // is_active = false -> 0
         '2024-01-01T00:00:00Z', // created_at
         '2024-01-01T00:00:00Z', // updated_at
-        'Hello!', // last_message_snippet
-        '2024-01-01T12:00:00Z', // last_message_at
+        'Hello!', // last_activity_snippet
+        '2024-01-01T12:00:00Z', // last_activity_at
         2, // unread_count
         null, // icon_url
         JSON.stringify(testInteraction.metadata), // metadata (double-stringified)

@@ -167,13 +167,21 @@ const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }, [isLockConfigured, authContext.isAuthenticated]);
 
   // Listen for SESSION_EXPIRED events (token refresh failures)
-  // Revolut-style: lock the app instead of logging out
+  // Revolut-style: lock the app if PIN configured, otherwise force logout
   useEffect(() => {
-    const handleSessionExpired = (reason: string) => {
-      if (isLockConfigured && authContext.isAuthenticated) {
+    const handleSessionExpired = async (reason: string) => {
+      // Already logged out - nothing to do
+      if (!authContext.isAuthenticated) return;
+
+      if (isLockConfigured) {
+        // Lock configured: show PIN screen (Revolut-style)
         logger.info(`[AppLockHandler] Session expired (${reason}), locking app...`);
         appLockService.lock();
         setIsAppLocked(true);
+      } else {
+        // No lock configured: force logout to prevent broken state
+        logger.info(`[AppLockHandler] Session expired (${reason}), no lock configured - forcing logout...`);
+        await authContext.logout();
       }
     };
 
@@ -181,7 +189,7 @@ const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return () => {
       authEvents.off(APP_LOCK_EVENTS.SESSION_EXPIRED, handleSessionExpired);
     };
-  }, [isLockConfigured, authContext.isAuthenticated]);
+  }, [isLockConfigured, authContext.isAuthenticated, authContext]);
 
   const handleUnlock = useCallback(() => {
     logger.info('[AppLockHandler] App unlocked');

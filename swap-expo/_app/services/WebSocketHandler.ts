@@ -1,16 +1,17 @@
 // Created: WebSocketHandler for consistent message processing with idempotency - 2025-05-21
 // Updated: Migrated to use centralized repository instances - 2025-05-29
 // Updated: Professional architecture with direct cache updates - 2025-11-04
+// Updated: Removed legacy MessageManager - uses local-first architecture - 2025-12-22
 
 import { websocketService } from './websocketService';
-import { messageManager } from './MessageManager';
-import { messageRepository } from '../localdb/MessageRepository';
+import { unifiedTimelineRepository } from '../localdb/UnifiedTimelineRepository';
+import { LocalTimelineItem } from '../localdb/schema/local-timeline-schema';
 import logger from '../utils/logger';
 import { MessageTimelineItem } from '../types/timeline.types';
 import { eventEmitter } from '../utils/eventEmitter';
 import { smartNotificationHandler } from './SmartNotificationHandler';
 import { deliveryConfirmationManager } from './DeliveryConfirmationManager';
-import { cacheUpdateManager } from './CacheUpdateManager';
+// NOTE: LocalDataManager removed - BackgroundSyncService handles local-first updates via SQLite
 import { QueryClient } from '@tanstack/react-query';
 
 // Track processed message IDs to prevent duplicates
@@ -48,14 +49,11 @@ class WebSocketHandler {
 
     console.log('🔥 [WebSocketHandler] 🚀 INITIALIZING WebSocketHandler...');
 
-    // Store QueryClient for direct cache updates
+    // Store QueryClient for cache invalidation on reconnect
     if (queryClient) {
       this.queryClient = queryClient;
-      // Initialize the professional cache update manager with entityId for proper cache key matching
-      cacheUpdateManager.initialize(queryClient, entityId);
-      console.log('🔥 [WebSocketHandler] ✅ Professional cache updates enabled', {
-        hasEntityId: !!entityId
-      });
+      // NOTE: Local-first updates now handled by BackgroundSyncService via SQLite
+      console.log('🔥 [WebSocketHandler] ✅ Local-first architecture enabled');
     }
     
     // Check WebSocket connection status
@@ -197,7 +195,7 @@ class WebSocketHandler {
         messageId: data?.id,
         interactionId: data?.interaction_id,
         content: data?.content?.substring(0, 30),
-        senderEntityId: data?.sender_entity_id
+        fromEntityId: data?.from_entity_id
       });
       
       if (!data || !data.id) {
@@ -218,25 +216,29 @@ class WebSocketHandler {
       logger.debug(`[WebSocketHandler] Processing new WebSocket message: ${messageId}`);
       
       // Process the message for storage and UI updates
-      // 1. Save to local storage for offline access
+      // 1. Save to unified local_timeline for offline access
       if (data.id && data.interaction_id) {
-        const messageToSave: MessageTimelineItem = {
+        // Map WebSocket message to LocalTimelineItem format
+        // ALIGNED WITH SUPABASE: from_entity_id = who sent, to_entity_id = who received
+        const localItem: Partial<LocalTimelineItem> & { id: string } = {
           id: data.id,
+          server_id: data.id, // WebSocket message = from server
           interaction_id: data.interaction_id,
-          type: 'message',
-          itemType: 'message',
+          profile_id: data.profile_id || '', // Will be set by repository if empty
+          item_type: 'message',
+          created_at: data.created_at || data.createdAt || new Date().toISOString(),
           content: data.content || '',
           message_type: data.message_type || 'text',
-          sender_entity_id: data.sender_entity_id || data.sender_id || 'unknown',
-          createdAt: data.created_at || data.createdAt || new Date().toISOString(),
-          timestamp: data.timestamp || data.created_at || new Date().toISOString(),
-          metadata: { ...data.metadata, isOptimistic: false },
-          status: data.status || 'delivered'
+          sync_status: 'synced', // Came from server via WebSocket
+          local_status: data.status || 'delivered',
+          from_entity_id: data.from_entity_id || '',
+          to_entity_id: data.to_entity_id || null,
+          timeline_metadata: JSON.stringify({ ...data.timeline_metadata, isOptimistic: false }),
         };
-        
-        messageRepository.saveMessages([messageToSave])
+
+        unifiedTimelineRepository.upsertFromServer(localItem)
           .catch(err => logger.warn(
-            `[WebSocketHandler] Failed to save message ${data.id} to local storage: ${String(err)}`
+            `[WebSocketHandler] Failed to save message ${data.id} to local_timeline: ${String(err)}`
           ));
       }
       
@@ -259,10 +261,10 @@ class WebSocketHandler {
         itemType: 'message',
         content: data.content || '',
         message_type: data.message_type || 'text',
-        sender_entity_id: data.sender_entity_id || data.sender_id || 'unknown',
+        from_entity_id: data.from_entity_id || 'unknown',
         createdAt: data.created_at || data.createdAt || new Date().toISOString(),
         timestamp: data.timestamp || data.created_at || new Date().toISOString(),
-        metadata: { ...data.metadata, isOptimistic: false },
+        metadata: { ...data.timeline_metadata, isOptimistic: false },
         status: data.status || 'delivered'
       };
       

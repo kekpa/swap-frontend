@@ -32,25 +32,16 @@ import { websocketService } from '../../services/websocketService';
 import { userStateManager } from '../../services/UserStateManager';
 import { useTheme } from '../../theme/ThemeContext';
 import { Theme } from '../../theme/theme';
-import { useTimelineInfinite } from '../../hooks-data/useTimeline';
-import { queryKeys } from '../../tanstack-query/queryKeys';
-import { queryClient } from '../../tanstack-query/queryClient';
-// DataContext replaced with TanStack Query hooks
-import { useSendMessage } from '../../tanstack-query/mutations/useSendMessage';
-import { useRealtimeUpdates } from '../../hooks/useRealtimeUpdates';
-import { useGetOrCreateDirectInteraction } from '../../tanstack-query/mutations/useCreateInteraction';
-import { useCreateDirectInteraction } from '../../tanstack-query/mutations/useCreateDirectInteraction';
+// LOCAL-FIRST ARCHITECTURE: SQLite is the source of truth
+import { useLocalTimeline, LocalTimelineItem, isProcessingStatus } from '../../hooks-data/useLocalTimeline';
+import { unifiedTimelineService } from '../../services/UnifiedTimelineService';
+import { backgroundSyncService } from '../../services/BackgroundSyncService';
+import { useInteraction } from '../../tanstack-query/mutations/useInteraction';
 import { SendMessageRequest, MessageType, Message as ApiMessage, MessageStatus } from '../../types/message.types';
 import { TimelineItem, TimelineItemType as ImportedTimelineItemType, MessageTimelineItem, TransactionTimelineItem, DateSeparatorTimelineItem } from '../../types/timeline.types';
 import TransferCompletedScreen from './sendMoney2/TransferCompletedScreen';
-import { messageRepository } from '../../localdb/MessageRepository';
-import { Message, MessageType as APIMessageType, TextMessage } from '../../types/message.types';
-import { getTimelineManager } from '../../services/TimelineManager';
-import { timelineRepository } from '../../localdb/TimelineRepository';
-import { TimelineManager } from '../../services/TimelineManager';
-import { messageManager } from '../../services/MessageManager';
-import { transactionManager } from '../../services/TransactionManager';
 import { networkService } from '../../services/NetworkService';
+import { getTransactionStatusDisplay } from '../../utils/transactionStatusDisplay';
 
 // --- Type definitions ---
 type TimelineItemType = 'transaction' | 'message' | 'date';
@@ -83,23 +74,32 @@ type NavigationProp = StackNavigationProp<InteractionsStackParamList, 'ContactIn
 
 // --- Stylesheet functions defined globally ---
 const transactionStyles = (theme: Theme) => StyleSheet.create({
-  transactionContainer: { 
-    marginBottom: theme.spacing.sm, 
+  transactionContainer: {
+    marginBottom: theme.spacing.sm,
     flexDirection: 'row',
+    paddingHorizontal: theme.spacing.sm, // 8px from screen edge
   },
-  transactionBubble: { 
-    borderRadius: theme.borderRadius.md, 
-    padding: theme.spacing.sm, 
-    maxWidth: '80%',
-    borderWidth: 1, 
-    backgroundColor: theme.colors.primaryUltraLight, 
+  // Sent transaction: rounded corners except bottom-right (tail pointing to sender)
+  transactionBubble: {
+    borderTopLeftRadius: theme.borderRadius.lg,
+    borderTopRightRadius: theme.borderRadius.lg,
+    borderBottomLeftRadius: theme.borderRadius.lg,
+    borderBottomRightRadius: theme.borderRadius.xs, // 4px tail corner
+    padding: theme.spacing.sm,
+    minWidth: 160,  // Minimum width for readability
+    maxWidth: '65%',  // Max width relative to screen
+    borderWidth: 1,
+    backgroundColor: theme.colors.primaryUltraLight,
     borderColor: theme.colors.primaryLight,
     alignSelf: 'flex-end',
   },
-  receivedTransactionBubble: { 
-    backgroundColor: theme.colors.grayUltraLight, 
+  // Received transaction: rounded corners except bottom-left (tail pointing to contact)
+  receivedTransactionBubble: {
+    backgroundColor: theme.colors.grayUltraLight,
     borderColor: theme.colors.border,
     alignSelf: 'flex-start',
+    borderBottomRightRadius: theme.borderRadius.lg, // Restore rounded
+    borderBottomLeftRadius: theme.borderRadius.xs, // 4px tail corner
   },
   transactionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.xs },
   transactionBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.primaryUltraLight, paddingVertical: 2, paddingHorizontal: theme.spacing.xs, borderRadius: theme.borderRadius.lg }, 
@@ -107,15 +107,30 @@ const transactionStyles = (theme: Theme) => StyleSheet.create({
   transactionAmount: { fontSize: theme.typography.fontSize.xl, fontWeight: '700', color: theme.colors.primary, marginBottom: theme.spacing.xs },
   receivedTransactionAmount: { color: theme.colors.textPrimary },
   transactionDetails: { fontSize: theme.typography.fontSize.sm, color: theme.colors.textSecondary, marginBottom: theme.spacing.xs },
-  transactionStatus: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: theme.spacing.xs },
-  transactionId: { fontSize: theme.typography.fontSize.xs, color: theme.colors.textTertiary },
-  transactionTime: { fontSize: theme.typography.fontSize.xs, color: theme.colors.textTertiary },
+  transactionStatus: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: theme.spacing.xs, gap: 12 },
+  transactionId: { fontSize: theme.typography.fontSize.xs, color: theme.colors.textTertiary, flex: 1 },
+  transactionTime: { fontSize: theme.typography.fontSize.xs, color: theme.colors.textTertiary, flexShrink: 0 },
 });
 const messageBubbleStyles = (theme: Theme) => StyleSheet.create({
-  messageContainer: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: theme.spacing.xs, paddingHorizontal: theme.spacing.md },
+  messageContainer: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: theme.spacing.xs, paddingHorizontal: theme.spacing.sm }, // 8px from screen edge
   receivedContainer: { justifyContent: 'flex-start' },
-  messageBubble: { backgroundColor: theme.colors.primary, borderRadius: theme.borderRadius.md, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm, maxWidth: '70%', borderBottomRightRadius: theme.borderRadius.xs },
-  receivedBubble: { backgroundColor: theme.colors.grayUltraLight, borderBottomRightRadius: theme.borderRadius.md, borderBottomLeftRadius: theme.borderRadius.xs },
+  // Sent message: rounded corners except bottom-right (tail pointing to sender)
+  messageBubble: {
+    backgroundColor: theme.colors.primary,
+    borderTopLeftRadius: theme.borderRadius.lg,
+    borderTopRightRadius: theme.borderRadius.lg,
+    borderBottomLeftRadius: theme.borderRadius.lg,
+    borderBottomRightRadius: theme.borderRadius.xs, // 4px tail corner
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    maxWidth: '70%',
+  },
+  // Received message: rounded corners except bottom-left (tail pointing to contact)
+  receivedBubble: {
+    backgroundColor: theme.colors.grayUltraLight,
+    borderBottomRightRadius: theme.borderRadius.lg, // Restore rounded
+    borderBottomLeftRadius: theme.borderRadius.xs, // 4px tail corner
+  },
   messageText: { color: theme.colors.white, fontSize: theme.typography.fontSize.md },
   receivedMessageText: { color: theme.colors.textPrimary },
   messageTime: { fontSize: theme.typography.fontSize.xs, color: theme.colors.primaryUltraLight, alignSelf: 'flex-end', marginTop: 2, opacity: 0.8 },
@@ -142,12 +157,12 @@ const createGlobalStyles = (theme: Theme) => StyleSheet.create({
   headerActions: { flexDirection: 'row' },
   headerButton: { width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center', marginLeft: theme.spacing.sm },
   filterBar: { flexDirection: 'row', justifyContent: 'center', gap: theme.spacing.sm, padding: theme.spacing.sm, backgroundColor: theme.colors.card, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  contentArea: { flex: 1, backgroundColor: theme.colors.background },
+  contentArea: { flex: 1, backgroundColor: theme.colors.white },
   filterBadge: { paddingVertical: theme.spacing.xs + 2, paddingHorizontal: theme.spacing.md, borderRadius: theme.borderRadius.xl, backgroundColor: theme.colors.grayUltraLight },
   activeFilterBadge: { backgroundColor: theme.colors.primaryLight },
   filterBadgeText: { fontSize: theme.typography.fontSize.sm, fontWeight: '500', color: theme.colors.textSecondary },
   activeFilterBadgeText: { color: theme.colors.primary, fontWeight: '600' },
-  timelineContent: { paddingVertical: theme.spacing.sm, paddingHorizontal: theme.spacing.md, flexGrow: 1 },
+  timelineContent: { paddingVertical: theme.spacing.sm, paddingHorizontal: 0, flexGrow: 1 },
   chatInputContainer: { flexDirection: 'row', alignItems: 'center', padding: theme.spacing.sm, backgroundColor: theme.colors.card, borderTopWidth: 1, borderTopColor: theme.colors.border },
   actionButton: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
   emojiButton: { fontSize: 30 },
@@ -196,7 +211,21 @@ const createGlobalStyles = (theme: Theme) => StyleSheet.create({
 
 const ThemedTransaction: React.FC<TransactionProps & { onPress?: () => void }> = ({ amount, time, source, type, transactionId, status = 'Completed', theme, isFromCurrentUser, onPress }) => {
   const componentStyles = useMemo(() => transactionStyles(theme), [theme]);
-  
+
+  // Get status display properties from Saga-aware utility
+  const statusDisplay = useMemo(() => getTransactionStatusDisplay(status), [status]);
+
+  // Map color type to theme color
+  const statusColor = useMemo(() => {
+    switch (statusDisplay.color) {
+      case 'success': return theme.colors.success;
+      case 'error': return theme.colors.error;
+      case 'warning': return theme.colors.warning;
+      case 'info': return theme.colors.info;
+      default: return theme.colors.success;
+    }
+  }, [statusDisplay.color, theme]);
+
   // Determine alignment based on isFromCurrentUser
   const justifyContentStyle: { justifyContent: 'flex-start' | 'flex-end' } = isFromCurrentUser ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' };
   const bubbleStyle = isFromCurrentUser ? componentStyles.transactionBubble : [componentStyles.transactionBubble, componentStyles.receivedTransactionBubble];
@@ -207,12 +236,16 @@ const ThemedTransaction: React.FC<TransactionProps & { onPress?: () => void }> =
       <TouchableOpacity style={bubbleStyle} onPress={onPress}>
         <View style={componentStyles.transactionHeader}>
           <View style={componentStyles.transactionBadge}>
-            <Ionicons name="checkmark-outline" size={14} color={theme.colors.success} />
-            <Text style={componentStyles.transactionBadgeText}>{status}</Text>
+            {statusDisplay.isProcessing ? (
+              <ActivityIndicator size={12} color={statusColor} />
+            ) : (
+              <Ionicons name={statusDisplay.icon} size={14} color={statusColor} />
+            )}
+            <Text style={[componentStyles.transactionBadgeText, { color: statusColor }]}>{statusDisplay.label}</Text>
           </View>
         </View>
         <Text style={amountStyle}>{isFromCurrentUser ? '-' : '+'}{amount}</Text>
-        <Text style={componentStyles.transactionDetails}>For {source}</Text>
+        {source && <Text style={componentStyles.transactionDetails}>"{source}"</Text>}
         <View style={componentStyles.transactionStatus}>
           <Text style={componentStyles.transactionId}>#{transactionId?.slice(0,8)}</Text>
           <Text style={componentStyles.transactionTime}>{time}</Text>
@@ -252,10 +285,8 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
   const { theme } = useTheme();
   const authContext = useAuthContext();
   const { user: currentUser } = authContext;
-  // TanStack Query hooks for message operations
-  const sendMessageMutation = useSendMessage();
-  const { getOrCreateDirectInteraction } = useGetOrCreateDirectInteraction();
-  const createDirectInteractionMutation = useCreateDirectInteraction();
+  // ONE hook for all interaction needs (find or create)
+  const { ensureInteraction } = useInteraction();
 
   const { 
     contactId, 
@@ -274,22 +305,71 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
   const [messageInput, setMessageInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [currentInteractionId, setCurrentInteractionId] = useState<string | null>(passedInteractionId || null);
-  
-  // 🚀 Infinite scroll with WhatsApp-style pagination (scroll to top loads more)
+
+  // 🚀 LOCAL-FIRST: SQLite is the ONLY source of truth (WhatsApp-grade architecture)
   const {
-    flatTimeline: timelineItems,
+    items: localTimelineItems,
     isLoading: isLoadingTimeline,
     refetch: refetchTimeline,
-    isError: hasTimelineError,
+    hasMore: hasNextPage,
+    loadMore: fetchNextPage,
+    isLoadingMore: isFetchingNextPage,
     error: timelineError,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useTimelineInfinite(currentInteractionId || '', { enabled: !!currentInteractionId, pageSize: 50 });
+  } = useLocalTimeline(currentInteractionId, {
+    enabled: !!currentInteractionId && !!currentUser?.profileId,
+    pageSize: 50,
+  });
 
-  // 🔔 Professional Real-time Updates (WhatsApp/Slack pattern)
-  // Direct cache updates instead of query invalidation
-  useRealtimeUpdates({ interactionId: currentInteractionId || undefined });
+  // Map LocalTimelineItem to TimelineItem format for component compatibility
+  // ALIGNED WITH SUPABASE: from_entity_id = who sent (for message alignment)
+  const timelineItems = useMemo(() => {
+    return localTimelineItems.map((item): TimelineItem => {
+      if (item.item_type === 'message') {
+        return {
+          id: item.id,
+          type: 'message',
+          itemType: 'message',
+          interaction_id: item.interaction_id,
+          from_entity_id: item.from_entity_id,
+          content: item.content || '',
+          message_type: (item.message_type || 'text') as any,
+          timestamp: item.created_at,
+          createdAt: item.created_at,
+          status: item.local_status as any,
+          metadata: item.metadata ? JSON.parse(item.metadata) : {},
+        } as MessageTimelineItem;
+      } else {
+        return {
+          id: item.id,
+          type: 'transaction',
+          itemType: 'transaction',
+          interaction_id: item.interaction_id,
+          from_entity_id: item.from_entity_id,
+          amount: item.amount || 0,
+          currency_symbol: item.currency_symbol || '$',
+          currency_code: item.currency_code || 'USD',
+          description: item.description || item.content || '',
+          timestamp: item.created_at,
+          createdAt: item.created_at,
+          status: item.local_status,
+          // Entity IDs for transaction direction (who sent / who received)
+          from_entity_id: item.from_entity_id,
+          to_entity_id: item.to_entity_id,
+          metadata: item.metadata ? JSON.parse(item.metadata) : {},
+        } as TransactionTimelineItem;
+      }
+    });
+  }, [localTimelineItems]);
+
+  const hasTimelineError = !!timelineError;
+
+  // 🚀 Start background sync service on mount
+  useEffect(() => {
+    if (currentUser?.profileId) {
+      backgroundSyncService.start(currentUser.profileId);
+      logger.debug('[ContactInteractionHistory] 🚀 BackgroundSyncService started');
+    }
+  }, [currentUser?.profileId]);
 
   // Debug logging for timeline state
   useEffect(() => {
@@ -363,10 +443,10 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
         );
         try {
           logger.debug(
-            `[ContactInteractionHistory] 📞 Calling getOrCreateDirectInteraction with contactId: ${contactId}`,
+            `[ContactInteractionHistory] 📞 Calling ensureInteraction with contactId: ${contactId}`,
             "ContactInteractionHistory"
           );
-          const newInteractionId = await getOrCreateDirectInteraction(contactId);
+          const newInteractionId = await ensureInteraction(contactId);
 
           if (newInteractionId) {
             logger.debug(
@@ -398,7 +478,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
 
     initializeInteraction();
     // Only depend on data that actually changes - function is now memoized with useCallback
-  }, [passedInteractionId, contactId, getOrCreateDirectInteraction]);
+  }, [passedInteractionId, contactId, ensureInteraction]);
 
   // Enhanced focus effect - simplified
   useFocusEffect(
@@ -449,10 +529,10 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
 
   const handleSendMoney = () => {
     logger.debug('[ContactInteractionHistory] Navigating to SendMoney screen', "ContactInteractionHistory");
-    navigation.navigate("SendMoney", { 
-      recipientId: contactId, 
-      recipientName: contactName, 
-      recipientInitial: contactInitials, 
+    navigation.navigate("SendMoney", {
+      toEntityId: contactId,
+      recipientName: contactName,
+      recipientInitial: contactInitials,
       recipientColor: contactAvatarColor
     });
   };
@@ -484,14 +564,15 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
 
   const handleSendMessage = async () => {
     // Validate input and user
-    if (!messageInput.trim() || !currentUser?.entityId || !contactId) {
+    if (!messageInput.trim() || !currentUser?.entityId || !contactId || !currentUser?.profileId) {
       const errorDetails = {
         messageInputEmpty: !messageInput.trim(),
         currentUserMissing: !currentUser?.entityId,
         contactIdMissing: !contactId,
+        profileIdMissing: !currentUser?.profileId,
       };
       logger.warn(
-        'Cannot send message: Missing input, user/entity ID, or contact ID.',
+        'Cannot send message: Missing input, user/entity ID, contact ID, or profile ID.',
         `Details: ${JSON.stringify(errorDetails)}`
       );
       return;
@@ -511,12 +592,14 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
           'ContactInteractionHistory'
         );
 
-        const newInteraction = await createDirectInteractionMutation.mutateAsync({
-          entity_one_id: currentUser.entityId,
-          entity_two_id: contactId,
-        });
+        // ensureInteraction handles find OR create automatically
+        const newInteractionId = await ensureInteraction(contactId);
 
-        interactionIdToUse = newInteraction.id;
+        if (!newInteractionId) {
+          throw new Error('Failed to create interaction');
+        }
+
+        interactionIdToUse = newInteractionId;
         setCurrentInteractionId(interactionIdToUse);
 
         logger.debug(
@@ -525,20 +608,27 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
         );
       }
 
-      // Send message with interaction ID (either existing or newly created)
-      const sentMessage = await sendMessageMutation.mutateAsync({
+      // 🚀 NEW: Local-first message sending (INSTANT UI update)
+      // Message is written to SQLite first, UI updates immediately
+      // BackgroundSyncService handles API call asynchronously
+      // Uses from_entity_id/to_entity_id for consistency with Supabase
+      const { localId, success, error } = await unifiedTimelineService.sendMessage({
         interactionId: interactionIdToUse,
-        recipientEntityId: contactId,
-        senderEntityId: currentUser.entityId, // Required for proper cache key matching
+        profileId: currentUser.profileId,
+        fromEntityId: currentUser.entityId,  // Who is sending
+        toEntityId: contactId,                // Who is receiving
         content: messageToSend,
         messageType: 'text',
       });
 
-      if (!sentMessage) {
-        throw new Error('Failed to send message');
+      if (!success) {
+        throw new Error(error || 'Failed to send message');
       }
 
-      logger.debug('[ContactInteractionHistory] ✅ Message sent successfully');
+      logger.debug(`[ContactInteractionHistory] ✅ Message ${localId} added to local timeline (INSTANT)`);
+
+      // Trigger background sync immediately
+      backgroundSyncService.triggerSync();
 
       // Auto-scroll to bottom to show the latest message (WhatsApp/Messenger UX)
       setTimeout(() => {
@@ -584,15 +674,38 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     previousTimelineLength.current = timelineItems.length;
   }, [timelineItems.length]);
 
-  // Filter timeline items based on active tab
+  // Filter timeline items based on active tab AND insert date separators
   const filteredItems = useMemo(() => {
-    if (activeTab === 'all') {
-      return timelineItems;
+    // First filter by tab
+    const items = activeTab === 'all'
+      ? timelineItems
+      : timelineItems.filter(item => {
+          const itemType = item.itemType || item.type;
+          return itemType === activeTab;
+        });
+
+    // Insert date separators between items on different days
+    const withDateSeparators: TimelineItem[] = [];
+    let lastDate: string | null = null;
+
+    for (const item of items) {
+      const itemTimestamp = item.created_at || item.timestamp || item.createdAt;
+      const itemDate = itemTimestamp ? formatDate(new Date(itemTimestamp)) : null;
+
+      if (itemDate && itemDate !== lastDate) {
+        // Add date separator before this item
+        withDateSeparators.push({
+          id: `date-${itemDate}-${item.id}`,
+          type: 'date',
+          itemType: 'date',
+          date_string: itemDate,
+        } as DateSeparatorTimelineItem);
+        lastDate = itemDate;
+      }
+      withDateSeparators.push(item);
     }
-    return timelineItems.filter(item => {
-      const itemType = item.itemType || item.type;
-      return itemType === activeTab;
-    });
+
+    return withDateSeparators;
   }, [timelineItems, activeTab]);
   
   const renderTimelineItem = ({ item }: { item: TimelineItem }) => {
@@ -602,7 +715,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
       const messageContent = messageItem.content || '';
       const messageTimestamp = messageItem.timestamp || messageItem.createdAt || new Date().toISOString();
       
-      const isFromCurrentUser = messageItem.sender_entity_id === currentUser?.entityId;
+      const isFromCurrentUser = messageItem.from_entity_id === currentUser?.entityId;
       
       return <ThemedMessageBubble 
         key={item.id} 
@@ -634,14 +747,19 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
         }
       }
 
-      const timeStr = new Date(txItem.timestamp || txItem.createdAt || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      // Format time with explicit space before AM/PM
+      const timeStr = new Date(txItem.timestamp || txItem.createdAt || '').toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
       return (
         <ThemedTransaction
           key={txItem.id}
           amount={txItem.amount?.toString() || ''}
           date={''} 
           time={timeStr}
-          source={txItem.description || 'Payment'}
+          source={txItem.description || ''}
           type={isSentByCurrentUser ? 'sent' : 'received'}
           transactionId={txItem.id}
           status={txItem.status}

@@ -2,6 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import { ENV } from '../config/env';
 import logger from '../utils/logger';
 import { networkService } from './NetworkService';
+import { profileContextManager } from './ProfileContextManager';
 
 interface WebSocketOptions {
   autoConnect?: boolean;
@@ -23,7 +24,12 @@ class WebSocketService {
   private currentEntityId: string | null = null;
   private activeInteractionRooms: Set<string> = new Set();
 
+  // Profile switch cleanup function (React useEffect pattern)
+  private cleanupProfileSwitch: (() => void) | null = null;
+
   constructor() {
+    // Subscribe to profile switch events to clear room state
+    this.subscribeToProfileSwitch();
     // Monitor network state changes
     networkService.onNetworkStateChange((state) => {
       this.isOfflineMode = state.isOfflineMode;
@@ -67,6 +73,46 @@ class WebSocketService {
         this.connect(this.authToken!);
       }, 1000); // Small delay to ensure network is stable
     }
+  }
+
+  /**
+   * Subscribe to profile switch events to clear room state
+   * CRITICAL: Prevents rejoining OLD profile's rooms after switch
+   * Uses cleanup function pattern (React useEffect best practice)
+   */
+  private subscribeToProfileSwitch(): void {
+    const unsubscribeSwitchStart = profileContextManager.onSwitchStart(() => {
+      logger.info('[WebSocket] 🔄 Profile switch starting - clearing room state');
+
+      // Clear entity room (prevents rejoining old profile's entity room)
+      this.currentEntityId = null;
+
+      // Clear interaction rooms (prevents rejoining old profile's chats)
+      this.activeInteractionRooms.clear();
+
+      // Reset authentication state (new profile needs new auth)
+      this.isAuthenticated = false;
+
+      logger.debug('[WebSocket] ✅ Room state cleared for profile switch');
+    });
+
+    const unsubscribeSwitchComplete = profileContextManager.onSwitchComplete((data) => {
+      logger.info('[WebSocket] ✅ Profile switch complete - ready for new profile rooms');
+      // New rooms will be joined explicitly by app code after switch
+    });
+
+    const unsubscribeSwitchFailed = profileContextManager.onSwitchFailed(() => {
+      logger.warn('[WebSocket] ⚠️ Profile switch failed - room state already cleared');
+      // State already cleared on switch start, no action needed
+    });
+
+    // Store cleanup function
+    this.cleanupProfileSwitch = () => {
+      unsubscribeSwitchStart();
+      unsubscribeSwitchComplete();
+      unsubscribeSwitchFailed();
+      logger.debug('[WebSocket] Profile switch subscriptions cleaned up');
+    };
   }
 
   async connect(token: string, options: WebSocketOptions = {}): Promise<boolean> {
@@ -478,7 +524,7 @@ class WebSocketService {
         event: 'new_message',
         messageId: data?.id,
         interactionId: data?.interaction_id,
-        senderId: data?.sender_entity_id,
+        fromEntityId: data?.from_entity_id,
         timestamp: new Date().toISOString(),
         socketConnected: this.isConnected,
         socketAuthenticated: this.isAuthenticated,
@@ -561,23 +607,85 @@ class WebSocketService {
     return this.isAuthenticated && !this.isOfflineMode;
   }
 
+  /**
+   * Generic event listener - Standard EventEmitter pattern
+   *
+   * This is the PROFESSIONAL approach used by:
+   * - Socket.io native API
+   * - Node.js EventEmitter
+   * - RxJS Observable
+   *
+   * @param event - Event name to listen for
+   * @param callback - Handler function
+   * @returns Cleanup function to unsubscribe
+   */
+  on<T = any>(event: string, callback: (data: T) => void): () => void {
+    if (!this.socket) {
+      logger.warn(`[WebSocket] ⚠️ Cannot listen for '${event}' - socket not initialized`);
+      return () => {};
+    }
+
+    this.socket.on(event, callback);
+
+    // Return cleanup function (React useEffect pattern)
+    return () => {
+      if (this.socket) {
+        this.socket.off(event, callback);
+      }
+    };
+  }
+
+  /**
+   * Remove event listener
+   */
+  off(event: string, callback?: (...args: any[]) => void): void {
+    if (this.socket) {
+      if (callback) {
+        this.socket.off(event, callback);
+      } else {
+        this.socket.off(event);
+      }
+    }
+  }
+
   disconnect(): void {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    
+
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
     }
-    
+
     this.isConnected = false;
     this.isAuthenticated = false;
     this.reconnectAttempts = 0;
-    
+
     logger.debug('[WebSocket] 🔌 Disconnected and cleaned up');
-      }
+  }
+
+  /**
+   * Full cleanup including profile switch subscriptions
+   * Call this on logout to prevent memory leaks
+   */
+  cleanup(): void {
+    logger.debug('[WebSocket] 🧹 Full cleanup starting...');
+
+    // Disconnect socket
+    this.disconnect();
+
+    // Clear room state
+    this.currentEntityId = null;
+    this.activeInteractionRooms.clear();
+
+    // Cleanup profile switch subscriptions (prevents memory leak)
+    this.cleanupProfileSwitch?.();
+    this.cleanupProfileSwitch = null;
+
+    logger.info('[WebSocket] ✅ Full cleanup complete');
+  }
 }
 
 export const websocketService = new WebSocketService(); 

@@ -1,38 +1,15 @@
 /**
  * TanStack Query Mutations Index
- * 
+ *
  * Centralized export for all mutation hooks.
  * Provides easy access to all write operations with consistent patterns.
  */
 
-// Transfer mutations
-export {
-  useTransferMoney,
-  useOfflineTransferQueue,
-  type TransferRequest,
-  type TransferResponse,
-} from './useTransferMoney';
+// NOTE: useSendMessage is DEPRECATED - use UnifiedTimelineService.sendMessage() instead
+// See: _app/services/UnifiedTimelineService.ts
 
-// Message mutations
-export {
-  useSendMessage,
-  useBulkMessageOperations,
-  type SendMessageRequest,
-  type SendMessageResponse,
-} from './useSendMessage';
-
-// Profile mutations
-export {
-  useUpdateProfile,
-  useUploadAvatar,
-  useDeleteAccount,
-  type ProfileUpdateRequest,
-  type ProfileUpdateResponse,
-  type BasicProfileUpdate,
-  type AddressUpdate,
-  type PreferencesUpdate,
-  type SecurityUpdate,
-} from './useUpdateProfile';
+// Interaction mutations - ONE hook, ONE function
+export { useInteraction } from './useInteraction';
 
 /**
  * Common mutation patterns and utilities

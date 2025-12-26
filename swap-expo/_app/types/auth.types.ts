@@ -76,6 +76,9 @@ export interface AuthContextType {
   isLoading: boolean;
   user: User | null;
 
+  // Computed convenience properties (derived from user)
+  currentProfileId: string | null; // user?.profileId - single source of truth
+
   // Initialization State (blocks UI until session check completes)
   isInitialized: boolean;
 

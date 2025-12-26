@@ -138,10 +138,10 @@ export const clearProfileLocalDB = async (profileId: string): Promise<void> => {
 export type { Database, Transaction } from './db-interfaces';
 
 // Re-export Repository classes (they use singleton pattern)
-export { MessageRepository } from './MessageRepository';
+// NOTE: MessageRepository deleted - use unifiedTimelineRepository for interaction timeline
 export { TransactionRepository } from './TransactionRepository';
 export { CurrencyWalletsRepository } from './CurrencyWalletsRepository';
-export { TimelineRepository } from './TimelineRepository';
+export { unifiedTimelineRepository, TIMELINE_UPDATED_EVENT } from './UnifiedTimelineRepository'; // LOCAL-FIRST: Replaces TimelineRepository
 export { InteractionRepository } from './InteractionRepository';
 export { UserRepository } from './UserRepository';
 export { SearchHistoryRepository } from './SearchHistoryRepository';

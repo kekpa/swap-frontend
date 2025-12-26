@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { CommonActions, StackActions } from '@react-navigation/native';
+import { CommonActions } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { InteractionsStackParamList } from '../../navigation/interactions/interactionsNavigator';
 import { useUnifiedSearch, SearchResult } from '../../hooks-data/useUnifiedSearch';
@@ -399,16 +399,19 @@ const NewInteraction2: React.FC = () => {
         timestamp: new Date().getTime(),
       };
 
+      // 1. Dismiss the modal (slide down animation)
       navigation.goBack();
+
+      // 2. After modal dismiss, navigate using official CommonActions API
+      // Option B: Back returns to original page (industry standard)
       InteractionManager.runAfterInteractions(() => {
         logger.debug(`Navigating to existing interaction: ${searchResult.id}`, "NewInteraction");
-        navigation.navigate('App', {
-          screen: 'Contacts',
-          params: {
-            screen: 'ContactInteractionHistory2',
+        navigation.dispatch(
+          CommonActions.navigate({
+            name: 'ContactInteractionHistory2',
             params: contactData,
-          },
-        });
+          })
+        );
       });
       return;
     }
@@ -423,19 +426,19 @@ const NewInteraction2: React.FC = () => {
       timestamp: new Date().getTime(),
     };
 
-    // 1. Dismiss the modal first
+    // 1. Dismiss the modal (slide down animation)
     navigation.goBack();
 
-    // 2. After interactions (like modal dismiss animation) have settled, navigate to the nested screen
+    // 2. After modal dismiss, navigate using official CommonActions API
+    // Option B: Back returns to original page (industry standard)
     InteractionManager.runAfterInteractions(() => {
-      logger.debug(`After modal dismiss, navigating to App/Contacts -> ContactInteractionHistory2 with params: ${JSON.stringify(contactData)}`, "NewInteraction");
-      navigation.navigate('App', {
-        screen: 'Contacts', // Target tab
-        params: {           // Params for the nested InteractionsNavigator
-          screen: 'ContactInteractionHistory2', // Target screen within InteractionsNavigator
-          params: contactData,                // Params for ContactInteractionHistory2
-        },
-      });
+      logger.debug(`After modal dismiss, navigating to ContactInteractionHistory2 for entity: ${searchResult.id}`, "NewInteraction");
+      navigation.dispatch(
+        CommonActions.navigate({
+          name: 'ContactInteractionHistory2',
+          params: contactData,
+        })
+      );
     });
   };
 

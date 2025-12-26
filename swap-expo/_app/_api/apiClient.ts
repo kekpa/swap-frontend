@@ -15,9 +15,9 @@ import {
   CacheConfig,
   QueuedRequest,
   AUTH_EVENTS,
-  EventEmitter,
   CachedEntry
 } from "../types/api.types";
+import EventEmitter from 'eventemitter3';
 import { jwtDecode } from "jwt-decode";
 
 
@@ -33,38 +33,8 @@ declare global {
   var apiCallHistory: ApiCallInfo[];
 }
 
-// Simple custom event emitter implementation for React Native
-class SimpleEventEmitter implements EventEmitter {
-  private listeners: Record<string, Function[]> = {};
-
-  on(event: string, callback: Function): void {
-    if (!this.listeners[event]) {
-      this.listeners[event] = [];
-    }
-    this.listeners[event].push(callback);
-  }
-
-  off(event: string, callback: Function): void {
-    if (!this.listeners[event]) return;
-    this.listeners[event] = this.listeners[event].filter(
-      (cb) => cb !== callback
-    );
-  }
-
-  emit(event: string, ...args: any[]): void {
-    if (!this.listeners[event]) return;
-    this.listeners[event].forEach((callback) => {
-      try {
-        callback(...args);
-      } catch (error) {
-        logger.error(`Error in event listener for ${event}:`, error);
-      }
-    });
-  }
-}
-
-// Create a global event emitter for auth events
-export const authEvents = new SimpleEventEmitter();
+// Create a global event emitter for auth events (using battle-tested eventemitter3)
+export const authEvents = new EventEmitter();
 
 // Event types for app lock integration
 export const APP_LOCK_EVENTS = {
@@ -276,15 +246,15 @@ const isTokenExpired = (token: string): boolean => {
   }
 };
 
-// Helper to check if a token is valid but about to expire (e.g., within 5 seconds)
+// Helper to check if a token is valid but about to expire
+// Proactive refresh: trigger background refresh 5 minutes before expiration
 const isTokenAboutToExpire = (token: string): boolean => {
   try {
     const decoded = jwtDecode(token) as any;
     const currentTime = Math.floor(Date.now() / 1000);
-    // Token is valid but expires in less than 5 seconds (was 30)
-    // For now, let's make this less aggressive or even disable it to break loops.
-    // return decoded.exp && decoded.exp > currentTime && decoded.exp - currentTime < 5;
-    return false; // Temporarily disable proactive refresh to stabilize
+    // Refresh if token expires within 5 minutes (300 seconds)
+    // This prevents 401 errors by refreshing before expiration (industry best practice)
+    return decoded.exp && decoded.exp > currentTime && decoded.exp - currentTime < 300;
   } catch (error) {
     logger.error('Error checking token expiration:', error);
     return false;

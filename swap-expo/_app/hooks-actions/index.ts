@@ -19,6 +19,9 @@ export * from './usePersonalInfoSave';
 export * from './useKycCompletion';
 export * from './useBeneficialOwners';
 
+// Interaction mutations (delete, archive, unarchive)
+export * from './useDeleteInteraction';
+
 /**
  * Quick reference for common hooks:
  * 

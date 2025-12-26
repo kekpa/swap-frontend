@@ -21,7 +21,7 @@ interface WebSocketMessage {
 interface MessageData {
   id: string;
   interaction_id: string;
-  sender_entity_id: string;
+  from_entity_id: string;
   content?: string;
   timestamp: string;
   // Additional WebSocket specific fields if needed
@@ -95,7 +95,7 @@ export const useWebSocketQuerySync = (entityId: string) => {
 
     const messageCleanup = websocketService.onMessage((data: MessageData) => {
       try {
-        logger.debug('[useWebSocketQuerySync] 📨 Received new message via WebSocket:', `messageId: ${data.id}, interactionId: ${data.interaction_id}, senderEntityId: ${data.sender_entity_id}`);
+        logger.debug('[useWebSocketQuerySync] 📨 Received new message via WebSocket:', `messageId: ${data.id}, interactionId: ${data.interaction_id}, fromEntityId: ${data.from_entity_id}`);
 
         // Prevent duplicate processing
         if (processedMessageIds.current.has(data.id)) {
@@ -201,7 +201,7 @@ export const useWebSocketQuerySync = (entityId: string) => {
       );
     });
 
-    // Update interactions list to show latest message
+    // Update interactions list to show latest activity
     const interactionsQueryKey = queryKeys.interactionsByEntity(entityId);
     queryClient.setQueryData(interactionsQueryKey, (oldInteractions: any[] | undefined) => {
       if (!oldInteractions) return oldInteractions;
@@ -210,10 +210,11 @@ export const useWebSocketQuerySync = (entityId: string) => {
         if (interaction.id === data.interaction_id) {
           return {
             ...interaction,
-            last_message_snippet: data.content || '',
-            last_message_at: data.timestamp,
-            unread_count: data.sender_entity_id !== entityId 
-              ? (interaction.unread_count || 0) + 1 
+            last_activity_snippet: data.content || '',
+            last_activity_at: data.timestamp,
+            last_activity_from_entity_id: data.from_entity_id,
+            unread_count: data.from_entity_id !== entityId
+              ? (interaction.unread_count || 0) + 1
               : interaction.unread_count,
           };
         }
@@ -293,6 +294,14 @@ export const useWebSocketQuerySync = (entityId: string) => {
     // Invalidate transactions
     queryClient.invalidateQueries({
       queryKey: queryKeys.recentTransactions(entityId, 50),
+      refetchType: 'active',
+    });
+
+    // PROFESSIONAL FIX: Also invalidate interactions list so chat preview updates
+    // When transaction status changes (PROCESSING_QUEUED -> COMPLETED), the interactions
+    // list snippet should update from "Pending: 44 HTG" to "Sent 44 HTG"
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.interactionsByEntity(entityId),
       refetchType: 'active',
     });
 

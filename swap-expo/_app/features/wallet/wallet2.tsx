@@ -41,11 +41,11 @@ import { useTransactionLimits, TransactionLimits } from '../../hooks-data/useTra
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useWalletTransactions } from '../../hooks-data/useRecentTransactions';
 import { useHeaderOffset } from '../../hooks/useHeaderOffset';
+import { useRefreshByUser } from '../../hooks/useRefreshByUser';
 
-// 🚀 PROFESSIONAL: Add intelligent preloading for WhatsApp-style instant loading
+// 🚀 UNIFIED: Local-first architecture uses local_timeline for instant loading
 import { queryClient } from '../../tanstack-query/queryClient';
 import { queryKeys } from '../../tanstack-query/queryKeys';
-import { transactionManager } from '../../services/TransactionManager';
 
 interface WalletTransaction {
   id: string;
@@ -128,45 +128,13 @@ const WalletDashboard: React.FC = () => {
     }
   }, [currencyBalances, isLoadingBalances, balancesError]);
 
-  // 🚀 PROFESSIONAL: Intelligent preloading of wallet transaction data (WhatsApp-style)
-  useEffect(() => {
-    if (currencyBalances && currencyBalances.length > 0 && user?.entityId) {
-      // Find the primary wallet's account for preloading transactions
-      const primaryWallet = currencyBalances.find(w => w.isPrimary);
-      const accountIdToPreload = primaryWallet?.account_id || currencyBalances[0]?.account_id;
-      
-      if (accountIdToPreload) {
-        logger.debug(`[WalletDashboard] 🚀 PRELOADING: Starting transaction preload for account: ${accountIdToPreload}`, "WalletDashboard");
-        
-        // Preload transactions in background with small delay to avoid overwhelming
-        setTimeout(() => {
-          // Check if we already have cached transaction data
-          const existingData = queryClient.getQueryData(queryKeys.transactionsByAccount(accountIdToPreload, 4));
-          if (!existingData) {
-            logger.debug(`[WalletDashboard] 🔄 PRELOADING: No cached transactions found, prefetching for instant UX`, "WalletDashboard");
-            
-            // Prefetch transaction data for instant loading
-            queryClient.prefetchQuery({
-              queryKey: queryKeys.transactionsByAccount(accountIdToPreload, 4),
-              queryFn: async () => {
-                const result = await transactionManager.getTransactionsForAccount(accountIdToPreload, 4, 0);
-                return result?.data || [];
-              },
-              staleTime: 10 * 60 * 1000, // 10 minutes
-            }).catch(error => {
-              logger.debug(`[WalletDashboard] ⚠️ PRELOADING: Transaction prefetch failed (non-critical): ${error}`, "WalletDashboard");
-            });
-          } else {
-            logger.debug(`[WalletDashboard] ✅ PRELOADING: Cached transaction data exists, skipping prefetch`, "WalletDashboard");
-          }
-        }, 200); // 200ms delay for background preloading
-      }
-    }
-  }, [currencyBalances, user?.entityId]);
+  // 🚀 UNIFIED: Wallet transaction preloading is now handled by useWalletTransactions hook
+  // The hook uses local_timeline (SQLite) for instant cached data display,
+  // and syncs with the API in background. No separate preloading needed here.
+  // See: fetchWalletTransactionsLocalFirst in useRecentTransactions.ts
 
   // State declarations
   const [isBalanceVisible, setIsBalanceVisible] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [selectedWallet, setSelectedWallet] = useState<WalletBalance | null>(null);
   const [isStackExpanded, setIsStackExpanded] = useState(false); // Disable scroll when stack is expanded
 
@@ -245,45 +213,51 @@ const WalletDashboard: React.FC = () => {
   };
 
   // Professional wallet-specific transaction loading
-  const { 
-    transactions: allAccountTransactions = [], 
-    isLoading: isLoadingWalletTransactions, 
-    refetch: refetchWalletTransactions 
+  // CRITICAL FIX: Pass BOTH walletId (for local SQLite query) AND accountId (for API call)
+  // - walletId: Currency-specific (e.g., HTG wallet, EUR wallet)
+  // - accountId: Parent account that owns all currency wallets
+  const walletTransactionsEnabled = !!selectedWallet?.wallet_id && !!selectedWallet?.account_id;
+
+  // DEBUG: Log hook parameters
+  logger.debug(`[WalletDashboard] 🔍 HOOK PARAMS: wallet_id=${selectedWallet?.wallet_id?.substring(0, 8) || 'null'}, account_id=${selectedWallet?.account_id?.substring(0, 8) || 'null'}, enabled=${walletTransactionsEnabled}`);
+
+  const {
+    transactions: allAccountTransactions = [],
+    isLoading: isLoadingWalletTransactions,
+    refetch: refetchWalletTransactions
   } = useWalletTransactions(
-    selectedWallet?.account_id || '', 
-    !!selectedWallet?.account_id
+    selectedWallet?.wallet_id || '',   // For local_timeline SQLite query
+    selectedWallet?.account_id || '',  // For API: /transactions/account/{accountId}
+    walletTransactionsEnabled
   );
+
+  // DEBUG: Log hook results
+  logger.debug(`[WalletDashboard] 🔍 HOOK RESULTS: transactions=${allAccountTransactions.length}, isLoading=${isLoadingWalletTransactions}`);
+
+  // Industry-standard refresh hook - per-screen local state (TanStack Query pattern)
+  // Source: https://github.com/TanStack/query/issues/2380
+  const { refreshing, onRefresh } = useRefreshByUser(async () => {
+    logger.debug('[WalletDashboard] 🔄 LOCAL-FIRST: Manual refresh requested');
+    await Promise.all([
+      refreshBalances().catch((error: any) => logger.warn('[WalletDashboard] Balance refresh failed (non-critical):', error)),
+      Promise.resolve(refetchWalletTransactions()).catch((error: any) => logger.warn('[WalletDashboard] Transaction refresh failed (non-critical):', error))
+    ]);
+    logger.info('[WalletDashboard] ✅ LOCAL-FIRST: Manual refresh completed');
+  });
 
   // Filter transactions by selected wallet currency
   const walletTransactions = useMemo(() => {
     if (!selectedWallet || !allAccountTransactions.length) {
-      logger.debug(`[WalletDashboard] 🎯 CURRENCY FILTER: No wallet selected or no transactions. Wallet: ${!!selectedWallet}, Transactions: ${allAccountTransactions.length}`);
       return [];
     }
 
-    // Debug: Log the first transaction and wallet currency IDs for comparison
-    if (allAccountTransactions.length > 0) {
-      const firstTx = allAccountTransactions[0];
-      logger.debug(`[WalletDashboard] 🔍 DEBUG CURRENCY FILTER:`);
-      logger.debug(`[WalletDashboard] 🔍 Selected Wallet Currency ID: ${selectedWallet.currency_id}`);
-      logger.debug(`[WalletDashboard] 🔍 Selected Wallet Currency Code: ${selectedWallet.currency_code}`);
-      logger.debug(`[WalletDashboard] 🔍 First Transaction Currency ID: ${firstTx.currency_id}`);
-      logger.debug(`[WalletDashboard] 🔍 First Transaction Currency Symbol: ${firstTx.currency_symbol}`);
-      logger.debug(`[WalletDashboard] 🔍 Transaction Structure:`, JSON.stringify(firstTx, null, 2));
-      logger.debug(`[WalletDashboard] 🔍 Wallet Structure:`, JSON.stringify(selectedWallet, null, 2));
-    }
-
     // Filter transactions to only show those matching the selected wallet's currency
-    const filteredTransactions = allAccountTransactions.filter(tx => {
-      const matches = tx.currency_id === selectedWallet.currency_id;
-      if (!matches) {
-        logger.debug(`[WalletDashboard] 🔍 Transaction ${tx.id} currency_id '${tx.currency_id}' does NOT match wallet currency_id '${selectedWallet.currency_id}'`);
-      }
-      return matches;
-    });
+    const filteredTransactions = allAccountTransactions.filter(tx =>
+      tx.currency_id === selectedWallet.currency_id
+    );
 
-    logger.debug(`[WalletDashboard] 🎯 CURRENCY FILTER: Showing ${filteredTransactions.length} of ${allAccountTransactions.length} transactions for ${selectedWallet.currency_code} wallet`);
-    
+    logger.debug(`[WalletDashboard] 🎯 CURRENCY FILTER: ${filteredTransactions.length}/${allAccountTransactions.length} transactions for ${selectedWallet.currency_code}`);
+
     return filteredTransactions;
   }, [allAccountTransactions, selectedWallet]);
 
@@ -564,11 +538,50 @@ const WalletDashboard: React.FC = () => {
     return networkUnsubscribe;
   }, [isWalletUnlocked, user]);
 
-  // Enhanced wallet initialization with offline mode support
+  // Wallet selection - separated from unlock state
+  // Transaction history should be visible even when wallet is "locked" (biometric)
+  // Only balance display requires unlock, not wallet selection
+  useEffect(() => {
+    if (!user) {
+      setSelectedWallet(null);
+      return;
+    }
+
+    // 🚀 WHATSAPP-STYLE: Auto-select primary wallet from TanStack Query data
+    // No longer gated by isWalletUnlocked - transactions should show immediately
+    if (currencyBalances.length > 0) {
+      const primaryWallet = currencyBalances.find((w: WalletBalance) => w.isPrimary) || currencyBalances[0];
+
+      // Use functional update to avoid race condition
+      setSelectedWallet(prev => {
+        // If no previous selection OR wallet changed, select the primary
+        if (!prev || prev.wallet_id !== primaryWallet.wallet_id) {
+          logger.debug(`[WalletDashboard] 🎯 INSTANT: Auto-selected ${primaryWallet.currency_code} wallet (${primaryWallet.isPrimary ? 'PRIMARY' : 'FALLBACK'})`, "WalletDashboard");
+          return primaryWallet;
+        }
+        // Even if wallet_id matches, update if isPrimary status changed
+        if (prev.isPrimary !== primaryWallet.isPrimary) {
+          logger.debug(`[WalletDashboard] 🔄 SYNC: Updated ${primaryWallet.currency_code} wallet primary status to ${primaryWallet.isPrimary}`, "WalletDashboard");
+          return primaryWallet;
+        }
+        // No change needed
+        return prev;
+      });
+    } else {
+      // Clear selected wallet if no balances available
+      setSelectedWallet(prev => {
+        if (prev) {
+          logger.debug(`[WalletDashboard] 📭 No wallets available, cleared selection`, "WalletDashboard");
+          return null;
+        }
+        return prev;
+      });
+    }
+  }, [user?.id, user?.entityId, currencyBalances]);
+
+  // Balance refresh when wallet unlocks
   useEffect(() => {
     if (!isWalletUnlocked || !user) {
-      // Clear selected wallet when wallet is locked
-      setSelectedWallet(null);
       return;
     }
 
@@ -578,44 +591,17 @@ const WalletDashboard: React.FC = () => {
       refreshBalances().catch((error: any) => {
         logger.error('[WalletDashboard] Failed to fetch balances after unlock:', error);
       });
-      return; // Wait for refetch to complete
     }
 
-    // 🚀 WHATSAPP-STYLE: Auto-select primary wallet from TanStack Query data
-    if (currencyBalances.length > 0) {
-      const primaryWallet = currencyBalances.find((w: WalletBalance) => w.isPrimary) || currencyBalances[0];
-      
-      // CRITICAL FIX: Always update selectedWallet to match the current primary from TanStack Query
-      // This ensures optimistic updates are immediately reflected in the UI
-      if (!selectedWallet || selectedWallet.wallet_id !== primaryWallet.wallet_id) {
-        setSelectedWallet(primaryWallet);
-        logger.debug(`[WalletDashboard] 🎯 INSTANT: Auto-selected ${primaryWallet.currency_code} wallet (${primaryWallet.isPrimary ? 'PRIMARY' : 'FALLBACK'})`, "WalletDashboard");
-      } else {
-        // Even if wallet_id matches, update the wallet object to get latest isPrimary status
-        if (selectedWallet.isPrimary !== primaryWallet.isPrimary) {
-          setSelectedWallet(primaryWallet);
-          logger.debug(`[WalletDashboard] 🔄 SYNC: Updated ${primaryWallet.currency_code} wallet primary status to ${primaryWallet.isPrimary}`, "WalletDashboard");
-        }
-      }
-    } else {
-      // Clear selected wallet if no balances available
-      if (selectedWallet) {
-        setSelectedWallet(null);
-        logger.debug(`[WalletDashboard] 📭 No wallets available, cleared selection`, "WalletDashboard");
-      }
-    }
-
-    // Cleanup on unmount or user change
+    // Cleanup on unmount
     return () => {
-      // Clear authentication timer on unmount
       if (authTimerRef.current) {
         clearTimeout(authTimerRef.current);
         authTimerRef.current = null;
       }
-      // Reset authentication state
       authenticationRef.current = false;
     };
-  }, [isWalletUnlocked, user?.id, user?.entityId, currencyBalances, selectedWallet]);
+  }, [isWalletUnlocked, user?.id, currencyBalances.length, isLoadingBalances, refreshBalances]);
 
   // Helper function to resolve entity name from interactions
   const getEntityNameFromInteractions = useCallback((entityId: string): string => {
@@ -770,26 +756,6 @@ const WalletDashboard: React.FC = () => {
   // NO FALLBACK: Clean, professional backend filtering only
   const filteredTransactions = displayTransactions;
 
-  const handleActualRefresh = async () => {
-    setRefreshing(true);
-    try {
-      logger.debug('[WalletDashboard] 🔄 LOCAL-FIRST: Manual refresh requested');
-      
-      // LOCAL-FIRST: Background refresh without blocking UI
-      // UI already shows cached data, this just updates it
-      await Promise.all([
-        refreshBalances().catch((error: any) => logger.warn('[WalletDashboard] Balance refresh failed (non-critical):', error)),
-        Promise.resolve(refetchWalletTransactions()).catch((error: any) => logger.warn('[WalletDashboard] Transaction refresh failed (non-critical):', error))
-      ]);
-      
-      logger.info('[WalletDashboard] ✅ LOCAL-FIRST: Manual refresh completed');
-    } catch (error) {
-      logger.error('[WalletDashboard] ❌ Manual refresh error (UI still shows cached data):', error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
   const getHeaderInitials = () => {
     // For business users, use business name initials
     if (user?.businessName) {
@@ -821,16 +787,13 @@ const WalletDashboard: React.FC = () => {
       flex: 1,
       backgroundColor: theme.colors.background,
     },
+    contentContainer: {
+      flex: 1,
+    },
     scrollView: {
       flex: 1,
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
     },
     scrollViewContent: {
-      paddingTop: headerHeight,
       paddingBottom: theme.spacing.lg,
     },
     greeting: {
@@ -1237,29 +1200,30 @@ const WalletDashboard: React.FC = () => {
           entityId={user?.entityId}
         />
 
-        <Animated.ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollViewContent}
-          showsVerticalScrollIndicator={false}
-          scrollEnabled={!isStackExpanded}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: false }
-          )}
-          scrollEventThrottle={16}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleActualRefresh}
-              colors={[theme.colors.primary]}
-              tintColor={theme.colors.primary}
-            />
-          }
-        >
-          <View>
-            {/* Limited access banner moved to Home page card slider */}
+        <View style={styles.contentContainer}>
+          <Animated.ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollViewContent}
+            showsVerticalScrollIndicator={false}
+            scrollEnabled={!isStackExpanded}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+              { useNativeDriver: false }
+            )}
+            scrollEventThrottle={16}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[theme.colors.primary]}
+                tintColor={theme.colors.primary}
+              />
+            }
+          >
+            <View>
+              {/* Limited access banner moved to Home page card slider */}
 
-            <WalletStackCard
+              <WalletStackCard
               wallets={currencyBalances}
               selectedWalletId={selectedWallet?.wallet_id}
               isBalanceVisible={isBalanceVisible}
@@ -1330,8 +1294,9 @@ const WalletDashboard: React.FC = () => {
                 )}
               </View>
             </Animated.View>
-          </View>
-        </Animated.ScrollView>
+            </View>
+          </Animated.ScrollView>
+        </View>
       </SafeAreaView>
     );
   }
@@ -1445,27 +1410,28 @@ const WalletDashboard: React.FC = () => {
         entityId={user?.entityId}
       />
 
-      <Animated.ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollViewContent}
-        showsVerticalScrollIndicator={false}
-        scrollEnabled={!isStackExpanded}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
-        scrollEventThrottle={16}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleActualRefresh}
-            colors={[theme.colors.primary]}
-            tintColor={theme.colors.primary}
-          />
-        }
-      >
-        <View>
-          <WalletStackCard
+      <View style={styles.contentContainer}>
+        <Animated.ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollViewContent}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={!isStackExpanded}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: false }
+          )}
+          scrollEventThrottle={16}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.colors.primary]}
+              tintColor={theme.colors.primary}
+            />
+          }
+        >
+          <View>
+            <WalletStackCard
             wallets={currencyBalances}
             selectedWalletId={selectedWallet?.wallet_id}
             isBalanceVisible={isBalanceVisible}
@@ -1547,8 +1513,9 @@ const WalletDashboard: React.FC = () => {
               )}
             </View>
           </Animated.View>
-        </View>
-      </Animated.ScrollView>
+          </View>
+        </Animated.ScrollView>
+      </View>
     </SafeAreaView>
   );
 };

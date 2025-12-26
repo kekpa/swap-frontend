@@ -53,7 +53,7 @@ const createStyles = (theme: Theme) =>
     title: {
       fontSize: theme.typography.fontSize.xxl,
       fontWeight: 'bold',
-      color: theme.colors.text,
+      color: theme.colors.textPrimary,
       marginBottom: 8,
     },
     subtitle: {
@@ -70,7 +70,7 @@ const createStyles = (theme: Theme) =>
     comingSoonText: {
       fontSize: theme.typography.fontSize.lg,
       fontWeight: '600',
-      color: theme.colors.text,
+      color: theme.colors.textPrimary,
       marginBottom: 12,
       textAlign: 'center',
     },

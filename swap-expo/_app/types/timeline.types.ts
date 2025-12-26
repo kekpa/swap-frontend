@@ -17,7 +17,7 @@ export interface MessageTimelineItem extends BaseTimelineItem {
   itemType?: 'message';
   type?: 'message';
   interaction_id: string;
-  sender_entity_id: string;
+  from_entity_id: string;
   content?: string;
   message_type?: MessageType;
   media_url?: string;
@@ -55,8 +55,8 @@ export interface TransactionTimelineItem extends BaseTimelineItem {
   from_entity_id?: string;
   to_entity_id?: string;
   related_entities?: {
-    sender_entity_id?: string;
-    recipient_entity_id?: string;
+    from_entity_id?: string;
+    to_entity_id?: string;
   };
 }
 

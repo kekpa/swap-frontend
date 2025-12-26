@@ -3,6 +3,7 @@
 // Updated: Fixed undefined recipientName.split error - 2025-05-22
 // Updated: Changed to use navigation-based slide-up similar to NewInteraction2 - 2025-05-22
 // Updated: Fixed navigation back to ContactInteractionHistory to preserve context - 2025-05-23
+// Updated: Changed to CommonActions.reset for guaranteed stack state (Revolut/Stripe pattern) - 2025-12-17
 import React, { useMemo, useEffect } from 'react';
 import {
   View,
@@ -11,7 +12,6 @@ import {
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
-  InteractionManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, CommonActions } from '@react-navigation/native';
@@ -33,6 +33,7 @@ interface TransferCompletedScreenProps {
       createdAt?: string;
       contactId?: string;
       interactionId?: string;
+      currencyCode?: string; // Currency code for display (e.g., "HTG", "USD")
     };
   };
 }
@@ -51,17 +52,18 @@ const TransferCompletedScreen: React.FC<TransferCompletedScreenProps> = ({ route
     transactionId: 'UNKNOWN',
   };
   
-  const { 
+  const {
     amount = 0, // Provide default value to prevent the toFixed error
     recipientName = 'Unknown', // Add default value to prevent undefined errors
     recipientInitial = 'U',
     recipientColor = theme.colors.secondary,
-    message = '', 
-    transactionId = 'UNKNOWN', 
-    status = 'Completed', 
+    message = '',
+    transactionId = 'UNKNOWN',
+    status = 'Completed',
     createdAt,
     contactId,
-    interactionId
+    interactionId,
+    currencyCode = 'HTG', // Default to HTG for Haiti
   } = params;
   
   // Get recipient's first name safely
@@ -87,39 +89,35 @@ const TransferCompletedScreen: React.FC<TransferCompletedScreenProps> = ({ route
   }, [recipientName, amount, transactionId, contactId, interactionId]);
   
   const handleClose = () => {
-    // If we have contactId and/or interactionId, navigate back to ContactInteractionHistory2
-    // with proper parameters to ensure context is preserved
-    if (contactId) {
-      logger.debug(`Navigating back to ContactInteractionHistory2 with contactId: ${contactId}, interactionId: ${interactionId}`, "TransferCompletedScreen");
-      
-      // Use a reset action to clear the navigation stack before navigating
-      // This will remove ReviewTransfer from the stack
-      InteractionManager.runAfterInteractions(() => {
-        navigation.dispatch(
-          CommonActions.reset({
-            index: 1,
-            routes: [
-              { name: 'InteractionsHistory' },
-              { 
-                name: 'ContactInteractionHistory2',
-                params: {
-                  contactId,
-                  contactName: recipientName,
-                  contactInitials: recipientInitial,
-                  contactAvatarColor: recipientColor,
-                  interactionId,
-                  forceRefresh: true,
-                  timestamp: new Date().getTime()
-                }
-              }
-            ],
-          })
-        );
-      });
-    } else {
-      // Just go back one screen if we don't have enough context
-      navigation.goBack();
-    }
+    // Use CommonActions.reset to guarantee clean navigation stack
+    // This is the industry standard approach (Revolut/Stripe pattern)
+    // Stack becomes: App → ContactInteractionHistory2
+    // Back button will go to App (home), not through SendMoney flow
+    logger.debug(
+      `Resetting navigation stack to App → ContactInteractionHistory2`,
+      "TransferCompletedScreen"
+    );
+
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 1,
+        routes: [
+          { name: "App" },
+          {
+            name: "ContactInteractionHistory2",
+            params: {
+              contactId,
+              contactName: recipientName,
+              contactInitials: recipientInitial,
+              contactAvatarColor: recipientColor,
+              interactionId,
+              forceRefresh: true,
+              timestamp: Date.now(),
+            },
+          },
+        ],
+      })
+    );
   };
 
   // Styles memoized with theme dependency
@@ -253,7 +251,7 @@ const TransferCompletedScreen: React.FC<TransferCompletedScreenProps> = ({ route
       
       {/* Transaction Summary */}
       <View style={styles.summaryContainer}>
-        <Text style={styles.amountText}>-${amount.toFixed(2)}</Text>
+        <Text style={styles.amountText}>-{Math.round(amount)} {currencyCode}</Text>
         <Text style={styles.recipientText}>{recipientName}</Text>
         <Text style={styles.transactionIdText}>Transaction ID: {transactionId}</Text>
         <Text style={styles.transactionIdText}>Status: {status}</Text>

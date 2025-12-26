@@ -17,8 +17,9 @@ export interface LocalInteraction {
   is_active?: boolean;
   created_at?: string;
   updated_at?: string;
-  last_message_snippet?: string | null;
-  last_message_at?: string | null;
+  last_activity_snippet?: string | null;
+  last_activity_at?: string | null;
+  last_activity_from_entity_id?: string | null;
   unread_count?: number;
   icon_url?: string | null;
   metadata?: any;
@@ -144,9 +145,9 @@ export class InteractionRepository {
       const statement = await db.prepareAsync(`
         INSERT OR REPLACE INTO interactions (
           id, name, is_group, relationship_id, created_by_entity_id, is_active,
-          created_at, updated_at, last_message_snippet, last_message_at,
-          unread_count, icon_url, metadata, profile_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          created_at, updated_at, last_activity_snippet, last_activity_at,
+          last_activity_from_entity_id, unread_count, icon_url, metadata, profile_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       await statement.executeAsync(
@@ -158,8 +159,9 @@ export class InteractionRepository {
         interaction.is_active !== undefined ? (interaction.is_active ? 1 : 0) : 1,
         interaction.created_at || new Date().toISOString(),
         interaction.updated_at || new Date().toISOString(),
-        interaction.last_message_snippet || null,
-        interaction.last_message_at || null,
+        interaction.last_activity_snippet || null,
+        interaction.last_activity_at || null,
+        interaction.last_activity_from_entity_id || null,
         interaction.unread_count || 0,
         interaction.icon_url || null,
         interaction.metadata ? JSON.stringify(interaction.metadata) : null,
@@ -185,9 +187,9 @@ export class InteractionRepository {
       await db.runAsync(
         `INSERT OR REPLACE INTO interactions (
           id, name, is_group, relationship_id, created_by_entity_id, is_active,
-          created_at, updated_at, last_message_snippet, last_message_at,
-          unread_count, icon_url, metadata, profile_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          created_at, updated_at, last_activity_snippet, last_activity_at,
+          last_activity_from_entity_id, unread_count, icon_url, metadata, profile_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           interaction.id,
           interaction.name ?? null,
@@ -197,8 +199,9 @@ export class InteractionRepository {
           interaction.is_active !== undefined ? (interaction.is_active ? 1 : 0) : 1,
           interaction.created_at ?? new Date().toISOString(),
           interaction.updated_at ?? new Date().toISOString(),
-          interaction.last_message_snippet ?? null,
-          interaction.last_message_at ?? null,
+          interaction.last_activity_snippet ?? null,
+          interaction.last_activity_at ?? null,
+          interaction.last_activity_from_entity_id ?? null,
           interaction.unread_count ?? 0,
           interaction.icon_url ?? null,
           JSON.stringify(interaction.metadata ?? {}),
@@ -348,7 +351,7 @@ export class InteractionRepository {
       const statement = await db.prepareAsync(`
         SELECT * FROM interactions
         WHERE profile_id = ?
-        ORDER BY datetime(last_message_at) DESC, datetime(updated_at) DESC
+        ORDER BY datetime(last_activity_at) DESC, datetime(updated_at) DESC
         LIMIT ?
       `);
 
@@ -415,7 +418,7 @@ export class InteractionRepository {
       const interactionsStatement = await db.prepareAsync(`
         SELECT * FROM interactions
         WHERE profile_id = ?
-        ORDER BY datetime(last_message_at) DESC, datetime(updated_at) DESC
+        ORDER BY datetime(last_activity_at) DESC, datetime(updated_at) DESC
         LIMIT ?
       `);
 
@@ -496,18 +499,19 @@ export class InteractionRepository {
   }
 
   /**
-   * Update interaction's last message info (PROFILE-ISOLATED)
+   * Update interaction's last activity info (PROFILE-ISOLATED)
    */
-  public async updateInteractionLastMessage(
+  public async updateInteractionLastActivity(
     interactionId: string,
     profileId: string,
-    messageSnippet: string,
-    messageTimestamp: string
+    activitySnippet: string,
+    activityTimestamp: string,
+    fromEntityId?: string
   ): Promise<void> {
-    logger.debug(`[InteractionRepository] Updating last message for interaction: ${interactionId} (profileId: ${profileId})`);
+    logger.debug(`[InteractionRepository] Updating last activity for interaction: ${interactionId} (profileId: ${profileId})`);
 
     if (!(await this.isDatabaseAvailable())) {
-      logger.warn('[InteractionRepository] Database not available for updateInteractionLastMessage');
+      logger.warn('[InteractionRepository] Database not available for updateInteractionLastActivity');
       return;
     }
 
@@ -515,23 +519,24 @@ export class InteractionRepository {
       const db = await this.getDatabase();
       const statement = await db.prepareAsync(`
         UPDATE interactions
-        SET last_message_snippet = ?, last_message_at = ?, updated_at = ?
+        SET last_activity_snippet = ?, last_activity_at = ?, last_activity_from_entity_id = ?, updated_at = ?
         WHERE id = ? AND profile_id = ?
       `);
 
       await statement.executeAsync(
-        messageSnippet,
-        messageTimestamp,
+        activitySnippet,
+        activityTimestamp,
+        fromEntityId || null,
         new Date().toISOString(),
         interactionId,
         profileId
       );
 
       await statement.finalizeAsync();
-      logger.debug(`[InteractionRepository] Updated last message for interaction: ${interactionId} (profileId: ${profileId})`);
+      logger.debug(`[InteractionRepository] Updated last activity for interaction: ${interactionId} (profileId: ${profileId})`);
 
     } catch (error) {
-      logger.error(`[InteractionRepository] Error updating last message for interaction ${interactionId}: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(`[InteractionRepository] Error updating last activity for interaction ${interactionId}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

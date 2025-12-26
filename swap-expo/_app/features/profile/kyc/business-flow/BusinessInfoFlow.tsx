@@ -451,7 +451,7 @@ const BusinessInfoFlow: React.FC = () => {
       borderRadius: 999,
       borderWidth: 1.5,
       borderColor: theme.colors.border,
-      backgroundColor: theme.colors.surface,
+      backgroundColor: theme.colors.card,
     },
     chipSelected: {
       backgroundColor: theme.colors.primary,

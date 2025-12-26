@@ -7,17 +7,16 @@
  * For action hooks (mutations, side effects), see /hooks-actions/index.ts
  */
 
-// Balance and wallet hooks
+// Balance hooks
 export * from './useBalances';
-export * from './useWallets';
 
-// Transaction hooks  
+// Transaction hooks
 export * from './useRecentTransactions';
-export * from './useTransactionHistory';
+export * from './useTransactionLimits';
 
 // Interaction and messaging hooks
 export * from './useInteractions';
-export * from './useTimeline';
+export * from './useLocalTimeline'; // LOCAL-FIRST: Replaces useTimeline
 export * from './useRecentConversations';
 
 // User profile and identity hooks
@@ -33,9 +32,20 @@ export * from './useStandardQuery';
 
 // Search hooks
 export * from './useSearchEntities';
+export * from './useUnifiedSearch';
+export * from './useFullTextSearch';
 
-// Background sync hooks
-export * from './useBackgroundSync';
+// Profile hooks
+export * from './useAvailableProfiles';
+
+// Device capability hooks
+export * from './useBiometricAvailability';
+
+// Loading state utilities
+export * from './useLoadingState';
+
+// Background sync hooks (from tanstack-query/sync)
+export * from '../tanstack-query/sync/useBackgroundSync';
 
 // WebSocket integration hooks
 export * from './useWebSocketQuerySync';
@@ -58,7 +68,7 @@ export * from './useAdaptiveStaleTime';
  * 
  * **Messaging & Interactions:**
  * - `useInteractions(entityId)` - Get interaction list
- * - `useTimeline(interactionId)` - Get message timeline
+ * - `useLocalTimeline(interactionId)` - Get message timeline (local-first, instant)
  * - `useRecentConversations(entityId)` - Get recent conversations
  * 
  * **Search:**

@@ -4,7 +4,7 @@ export * from './user.types';
 export * from './currency.types';
 export * from './api.types';
 export * from './ui.types';
-export * from './refresh.types';
+// refresh.types.ts was replaced by RefreshContext.tsx
 export * from './interaction.types';
 export * from './message.types';
 export * from './transaction.types';

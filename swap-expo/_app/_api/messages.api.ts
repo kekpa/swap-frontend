@@ -16,26 +16,32 @@ import { MessageType } from '../types/message.types';
 /**
  * CreateDirectMessageDto
  * Matches backend: @kekpa/shared-infra/dto/message.dto.ts
+ *
+ * Uses from_entity_id/to_entity_id for consistency with transaction_ledger
  */
 export interface CreateDirectMessageRequest {
-  recipient_id: string;
+  to_entity_id: string;           // Who receives the message (aligned with transaction_ledger)
+  from_entity_id?: string;        // Who sends (optional - from JWT if not provided)
   content?: string;
   message_type: MessageType;
   media_url?: string;
   media_type?: 'image' | 'video' | 'audio' | 'file';
   metadata?: Record<string, any>;
-  idempotency_key: string; // Required for production reliability
+  idempotency_key: string;        // Required for production reliability
 }
 
 /**
  * DirectMessageResponse
  * Matches backend response structure from MessagesGatewayService
+ *
+ * Uses from_entity_id/to_entity_id for consistency with transaction_ledger
  */
 export interface DirectMessageResponse {
   message: {
     id: string;
     interaction_id: string;
-    sender_entity_id: string;
+    from_entity_id: string;       // Who sent (aligned with transaction_ledger)
+    to_entity_id?: string;        // Who receives (aligned with transaction_ledger)
     content: string;
     message_type: MessageType;
     media_url?: string;
@@ -71,7 +77,9 @@ export class MessagesApiService {
    * 3. Proxies to Messages microservice
    * 4. Returns message + interaction details
    *
-   * @param request Message data with recipient_id
+   * Uses from_entity_id/to_entity_id for consistency with transaction_ledger
+   *
+   * @param request Message data with to_entity_id
    * @returns Promise with created message and interaction
    * @throws Error if API call fails
    */

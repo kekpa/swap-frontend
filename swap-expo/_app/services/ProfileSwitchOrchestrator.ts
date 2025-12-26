@@ -103,6 +103,8 @@ export interface AvailableProfile {
 export interface ProfileSwitchOptions {
   targetProfileId: string;
   pin?: string; // Business access PIN (required if business has PIN set)
+  biometricVerified?: boolean; // True if user authenticated via biometric (skip PIN)
+  deviceFingerprint?: string; // Device fingerprint for biometric verification
   requireBiometric?: boolean; // Default: true
   apiClient: any; // Axios instance
   authContext: any; // AuthContext instance
@@ -322,7 +324,13 @@ export class ProfileSwitchOrchestrator {
       this.state = ProfileSwitchState.API_CALL_PENDING;
       this.updateProgress(this.state, 'Switching profile...');
 
-      const apiResponse = await this.callSwitchProfileAPI(apiClient, targetProfileId, options.pin);
+      const apiResponse = await this.callSwitchProfileAPI(
+        apiClient,
+        targetProfileId,
+        options.pin,
+        options.biometricVerified,
+        options.deviceFingerprint
+      );
 
       logger.debug('[ProfileSwitchOrchestrator] ✅ API call successful', 'profile_switch');
 
@@ -609,10 +617,18 @@ export class ProfileSwitchOrchestrator {
   /**
    * Call backend /auth/switch-profile API
    */
-  private async callSwitchProfileAPI(apiClient: any, targetProfileId: string, pin?: string): Promise<any> {
+  private async callSwitchProfileAPI(
+    apiClient: any,
+    targetProfileId: string,
+    pin?: string,
+    biometricVerified?: boolean,
+    deviceFingerprint?: string
+  ): Promise<any> {
     const response = await apiClient.post('/auth/switch-profile', {
       targetProfileId,
-      pin, // Business access PIN (if required)
+      pin, // Business access PIN (if required, skipped when biometricVerified)
+      biometricVerified, // True if user authenticated via biometric on this device
+      deviceFingerprint, // Device fingerprint for backend biometric token validation
     });
 
     if (!response.data || !response.data.access_token) {
@@ -802,28 +818,123 @@ export class ProfileSwitchOrchestrator {
 
       logger.debug('[ProfileSwitchOrchestrator] ✅ Old profile caches surgically invalidated (including KYC)');
 
+      // OPTIMIZATION: Prefetch NEW profile's critical data BEFORE clearing old data
+      // This is the Revolut/Wise pattern - data is ready before switch completes
+      const newProfileId = newProfile.id || newProfile.profile_id;
+      const newEntityId = newProfile.entity_id;
+
+      if (newProfileId && newEntityId) {
+        // STEP A: Prefetch wallet/balance data from API and store in SQLite
+        // This happens BEFORE clearing old data so wallet screen never shows skeleton
+        try {
+          console.log('🏦 [PREFETCH 1/8] Starting prefetch for:', { newProfileId, newEntityId });
+
+          const { API_PATHS } = await import('../_api/apiPaths');
+          const apiUrl = API_PATHS.WALLET.BY_ENTITY(newEntityId);
+          console.log('🏦 [PREFETCH 2/8] API URL:', apiUrl);
+
+          const walletResponse = await apiClient.get(apiUrl);
+          console.log('🏦 [PREFETCH 3/8] API response status:', walletResponse?.status, 'hasData:', !!walletResponse?.data);
+          console.log('🏦 [PREFETCH 3b/8] Raw response data type:', typeof walletResponse?.data, 'isArray:', Array.isArray(walletResponse?.data));
+          console.log('🏦 [PREFETCH 3c/8] Raw response data (first 500 chars):', JSON.stringify(walletResponse?.data)?.substring(0, 500));
+
+          if (walletResponse?.data) {
+            // Import repository instance (not class) from the repository file directly
+            const { currencyWalletsRepository } = await import('../localdb/CurrencyWalletsRepository');
+            console.log('🏦 [PREFETCH 4/8] Repository imported successfully');
+
+            // PROFESSIONAL: Use shared API response parser (same as useBalances.ts)
+            // This handles all backend response formats: {result: [...]}, {data: [...]}, direct array, etc.
+            const { parseWalletResponse } = await import('../utils/apiResponseParser');
+            const wallets = parseWalletResponse(walletResponse.data);
+            console.log('🏦 [PREFETCH 5/8] Wallets parsed:', wallets.length, 'items');
+            if (wallets.length > 0) {
+              console.log('🏦 [PREFETCH 5b/8] First wallet sample:', JSON.stringify(wallets[0])?.substring(0, 300));
+            }
+
+            if (wallets.length > 0) {
+              // Transform to repository format
+              const repositoryBalances = wallets.map((wallet: any) => ({
+                id: wallet.id || wallet.wallet_id,
+                account_id: wallet.account_id,
+                currency_id: wallet.currency_id,
+                currency_code: wallet.currency_code || wallet.currency?.code || 'HTG',
+                currency_symbol: wallet.currency_symbol || wallet.currency?.symbol || 'G',
+                currency_name: wallet.currency_name || wallet.currency?.name || 'Haitian Gourde',
+                currency_color: wallet.currency_color || wallet.currency?.color,
+                balance: parseFloat(wallet.balance) || 0,
+                reserved_balance: parseFloat(wallet.reserved_balance) || 0,
+                available_balance: parseFloat(wallet.available_balance) || parseFloat(wallet.balance) || 0,
+                balance_last_updated: wallet.balance_last_updated || wallet.updated_at,
+                is_active: wallet.is_active ?? true,
+                is_primary: wallet.is_primary ?? false,
+                created_at: wallet.created_at || new Date().toISOString(),
+                updated_at: wallet.updated_at || new Date().toISOString(),
+                is_synced: true,
+              }));
+              console.log('🏦 [PREFETCH 6/8] Transformed', repositoryBalances.length, 'wallets for SQLite');
+
+              // Save to SQLite for new profile
+              await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances, newProfileId);
+              console.log('🏦 [PREFETCH 7/8] ✅ Saved to SQLite for profileId:', newProfileId);
+
+              // Also cache in TanStack Query for immediate availability
+              if (queryClient) {
+                const transformedBalances = wallets.map((wallet: any) => ({
+                  wallet_id: wallet.id || wallet.wallet_id,
+                  account_id: wallet.account_id,
+                  currency_id: wallet.currency_id,
+                  currency_code: wallet.currency_code || wallet.currency?.code || 'HTG',
+                  currency_symbol: wallet.currency_symbol || wallet.currency?.symbol || 'G',
+                  currency_name: wallet.currency_name || wallet.currency?.name || 'Haitian Gourde',
+                  currency_color: wallet.currency_color || wallet.currency?.color,
+                  balance: parseFloat(wallet.balance) || 0,
+                  reserved_balance: parseFloat(wallet.reserved_balance) || 0,
+                  available_balance: parseFloat(wallet.available_balance) || parseFloat(wallet.balance) || 0,
+                  balance_last_updated: wallet.balance_last_updated || wallet.updated_at,
+                  is_active: wallet.is_active ?? true,
+                  isPrimary: wallet.is_primary ?? false,
+                }));
+
+                const queryKey = queryKeys.balancesByEntity(newProfileId, newEntityId);
+                console.log('🏦 [PREFETCH 8/8] Caching in TanStack with queryKey:', JSON.stringify(queryKey));
+                queryClient.setQueryData(queryKey, transformedBalances);
+                console.log('🏦 [PREFETCH COMPLETE] ✅ All steps completed successfully!');
+              } else {
+                console.log('🏦 [PREFETCH 8/8] ⚠️ queryClient is null, skipping TanStack cache');
+              }
+            } else {
+              console.log('🏦 [PREFETCH 5/8] ℹ️ Empty wallets array - new profile has no wallets');
+            }
+          } else {
+            console.log('🏦 [PREFETCH 3/8] ⚠️ No data in response');
+          }
+        } catch (walletError: any) {
+          // Wallet prefetch failure is non-critical - useBalances will fetch later
+          console.log('🏦 [PREFETCH ERROR] ❌ Failed at some step:', walletError?.message);
+          console.log('🏦 [PREFETCH ERROR] Full error:', walletError);
+          logger.warn('[ProfileSwitchOrchestrator] ⚠️ Wallet prefetch failed (non-critical):', walletError?.message);
+        }
+
+        // STEP B: Prefetch current profile (uses already-fetched data from /auth/me)
+        if (queryClient) {
+          await queryClient.prefetchQuery({
+            queryKey: queryKeys.currentProfile(newProfileId),
+            queryFn: () => Promise.resolve(newProfile),
+            staleTime: 60000, // Cache for 1 minute
+          });
+          logger.debug('[ProfileSwitchOrchestrator] ✅ Profile data prefetched');
+        }
+      }
+
       // CRITICAL: Clear SQLite local database for old profile (privacy & data isolation)
       // This removes ALL old profile data: messages, interactions, transactions, balances, etc.
+      // NOTE: Happens AFTER prefetch so new profile data is already in SQLite
       try {
         await clearProfileLocalDB(oldProfileId);
         logger.debug('[ProfileSwitchOrchestrator] ✅ Local DB cleared for old profile (messages, interactions, transactions, wallets cleared)');
       } catch (dbError: any) {
         logger.warn('[ProfileSwitchOrchestrator] ⚠️ Local DB clear failed (non-critical):', dbError);
-      }
-
-      // OPTIMIZATION: Prefetch NEW profile's critical data for instant display
-      const newProfileId = newProfile.id || newProfile.profile_id;
-      const newEntityId = newProfile.entity_id;
-
-      if (newProfileId && newEntityId) {
-        // Prefetch current profile (uses already-fetched data from /auth/me)
-        await queryClient.prefetchQuery({
-          queryKey: queryKeys.currentProfile(newProfileId),
-          queryFn: () => Promise.resolve(newProfile),
-          staleTime: 60000, // Cache for 1 minute
-        });
-
-        logger.debug('[ProfileSwitchOrchestrator] ✅ New profile data prefetched');
       }
     }
   }

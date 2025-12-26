@@ -12,15 +12,15 @@
 import logger from '../utils/logger';
 import { websocketService } from './websocketService';
 import { webSocketHandler } from './WebSocketHandler';
-import { messageManager } from './MessageManager';
+import { backgroundSyncService } from './BackgroundSyncService'; // LOCAL-FIRST: Replaces MessageManager & TransactionManager
 import { IS_DEVELOPMENT } from '../config/env';
-import { transactionManager } from './TransactionManager';
-import { TimelineManager } from './TimelineManager';
+import { InteractionTimelineCache } from './InteractionTimelineCache';
 import { networkService } from './NetworkService';
 import { userStateManager } from './UserStateManager';
 import { pushNotificationService } from './PushNotificationService';
-import { messageSyncManager } from './MessageSyncManager';
+import { timelineSyncService } from './TimelineSyncService';
 import { deliveryConfirmationManager } from './DeliveryConfirmationManager';
+import { interactionRepository } from '../localdb/InteractionRepository';
 import { AppState } from 'react-native';
 import { queryClient } from '../tanstack-query/queryClient';
 import apiClient from '../_api/apiClient';
@@ -107,6 +107,10 @@ class AppLifecycleManager {
 
       // 🚀 PHASE 2.6: Initialize delivery confirmation system
       this.initializeDeliveryConfirmation();
+
+      // 🚀 WHATSAPP PATTERN: Pre-fetch timelines on app launch for instant chat display
+      // This ensures SQLite has data BEFORE user opens any chat
+      this.prefetchTimelines(user);
 
       this.isInitialized = true;
       if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] ✅ All services initialized successfully');
@@ -428,11 +432,11 @@ class AppLifecycleManager {
   private initializeMessageSync(user?: { profileId?: string }): void {
     try {
       logger.debug('[AppLifecycleManager] 🔄 Initializing message sync...');
-      messageSyncManager.initialize();
+      timelineSyncService.initialize();
 
       // Set current profile ID for sync operations
       if (user?.profileId) {
-        messageSyncManager.setCurrentProfileId(user.profileId);
+        timelineSyncService.setCurrentProfileId(user.profileId);
         logger.debug(`[AppLifecycleManager] Profile ID set for message sync: ${user.profileId}`);
       }
 
@@ -458,6 +462,72 @@ class AppLifecycleManager {
   }
 
   /**
+   * 🚀 WHATSAPP PATTERN: Pre-fetch timelines on app launch
+   *
+   * This ensures SQLite has data BEFORE user opens any chat.
+   * When user taps on an interaction, data is already cached → INSTANT display.
+   *
+   * Strategy:
+   * - Fetch top 10 most recent interactions (most likely to be opened)
+   * - Sync in parallel for speed
+   * - Non-blocking - runs in background, doesn't block app launch
+   */
+  private prefetchTimelines(user?: User): void {
+    if (!user?.profileId) {
+      logger.debug('[AppLifecycleManager] Skipping timeline pre-fetch - no profile ID');
+      return;
+    }
+
+    // Run in background - don't await, don't block app launch
+    this.performTimelinePrefetch(user.profileId).catch((error) => {
+      logger.warn('[AppLifecycleManager] Timeline pre-fetch failed (non-fatal):', error);
+    });
+  }
+
+  /**
+   * Perform the actual timeline pre-fetch (async)
+   */
+  private async performTimelinePrefetch(profileId: string): Promise<void> {
+    logger.info('[AppLifecycleManager] 🚀 Pre-fetching timelines (WhatsApp pattern)');
+
+    try {
+      // Get all interactions for current profile
+      const interactions = await interactionRepository.getInteractionsWithMembers(profileId);
+
+      if (interactions.length === 0) {
+        logger.debug('[AppLifecycleManager] No interactions to pre-fetch');
+        return;
+      }
+
+      // Pre-fetch top 10 most recent interactions (most likely to be opened)
+      const recentInteractions = interactions
+        .sort((a, b) => {
+          const timeA = a.last_activity_at ? new Date(a.last_activity_at).getTime() : 0;
+          const timeB = b.last_activity_at ? new Date(b.last_activity_at).getTime() : 0;
+          return timeB - timeA;
+        })
+        .slice(0, 10);
+
+      logger.debug(`[AppLifecycleManager] Pre-fetching ${recentInteractions.length} most recent interactions`);
+
+      // Sync in parallel (faster than sequential)
+      await Promise.all(
+        recentInteractions.map((interaction) =>
+          timelineSyncService.syncInteraction(interaction.id).catch((err) => {
+            logger.warn(`[AppLifecycleManager] Pre-fetch failed for ${interaction.id}:`, err);
+            // Continue with other interactions - non-fatal
+          })
+        )
+      );
+
+      logger.info(`[AppLifecycleManager] ✅ Pre-fetched ${recentInteractions.length} timelines`);
+    } catch (error) {
+      logger.error('[AppLifecycleManager] Pre-fetch failed:', error);
+      // Non-fatal - app continues, user just waits on first chat open
+    }
+  }
+
+  /**
    * Cleanup all services when user logs out
    */
   cleanup(): void {
@@ -471,8 +541,8 @@ class AppLifecycleManager {
       logger.debug('[AppLifecycleManager] Cleared WebSocket handler retry interval');
     }
 
-    // Clear all TimelineManager instances
-    TimelineManager.clearAllInstances();
+    // Clear all InteractionTimelineCache instances
+    InteractionTimelineCache.clearAllInstances();
     
     // 🚀 PHASE 2.1: Cleanup global user subscription
     userStateManager.cleanup();
@@ -487,7 +557,7 @@ class AppLifecycleManager {
     pushNotificationService.cleanup();
 
     // 🚀 PHASE 2.5: Cleanup message sync
-    messageSyncManager.cleanup();
+    timelineSyncService.cleanup();
 
     // 🚀 PHASE 2.6: Cleanup delivery confirmation
     deliveryConfirmationManager.cleanup();
@@ -502,15 +572,14 @@ class AppLifecycleManager {
       });
     }
     
-    // Clear MessageManager, TransactionManager state
+    // Clear BackgroundSyncService state (LOCAL-FIRST: replaces MessageManager & TransactionManager)
     try {
-      messageManager.cleanup();
-      transactionManager.cleanup();
+      backgroundSyncService.stop();
       webSocketHandler.cleanup();
-      logger.debug('[AppLifecycleManager] Managers cleaned up for logout', 'lifecycle');
+      logger.debug('[AppLifecycleManager] Background sync and handlers cleaned up for logout', 'lifecycle');
     } catch (error) {
-      logger.warn('[AppLifecycleManager] Error cleaning up managers', 'lifecycle', { 
-        error: error instanceof Error ? error.message : String(error) 
+      logger.warn('[AppLifecycleManager] Error cleaning up sync service', 'lifecycle', {
+        error: error instanceof Error ? error.message : String(error)
       });
     }
     

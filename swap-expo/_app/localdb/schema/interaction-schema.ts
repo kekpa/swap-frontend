@@ -20,8 +20,9 @@ export async function initializeInteractionSchema(db: SQLiteDatabase): Promise<v
         is_active INTEGER DEFAULT 1,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        last_message_snippet TEXT,
-        last_message_at TEXT,
+        last_activity_snippet TEXT,
+        last_activity_at TEXT,
+        last_activity_from_entity_id TEXT,
         unread_count INTEGER DEFAULT 0,
         icon_url TEXT,
         metadata TEXT,
@@ -53,8 +54,8 @@ export async function initializeInteractionSchema(db: SQLiteDatabase): Promise<v
     `);
     
     await db.runAsync(`
-      CREATE INDEX IF NOT EXISTS idx_interactions_last_message_at 
-      ON interactions(last_message_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_interactions_last_activity_at
+      ON interactions(last_activity_at DESC);
     `);
     
     await db.runAsync(`

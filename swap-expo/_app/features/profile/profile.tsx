@@ -309,8 +309,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       alignItems: "center",
     },
     headerTitle: {
-      fontSize: 17,
+      fontSize: theme.typography.fontSize.lg,
       fontWeight: "600",
+      color: theme.colors.textPrimary,
       flex: 1,
       textAlign: "center",
       marginRight: 40, // Offset to center title accounting for back button width

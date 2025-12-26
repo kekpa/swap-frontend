@@ -18,9 +18,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
 import logger from '../utils/logger';
+import { eventEmitter } from '../utils/eventEmitter';
 import { networkService } from '../services/NetworkService';
 import { staleTimeManager } from './config/staleTimeConfig';
 import { validateQueryKeyForProfileIsolation } from './profileIsolationGuards';
+import { queryKeys } from './queryKeys';
+import { TIMELINE_UPDATED_EVENT, TimelineUpdateEvent } from '../localdb/UnifiedTimelineRepository';
 
 /**
  * Create AsyncStorage persister for cache persistence
@@ -119,6 +122,138 @@ export const queryClient = new QueryClient({
 // Store the app state listener reference for cleanup
 let appStateListener: any = null;
 
+// Store the data_updated event listener cleanup function
+let dataUpdatedUnsubscribe: (() => void) | null = null;
+
+// Store the TIMELINE_UPDATED_EVENT listener cleanup function (centralized)
+let timelineEventUnsubscribe: (() => void) | null = null;
+
+/**
+ * Handle SQLite data_updated events to invalidate relevant queries.
+ * This is the key integration point between SQLite-First writes and TanStack Query.
+ *
+ * Phase 6: SQLite-First Architecture
+ * When LocalDataManager writes to SQLite, repositories emit 'data_updated' events.
+ * We listen here and invalidate the relevant queries so they refetch from SQLite.
+ */
+const setupDataUpdatedListener = (): void => {
+  const handler = (payload: { type: string; data?: any; profileId?: string }) => {
+    logger.debug(`[QueryClient] data_updated event received - type: ${payload.type}`);
+
+    switch (payload.type) {
+      case 'transactions':
+        // Invalidate timeline queries to refetch updated transactions
+        queryClient.invalidateQueries({
+          queryKey: ['timeline'],
+          refetchType: 'active',
+        });
+        // Also invalidate balances as transactions affect them
+        queryClient.invalidateQueries({
+          queryKey: ['balances'],
+          refetchType: 'active',
+        });
+        logger.debug('[QueryClient] Invalidated timeline and balances queries for transaction update');
+        break;
+
+      case 'messages':
+        // Invalidate timeline queries to refetch updated messages
+        queryClient.invalidateQueries({
+          queryKey: ['timeline'],
+          refetchType: 'active',
+        });
+        // Also invalidate interactions list for preview updates
+        queryClient.invalidateQueries({
+          queryKey: ['interactions'],
+          refetchType: 'active',
+        });
+        logger.debug('[QueryClient] Invalidated timeline and interactions queries for message update');
+        break;
+
+      case 'interactions':
+        // Invalidate interactions list
+        queryClient.invalidateQueries({
+          queryKey: ['interactions'],
+          refetchType: 'active',
+        });
+        logger.debug('[QueryClient] Invalidated interactions queries');
+        break;
+
+      default:
+        logger.debug(`[QueryClient] Unknown data_updated type: ${payload.type}`);
+    }
+  };
+
+  eventEmitter.on('data_updated', handler);
+
+  // Return cleanup function
+  dataUpdatedUnsubscribe = () => {
+    eventEmitter.off('data_updated', handler);
+  };
+
+  logger.info('[QueryClient] SQLite data_updated listener established for query invalidation');
+};
+
+/**
+ * CENTRALIZED TIMELINE_UPDATED_EVENT Handler (Professional Architecture)
+ *
+ * This is the SINGLE listener for timeline events, replacing scattered listeners
+ * in useInteractions, useRecentTransactions, useLocalTimeline.
+ *
+ * Why centralized:
+ * - 1 event = 1 invalidation (no duplication)
+ * - No connection exhaustion from parallel fetches
+ * - Industry standard (Revolut/WhatsApp pattern)
+ * - Single place for throttling if needed
+ */
+const setupTimelineEventListener = (): void => {
+  // Throttle: Minimum 500ms between invalidations
+  // Reduced from 2s for faster real-time updates (Revolut/WhatsApp-level responsiveness)
+  let lastInvalidation = 0;
+  const MIN_INTERVAL = 500;
+
+  const handler = (event: TimelineUpdateEvent) => {
+    const now = Date.now();
+
+    // Throttle to prevent API flood
+    if (now - lastInvalidation < MIN_INTERVAL) {
+      logger.debug('[QueryClient] TIMELINE_UPDATED_EVENT throttled', 'query_invalidation');
+      return;
+    }
+
+    lastInvalidation = now;
+    logger.debug(`[QueryClient] TIMELINE_UPDATED_EVENT received - action: ${event.action}, interactionId: ${event.interactionId}`, 'query_invalidation');
+
+    // Invalidate timeline-related queries
+    queryClient.invalidateQueries({
+      queryKey: ['timeline'],
+      refetchType: 'active',
+    });
+
+    // Invalidate interactions for preview updates (last_activity_snippet)
+    queryClient.invalidateQueries({
+      queryKey: ['interactions'],
+      refetchType: 'active',
+    });
+
+    // Invalidate transactions for wallet updates
+    queryClient.invalidateQueries({
+      queryKey: ['transactions'],
+      refetchType: 'active',
+    });
+
+    logger.debug('[QueryClient] Queries invalidated from TIMELINE_UPDATED_EVENT', 'query_invalidation');
+  };
+
+  eventEmitter.on(TIMELINE_UPDATED_EVENT, handler);
+
+  // Store cleanup function
+  timelineEventUnsubscribe = () => {
+    eventEmitter.off(TIMELINE_UPDATED_EVENT, handler);
+  };
+
+  logger.info('[QueryClient] TIMELINE_UPDATED_EVENT listener centralized (replaces hook listeners)');
+};
+
 /**
  * Initialize QueryClient with persistence and network monitoring
  */
@@ -175,7 +310,14 @@ export const initializeQueryClient = async (): Promise<void> => {
     
     // Listen for app state changes
     appStateListener = AppState.addEventListener('change', handleAppStateChange);
-    
+
+    // PHASE 6: Setup SQLite data_updated listener for query invalidation
+    setupDataUpdatedListener();
+
+    // PROFESSIONAL: Centralized TIMELINE_UPDATED_EVENT listener
+    // This replaces scattered listeners in useInteractions, useRecentTransactions, useLocalTimeline
+    setupTimelineEventListener();
+
     logger.info('[QueryClient] ✅ TanStack Query initialization complete');
     
   } catch (error) {
@@ -194,10 +336,22 @@ export const cleanupQueryClient = (): void => {
       appStateListener.remove();
       appStateListener = null;
     }
-    
+
+    // Remove data_updated event listener
+    if (dataUpdatedUnsubscribe) {
+      dataUpdatedUnsubscribe();
+      dataUpdatedUnsubscribe = null;
+    }
+
+    // Remove TIMELINE_UPDATED_EVENT listener (centralized)
+    if (timelineEventUnsubscribe) {
+      timelineEventUnsubscribe();
+      timelineEventUnsubscribe = null;
+    }
+
     // Clear all queries
     queryClient.clear();
-    
+
     logger.info('[QueryClient] ✅ QueryClient cleanup complete');
   } catch (error) {
     logger.error('[QueryClient] Cleanup failed:', error);

@@ -6,9 +6,8 @@ import logger from '../utils/logger';
 import {
   initializeUserSchema,
   initializeInteractionSchema,
-  initializeMessageSchema,
   initializeTransactionSchema,
-  initializeTimelineSchema,
+  initializeLocalTimelineSchema,
   initializeSearchHistorySchema,
   initializeLocationSchema,
   initializeCurrencyWalletsSchema,
@@ -217,14 +216,15 @@ class DatabaseManager {
       
       // Interaction and messaging tables (WhatsApp-like experience)
       { name: 'Interactions', init: () => this.initializeInteractionsSchema() },
-      { name: 'Messages', init: () => this.initializeMessagesSchema() },
       { name: 'Transactions', init: () => this.initializeTransactionsSchema() },
       { name: 'Notifications', init: () => this.initializeNotificationsSchema() },
-      
+
       // Utility tables (UX enhancement)
       { name: 'SearchHistory', init: () => this.initializeSearchHistorySchema() },
       { name: 'Locations', init: () => this.initializeLocationSchema() },
-      { name: 'Timeline', init: () => this.initializeTimelineSchema() },
+
+      // Unified local timeline (WhatsApp-grade local-first) - replaces Messages + Timeline
+      { name: 'LocalTimeline', init: () => this.initializeLocalTimelineSchema() },
     ];
 
     // Initialize each schema sequentially
@@ -302,18 +302,6 @@ class DatabaseManager {
   }
 
   /**
-   * Initialize messages schema
-   */
-  private async initializeMessagesSchema(): Promise<SchemaResult> {
-    try {
-      await initializeMessageSchema(this.database!);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) };
-    }
-  }
-
-  /**
    * Initialize transactions schema
    */
   private async initializeTransactionsSchema(): Promise<SchemaResult> {
@@ -365,11 +353,12 @@ class DatabaseManager {
   }
 
   /**
-   * Initialize timeline view
+   * Initialize local timeline schema (WhatsApp-grade unified timeline)
+   * Replaces old messages schema + timeline view
    */
-  private async initializeTimelineSchema(): Promise<SchemaResult> {
+  private async initializeLocalTimelineSchema(): Promise<SchemaResult> {
     try {
-      await initializeTimelineSchema(this.database!);
+      await initializeLocalTimelineSchema(this.database!);
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };

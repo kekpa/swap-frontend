@@ -62,13 +62,13 @@ const mockInteraction = {
   id: 'interaction-1',
   name: 'Test Chat',
   is_group: false,
-  last_message_at: '2024-01-01T00:00:00Z',
+  last_activity_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
   members: [
     { entity_id: 'entity-123', role: 'MEMBER', display_name: 'User 1' },
     { entity_id: 'entity-456', role: 'MEMBER', display_name: 'User 2' },
   ],
-  last_message_snippet: 'Hello!',
+  last_activity_snippet: 'Hello!',
   unread_count: 2,
 };
 
@@ -76,13 +76,13 @@ const mockLocalInteraction = {
   id: 'interaction-1',
   name: 'Test Chat',
   is_group: false,
-  last_message_at: '2024-01-01T00:00:00Z',
+  last_activity_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
   members: [
     { entity_id: 'entity-123', role: 'MEMBER', display_name: 'User 1' },
     { entity_id: 'entity-456', role: 'MEMBER', display_name: 'User 2' },
   ],
-  last_message_snippet: 'Hello!',
+  last_activity_snippet: 'Hello!',
   unread_count: 2,
 };
 
@@ -263,19 +263,21 @@ describe('useInteractions', () => {
   // ============================================================
 
   describe('event emission', () => {
-    it('should emit data_updated event after API fetch', async () => {
+    // NOTE: useInteractions no longer emits data_updated events to prevent infinite loops.
+    // The queryClient listener invalidates queries when it receives these events,
+    // which would cause useInteractions to refetch endlessly.
+    // Only SQLite writes from LocalDataManager should emit data_updated events.
+
+    it('should NOT emit data_updated event after API fetch (prevents infinite loop)', async () => {
       mockApiClient.get.mockResolvedValue({
         data: { interactions: [mockInteraction], deletedIds: [] },
       });
 
       renderHook(() => useInteractions(), { wrapper: createWrapper() });
 
-      await waitFor(() => {
-        expect(eventEmitter.emit).toHaveBeenCalledWith('data_updated', {
-          type: 'interactions',
-          data: [mockInteraction],
-        });
-      });
+      await waitFor(() => expect(mockApiClient.get).toHaveBeenCalled());
+      // Should NOT emit to prevent infinite loop
+      expect(eventEmitter.emit).not.toHaveBeenCalledWith('data_updated', expect.anything());
     });
 
     it('should not emit event when no API data', async () => {

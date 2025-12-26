@@ -47,7 +47,7 @@ Notifications.setNotificationHandler({
 interface PushNotificationData {
   interactionId: string;
   messageId: string;
-  senderId: string;
+  fromEntityId: string;
   senderName?: string;
   messageType?: string;
 }

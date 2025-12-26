@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -14,6 +15,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { Theme } from '../../theme/theme';
 import logger from '../../utils/logger';
+import { getTransactionStatusDisplay } from '../../utils/transactionStatusDisplay';
 
 interface TransactionDetailsScreenProps {
   route?: {
@@ -53,7 +55,8 @@ const TransactionDetailsScreen: React.FC<TransactionDetailsScreenProps> = ({ rou
   const currency_symbol = transaction?.currency_symbol || '$';
   const isReceived = transaction?.type === 'received';
   const transactionDate = transaction?.timestamp ? new Date(transaction.timestamp) : new Date();
-  const status = transaction?.status || 'Completed';
+  const rawStatus = transaction?.status || 'Completed';
+  const statusDisplay = useMemo(() => getTransactionStatusDisplay(rawStatus), [rawStatus]);
   const category = transaction?.category || (isReceived ? 'Payment received' : 'Payment sent');
   const entityName = transaction?.name || contactName || 'Unknown Contact';
   
@@ -333,14 +336,28 @@ const TransactionDetailsScreen: React.FC<TransactionDetailsScreenProps> = ({ rou
       {/* Status */}
       <View style={styles.statusContainer}>
         <Text style={styles.statusTitle}>Status</Text>
-        <View style={styles.statusBadge}>
-          <Ionicons 
-            name="checkmark-circle" 
-            size={16} 
-            color={theme.colors.success} 
-            style={styles.statusIcon}
-          />
-          <Text style={styles.statusText}>{status}</Text>
+        <View style={[styles.statusBadge, { backgroundColor: statusDisplay.isProcessing ? theme.colors.warningLight : theme.colors.primaryUltraLight }]}>
+          {statusDisplay.isProcessing ? (
+            <ActivityIndicator
+              size={14}
+              color={theme.colors.warning}
+              style={styles.statusIcon}
+            />
+          ) : (
+            <Ionicons
+              name={statusDisplay.icon}
+              size={16}
+              color={statusDisplay.color === 'success' ? theme.colors.success :
+                     statusDisplay.color === 'error' ? theme.colors.error :
+                     statusDisplay.color === 'warning' ? theme.colors.warning : theme.colors.info}
+              style={styles.statusIcon}
+            />
+          )}
+          <Text style={[styles.statusText, {
+            color: statusDisplay.color === 'success' ? theme.colors.success :
+                   statusDisplay.color === 'error' ? theme.colors.error :
+                   statusDisplay.color === 'warning' ? theme.colors.warning : theme.colors.info
+          }]}>{statusDisplay.label}</Text>
         </View>
       </View>
     </SafeAreaView>

@@ -2,6 +2,7 @@
 // Replaces custom interaction fetching logic in DataContext
 // Created: 2025-01-10 for TanStack Query migration
 // Updated: 2025-01-12 - Added Option B deletion events pattern for sync
+// Updated: 2025-12-24 - TIMELINE_UPDATED_EVENT centralized in queryClient.ts (Revolut pattern)
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
@@ -11,14 +12,14 @@ import { queryKeys } from '../tanstack-query/queryKeys';
 import logger from '../utils/logger';
 import { useAuthContext } from '../features/auth/context/AuthContext';
 import { interactionRepository } from '../localdb/InteractionRepository';
-import { eventEmitter } from '../utils/eventEmitter';
 import { useCurrentProfileId } from '../hooks/useCurrentProfileId';
+// NOTE: TIMELINE_UPDATED_EVENT listener is centralized in queryClient.ts
 
 export interface InteractionItem {
   id: string;
   name?: string;
   is_group: boolean;
-  last_message_at?: string;
+  last_activity_at?: string;
   updated_at?: string;
   members: Array<{
     entity_id: string;
@@ -27,8 +28,8 @@ export interface InteractionItem {
     avatar_url?: string;
     entity_type?: string;
   }>;
-  last_message_snippet?: string;
-  last_message_sender_id?: string;
+  last_activity_snippet?: string;
+  last_activity_from_entity_id?: string;
   unread_count?: number;
 }
 
@@ -136,9 +137,10 @@ export const useInteractions = (
           id: local.id,
           name: local.name || undefined,
           is_group: local.is_group || false,
-          last_message_at: local.last_message_at || undefined,
+          last_activity_at: local.last_activity_at || undefined,
           updated_at: local.updated_at || undefined,
-          last_message_snippet: local.last_message_snippet || undefined,
+          last_activity_snippet: local.last_activity_snippet || undefined,
+          last_activity_from_entity_id: local.last_activity_from_entity_id || undefined,
           unread_count: local.unread_count || undefined,
           members: local.members.map((member: any) => ({
             entity_id: member.entity_id,
@@ -203,8 +205,9 @@ export const useInteractions = (
                name: interaction.name || null,
                is_group: interaction.is_group || false,
                updated_at: interaction.updated_at || new Date().toISOString(),
-               last_message_snippet: interaction.last_message_snippet || null,
-               last_message_at: interaction.last_message_at || null,
+               last_activity_snippet: interaction.last_activity_snippet || null,
+               last_activity_at: interaction.last_activity_at || null,
+               last_activity_from_entity_id: interaction.last_activity_from_entity_id || null,
                unread_count: interaction.unread_count || 0,
                icon_url: null, // Not provided in API response
                metadata: null  // Not provided in API response
@@ -243,8 +246,10 @@ export const useInteractions = (
         // Save sync timestamp for next request (Option B pattern)
         await saveSyncTimestamp(syncTimestamp);
 
-        // Emit update event for other components
-        eventEmitter.emit('data_updated', { type: 'interactions', data: fetchedInteractions });
+        // NOTE: Don't emit 'data_updated' event here - it causes infinite loop!
+        // The queryClient listener invalidates interactions queries when it receives
+        // 'data_updated' type: 'interactions', which triggers this fetch again.
+        // Only SQLite writes (from LocalDataManager) should emit data_updated events.
 
         return fetchedInteractions;
       } else {
@@ -275,10 +280,25 @@ export const useInteractions = (
     refetchOnWindowFocus: false, // Don't refetch on window focus
     refetchOnReconnect: true, // Refetch when coming back online
     retry: (failureCount, error: any) => {
-      // Don't retry on 401 (unauthorized) or 403 (forbidden)
-      if (error?.response?.status === 401 || error?.response?.status === 403) {
+      // Check multiple error shapes for auth errors
+      const status = error?.response?.status || error?.status || error?.code;
+      const message = error?.message || '';
+
+      // Don't retry on ANY auth-related error (prevents infinite loop)
+      if (status === 401 || status === 403 ||
+          message.includes('Authentication') ||
+          message.includes('unauthorized') ||
+          message.includes('Token')) {
+        logger.debug('[useInteractions] Auth error detected, not retrying', 'interactions_query');
         return false;
       }
+
+      // Don't retry on timeout errors (prevents connection exhaustion)
+      if (message.includes('timeout') || message.includes('ETIMEDOUT') || error?.code === 'ECONNABORTED') {
+        logger.debug('[useInteractions] Timeout error detected, not retrying', 'interactions_query');
+        return false;
+      }
+
       return failureCount < 2; // Retry up to 2 times for other errors
     },
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
@@ -289,6 +309,10 @@ export const useInteractions = (
     logger.debug('[useInteractions] Manual refetch triggered', 'interactions_query');
     return queryResult.refetch();
   }, [queryResult.refetch]);
+
+  // NOTE: TIMELINE_UPDATED_EVENT listener is centralized in queryClient.ts
+  // This follows the Revolut/WhatsApp pattern - single listener, single invalidation
+  // See: _app/tanstack-query/queryClient.ts setupTimelineEventListener()
 
   return {
     interactions: queryResult.data || [],

@@ -18,8 +18,9 @@ interface MessageEvent {
   id: string;
   interaction_id: string;
   content: string;
-  sender_entity_id: string;
+  from_entity_id: string;
   created_at: string;
+  message_type?: string;
 }
 
 interface NotificationDecision {
@@ -151,7 +152,7 @@ class SmartNotificationHandler {
         data: {
           interactionId: message.interaction_id,
           messageId: message.id,
-          senderId: message.sender_entity_id,
+          fromEntityId: message.from_entity_id,
           messageType: message.message_type || 'text',
         },
         sound: true,
@@ -192,7 +193,7 @@ class SmartNotificationHandler {
         data: {
           interactionId: message.interaction_id,
           messageId: message.id,
-          senderId: message.sender_entity_id,
+          fromEntityId: message.from_entity_id,
           messageType: message.message_type || 'text',
         },
         sound: true,

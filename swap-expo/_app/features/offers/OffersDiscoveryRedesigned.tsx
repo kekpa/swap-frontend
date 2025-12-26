@@ -13,6 +13,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { Theme } from '../../theme/theme';
 import { useAuthContext } from '../auth/context/AuthContext';
 import { useHeaderOffset } from '../../hooks/useHeaderOffset';
+import { useRefreshByUser } from '../../hooks/useRefreshByUser';
 
 interface Bundle {
   name: string;
@@ -60,8 +61,14 @@ const OffersDiscoveryRedesignedScreen: React.FC = () => {
   const { headerHeight } = useHeaderOffset();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('all');
+
+  // Industry-standard refresh hook (local state, no shared global state)
+  // TODO: Replace with real API call when offers backend is implemented
+  const { refreshing, onRefresh } = useRefreshByUser(async () => {
+    // Currently uses mock data - will be replaced with actual TanStack Query refetch
+    await new Promise(resolve => setTimeout(resolve, 500));
+  });
   const [expandedOfferId, setExpandedOfferId] = useState<string | null>(null);
   const [selectedBundles, setSelectedBundles] = useState<{ [merchantId: string]: number | null }>({});
   const [pressedCard, setPressedCard] = useState<string | null>(null);
@@ -214,16 +221,6 @@ const OffersDiscoveryRedesignedScreen: React.FC = () => {
   const handleEarnPress = () => navigation.navigate('Challenges');
   const handleMyPointsPress = () => navigation.navigate('OffersHome');
 
-  // TODO: Replace with real API call when offers backend is implemented
-  // Currently uses mock data - refresh simulates API latency for demo purposes
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    // Simulate API latency (replace with actual TanStack Query refetch)
-    setTimeout(() => {
-      console.log('[OffersDiscoveryRedesigned] Refresh triggered - mock data (no backend yet)');
-      setRefreshing(false);
-    }, 1500);
-  }, []);
 
   const getHeaderInitials = () => {
     // For business users, use business name initials

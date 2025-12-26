@@ -121,7 +121,7 @@ const NewCurrencySheet: React.FC<NewCurrencySheetProps> = ({
     headerTitle: {
       fontSize: 20,
       fontWeight: '700',
-      color: theme.colors.text,
+      color: theme.colors.textPrimary,
       textAlign: 'center',
     },
     headerSubtitle: {
@@ -141,7 +141,7 @@ const NewCurrencySheet: React.FC<NewCurrencySheetProps> = ({
       justifyContent: 'space-between',
       paddingVertical: 14,
       paddingHorizontal: 16,
-      backgroundColor: theme.colors.surface,
+      backgroundColor: theme.colors.card,
       borderRadius: 12,
       marginBottom: 8,
     },
@@ -171,7 +171,7 @@ const NewCurrencySheet: React.FC<NewCurrencySheetProps> = ({
     currencyCode: {
       fontSize: 16,
       fontWeight: '600',
-      color: theme.colors.text,
+      color: theme.colors.textPrimary,
     },
     currencyName: {
       fontSize: 13,
@@ -196,7 +196,7 @@ const NewCurrencySheet: React.FC<NewCurrencySheetProps> = ({
     emptyTitle: {
       fontSize: 16,
       fontWeight: '600',
-      color: theme.colors.text,
+      color: theme.colors.textPrimary,
       marginTop: 12,
     },
     emptySubtitle: {

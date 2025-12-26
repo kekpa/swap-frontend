@@ -1,43 +1,8 @@
 // Created: InteractionsManager service for centralized interactions list business logic - 2025-01-24
 
+import EventEmitter from 'eventemitter3';
 import { InteractionListItem } from '../types/interaction.types';
 import logger from '../utils/logger';
-
-// Simple EventEmitter implementation for React Native
-class SimpleEventEmitter {
-  private listeners: { [event: string]: Function[] } = {};
-
-  on(event: string, listener: Function): void {
-    if (!this.listeners[event]) {
-      this.listeners[event] = [];
-    }
-    this.listeners[event].push(listener);
-  }
-
-  removeListener(event: string, listener: Function): void {
-    if (!this.listeners[event]) return;
-    this.listeners[event] = this.listeners[event].filter(l => l !== listener);
-  }
-
-  removeAllListeners(event?: string): void {
-    if (event) {
-      delete this.listeners[event];
-    } else {
-      this.listeners = {};
-    }
-  }
-
-  emit(event: string, ...args: any[]): void {
-    if (!this.listeners[event]) return;
-    this.listeners[event].forEach(listener => {
-      try {
-        listener(...args);
-      } catch (error) {
-        console.error(`Error in event listener for ${event}:`, error);
-      }
-    });
-  }
-}
 
 export interface InteractionsManagerOptions {
   enableOptimisticUpdates?: boolean;
@@ -58,7 +23,7 @@ export interface DisplayChat {
   type?: 'friend' | 'business';
 }
 
-export class InteractionsManager extends SimpleEventEmitter {
+export class InteractionsManager extends EventEmitter {
   private static instance: InteractionsManager | null = null;
   private interactions = new Map<string, InteractionListItem>();
   private displayChats: DisplayChat[] = [];
@@ -129,19 +94,19 @@ export class InteractionsManager extends SimpleEventEmitter {
   }
 
   /**
-   * Update interaction preview (for real-time message updates)
+   * Update interaction preview (for real-time activity updates)
    */
-  updateInteractionPreview(interactionId: string, snippet: string, senderEntityId: string, timestamp: string): void {
+  updateInteractionPreview(interactionId: string, snippet: string, fromEntityId: string, timestamp: string): void {
     const interaction = this.interactions.get(interactionId);
     if (!interaction) return;
 
     logger.debug(`[InteractionsManager] Updating preview for ${interactionId}`, 'interactions_manager');
-    
+
     const updatedInteraction: InteractionListItem = {
       ...interaction,
-      last_message_snippet: snippet,
-      last_message_sender_id: senderEntityId,
-      last_message_at: timestamp,
+      last_activity_snippet: snippet,
+      last_activity_from_entity_id: fromEntityId,
+      last_activity_at: timestamp,
     };
 
     this.interactions.set(interactionId, updatedInteraction);
@@ -207,10 +172,10 @@ export class InteractionsManager extends SimpleEventEmitter {
 
     const interactions = Array.from(this.interactions.values());
     
-    // Sort by last_message_at for real-time reordering
+    // Sort by last_activity_at for real-time reordering
     const sortedInteractions = [...interactions].sort((a, b) => {
-      const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
-      const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+      const aTime = a.last_activity_at ? new Date(a.last_activity_at).getTime() : 0;
+      const bTime = b.last_activity_at ? new Date(b.last_activity_at).getTime() : 0;
       return bTime - aTime; // Most recent first
     });
 
@@ -249,15 +214,15 @@ export class InteractionsManager extends SimpleEventEmitter {
         interactionType = 'business';
       }
 
-      const messageSnippet = interaction.last_message_snippet || 
+      const activitySnippet = interaction.last_activity_snippet ||
         (interaction.is_group ? 'Group created' : 'Chat started');
-      const lastMessageTime = interaction.last_message_at || interaction.updated_at || '';
+      const lastActivityTime = interaction.last_activity_at || interaction.updated_at || '';
 
       return {
         id: interaction.id,
         name: chatName,
-        message: messageSnippet,
-        time: this.formatTime(lastMessageTime),
+        message: activitySnippet,
+        time: this.formatTime(lastActivityTime),
         avatar: avatarText,
         avatarColor: avatarColor,
         isGroup: interaction.is_group,

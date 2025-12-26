@@ -12,7 +12,6 @@ import logger from '../utils/logger';
 import { queryKeys } from '../tanstack-query/queryKeys';
 import apiClient from '../_api/apiClient';
 import { getStaleTimeForQuery, staleTimeManager } from '../tanstack-query/config/staleTimeConfig';
-import { useOptimisticUpdates } from '../tanstack-query/optimistic/useOptimisticUpdates';
 import { userRepository } from '../localdb/UserRepository';
 import { useCurrentProfileId } from '../hooks/useCurrentProfileId';
 
@@ -115,15 +114,14 @@ interface KycQueryConfig {
  * Professional KYC Query Hook
  *
  * Features:
+ * - Local-first: SQLite cache for instant data access
  * - Smart cache invalidation on navigation focus
  * - Critical flow optimization using existing stale time manager
- * - Optimistic updates for instant feedback
  * - Dependency-based query key strategies
  * - Enterprise-grade error handling
  */
 export const useKycQuery = (config: KycQueryConfig) => {
   const queryClient = useQueryClient();
-  const { addOptimisticUpdate, removeOptimisticUpdate } = useOptimisticUpdates();
   const profileId = useCurrentProfileId();
 
   // Generate smart query key with dependency mapping
@@ -292,7 +290,7 @@ export const useKycQuery = (config: KycQueryConfig) => {
 
   /**
    * Professional KYC step completion mutation
-   * Features optimistic updates and systematic cache invalidation
+   * Features systematic cache invalidation and retry logic
    */
   const completeStepMutation = useMutation({
     mutationFn: async ({
@@ -304,44 +302,13 @@ export const useKycQuery = (config: KycQueryConfig) => {
     }) => {
       logger.debug(`[useKycQuery] Completing KYC step: ${stepType}`);
 
-      // Add optimistic update for instant UI feedback
-      if (config.enableOptimisticUpdates !== false) {
-        const optimisticUpdate = {
-          queryKey,
-          updater: (old: any) => {
-            if (!old) return old;
-            return {
-              ...old,
-              steps: {
-                ...old.steps,
-                [stepType]: {
-                  ...old.steps?.[stepType],
-                  status: 'completed',
-                  completed_at: new Date().toISOString(),
-                  data: stepData
-                }
-              },
-              [`${stepType}_completed`]: true,
-              [`${stepType}_completed_at`]: new Date().toISOString()
-            };
-          }
-        };
-
-        addOptimisticUpdate('kyc-step-completion', optimisticUpdate);
-      }
-
-      // Execute the actual API call
+      // Execute the API call
       const response = await apiClient.post(`/kyc/${stepType.replace('_', '-')}`, stepData);
       return response.data;
     },
 
     onSuccess: (data, variables) => {
       logger.debug(`[useKycQuery] ✅ Step completion successful: ${variables.stepType}`);
-
-      // Remove optimistic update and invalidate for fresh data
-      if (config.enableOptimisticUpdates !== false) {
-        removeOptimisticUpdate('kyc-step-completion');
-      }
 
       // Systematic cache invalidation for dependent queries
       queryClient.invalidateQueries({ queryKey });
@@ -360,11 +327,6 @@ export const useKycQuery = (config: KycQueryConfig) => {
 
     onError: (error, variables) => {
       logger.error(`[useKycQuery] ❌ Step completion failed: ${variables.stepType}`, error);
-
-      // Remove failed optimistic update
-      if (config.enableOptimisticUpdates !== false) {
-        removeOptimisticUpdate('kyc-step-completion');
-      }
     },
 
     // Retry configuration for critical mutations

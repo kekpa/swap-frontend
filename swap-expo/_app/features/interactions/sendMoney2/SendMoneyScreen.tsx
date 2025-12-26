@@ -1,4 +1,4 @@
-// Updated: Simplified transaction flow - removed complex frontend account matching, backend now handles account resolution/creation automatically - 2025-06-28
+// Updated: Professional ID-centric recipient resolution - 2025-12-16
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
@@ -22,9 +22,20 @@ import { CreateDirectTransactionDto } from '../../../types/transaction.types';
 import { useAuthContext } from '../../auth/context/AuthContext';
 import AccountSelectionModal from '../../../components/AccountSelectionModal';
 import apiClient from '../../../_api/apiClient';
-import API_PATHS from '../../../_api/apiPaths';
+import API_PATHS, { WALLET_PATHS } from '../../../_api/apiPaths';
+import { getPresetAmounts, formatPresetAmount } from '../../../constants/currencyConstants';
+import { getInitials, getAvatarColor } from '../../../utils/avatarUtils';
 
-type AmountOption = `${string}5` | `${string}10` | `${string}15` | `${string}20` | `${string}50` | 'Other';
+// Recipient interface - fetched fresh from API
+interface Recipient {
+  id: string;
+  name: string;
+  initial: string;
+  color: string;
+  type: 'entity' | 'external_account';
+}
+
+type AmountOption = string;
 
 interface Account {
   id: string;
@@ -34,26 +45,20 @@ interface Account {
   balance: number;
   account_name: string;
   entity_id: string;
-  account_type: { name: string };
+  account_type: { name: string; display_name?: string };
+  account_type_display_name?: string;
   account_number_last4?: string;
   is_recipient?: boolean;
   // Recipient display info
   recipientName?: string;
-  recipientEntityId?: string;
-  recipientEntityType?: string;
+  toEntityId?: string;
+  toEntityType?: string;
 }
 
 interface SendMoneyScreenProps {
   route?: {
     params?: {
-      recipientId?: string;
-      recipientName?: string;
-      recipientInitial?: string;
-      recipientColor?: string;
-      contactId?: string; // Legacy
-      contactName?: string; // Legacy
-      contactInitials?: string; // Legacy
-      contactAvatarColor?: string; // Legacy
+      toEntityId: string; // Entity ID - the only param needed, display data fetched from API
     };
   };
 }
@@ -73,11 +78,12 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
   const [isLoadingSenderAccounts, setIsLoadingSenderAccounts] = useState(false);
   const [isSenderAccountModalVisible, setIsSenderAccountModalVisible] = useState(false);
 
-  const params = route?.params || {};
-  const recipientId = params.recipientId || params.contactId;
-  const recipientName = params.recipientName || params.contactName || 'Unknown User';
-  const recipientInitial = params.recipientInitial || params.contactInitials || 'U';
-  const recipientColor = params.recipientColor || params.contactAvatarColor || theme.colors.secondary;
+  // Recipient state - fetched fresh from API (professional best practice)
+  const [recipient, setRecipient] = useState<Recipient | null>(null);
+  const [isLoadingRecipient, setIsLoadingRecipient] = useState(false);
+
+  const toEntityId = route?.params?.toEntityId;
+  console.log('[SendMoney] toEntityId from params:', toEntityId, 'full params:', route?.params);
 
   const senderInitial = useMemo(() => {
     // For business users, use business name initials
@@ -101,16 +107,47 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
     return 'Me';
   }, [currentUser]);
 
+  // Fetch recipient data fresh from API (single source of truth)
+  useEffect(() => {
+    const fetchRecipient = async () => {
+      if (!toEntityId) return;
+
+      setIsLoadingRecipient(true);
+      try {
+        // Fetch entity (internal Swap user/business)
+        const resp = await apiClient.get(`/entities/${toEntityId}`);
+        const entity = resp.data;
+
+        if (entity?.display_name) {
+          setRecipient({
+            id: entity.id,
+            name: entity.display_name,
+            initial: getInitials(entity.display_name),
+            color: getAvatarColor(entity.id),
+            type: 'entity',
+          });
+          console.log('[SendMoney] Fetched recipient:', entity.display_name);
+        }
+      } catch (err) {
+        console.error('[SendMoney] Failed to fetch recipient:', err);
+        // No fallback - UI shows error state when recipient is null
+      } finally {
+        setIsLoadingRecipient(false);
+      }
+    };
+
+    fetchRecipient();
+  }, [toEntityId]);
 
   useEffect(() => {
-    const fetchSenderAccounts = async () => {
+    const fetchSenderWallets = async () => {
       if (!currentUser?.profileId) return;
       setIsLoadingSenderAccounts(true);
 
       try {
-        // First get current user's entity ID
-        let entityId = currentUser.entityId; // Try using entityId from JWT if available
-        
+        // Get current user's entity ID
+        let entityId = currentUser.entityId;
+
         if (!entityId) {
           // If not available in JWT, fetch it from the entities service
           try {
@@ -118,70 +155,69 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
             entityId = entityResp?.data?.id || currentUser.profileId;
           } catch (err) {
             console.warn('Failed to fetch entity ID for current user', err);
-            // Fall back to profile endpoint if entity lookup fails
-            const resp = await apiClient.get(`${API_PATHS.ACCOUNT.LIST}?includeDetails=true`);
-            const raw = Array.isArray(resp.data) ? resp.data : resp.data?.data || [];
-            const mapped: Account[] = (raw as any[]).map((acc) => ({
-              id: acc.id,
-              currency_id: acc.currency_id,
-              currency_code: acc.currencies?.code || acc.currency_id,
-              currency_symbol: acc.currencies?.symbol || '',
-              balance: parseFloat(acc.balance ?? 0),
-              account_name: acc.name || acc.account_name || `${acc.currencies?.code || ''} Account`,
-              entity_id: acc.entity_id || acc.profile_id,
-              account_type: { name: acc.account_types?.name || '' },
-              account_number_last4: acc.account_number_last4 || acc.id.substring(acc.id.length - 4),
-            }));
-            
-            setSenderAccounts(mapped);
-            if (mapped.length > 0) setSelectedSenderAccount(mapped[0]);
-            return; // Exit the function since we've already set accounts
+            entityId = currentUser.profileId; // Fallback to profileId
           }
         }
-        
-        // Use entity endpoint with the resolved entityId
-        const resp = await apiClient.get(`${API_PATHS.ACCOUNT.BY_ENTITY(entityId)}?includeDetails=true`);
-        const raw = Array.isArray(resp.data) ? resp.data : resp.data?.data || [];
-        const mapped: Account[] = (raw as any[]).map((acc) => ({
-          id: acc.id,
-          currency_id: acc.currency_id,
-          currency_code: acc.currencies?.code || acc.currency_id,
-          currency_symbol: acc.currencies?.symbol || '',
-          balance: parseFloat(acc.balance ?? 0),
-          account_name: acc.name || acc.account_name || `${acc.currencies?.code || ''} Account`,
-          entity_id: acc.entity_id || acc.profile_id,
-          account_type: { name: acc.account_types?.name || '' },
-          account_number_last4: acc.account_number_last4 || acc.id.substring(acc.id.length - 4),
-          is_recipient: true, // This is a recipient account - hide balance
-        }));
+
+        // Use new wallet endpoint to get all wallets for the entity
+        const resp = await apiClient.get(WALLET_PATHS.BY_ENTITY(entityId));
+        const wallets = Array.isArray(resp.data) ? resp.data : resp.data?.data || resp.data?.result || [];
+        console.log('[SendMoney] Fetched wallets:', JSON.stringify(wallets).substring(0, 500));
+
+        // Map wallet response to Account interface
+        // API returns flat fields: wallet_id, currency_code, currency_symbol, currency_name, account_type_display_name
+        const mapped: Account[] = wallets.map((wallet: any) => {
+          const walletId = wallet.wallet_id || wallet.id || '';
+          // Use account_type_display_name (e.g. "Main") for better UX, fallback to currency name
+          const displayName = wallet.account_type_display_name || wallet.currency_name || wallet.currency?.name || wallet.currency_code || 'Wallet';
+          return {
+            id: walletId,
+            currency_id: wallet.currency_id,
+            currency_code: wallet.currency_code || wallet.currency?.code || '',
+            currency_symbol: wallet.currency_symbol || wallet.currency?.symbol || '',
+            balance: parseFloat(wallet.available_balance ?? wallet.balance ?? 0),
+            account_name: displayName,
+            entity_id: entityId,
+            account_type: { name: wallet.account_type_name || 'Wallet', display_name: wallet.account_type_display_name },
+            account_type_display_name: wallet.account_type_display_name,
+            account_number_last4: walletId.substring(walletId.length - 4),
+          };
+        });
+        console.log('[SendMoney] Mapped accounts:', mapped.map(m => ({ code: m.currency_code, symbol: m.currency_symbol, balance: m.balance })));
 
         setSenderAccounts(mapped);
-        if (mapped.length > 0) setSelectedSenderAccount(mapped[0]);
+        if (mapped.length > 0) {
+          // Select HTG wallet by default if available, otherwise first wallet
+          const htgWallet = mapped.find(w => w.currency_code === 'HTG');
+          setSelectedSenderAccount(htgWallet || mapped[0]);
+        }
       } catch (err) {
-        console.warn('Failed to fetch sender accounts', err);
-        // Show mock accounts if API fails in development
+        console.warn('Failed to fetch sender wallets', err);
+        // Show mock wallets if API fails in development
         if (__DEV__) {
           const mockAccounts: Account[] = [
-            { 
-              id: 'sender-acc-usd', 
-              currency_id: 'USD', 
-              currency_code: 'USD',
-              currency_symbol: '$',
-              balance: 2458.65, 
-              account_name: `My Wallet`, 
-              entity_id: currentUser.profileId!, 
-              account_type: { name: 'Primary' },
+            {
+              id: 'sender-wallet-htg',
+              currency_id: 'HTG',
+              currency_code: 'HTG',
+              currency_symbol: 'G',
+              balance: 1000.00,
+              account_name: 'Main',
+              entity_id: currentUser.profileId!,
+              account_type: { name: 'regular', display_name: 'Main' },
+              account_type_display_name: 'Main',
               account_number_last4: '1234'
             },
-            { 
-              id: 'sender-acc-eur', 
-              currency_id: 'EUR', 
-              currency_code: 'EUR',
-              currency_symbol: '€',
-              balance: 1500.00, 
-              account_name: 'My Savings', 
-              entity_id: currentUser.profileId!, 
-              account_type: { name: 'Savings' },
+            {
+              id: 'sender-wallet-usd',
+              currency_id: 'USD',
+              currency_code: 'USD',
+              currency_symbol: '$',
+              balance: 250.00,
+              account_name: 'Main',
+              entity_id: currentUser.profileId!,
+              account_type: { name: 'regular', display_name: 'Main' },
+              account_type_display_name: 'Main',
               account_number_last4: '5678'
             }
           ];
@@ -192,7 +228,7 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
         setIsLoadingSenderAccounts(false);
       }
     };
-    fetchSenderAccounts();
+    fetchSenderWallets();
   }, [currentUser?.profileId, currentUser?.entityId]);
 
   const handleClose = () => {
@@ -210,12 +246,12 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
   const handleSend = async () => {
     // This shouldn't happen since button is disabled when no amount selected
     if (!selectedAmount) return;
-    
-    const amountValue = selectedAmount === 'Other' 
+
+    const amountValue = selectedAmount === 'Other'
       ? parseFloat(customAmount || '0')
       : parseFloat(selectedAmount.replace(/[^0-9.]/g, '')); // Strip any currency symbols or non-numeric chars
-    
-    if (!recipientId) {
+
+    if (!toEntityId || !recipient) {
       alert('Recipient not found.');
       return;
     }
@@ -228,15 +264,15 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
       return;
     }
 
-    // Simplified DTO - let backend handle recipient account resolution
+    // Use fresh recipient data from API (single source of truth)
     const reviewParams = {
       amount: amountValue,
-      recipientName,
-      recipientInitial,
-      recipientColor,
+      recipientName: recipient.name,
+      recipientInitial: recipient.initial,
+      recipientColor: recipient.color,
       message: message || '',
-      recipientId, // Just pass the entity ID
-      fromAccount: selectedSenderAccount, 
+      toEntityId: recipient.id,
+      fromAccount: selectedSenderAccount,
       currency: selectedSenderAccount.currency_id
     };
 
@@ -277,11 +313,10 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
       fontStyle: 'italic'
     },
 
-    messageContainer: { flexDirection: 'row', marginBottom: theme.spacing.lg, gap: theme.spacing.sm },
-    messageInputTouchable: { flex: 1, backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.lg, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm, flexDirection: 'row', alignItems: 'center', ...theme.shadows.small, minHeight: 52 },
+    messageContainer: { marginBottom: theme.spacing.lg },
+    messageInputTouchable: { backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.lg, paddingHorizontal: theme.spacing.md, paddingVertical: theme.spacing.sm, flexDirection: 'row', alignItems: 'center', ...theme.shadows.small, minHeight: 52 },
     messageIcon: { marginRight: theme.spacing.sm },
     messageTextInput: { color: theme.colors.inputText, flex: 1, fontSize: theme.typography.fontSize.md },
-    attachButton: { width: 52, height: 52, backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.lg, alignItems: 'center', justifyContent: 'center', ...theme.shadows.small },
     customAmountContainer: { backgroundColor: theme.colors.card, borderRadius: theme.borderRadius.lg, padding: theme.spacing.md, marginBottom: theme.spacing.lg },
     customAmountLabel: { fontWeight: '500', color: theme.colors.textSecondary, marginBottom: theme.spacing.sm },
     customAmountInput: { ...theme.commonStyles.input, fontSize: theme.typography.fontSize.lg, fontWeight: '600' },
@@ -299,30 +334,40 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
       </View>
       <ScrollView style={{flex: 1}} contentContainerStyle={{flexGrow:1, padding: theme.spacing.md}}>
         <View style={styles.amountGrid}>
-          {selectedSenderAccount && (
-            [
-              `${selectedSenderAccount.currency_symbol || ''}5`, 
-              `${selectedSenderAccount.currency_symbol || ''}10`, 
-              `${selectedSenderAccount.currency_symbol || ''}15`, 
-              `${selectedSenderAccount.currency_symbol || ''}20`, 
-              `${selectedSenderAccount.currency_symbol || ''}50`, 
-              'Other'
-            ].map((amount, index) => (
-              <TouchableOpacity 
-                key={amount} 
-                style={[styles.amountOption, selectedAmount === amount && styles.selectedAmountOption]} 
-                onPress={() => handleAmountSelect(amount as AmountOption)}
-              >
-                <Text style={[styles.amountText, selectedAmount === amount && styles.selectedAmountText]}>{amount}</Text>
-              </TouchableOpacity>
-            ))
-          )}
-          {!selectedSenderAccount && (
-            (['$5', '$10', '$15', '$20', '$50', 'Other'] as AmountOption[]).map((amount) => (
-            <TouchableOpacity key={amount} style={[styles.amountOption, selectedAmount === amount && styles.selectedAmountOption]} onPress={() => handleAmountSelect(amount)}>
-              <Text style={[styles.amountText, selectedAmount === amount && styles.selectedAmountText]}>{amount}</Text>
-            </TouchableOpacity>
-            ))
+          {isLoadingSenderAccounts ? (
+            // Show loading placeholder while fetching wallets
+            <>
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <View key={i} style={[styles.amountOption, { backgroundColor: theme.colors.inputBackground }]}>
+                  <ActivityIndicator size="small" color={theme.colors.textTertiary} />
+                </View>
+              ))}
+            </>
+          ) : (
+            (() => {
+              // Get currency-specific presets based on selected wallet
+              const currencyCode = selectedSenderAccount?.currency_code || 'USD';
+              const symbol = selectedSenderAccount?.currency_symbol || '$';
+              const presets = getPresetAmounts(currencyCode);
+
+              // Generate amount options with proper formatting
+              const amountOptions = [
+                ...presets.map(amount => formatPresetAmount(amount, symbol)),
+                'Other'
+              ];
+
+              return amountOptions.map((displayAmount) => (
+                <TouchableOpacity
+                  key={displayAmount}
+                  style={[styles.amountOption, selectedAmount === displayAmount && styles.selectedAmountOption]}
+                  onPress={() => handleAmountSelect(displayAmount)}
+                >
+                  <Text style={[styles.amountText, selectedAmount === displayAmount && styles.selectedAmountText]}>
+                    {displayAmount}
+                  </Text>
+                </TouchableOpacity>
+              ));
+            })()
           )}
         </View>
 
@@ -339,8 +384,8 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
               <>
                 <View style={[styles.avatar, { backgroundColor: theme.colors.primary }]}><Text style={styles.avatarText}>{senderInitial}</Text></View>
                 <Text style={styles.accountName} numberOfLines={1} ellipsizeMode="tail">
-                  {selectedSenderAccount.account_name.replace(/ Account$/, '')}
-                  <Text style={styles.accountId}>•{selectedSenderAccount.account_number_last4}</Text>
+                  {selectedSenderAccount.account_name}
+                  <Text style={styles.accountId}>•{selectedSenderAccount.currency_code}</Text>
                 </Text>
               </>
             ) : (
@@ -354,25 +399,33 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.accountSelectButton} 
+        <TouchableOpacity
+          style={styles.accountSelectButton}
           disabled={!selectedSenderAccount}
         >
           <View style={styles.accountRow}>
             <Text style={styles.accountLabel}>To</Text>
-            {selectedSenderAccount ? (
+            {isLoadingRecipient ? (
+              <ActivityIndicator size="small" color={theme.colors.primary} />
+            ) : recipient ? (
               <>
-                <View style={[styles.avatar, { backgroundColor: recipientColor }]}><Text style={styles.avatarText}>{recipientInitial}</Text></View>
-                                  <Text style={styles.accountName} numberOfLines={1} ellipsizeMode="tail">
-                    {recipientName}
+                <View style={[styles.avatar, { backgroundColor: recipient.color }]}>
+                  <Text style={styles.avatarText}>{recipient.initial}</Text>
+                </View>
+                <Text style={styles.accountName} numberOfLines={1} ellipsizeMode="tail">
+                  {recipient.name}
+                  {selectedSenderAccount && (
                     <Text style={styles.accountId}>•{selectedSenderAccount.currency_code}</Text>
-                  </Text>
+                  )}
+                </Text>
               </>
-            ) : (
+            ) : !selectedSenderAccount ? (
               <Text style={styles.loadingText}>Select sender account first</Text>
+            ) : (
+              <Text style={styles.loadingText}>No recipient selected</Text>
             )}
-        </View>
-          {selectedSenderAccount && (
+          </View>
+          {selectedSenderAccount && recipient && (
             <Text style={styles.accountBalance}>
               {selectedSenderAccount.currency_code}
             </Text>
@@ -382,9 +435,8 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
         <View style={styles.messageContainer}>
           <TouchableOpacity style={styles.messageInputTouchable} onPress={() => { /* Potentially focus TextInput */ }}>
             <Ionicons name="chatbubble-outline" size={20} color={theme.colors.textSecondary} style={styles.messageIcon} />
-            <TextInput placeholder="Add message" placeholderTextColor={theme.colors.textTertiary} style={styles.messageTextInput} value={message} onChangeText={setMessage}/>
+            <TextInput placeholder="Add message (optional)" placeholderTextColor={theme.colors.textTertiary} style={styles.messageTextInput} value={message} onChangeText={setMessage}/>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.attachButton}><Ionicons name="image-outline" size={20} color={theme.colors.textSecondary} /></TouchableOpacity>
         </View>
 
         {selectedAmount === 'Other' && (
@@ -403,13 +455,13 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
         )}
         <View style={{flexGrow: 1}} /> 
       </ScrollView>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[
-          styles.sendButton, 
-          (!selectedSenderAccount || !selectedAmount || (selectedAmount === 'Other' && !parseFloat(customAmount))) && {backgroundColor: theme.colors.grayMedium}
-        ]} 
+          styles.sendButton,
+          (!selectedSenderAccount || !recipient || !selectedAmount || (selectedAmount === 'Other' && !parseFloat(customAmount))) && {backgroundColor: theme.colors.grayMedium}
+        ]}
         onPress={handleSend}
-        disabled={!selectedSenderAccount || !selectedAmount || (selectedAmount === 'Other' && !parseFloat(customAmount))}
+        disabled={!selectedSenderAccount || !recipient || !selectedAmount || (selectedAmount === 'Other' && !parseFloat(customAmount))}
       >
         <Text style={styles.sendButtonText}>Send</Text>
       </TouchableOpacity>

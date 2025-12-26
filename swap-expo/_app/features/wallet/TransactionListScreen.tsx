@@ -1,4 +1,4 @@
-// Updated: Removed avatar click functionality, entire transaction item now clickable for details - 2025-05-27
+// Updated: Improved UI with entity name resolution, direction arrows, and better formatting - 2025-12-24
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
@@ -20,7 +20,11 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useAuthContext } from '../auth/context/AuthContext';
 import { useTransactionList } from '../../hooks-data/useRecentTransactions';
 import { useBalances } from '../../hooks-data/useBalances';
+import { useCurrentProfileId } from '../../hooks/useCurrentProfileId';
+import { useInteractions } from '../../hooks-data/useInteractions';
+import { formatRelativeTimestamp } from '../../utils/dateFormatting';
 import logger from '../../utils/logger';
+import { useRefreshByUser } from '../../hooks/useRefreshByUser';
 
 interface WalletTransaction {
   id: string;
@@ -53,6 +57,14 @@ const TransactionListScreen: React.FC = () => {
   const { theme } = useTheme();
   const authContext = useAuthContext();
   const user = authContext.user;
+  const profileId = useCurrentProfileId();
+
+  // Entity name cache for resolving contact names from interaction_members
+  const [entityNameCache, setEntityNameCache] = useState<Map<string, string>>(new Map());
+
+  // ENTITY NAME FIX: Use useInteractions hook (same pattern as InteractionsHistory2)
+  // This ensures we get the data from TanStack Query which has the display_name populated
+  const { interactions: interactionsList } = useInteractions({ enabled: !!user });
 
   // Get selected wallet from navigation params or use primary account as fallback
   const selectedWallet = (route.params as any)?.selectedWallet;
@@ -72,6 +84,7 @@ const TransactionListScreen: React.FC = () => {
   }, [selectedWallet, currencyBalances]);
 
   // Use the new useTransactionList hook for account-specific transactions
+  // CRITICAL FIX: Pass BOTH walletId (for local SQLite query) AND accountId (for API call)
   const {
     transactions: allAccountTransactions,
     isLoading: isLoadingTransactions,
@@ -79,10 +92,11 @@ const TransactionListScreen: React.FC = () => {
     hasMore,
     loadMore
   } = useTransactionList(
-    targetAccount?.account_id || '', 
+    targetAccount?.wallet_id || '',   // For local_timeline SQLite query
+    targetAccount?.account_id || '',  // For API: /transactions/account/{accountId}
     50, // limit to 50 transactions
     0,  // offset
-    !!targetAccount?.account_id // only enabled when we have an account ID
+    !!targetAccount?.wallet_id && !!targetAccount?.account_id // only enabled when we have both IDs
   );
 
   // Filter transactions by selected wallet currency
@@ -101,56 +115,43 @@ const TransactionListScreen: React.FC = () => {
     return filteredTransactions;
   }, [allAccountTransactions, targetAccount]);
 
-  const [refreshing, setRefreshing] = useState(false);
+  // Industry-standard refresh hook - per-screen local state (TanStack Query pattern)
+  const { refreshing, onRefresh } = useRefreshByUser(refetch);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'received' | 'sent'>('all');
 
-  // Get entity name from transactions - stable callback
-  const getEntityNameFromTransactions = useCallback((entityId: string): string => {
-    // For now, return a placeholder - in production, this would resolve from contacts/cache
-    return `Contact ${entityId.slice(0, 8)}`;
-  }, []);
+  // ENTITY NAME FIX: Load entity names from useInteractions hook data (same as InteractionsHistory2)
+  // This uses the TanStack Query cached data which has display_name properly populated from API
+  useEffect(() => {
+    if (!interactionsList?.length) return;
 
-  // Format transaction date time - stable callback
-  const formatTransactionDateTime = useCallback((dateString: string): string => {
-    if (!dateString) return 'Recent';
-    
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return 'Recent';
-      
-      const now = new Date();
-      const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-      
-      if (diffInHours < 24) {
-        const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        return `Today, ${timeString}`;
-      } else if (diffInHours < 48) {
-        const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        return `Yesterday, ${timeString}`;
-      } else {
-        const dateString = date.toLocaleDateString();
-        const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        return `${dateString}, ${timeString}`;
+    const nameMap = new Map<string, string>();
+    for (const interaction of interactionsList) {
+      for (const member of interaction.members || []) {
+        if (member.display_name && member.entity_id) {
+          nameMap.set(member.entity_id, member.display_name);
+        }
       }
-    } catch (error) {
-      logger.debug('[TransactionListScreen] Error formatting date:', String(error));
-      return 'Recent';
     }
-  }, []);
 
-  // Resolve contact name from entity IDs - stable callback
+    setEntityNameCache(nameMap);
+    logger.debug(`[TransactionListScreen] Loaded ${nameMap.size} entity names from useInteractions hook`);
+  }, [interactionsList]);
+
+  // Resolve contact name from entity IDs using cached interaction_members data
   const resolveContactName = useCallback((fromEntityId: string, toEntityId: string): string => {
     const contactEntityId = fromEntityId === user?.entityId ? toEntityId : fromEntityId;
-    
-    // For now, return a placeholder - in production, this should resolve from contacts/profiles
-    // TODO: Implement proper contact name resolution from profiles table
-    if (contactEntityId === 'c91f23d0-4e60-4a54-bf5b-18d87672041b') {
-      return 'Frantz Paillant'; // From database query result
+
+    // Try to get from entity name cache (populated from interaction_members)
+    const cachedName = entityNameCache.get(contactEntityId);
+    if (cachedName) {
+      return cachedName;
     }
-    
-    return `Contact ${contactEntityId.slice(0, 8)}`;
-  }, [user?.entityId]);
+
+    // Fallback to truncated entity ID
+    return `User ${contactEntityId.slice(0, 8)}`;
+  }, [user?.entityId, entityNameCache]);
 
   // Transform transactions with proper currency and contact resolution
   const transformedTransactions = useMemo(() => {
@@ -175,13 +176,13 @@ const TransactionListScreen: React.FC = () => {
         amount: parseFloat(tx.amount || '0').toFixed(2), // Keep as string
         type: (tx.from_entity_id === user?.entityId ? 'sent' : 'received') as 'received' | 'sent',
         category: tx.from_entity_id === user?.entityId ? 'Payment sent' : 'Payment received',
-        date: formatTransactionDateTime(tx.created_at?.toString() || ''),
+        date: formatRelativeTimestamp(tx.id, tx.created_at?.toString() || ''),
         currency_symbol: transactionSymbol, // Use transaction's symbol (HTG = 'G')
         timestamp: tx.created_at,
         entityId: tx.from_entity_id === user?.entityId ? tx.to_entity_id : tx.from_entity_id,
       };
     });
-  }, [transactions, user?.entityId, formatTransactionDateTime, resolveContactName]);
+  }, [transactions, user?.entityId, resolveContactName]);
 
   // Filter transactions based on search and filter - stable memoization
   const filteredTransactions = useMemo(() => {
@@ -205,14 +206,6 @@ const TransactionListScreen: React.FC = () => {
     return filtered;
   }, [transformedTransactions, searchQuery, selectedFilter]);
 
-  // Handle refresh
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await refetch();
-    setRefreshing(false);
-  };
-
-
   // Handle transaction press
   const handleTransactionPress = (transaction: WalletTransaction) => {
     logger.debug(`[TransactionListScreen] Transaction pressed: ${transaction.id}`, "TransactionListScreen");
@@ -230,16 +223,19 @@ const TransactionListScreen: React.FC = () => {
     const initials = getInitials(item.name);
     const charCode = item.name.charCodeAt(0);
     const colorPalette = [
-      theme.colors.primary, 
-      theme.colors.secondary, 
-      theme.colors.success, 
-      theme.colors.info, 
+      theme.colors.primary,
+      theme.colors.secondary,
+      theme.colors.success,
+      theme.colors.info,
       theme.colors.warning
     ];
     const avatarColor = colorPalette[charCode % colorPalette.length];
 
+    // Direction colors: green for received (money in), red for sent (money out)
+    const directionColor = item.type === 'received' ? theme.colors.success : theme.colors.error;
+
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.transactionItem}
         onPress={() => handleTransactionPress(item)}
       >
@@ -248,18 +244,24 @@ const TransactionListScreen: React.FC = () => {
         </View>
         <View style={styles.transactionContent}>
           <View style={styles.transactionInfo}>
-            <Text style={styles.transactionName}>{item.name}</Text>
-            <Text style={styles.transactionCategory}>{item.category}</Text>
+            {/* Name with direction arrow */}
+            <View style={styles.transactionNameRow}>
+              <Ionicons
+                name={item.type === 'received' ? 'arrow-down' : 'arrow-up'}
+                size={14}
+                color={directionColor}
+                style={{ marginRight: 6 }}
+              />
+              <Text style={styles.transactionName}>{item.name}</Text>
+            </View>
+            {/* Transaction ID with # prefix */}
+            <Text style={styles.transactionId}>#{item.id.slice(0, 8)}</Text>
             <Text style={styles.transactionDate}>{item.date}</Text>
           </View>
           <View style={styles.transactionRight}>
-            <Text
-              style={[
-                styles.transactionAmount,
-                { color: item.type === 'received' ? theme.colors.success : theme.colors.textPrimary }
-              ]}
-            >
-              {item.currency_symbol}{item.amount}
+            {/* Amount with +/- prefix and direction color */}
+            <Text style={[styles.transactionAmount, { color: directionColor }]}>
+              {item.type === 'received' ? '+' : '-'}{item.currency_symbol}{item.amount}
             </Text>
           </View>
         </View>
@@ -301,24 +303,31 @@ const TransactionListScreen: React.FC = () => {
   const styles = useMemo(() => StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: theme.colors.card, // Match header for status bar (like KYC screens)
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'space-between',
       paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm,
+      paddingVertical: theme.spacing.sm + 2,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border,
+      backgroundColor: theme.colors.card,
     },
     backButton: {
-      marginRight: theme.spacing.md,
+      width: 40,
+      height: 40,
+      justifyContent: 'center',
+      alignItems: 'center',
     },
     headerTitle: {
       fontSize: theme.typography.fontSize.lg,
-      fontWeight: 'bold',
+      fontWeight: '600',
       color: theme.colors.textPrimary,
-      flex: 1,
+    },
+    headerSpacer: {
+      width: 40,
     },
     searchContainer: {
       paddingHorizontal: theme.spacing.md,
@@ -404,15 +413,20 @@ const TransactionListScreen: React.FC = () => {
     transactionInfo: {
       flex: 1,
     },
+    transactionNameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 2,
+    },
     transactionName: {
       fontSize: theme.typography.fontSize.md,
       fontWeight: '600',
       color: theme.colors.textPrimary,
-      marginBottom: 2,
+      flex: 1,
     },
-    transactionCategory: {
-      fontSize: theme.typography.fontSize.sm,
-      color: theme.colors.textSecondary,
+    transactionId: {
+      fontSize: theme.typography.fontSize.xs,
+      color: theme.colors.textTertiary,
       marginBottom: 2,
     },
     transactionDate: {
@@ -448,12 +462,13 @@ const TransactionListScreen: React.FC = () => {
   if (isLoadingBalances || (isLoadingTransactions && !targetAccount)) {
     return (
       <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} />
+        <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.card} />
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>All Transactions</Text>
+          <View style={styles.headerSpacer} />
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
@@ -465,14 +480,15 @@ const TransactionListScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} />
-      
-      {/* Header */}
+      <StatusBar barStyle={theme.isDark ? "light-content" : "dark-content"} backgroundColor={theme.colors.card} />
+
+      {/* Header - KYC style */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>All Transactions</Text>
+        <View style={styles.headerSpacer} />
       </View>
 
       {/* Search */}
@@ -520,7 +536,7 @@ const TransactionListScreen: React.FC = () => {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={handleRefresh}
+              onRefresh={onRefresh}
               colors={[theme.colors.primary]}
               tintColor={theme.colors.primary}
             />

@@ -1,12 +1,21 @@
 // Local-First Banking Schema Exports - Optimized for Performance & Compliance
-// Updated: 2025-01-10 - Removed unnecessary schemas, kept essential ones
+// Updated: 2025-12-22 - Added unified local_timeline for WhatsApp-grade local-first architecture
 
 // ✅ ESSENTIAL SCHEMAS - Core local-first experience
 
-// 1. Messages & Interactions (WhatsApp-like experience)
+// 1. Interactions (conversation metadata)
 export { initializeInteractionSchema } from './interaction-schema';
-export { initializeMessageSchema } from './message-schema';
-export { initializeTimelineSchema } from './timeline-schema';
+
+// 2. Unified Local Timeline (WhatsApp-grade local-first)
+// NOTE: Replaces old message-schema and timeline-schema (VIEW)
+export { initializeLocalTimelineSchema } from './local-timeline-schema';
+export type {
+  LocalTimelineItem,
+  SyncStatus,
+  MessageLocalStatus,
+  TransactionLocalStatus
+} from './local-timeline-schema';
+export { isProcessingStatus, isTerminalStatus } from './local-timeline-schema';
 
 // 2. User Data & Relationships (Profile & contacts)
 export { initializeUserSchema } from './user-schema';

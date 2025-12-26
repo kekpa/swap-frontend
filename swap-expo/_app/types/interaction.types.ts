@@ -76,9 +76,9 @@ export interface BaseInteraction {
  * Interaction list item for UI display
  */
 export interface InteractionListItem extends BaseInteraction {
-  last_message_snippet?: string;
-  last_message_at?: string;
-  last_message_sender_id?: string;
+  last_activity_snippet?: string;
+  last_activity_at?: string;
+  last_activity_from_entity_id?: string;
   unread_count?: number;
 }
 
@@ -112,7 +112,7 @@ export type InteractionMessage = {
   id: string;
   content?: string;
   created_at: string;
-  sender_id: string;
+  from_entity_id: string;
   sender_type: string;
   sender?: {
     id: string;
@@ -138,14 +138,14 @@ export interface Interaction {
   created_at: string;
   updated_at?: string;
   members?: InteractionMember[];
-  lastMessage?: InteractionMessage;
+  lastActivity?: InteractionMessage;
   unreadCount?: number;
-  
+
   // Frontend-specific fields for display
   displayName?: string;
   avatarColor?: string;
   initials?: string;
-  lastMessageText?: string;
+  lastActivityText?: string;
   lastActivityDateStr?: string;
   timestamp?: number;
   type?: string;

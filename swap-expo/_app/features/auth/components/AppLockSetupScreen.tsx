@@ -35,6 +35,7 @@ import { logger } from '../../../utils/logger';
 import { KycService } from '../../../services/KycService';
 import apiClient from '../../../_api/apiClient';
 import { API_PATHS } from '../../../_api/apiPaths';
+import { loginService } from '../../../services/auth/LoginService';
 
 // ============================================
 // TYPES
@@ -142,28 +143,47 @@ const AppLockSetupContent: React.FC<AppLockSetupContentProps> = ({
     return 'finger-print-outline';
   };
 
-  // Handle biometric setup
+  // Handle biometric setup - unified local + backend flow
   const handleBiometricSetup = useCallback(async () => {
     setIsLoading(true);
-    const result = await appLockService.setupBiometric();
-    setIsLoading(false);
 
-    if (result.success) {
-      logger.info('[AppLockSetup] Biometric setup successful (local-only, not synced to backend)');
-      // Note: Biometric is local-only, not tracked in backend KYC steps
-      setBiometricEnabled(true); // Track that biometric was successfully enabled
-      // Now setup backup PIN
-      setStep('pin_create');
-    } else {
+    // Step 1: Setup local biometric (for app lock)
+    const localResult = await appLockService.setupBiometric();
+
+    if (!localResult.success) {
+      setIsLoading(false);
       Alert.alert(
         'Biometric Setup Failed',
-        result.error || 'Please try again or use PIN instead.',
+        localResult.error || 'Please try again or use PIN instead.',
         [
           { text: 'Try Again', onPress: handleBiometricSetup },
           { text: 'Use PIN', onPress: () => setStep('pin_create') },
         ]
       );
+      return;
     }
+
+    logger.info('[AppLockSetup] Local biometric setup successful');
+
+    // Step 2: Enable backend biometric login (for password-less login)
+    // This stores a secure token that can be used for biometric login
+    try {
+      const backendResult = await loginService.enableBiometricLogin();
+      if (backendResult.success) {
+        logger.info('[AppLockSetup] Backend biometric login enabled - unified biometric setup complete');
+      } else {
+        // Non-fatal: local biometric works, backend can be enabled later in settings
+        logger.warn('[AppLockSetup] Backend biometric setup failed (non-fatal):', backendResult.message);
+      }
+    } catch (error: any) {
+      // Non-fatal: local biometric works, backend can be enabled later
+      logger.warn('[AppLockSetup] Backend biometric sync failed (non-fatal):', error.message);
+    }
+
+    setIsLoading(false);
+    setBiometricEnabled(true);
+    // Now setup backup PIN
+    setStep('pin_create');
   }, []);
 
   // Handle PIN creation - always 6 digits for both personal and business

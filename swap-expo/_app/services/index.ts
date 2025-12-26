@@ -1,6 +1,6 @@
 /**
  * Services Barrel Exports
- * 
+ *
  * Centralized exports for service modules to enable cleaner imports.
  * Instead of: import { contactsService } from '../../../services/ContactsService'
  * Use: import { contactsService } from '@/services'
@@ -19,14 +19,45 @@ export { websocketService } from './websocketService';
 // Contact services
 export { contactsService } from './ContactsService';
 
-// Message management
-export { messageManager } from './MessageManager';
+// LOCAL-FIRST: Unified timeline services
+export { unifiedTimelineService } from './UnifiedTimelineService';
+export { backgroundSyncService } from './BackgroundSyncService';
+export { timelineSyncService } from './TimelineSyncService';
 
-// Transaction management
-export { transactionManager } from './TransactionManager';
+// Wallet services
+export { walletManager } from './WalletManager';
 
-// Timeline management
-export { TimelineManager } from './TimelineManager';
+// Timeline cache (in-memory per interaction)
+export { getInteractionTimelineCache } from './InteractionTimelineCache';
+// @deprecated Use getInteractionTimelineCache instead - will be removed in future version
+export { getTimelineManager } from './InteractionTimelineCache';
+
+// Interactions management
+export { getInteractionsManager } from './InteractionsManager';
+
+// Profile management
+export { profileContextManager } from './ProfileContextManager';
+export { profileSwitchOrchestrator } from './ProfileSwitchOrchestrator';
+export { userStateManager } from './UserStateManager';
+export { default as accountSwitchAuditLogger } from './AccountSwitchAuditLogger';
+
+// Account management
+export { default as accountsManager } from './AccountsManager';
+
+// Security services
+export { appLockService } from './AppLockService';
+
+// KYC services
+export { KycService } from './KycService';
+export { kycOfflineQueue } from './KycOfflineQueue';
+
+// Transaction services
+export { transactionPollingManager } from './TransactionPollingManager';
+export { deliveryConfirmationManager } from './DeliveryConfirmationManager';
+
+// Notification services
+export { smartNotificationHandler } from './SmartNotificationHandler';
+export { pushNotificationService } from './PushNotificationService';
 
 // Map services
 export * from './MapApiService';
