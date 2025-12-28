@@ -13,7 +13,7 @@ import { queryKeys } from '../tanstack-query/queryKeys';
 import apiClient from '../_api/apiClient';
 import { getStaleTimeForQuery, staleTimeManager } from '../tanstack-query/config/staleTimeConfig';
 import { userRepository } from '../localdb/UserRepository';
-import { useCurrentProfileId } from '../hooks/useCurrentProfileId';
+import { useCurrentEntityId } from '../hooks/useCurrentEntityId';
 
 // KYC status types based on actual backend response
 export type KycLevel = 'not_started' | 'pending' | 'approved' | 'rejected' | 'in_review';
@@ -122,13 +122,13 @@ interface KycQueryConfig {
  */
 export const useKycQuery = (config: KycQueryConfig) => {
   const queryClient = useQueryClient();
-  const profileId = useCurrentProfileId();
+  const entityId = useCurrentEntityId();
 
   // Generate smart query key with dependency mapping
-  // Let the 'enabled' check handle null profileId gracefully (TanStack Query best practice)
+  // Let the 'enabled' check handle null entityId gracefully (TanStack Query best practice)
   const queryKey = React.useMemo(() => {
-    return queryKeys.kycStatus(profileId || '');
-  }, [profileId]);
+    return queryKeys.kycStatus(entityId || '');
+  }, [entityId]);
 
   // Calculate stale time based on context
   const staleTime = React.useMemo(() => {
@@ -147,9 +147,9 @@ export const useKycQuery = (config: KycQueryConfig) => {
 
       try {
         // STEP 1: Check local database first (local-first pattern)
-        const localKycStatus = await userRepository.getKycStatus(profileId!);
+        const localKycStatus = await userRepository.getKycStatus(entityId!);
         if (localKycStatus) {
-          logger.debug('[useKycQuery] 💾 Returning cached KYC status from local DB (profileId:', profileId, ')');
+          logger.debug('[useKycQuery] 💾 Returning cached KYC status from local DB (entityId:', entityId, ')');
 
           // PROFESSIONAL FIX: Parse local database format to match API response format
           let parsedLocalData;
@@ -178,7 +178,7 @@ export const useKycQuery = (config: KycQueryConfig) => {
                 await userRepository.saveKycStatus({
                   ...response.data,
                   id: config.entityId,
-                  profile_id: profileId!,
+                  entity_id: entityId!,
                   is_synced: true
                 });
 
@@ -201,7 +201,7 @@ export const useKycQuery = (config: KycQueryConfig) => {
         }
 
         // STEP 3: No local cache - fetch from API (first time only)
-        logger.debug('[useKycQuery] 🌐 No local cache, fetching from API (profileId:', profileId, ')');
+        logger.debug('[useKycQuery] 🌐 No local cache, fetching from API (entityId:', entityId, ')');
         const response = await apiClient.get('/kyc/verification-status');
 
         if (response.data) {
@@ -209,19 +209,19 @@ export const useKycQuery = (config: KycQueryConfig) => {
           await userRepository.saveKycStatus({
             ...response.data,
             id: config.entityId,
-            profile_id: profileId!,
+            entity_id: entityId!,
             is_synced: true
           });
-          logger.debug('[useKycQuery] ✅ KYC status fetched and saved to local DB (profileId:', profileId, ')');
+          logger.debug('[useKycQuery] ✅ KYC status fetched and saved to local DB (entityId:', entityId, ')');
           return response.data;
         } else {
           throw new Error('No KYC status data received');
         }
       } catch (error) {
         // Check if we have local data as fallback
-        const localKycStatus = await userRepository.getKycStatus(profileId!);
+        const localKycStatus = await userRepository.getKycStatus(entityId!);
         if (localKycStatus) {
-          logger.debug('[useKycQuery] 📱 Using local cache as fallback due to error (profileId:', profileId, ')');
+          logger.debug('[useKycQuery] 📱 Using local cache as fallback due to error (entityId:', entityId, ')');
 
           // PROFESSIONAL FIX: Apply same parsing logic for fallback data
           let parsedLocalData;
@@ -244,7 +244,7 @@ export const useKycQuery = (config: KycQueryConfig) => {
         throw error;
       }
     },
-    enabled: !!config.entityId && !!profileId,
+    enabled: !!config.entityId && !!entityId,
     staleTime,
     gcTime: 30 * 60 * 1000, // 30 minutes cache time
 
@@ -591,20 +591,20 @@ export default useKycQuery;
  * const { data: kycData } = useKycStatusDirect(authContext.user?.entityId);
  * if (kycData?.passcode_setup_completed) { ... }
  */
-export const useKycStatusDirect = (entityId?: string) => {
-  const profileId = useCurrentProfileId();
-  const targetEntityId = entityId || '';
+export const useKycStatusDirect = (entityIdParam?: string) => {
+  const entityId = useCurrentEntityId();
+  const targetEntityId = entityIdParam || '';
 
   return useQuery({
-    queryKey: queryKeys.kycStatus(profileId || ''),
+    queryKey: queryKeys.kycStatus(entityId || ''),
     queryFn: async (): Promise<KycStatus | null> => {
-      if (!targetEntityId || !profileId) {
+      if (!targetEntityId || !entityId) {
         return null;
       }
 
       try {
         // Check local cache first (offline-first pattern)
-        const localData = await userRepository.getKycStatus(profileId);
+        const localData = await userRepository.getKycStatus(entityId);
         if (localData) {
           logger.debug('[useKycStatusDirect] Using cached KYC data');
           return localData as KycStatus;
@@ -618,7 +618,7 @@ export const useKycStatusDirect = (entityId?: string) => {
 
         // Cache locally for future use
         if (response.data) {
-          await userRepository.saveKycStatus({ ...response.data, id: targetEntityId, profile_id: profileId });
+          await userRepository.saveKycStatus({ ...response.data, id: targetEntityId, entity_id: entityId });
         }
 
         return response.data;
@@ -627,7 +627,7 @@ export const useKycStatusDirect = (entityId?: string) => {
         throw error;
       }
     },
-    enabled: !!targetEntityId && !!profileId,
+    enabled: !!targetEntityId && !!entityId,
     staleTime: 5 * 60 * 1000, // 5 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes
     retry: 2,

@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import debounce from 'lodash/debounce';
 import logger from '../utils/logger';
 import { eventEmitter } from '../utils/eventEmitter';
-import { useCurrentProfileId } from '../hooks/useCurrentProfileId';
+import { useCurrentEntityId } from '../hooks/useCurrentEntityId';
 import {
   unifiedTimelineRepository,
   TIMELINE_UPDATED_EVENT,
@@ -85,8 +85,8 @@ export const useLocalTimeline = (
 ): UseLocalTimelineResult => {
   const { pageSize = 50, enabled = true } = options;
 
-  // Get current profile ID for isolation
-  const profileId = useCurrentProfileId();
+  // Get current entity ID for isolation (backend's universal identifier)
+  const entityId = useCurrentEntityId();
 
   // State
   const [items, setItems] = useState<LocalTimelineItem[]>([]);
@@ -103,6 +103,8 @@ export const useLocalTimeline = (
   const isSyncingRef = useRef(false);
   // Track last sync time for stale-while-revalidate
   const lastSyncTimeRef = useRef<number>(0);
+  // Track if we've already attempted sync for this interaction (prevent infinite loops)
+  const syncAttemptedRef = useRef<string | null>(null);
 
   /**
    * Check if cached data is stale (older than threshold)
@@ -131,10 +133,10 @@ export const useLocalTimeline = (
    */
   const loadTimeline = useCallback(
     async (reset: boolean = true) => {
-      if (!interactionId || !profileId || !enabled) {
+      if (!interactionId || !entityId || !enabled) {
         logger.debug('[useLocalTimeline] Skipping load - missing requirements', {
           interactionId,
-          profileId,
+          entityId,
           enabled,
         });
         setItems([]);
@@ -160,19 +162,19 @@ export const useLocalTimeline = (
         logger.debug(`[useLocalTimeline] Loading timeline for ${interactionId}`, {
           offset,
           pageSize,
-          profileId,
+          entityId,
         });
 
         // 1. INSTANT: Read from SQLite (local cache)
         const timelineItems = await unifiedTimelineRepository.getTimeline(
           interactionId,
-          profileId,
+          entityId,
           pageSize,
           offset
         );
 
         // Get total count for hasMore calculation
-        const count = await unifiedTimelineRepository.getTimelineCount(interactionId, profileId);
+        const count = await unifiedTimelineRepository.getTimelineCount(interactionId, entityId);
 
         if (!isMountedRef.current) return;
 
@@ -214,12 +216,17 @@ export const useLocalTimeline = (
         });
 
         // 3. BACKGROUND: Check if data is stale and needs sync
-        if (reset && !isSyncingRef.current) {
+        // GUARD: Only sync once per interaction to prevent infinite loops
+        // If sync already attempted for this interaction and still empty, don't retry
+        const alreadySyncedThisInteraction = syncAttemptedRef.current === interactionId;
+
+        if (reset && !isSyncingRef.current && !alreadySyncedThisInteraction) {
           const needsSync = isDataStale(timelineItems);
 
           if (needsSync) {
             isSyncingRef.current = true;
-            logger.info(`[useLocalTimeline] 🔄 Background sync for ${interactionId} (stale data)`);
+            syncAttemptedRef.current = interactionId; // Mark as attempted
+            logger.info(`[useLocalTimeline] 🔄 Background sync for ${interactionId} (stale data, entityId: ${entityId})`);
 
             // DON'T AWAIT - sync runs in background, user sees cached data instantly
             timelineSyncService.syncInteraction(interactionId)
@@ -234,6 +241,9 @@ export const useLocalTimeline = (
                 isSyncingRef.current = false;
               });
           }
+        } else if (alreadySyncedThisInteraction && timelineItems.length === 0) {
+          // DEBUG: Log potential entity_id mismatch
+          logger.warn(`[useLocalTimeline] ⚠️ Sync attempted but still empty for ${interactionId}. Possible entity_id mismatch (query entityId: ${entityId})`);
         }
       } catch (err) {
         logger.error('[useLocalTimeline] Error loading timeline:', err);
@@ -244,7 +254,7 @@ export const useLocalTimeline = (
         }
       }
     },
-    [interactionId, profileId, pageSize, enabled, items.length, isDataStale]
+    [interactionId, entityId, pageSize, enabled, items.length, isDataStale]
   );
 
   /**
@@ -300,7 +310,7 @@ export const useLocalTimeline = (
       }
 
       // Only handle events for current profile
-      if (event.profileId !== profileId) {
+      if (event.entityId !== entityId) {
         return;
       }
 
@@ -309,7 +319,7 @@ export const useLocalTimeline = (
       // Use debounced reload to batch multiple events
       debouncedLoadTimeline();
     },
-    [interactionId, profileId, debouncedLoadTimeline]
+    [interactionId, entityId, debouncedLoadTimeline]
   );
 
   // Initial load
@@ -329,7 +339,7 @@ export const useLocalTimeline = (
   // - Already debounced above (debouncedLoadTimeline) - no flood risk
   // - Centralized handler in queryClient.ts handles TanStack Query invalidation
   useEffect(() => {
-    if (!interactionId || !profileId || !enabled) {
+    if (!interactionId || !entityId || !enabled) {
       return;
     }
 
@@ -341,7 +351,7 @@ export const useLocalTimeline = (
       logger.debug(`[useLocalTimeline] Unsubscribing from timeline updates for ${interactionId}`);
       eventEmitter.off(TIMELINE_UPDATED_EVENT, handleTimelineUpdate);
     };
-  }, [interactionId, profileId, enabled, handleTimelineUpdate]);
+  }, [interactionId, entityId, enabled, handleTimelineUpdate]);
 
   return {
     items,

@@ -12,8 +12,8 @@ import React from 'react';
 // Mock the modules before importing the hook
 jest.mock('../../_api/apiClient');
 
-jest.mock('../../hooks/useCurrentProfileId', () => ({
-  useCurrentProfileId: jest.fn(() => 'profile-123'),
+jest.mock('../../hooks/useCurrentEntityId', () => ({
+  useCurrentEntityId: jest.fn(() => 'entity-123'),
 }));
 
 jest.mock('../../tanstack-query/config/staleTimeConfig', () => ({
@@ -36,11 +36,11 @@ import {
   UserProfile,
 } from '../useUserProfile';
 import apiClient from '../../_api/apiClient';
-import { useCurrentProfileId } from '../../hooks/useCurrentProfileId';
+import { useCurrentEntityId } from '../../hooks/useCurrentEntityId';
 
 const mockApiClient = apiClient as jest.Mocked<typeof apiClient>;
-const mockUseCurrentProfileId = useCurrentProfileId as jest.MockedFunction<
-  typeof useCurrentProfileId
+const mockUseCurrentEntityId = useCurrentEntityId as jest.MockedFunction<
+  typeof useCurrentEntityId
 >;
 
 // Test data
@@ -107,7 +107,7 @@ const createWrapper = () => {
 describe('useUserProfile', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
   });
 
   // ============================================================
@@ -143,8 +143,8 @@ describe('useUserProfile', () => {
       expect(mockApiClient.get).not.toHaveBeenCalled();
     });
 
-    it('should not fetch when profileId is null', () => {
-      mockUseCurrentProfileId.mockReturnValue(null);
+    it('should not fetch when currentEntityId is null', () => {
+      mockUseCurrentEntityId.mockReturnValue(null);
 
       const { result } = renderHook(() => useUserProfile('entity-789'), {
         wrapper: createWrapper(),
@@ -155,8 +155,8 @@ describe('useUserProfile', () => {
       expect(mockApiClient.get).not.toHaveBeenCalled();
     });
 
-    it('should not fetch when both entityId and profileId are missing', () => {
-      mockUseCurrentProfileId.mockReturnValue(null);
+    it('should not fetch when both entityId and currentEntityId are missing', () => {
+      mockUseCurrentEntityId.mockReturnValue(null);
 
       const { result } = renderHook(() => useUserProfile(undefined), {
         wrapper: createWrapper(),
@@ -298,7 +298,7 @@ describe('useUserProfile', () => {
 describe('useProfileDisplayName', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
   });
 
   it('should return full name when first_name and last_name are present', async () => {
@@ -391,7 +391,7 @@ describe('useProfileDisplayName', () => {
 describe('useProfileCompletion', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
   });
 
   it('should return 100% for complete profile', async () => {
@@ -481,7 +481,7 @@ describe('useProfileCompletion', () => {
 describe('useVerificationStatus', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
   });
 
   it('should return fully verified when email and phone exist', async () => {
@@ -570,10 +570,10 @@ describe('useVerificationStatus', () => {
 describe('query key behavior', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
   });
 
-  it('should use profile-specific query key', async () => {
+  it('should use entity-specific query key', async () => {
     mockApiClient.get.mockResolvedValue({ data: mockCompleteProfile });
 
     const { result } = renderHook(() => useUserProfile('entity-789'), {
@@ -584,21 +584,21 @@ describe('query key behavior', () => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    // Query should have been made with profile-specific key
+    // Query should have been made with entity-specific key
     expect(mockApiClient.get).toHaveBeenCalledTimes(1);
   });
 
-  it('should refetch when profile ID changes', async () => {
+  it('should refetch when entity ID changes', async () => {
     mockApiClient.get.mockResolvedValue({ data: mockCompleteProfile });
 
     const { result, rerender } = renderHook(
-      ({ profileId }) => {
-        mockUseCurrentProfileId.mockReturnValue(profileId);
+      ({ entityId }) => {
+        mockUseCurrentEntityId.mockReturnValue(entityId);
         return useUserProfile('entity-789');
       },
       {
         wrapper: createWrapper(),
-        initialProps: { profileId: 'profile-123' },
+        initialProps: { entityId: 'entity-123' },
       }
     );
 
@@ -606,11 +606,11 @@ describe('query key behavior', () => {
       expect(result.current.isSuccess).toBe(true);
     });
 
-    // Change profile ID
-    rerender({ profileId: 'profile-456' });
+    // Change entity ID
+    rerender({ entityId: 'entity-456' });
 
     await waitFor(() => {
-      // Should make a new fetch for the new profile
+      // Should make a new fetch for the new entity
       expect(mockApiClient.get).toHaveBeenCalledTimes(2);
     });
   });
@@ -623,7 +623,7 @@ describe('query key behavior', () => {
 describe('offline behavior', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
   });
 
   it('should use offlineFirst network mode', async () => {
@@ -650,7 +650,7 @@ describe('offline behavior', () => {
 describe('edge cases', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
   });
 
   it('should handle empty string entityId', () => {
@@ -722,7 +722,7 @@ describe('edge cases', () => {
 describe('integration patterns', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
   });
 
   it('should work correctly when multiple derived hooks use same profile', async () => {

@@ -199,10 +199,10 @@ export const useKycCompletion = () => {
 
     try {
       // Phase 1: Save to local database immediately (local-first pattern)
-      if (user?.entityId && user?.profileId) {
+      if (user?.entityId) {
         const kycData = {
           id: user.entityId,
-          profile_id: user.profileId, // Required for multi-profile data isolation
+          entity_id: user.entityId, // Required for entity-based data isolation
           [`${stepType}_completed`]: true,
           [`${stepType}_data`]: data,
           [`${stepType}_completed_at`]: new Date().toISOString(),
@@ -238,10 +238,10 @@ export const useKycCompletion = () => {
         logger.debug(`[useKycCompletion] ✅ API call successful: ${response.status}`);
 
         // Phase 3: Mark as synced in local DB
-        if (user?.entityId && user?.profileId) {
+        if (user?.entityId) {
           const kycData = {
             id: user.entityId,
-            profile_id: user.profileId, // Required for multi-profile data isolation
+            entity_id: user.entityId, // Required for entity-based data isolation
             [`${stepType}_completed`]: true,
             [`${stepType}_data`]: data,
             [`${stepType}_completed_at`]: new Date().toISOString(),

@@ -12,8 +12,8 @@ import React from 'react';
 // Mock dependencies before importing hooks
 jest.mock('../../_api/apiClient');
 
-jest.mock('../../hooks/useCurrentProfileId', () => ({
-  useCurrentProfileId: jest.fn(() => 'profile-123'),
+jest.mock('../../hooks/useCurrentEntityId', () => ({
+  useCurrentEntityId: jest.fn(() => 'entity-123'),
 }));
 
 jest.mock('../../localdb/UserRepository', () => ({
@@ -61,12 +61,12 @@ import {
 } from '../useKycQuery';
 import apiClient from '../../_api/apiClient';
 import { userRepository } from '../../localdb/UserRepository';
-import { useCurrentProfileId } from '../../hooks/useCurrentProfileId';
+import { useCurrentEntityId } from '../../hooks/useCurrentEntityId';
 
 const mockApiClient = apiClient as jest.Mocked<typeof apiClient>;
 const mockUserRepository = userRepository as jest.Mocked<typeof userRepository>;
-const mockUseCurrentProfileId = useCurrentProfileId as jest.MockedFunction<
-  typeof useCurrentProfileId
+const mockUseCurrentEntityId = useCurrentEntityId as jest.MockedFunction<
+  typeof useCurrentEntityId
 >;
 
 // Test data
@@ -187,7 +187,7 @@ const createWrapper = () => {
 describe('useKycQuery', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
     mockUserRepository.getKycStatus.mockResolvedValue(null);
     mockUserRepository.saveKycStatus.mockResolvedValue(undefined);
   });
@@ -222,8 +222,8 @@ describe('useKycQuery', () => {
       expect(mockApiClient.get).not.toHaveBeenCalled();
     });
 
-    it('should not fetch when profileId is null', () => {
-      mockUseCurrentProfileId.mockReturnValue(null);
+    it('should not fetch when currentEntityId is null', () => {
+      mockUseCurrentEntityId.mockReturnValue(null);
 
       const { result } = renderHook(
         () => useKycQuery({ entityId: 'entity-123' }),
@@ -287,7 +287,7 @@ describe('useKycQuery', () => {
         expect.objectContaining({
           ...mockApprovedKycStatus,
           id: 'entity-123',
-          profile_id: 'profile-123',
+          entity_id: 'entity-123',
           is_synced: true,
         })
       );
@@ -372,7 +372,7 @@ describe('useKycQuery', () => {
 describe('useKycStatus', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
     mockUserRepository.getKycStatus.mockResolvedValue(null);
   });
 
@@ -406,7 +406,7 @@ describe('useKycStatus', () => {
 describe('useKycStatusCritical', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
     mockUserRepository.getKycStatus.mockResolvedValue(null);
   });
 
@@ -431,7 +431,7 @@ describe('useKycStatusCritical', () => {
 describe('useKycRequirement', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
     mockUserRepository.getKycStatus.mockResolvedValue(null);
   });
 
@@ -493,7 +493,7 @@ describe('useKycRequirement', () => {
 describe('useKycProgress', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
     mockUserRepository.getKycStatus.mockResolvedValue(null);
   });
 
@@ -568,7 +568,7 @@ describe('useKycProgress', () => {
 describe('usePendingKycDocuments', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
     mockUserRepository.getKycStatus.mockResolvedValue(null);
   });
 
@@ -609,7 +609,7 @@ describe('usePendingKycDocuments', () => {
 describe('useKycLimits', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
     mockUserRepository.getKycStatus.mockResolvedValue(null);
   });
 
@@ -668,7 +668,7 @@ describe('useKycLimits', () => {
 describe('useTransactionLimitCheck', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
     mockUserRepository.getKycStatus.mockResolvedValue(null);
   });
 
@@ -760,7 +760,7 @@ describe('useTransactionLimitCheck', () => {
 describe('edge cases', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
     mockUserRepository.getKycStatus.mockResolvedValue(null);
   });
 

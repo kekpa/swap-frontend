@@ -33,8 +33,8 @@ jest.mock('../../features/auth/context/AuthContext', () => ({
   useAuthContext: jest.fn(),
 }));
 
-jest.mock('../../hooks/useCurrentProfileId', () => ({
-  useCurrentProfileId: jest.fn(),
+jest.mock('../../hooks/useCurrentEntityId', () => ({
+  useCurrentEntityId: jest.fn(),
 }));
 
 jest.mock('../../utils/eventEmitter');
@@ -46,14 +46,14 @@ import apiClient from '../../_api/apiClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { interactionRepository } from '../../localdb/InteractionRepository';
 import { useAuthContext } from '../../features/auth/context/AuthContext';
-import { useCurrentProfileId } from '../../hooks/useCurrentProfileId';
+import { useCurrentEntityId } from '../../hooks/useCurrentEntityId';
 import { eventEmitter } from '../../utils/eventEmitter';
 
 const mockApiClient = apiClient as jest.Mocked<typeof apiClient>;
 const mockAsyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage>;
 const mockInteractionRepository = interactionRepository as jest.Mocked<typeof interactionRepository>;
 const mockUseAuthContext = useAuthContext as jest.MockedFunction<typeof useAuthContext>;
-const mockUseCurrentProfileId = useCurrentProfileId as jest.MockedFunction<typeof useCurrentProfileId>;
+const mockUseCurrentEntityId = useCurrentEntityId as jest.MockedFunction<typeof useCurrentEntityId>;
 
 // Test data
 const mockUser = { entityId: 'entity-123', id: 'user-123' };
@@ -101,7 +101,7 @@ describe('useInteractions', () => {
       user: mockUser,
       isAuthenticated: true,
     } as any);
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
     mockInteractionRepository.getInteractionsWithMembers.mockResolvedValue([]);
     mockInteractionRepository.upsertInteraction.mockResolvedValue(undefined);
     mockInteractionRepository.saveInteractionMembers.mockResolvedValue(undefined);
@@ -141,8 +141,8 @@ describe('useInteractions', () => {
       expect(mockApiClient.get).not.toHaveBeenCalled();
     });
 
-    it('should not fetch when profileId is null', () => {
-      mockUseCurrentProfileId.mockReturnValue(null);
+    it('should not fetch when entityId is null', () => {
+      mockUseCurrentEntityId.mockReturnValue(null);
       renderHook(() => useInteractions(), { wrapper: createWrapper() });
       expect(mockApiClient.get).not.toHaveBeenCalled();
     });
@@ -160,7 +160,7 @@ describe('useInteractions', () => {
       const { result } = renderHook(() => useInteractions(), { wrapper: createWrapper() });
 
       await waitFor(() => expect(result.current.interactions).toHaveLength(1));
-      expect(mockInteractionRepository.getInteractionsWithMembers).toHaveBeenCalledWith('profile-123');
+      expect(mockInteractionRepository.getInteractionsWithMembers).toHaveBeenCalledWith('entity-123');
     });
 
     it('should return local data when API fails', async () => {
@@ -213,7 +213,7 @@ describe('useInteractions', () => {
       await waitFor(() => {
         expect(mockInteractionRepository.deleteInteractions).toHaveBeenCalledWith(
           deletedIds,
-          'profile-123',
+          'entity-123',
         );
       });
     });
@@ -399,19 +399,19 @@ describe('useInteractions', () => {
   // PROFILE ISOLATION TESTS
   // ============================================================
 
-  describe('profile isolation', () => {
-    it('should include profileId in query key', async () => {
-      mockUseCurrentProfileId.mockReturnValue('profile-ABC');
+  describe('entity isolation', () => {
+    it('should include entityId in query key', async () => {
+      mockUseCurrentEntityId.mockReturnValue('entity-ABC');
 
       renderHook(() => useInteractions(), { wrapper: createWrapper() });
 
       await waitFor(() => {
-        expect(mockInteractionRepository.getInteractionsWithMembers).toHaveBeenCalledWith('profile-ABC');
+        expect(mockInteractionRepository.getInteractionsWithMembers).toHaveBeenCalledWith('entity-ABC');
       });
     });
 
-    it('should pass profileId to delete operations', async () => {
-      mockUseCurrentProfileId.mockReturnValue('profile-XYZ');
+    it('should pass entityId to delete operations', async () => {
+      mockUseCurrentEntityId.mockReturnValue('entity-XYZ');
       mockApiClient.get.mockResolvedValue({
         data: { interactions: [], deletedIds: ['del-1'], syncTimestamp: '2024-01-01' },
       });
@@ -421,7 +421,7 @@ describe('useInteractions', () => {
       await waitFor(() => {
         expect(mockInteractionRepository.deleteInteractions).toHaveBeenCalledWith(
           ['del-1'],
-          'profile-XYZ',
+          'entity-XYZ',
         );
       });
     });
@@ -436,7 +436,7 @@ describe('usePrefetchInteractions', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseAuthContext.mockReturnValue({ user: mockUser, isAuthenticated: true } as any);
-    mockUseCurrentProfileId.mockReturnValue('profile-123');
+    mockUseCurrentEntityId.mockReturnValue('entity-123');
   });
 
   it('should return prefetch function', () => {
@@ -456,8 +456,8 @@ describe('usePrefetchInteractions', () => {
     // Should not throw
   });
 
-  it('should not prefetch when profileId is null', () => {
-    mockUseCurrentProfileId.mockReturnValue(null);
+  it('should not prefetch when entityId is null', () => {
+    mockUseCurrentEntityId.mockReturnValue(null);
 
     const { result } = renderHook(() => usePrefetchInteractions(), { wrapper: createWrapper() });
 

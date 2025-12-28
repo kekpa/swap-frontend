@@ -11,7 +11,7 @@ import { queryKeys } from '../tanstack-query/queryKeys';
 import apiClient from '../_api/apiClient';
 import { getStaleTimeForQuery } from '../tanstack-query/config/staleTimeConfig';
 import { createRetryFunction } from '../utils/errorHandler';
-import { useCurrentProfileId } from '../hooks/useCurrentProfileId';
+import { useCurrentEntityId } from '../hooks/useCurrentEntityId';
 import { useAuthContext } from '../features/auth/context/AuthContext';
 
 // User profile interface matching PersonalUserProfileDto from backend
@@ -39,15 +39,15 @@ export interface UserProfile {
 /**
  * Fetch user profile from API
  */
-const fetchUserProfile = async (profileId: string, entityId: string): Promise<UserProfile> => {
-  logger.debug('[useUserProfile] Fetching profile for entity:', entityId, '(profileId:', profileId, ')');
+const fetchUserProfile = async (entityId: string): Promise<UserProfile> => {
+  logger.debug('[useUserProfile] Fetching profile for entity:', entityId);
 
   try {
     // Use the correct backend endpoint
     const response = await apiClient.get('/auth/me');
 
     if (response.data) {
-      logger.debug('[useUserProfile] ✅ Profile fetched successfully (profileId:', profileId, ')');
+      logger.debug('[useUserProfile] ✅ Profile fetched successfully for entity:', entityId);
       return response.data;
     } else {
       throw new Error('No profile data received');
@@ -61,8 +61,8 @@ const fetchUserProfile = async (profileId: string, entityId: string): Promise<Us
 /**
  * useUserProfile Hook
  */
-export const useUserProfile = (entityId?: string) => {
-  const profileId = useCurrentProfileId();
+export const useUserProfile = (entityIdParam?: string) => {
+  const entityId = useCurrentEntityId();
   const { isProfileSwitching } = useAuthContext();
 
   // Pause queries during profile switch to prevent stale data
@@ -71,9 +71,9 @@ export const useUserProfile = (entityId?: string) => {
   }
 
   return useQuery({
-    queryKey: queryKeys.userProfile(profileId || ''),
-    queryFn: () => fetchUserProfile(profileId!, entityId!),
-    enabled: !!entityId && !!profileId && !isProfileSwitching,
+    queryKey: queryKeys.userProfile(entityId || ''),
+    queryFn: () => fetchUserProfile(entityId!),
+    enabled: !!entityIdParam && !!entityId && !isProfileSwitching,
     staleTime: getStaleTimeForQuery('userProfile'),
     networkMode: 'offlineFirst',
     retry: createRetryFunction(2),

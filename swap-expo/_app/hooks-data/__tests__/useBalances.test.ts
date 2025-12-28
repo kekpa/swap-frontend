@@ -21,8 +21,8 @@ jest.mock('../../localdb/CurrencyWalletsRepository', () => ({
   },
 }));
 
-jest.mock('../../hooks/useCurrentProfileId', () => ({
-  useCurrentProfileId: jest.fn(() => 'profile-123'),
+jest.mock('../../hooks/useCurrentEntityId', () => ({
+  useCurrentEntityId: jest.fn(() => 'entity-123'),
 }));
 
 jest.mock('../../utils/logger');

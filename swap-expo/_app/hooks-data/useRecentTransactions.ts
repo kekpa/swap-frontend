@@ -11,7 +11,7 @@ import { walletManager } from '../services/WalletManager';
 import { Transaction } from '../types/transaction.types';
 import logger from '../utils/logger';
 import { networkService } from '../services/NetworkService';
-import { useCurrentProfileId } from '../hooks/useCurrentProfileId';
+import { useCurrentEntityId } from '../hooks/useCurrentEntityId';
 import { useAuthContext } from '../features/auth/context/AuthContext';
 import { profileContextManager } from '../services/ProfileContextManager';
 import { unifiedTimelineRepository } from '../localdb/UnifiedTimelineRepository';
@@ -47,12 +47,12 @@ const mapTimelineItemToTransaction = (item: LocalTimelineItem): Transaction => {
 /**
  * Convert API Transaction to LocalTimelineItem format for storage
  */
-const mapTransactionToTimelineItem = (tx: Transaction, profileId: string): Partial<LocalTimelineItem> & { id: string } => {
+const mapTransactionToTimelineItem = (tx: Transaction, entityId: string): Partial<LocalTimelineItem> & { id: string } => {
   return {
     id: tx.id,
     server_id: tx.id,
     interaction_id: tx.interaction_id || '',
-    profile_id: profileId,
+    entity_id: entityId,
     item_type: 'transaction',
     created_at: tx.created_at || new Date().toISOString(),
     // Entity IDs - aligned with Supabase
@@ -86,18 +86,18 @@ interface BaseTransactionResult {
  * UNIFIED ARCHITECTURE: Uses local_timeline as single source of truth
  * PROFILE-SAFE: Checks for stale profile in setTimeout to prevent 404 errors after profile switch
  *
- * @param profileId - Current user's profile ID
+ * @param entityId - Current user's entity ID
  * @param walletId - Currency-specific wallet ID (for local SQLite query by from_wallet_id/to_wallet_id)
  * @param accountId - Parent account ID (for API call to /transactions/account/{accountId})
  * @param limit - Number of transactions to fetch
  */
-const fetchWalletTransactionsLocalFirst = async (profileId: string, walletId: string, accountId: string, limit: number = 4): Promise<Transaction[]> => {
+const fetchWalletTransactionsLocalFirst = async (entityId: string, walletId: string, accountId: string, limit: number = 4): Promise<Transaction[]> => {
   try {
-    logger.debug(`[useWalletTransactions] 🚀 UNIFIED: Starting transaction fetch for wallet: ${walletId} (profileId: ${profileId})`);
+    logger.debug(`[useWalletTransactions] 🚀 UNIFIED: Starting transaction fetch for wallet: ${walletId} (entityId: ${entityId})`);
 
     // STEP 1: ALWAYS load from local_timeline first (instant display)
     // UNIFIED: Single source of truth - same table as chat timeline
-    const cachedItems = await unifiedTimelineRepository.getTransactionsByWallet(walletId, profileId, limit);
+    const cachedItems = await unifiedTimelineRepository.getTransactionsByWallet(walletId, entityId, limit);
     const cachedTransactions = cachedItems.map(mapTimelineItemToTransaction);
     logger.debug(`[useWalletTransactions] ✅ INSTANT: Loaded ${cachedTransactions.length} transactions from local_timeline`);
 
@@ -106,15 +106,15 @@ const fetchWalletTransactionsLocalFirst = async (profileId: string, walletId: st
       logger.debug(`[useWalletTransactions] ⚡ INSTANT: Returning ${cachedTransactions.length} cached transactions immediately`);
 
       // STEP 3: Background sync (non-blocking)
-      // PROFILE-SAFE: Capture profileId at schedule time, check for staleness at execution time
-      const capturedProfileId = profileId;
+      // ENTITY-SAFE: Capture entityId at schedule time, check for staleness at execution time
+      const capturedEntityId = entityId;
       const capturedWalletId = walletId;
       const capturedAccountId = accountId;
       setTimeout(async () => {
         try {
           // PROFILE SWITCH GUARD: Skip if profile changed or switching in progress
-          if (profileContextManager.isProfileStale(capturedProfileId) || profileContextManager.isSwitchingProfile()) {
-            logger.debug(`[useWalletTransactions] ⏸️ BACKGROUND SYNC SKIPPED: Profile changed (was: ${capturedProfileId})`);
+          if (profileContextManager.isProfileStale(capturedEntityId) || profileContextManager.isSwitchingProfile()) {
+            logger.debug(`[useWalletTransactions] ⏸️ BACKGROUND SYNC SKIPPED: Entity changed (was: ${capturedEntityId})`);
             return;
           }
 
@@ -126,14 +126,14 @@ const fetchWalletTransactionsLocalFirst = async (profileId: string, walletId: st
           logger.debug(`[useWalletTransactions] ✅ BACKGROUND SYNC: Loaded ${apiTransactions.length} transactions from server`);
 
           // PROFILE SWITCH GUARD: Check again after API call
-          if (profileContextManager.isProfileStale(capturedProfileId) || profileContextManager.isSwitchingProfile()) {
-            logger.debug(`[useWalletTransactions] ⏸️ BACKGROUND SYNC SKIPPED: Profile changed during API call`);
+          if (profileContextManager.isProfileStale(capturedEntityId) || profileContextManager.isSwitchingProfile()) {
+            logger.debug(`[useWalletTransactions] ⏸️ BACKGROUND SYNC SKIPPED: Entity changed during API call`);
             return;
           }
 
           // UNIFIED: Save to local_timeline (single source of truth)
           if (apiTransactions.length > 0) {
-            const timelineItems = apiTransactions.map(tx => mapTransactionToTimelineItem(tx, capturedProfileId));
+            const timelineItems = apiTransactions.map(tx => mapTransactionToTimelineItem(tx, capturedEntityId));
             // Use batch upsert for efficient storage
             for (const item of timelineItems) {
               await unifiedTimelineRepository.upsertFromServer(item);
@@ -141,7 +141,7 @@ const fetchWalletTransactionsLocalFirst = async (profileId: string, walletId: st
             logger.debug(`[useWalletTransactions] ✅ BACKGROUND SYNC: Updated ${apiTransactions.length} transactions in local_timeline`);
 
             // Update TanStack Query cache with fresh data
-            queryClient.setQueryData(queryKeys.transactionsByAccount(capturedProfileId, capturedWalletId, limit), apiTransactions);
+            queryClient.setQueryData(queryKeys.transactionsByAccount(capturedEntityId, capturedWalletId, limit), apiTransactions);
           }
 
         } catch (error) {
@@ -162,7 +162,7 @@ const fetchWalletTransactionsLocalFirst = async (profileId: string, walletId: st
 
     // UNIFIED: Save to local_timeline (single source of truth)
     if (apiTransactions.length > 0) {
-      const timelineItems = apiTransactions.map(tx => mapTransactionToTimelineItem(tx, profileId));
+      const timelineItems = apiTransactions.map(tx => mapTransactionToTimelineItem(tx, entityId));
       for (const item of timelineItems) {
         await unifiedTimelineRepository.upsertFromServer(item);
       }
@@ -190,11 +190,11 @@ const fetchWalletTransactionsLocalFirst = async (profileId: string, walletId: st
  */
 export const useWalletTransactions = (walletId: string, accountId: string, enabled: boolean = true): BaseTransactionResult => {
   const isOffline = !networkService.isOnline();
-  const profileId = useCurrentProfileId();
+  const entityId = useCurrentEntityId();
   const { isProfileSwitching } = useAuthContext();
 
   // PROFILE SWITCH GUARD: Disable query during profile switch
-  const shouldExecute = enabled && !!walletId && !!accountId && !!profileId && !isProfileSwitching;
+  const shouldExecute = enabled && !!walletId && !!accountId && !!entityId && !isProfileSwitching;
 
   if (isProfileSwitching) {
     logger.debug(`[useWalletTransactions] ⏸️ SKIPPING: Profile switch in progress`);
@@ -207,15 +207,15 @@ export const useWalletTransactions = (walletId: string, accountId: string, enabl
     error,
     refetch,
   } = useQuery({
-    queryKey: queryKeys.transactionsByAccount(profileId!, walletId, 10),
+    queryKey: queryKeys.transactionsByAccount(entityId!, walletId, 10),
     queryFn: async (): Promise<Transaction[]> => {
-      if (!walletId || !accountId || !profileId) {
-        logger.debug('[useWalletTransactions] No walletId, accountId, or profileId provided');
+      if (!walletId || !accountId || !entityId) {
+        logger.debug('[useWalletTransactions] No walletId, accountId, or entityId provided');
         return [];
       }
 
       logger.debug(`[useWalletTransactions] 🎯 WALLET: Loading transactions for wallet: ${walletId?.substring(0, 8)}`);
-      return fetchWalletTransactionsLocalFirst(profileId, walletId, accountId, 10);
+      return fetchWalletTransactionsLocalFirst(entityId, walletId, accountId, 10);
     },
     enabled: shouldExecute,
 
@@ -263,14 +263,14 @@ export const useWalletTransactions = (walletId: string, accountId: string, enabl
  * UNIFIED ARCHITECTURE: Uses local_timeline as single source of truth
  * PROFILE-SAFE: Checks for stale profile in setTimeout to prevent 404 errors after profile switch
  *
- * @param profileId - Current user's profile ID
+ * @param entityId - Current user's entity ID
  * @param walletId - Currency-specific wallet ID (for local SQLite query by from_wallet_id/to_wallet_id)
  * @param accountId - Parent account ID (for API call to /transactions/account/{accountId})
  * @param limit - Number of transactions to fetch
  * @param offset - Offset for pagination
  */
 const fetchTransactionListLocalFirst = async (
-  profileId: string,
+  entityId: string,
   walletId: string,
   accountId: string,
   limit: number = 50,
@@ -281,7 +281,7 @@ const fetchTransactionListLocalFirst = async (
 
     // STEP 1: ALWAYS load from local_timeline first (instant display)
     // UNIFIED: Single source of truth - same table as chat timeline
-    const cachedItems = await unifiedTimelineRepository.getTransactionsByWallet(walletId, profileId, limit);
+    const cachedItems = await unifiedTimelineRepository.getTransactionsByWallet(walletId, entityId, limit);
     const cachedTransactions = cachedItems.map(mapTimelineItemToTransaction);
     logger.debug(`[useTransactionList] ✅ INSTANT: Loaded ${cachedTransactions.length} transactions from local_timeline`);
 
@@ -290,14 +290,14 @@ const fetchTransactionListLocalFirst = async (
       logger.debug(`[useTransactionList] ⚡ INSTANT: Returning ${cachedTransactions.length} cached transactions immediately`);
 
       // STEP 3: Background sync (non-blocking)
-      const capturedProfileId = profileId;
+      const capturedEntityId = entityId;
       const capturedWalletId = walletId;
       const capturedAccountId = accountId;
       setTimeout(async () => {
         try {
-          // PROFILE SWITCH GUARD: Skip if profile changed
-          if (profileContextManager.isProfileStale(capturedProfileId) || profileContextManager.isSwitchingProfile()) {
-            logger.debug(`[useTransactionList] ⏸️ BACKGROUND SYNC SKIPPED: Profile changed`);
+          // PROFILE SWITCH GUARD: Skip if entity changed
+          if (profileContextManager.isProfileStale(capturedEntityId) || profileContextManager.isSwitchingProfile()) {
+            logger.debug(`[useTransactionList] ⏸️ BACKGROUND SYNC SKIPPED: Entity changed`);
             return;
           }
 
@@ -308,19 +308,19 @@ const fetchTransactionListLocalFirst = async (
           logger.debug(`[useTransactionList] ✅ BACKGROUND SYNC: Loaded ${apiTransactions.length} transactions`);
 
           // PROFILE SWITCH GUARD: Check again after API call
-          if (profileContextManager.isProfileStale(capturedProfileId) || profileContextManager.isSwitchingProfile()) {
+          if (profileContextManager.isProfileStale(capturedEntityId) || profileContextManager.isSwitchingProfile()) {
             return;
           }
 
           // UNIFIED: Save to local_timeline (single source of truth)
           if (apiTransactions.length > 0) {
-            const timelineItems = apiTransactions.map(tx => mapTransactionToTimelineItem(tx, capturedProfileId));
+            const timelineItems = apiTransactions.map(tx => mapTransactionToTimelineItem(tx, capturedEntityId));
             for (const item of timelineItems) {
               await unifiedTimelineRepository.upsertFromServer(item);
             }
             // Update TanStack Query cache
             queryClient.setQueryData(
-              [...queryKeys.transactionsByAccount(capturedProfileId, capturedWalletId, limit), 'offset', offset],
+              [...queryKeys.transactionsByAccount(capturedEntityId, capturedWalletId, limit), 'offset', offset],
               { data: apiTransactions, hasMore: apiTransactions.length === limit }
             );
           }
@@ -341,7 +341,7 @@ const fetchTransactionListLocalFirst = async (
 
     // UNIFIED: Save to local_timeline (single source of truth)
     if (apiTransactions.length > 0) {
-      const timelineItems = apiTransactions.map(tx => mapTransactionToTimelineItem(tx, profileId));
+      const timelineItems = apiTransactions.map(tx => mapTransactionToTimelineItem(tx, entityId));
       for (const item of timelineItems) {
         await unifiedTimelineRepository.upsertFromServer(item);
       }
@@ -375,11 +375,11 @@ export const useTransactionList = (
   enabled: boolean = true
 ): BaseTransactionResult & { hasMore: boolean; loadMore: () => void } => {
   const isOffline = !networkService.isOnline();
-  const profileId = useCurrentProfileId();
+  const entityId = useCurrentEntityId();
   const { isProfileSwitching } = useAuthContext();
 
   // PROFILE SWITCH GUARD: Disable query during profile switch
-  const shouldExecute = enabled && !!walletId && !!accountId && !!profileId && !isProfileSwitching;
+  const shouldExecute = enabled && !!walletId && !!accountId && !!entityId && !isProfileSwitching;
 
   const {
     data: result,
@@ -388,15 +388,15 @@ export const useTransactionList = (
     error,
     refetch,
   } = useQuery({
-    queryKey: [...queryKeys.transactionsByAccount(profileId!, walletId, limit), 'offset', offset] as const,
+    queryKey: [...queryKeys.transactionsByAccount(entityId!, walletId, limit), 'offset', offset] as const,
     queryFn: async (): Promise<{ data: Transaction[]; hasMore: boolean }> => {
-      if (!walletId || !accountId || !profileId) {
-        logger.debug('[useTransactionList] No walletId, accountId, or profileId provided');
+      if (!walletId || !accountId || !entityId) {
+        logger.debug('[useTransactionList] No walletId, accountId, or entityId provided');
         return { data: [], hasMore: false };
       }
 
       logger.debug(`[useTransactionList] 📋 LIST: Loading ${limit} transactions for wallet: ${walletId?.substring(0, 8)}`);
-      return fetchTransactionListLocalFirst(profileId, walletId, accountId, limit, offset);
+      return fetchTransactionListLocalFirst(entityId, walletId, accountId, limit, offset);
     },
     enabled: shouldExecute,
 
@@ -449,16 +449,16 @@ export const useTransactionList = (
  * PROFILE-SAFE: Disabled during profile switch to prevent stale queries
  */
 export const useRecentTransactions = (
-  entityId: string,
+  entityIdParam: string,
   limit: number = 20,
   enabled: boolean = true
 ): BaseTransactionResult => {
   const isOffline = !networkService.isOnline();
-  const profileId = useCurrentProfileId();
+  const entityId = useCurrentEntityId();
   const { isProfileSwitching } = useAuthContext();
 
   // PROFILE SWITCH GUARD: Disable query during profile switch
-  const shouldExecute = enabled && !!entityId && !!profileId && !isProfileSwitching;
+  const shouldExecute = enabled && !!entityIdParam && !!entityId && !isProfileSwitching;
 
   const {
     data: transactions = [],
@@ -467,9 +467,9 @@ export const useRecentTransactions = (
     error,
     refetch,
   } = useQuery({
-    queryKey: queryKeys.recentTransactions(profileId!, entityId, limit),
+    queryKey: queryKeys.recentTransactions(entityId!, limit),
     queryFn: async (): Promise<Transaction[]> => {
-      logger.debug(`[useRecentTransactions] 📊 GENERAL: Loading ${limit} recent transactions (profileId: ${profileId})`);
+      logger.debug(`[useRecentTransactions] 📊 GENERAL: Loading ${limit} recent transactions (entityId: ${entityId})`);
 
       try {
         const recentTransactions = await walletManager.getRecentTransactions(limit);

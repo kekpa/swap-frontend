@@ -12,7 +12,7 @@ import { API_PATHS } from '../_api/apiPaths';
 import logger from '../utils/logger';
 import { currencyWalletsRepository, CurrencyWallet } from '../localdb/CurrencyWalletsRepository';
 import { WalletBalance } from '../types/wallet.types';
-import { useCurrentProfileId } from '../hooks/useCurrentProfileId';
+import { useCurrentEntityId } from '../hooks/useCurrentEntityId';
 import { useAuthContext } from '../features/auth/context/AuthContext';
 import { profileContextManager } from '../services/ProfileContextManager';
 import { parseWalletResponse } from '../utils/apiResponseParser';
@@ -74,13 +74,13 @@ const transformToWalletBalance = (apiWallet: WalletApiResponse): WalletBalance =
 export const useBalances = (entityId: string, options: UseBalancesOptions = {}) => {
   const { enabled = true } = options;
   const queryClient = useQueryClient();
-  const profileId = useCurrentProfileId();
+  const currentEntityId = useCurrentEntityId();
   const { isProfileSwitching } = useAuthContext();
 
-  // PROFESSIONAL FIX: Validate entityId AND profileId AND check if enabled to prevent unauthorized API calls
+  // PROFESSIONAL FIX: Validate entityId AND currentEntityId AND check if enabled to prevent unauthorized API calls
   // CRITICAL: Also check isProfileSwitching to prevent stale queries during profile switch
   const isValidEntityId = entityId && entityId.trim().length > 0 && entityId !== 'undefined' && entityId !== 'null';
-  const shouldExecute = enabled && isValidEntityId && !!profileId && !isProfileSwitching;
+  const shouldExecute = enabled && isValidEntityId && !!currentEntityId && !isProfileSwitching;
 
   if (!isValidEntityId) {
     logger.debug(`[useBalances] ⏸️ SKIPPING: Invalid entityId "${entityId}" - waiting for user data to load`);
@@ -97,7 +97,7 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
   // WhatsApp-style fetchBalances function
   const fetchBalances = async (): Promise<WalletBalance[]> => {
     // DEBUG: Log entityId at query execution time
-    console.log('💰 [useBalances FETCH 1/6] queryFn executing with:', { entityId, profileId, isValidEntityId, shouldExecute, isProfileSwitching });
+    console.log('💰 [useBalances FETCH 1/6] queryFn executing with:', { entityId, currentEntityId, isValidEntityId, shouldExecute, isProfileSwitching });
 
     // CRITICAL: Double-check entityId before making API calls
     if (!isValidEntityId) {
@@ -105,16 +105,16 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
       return [];
     }
 
-    if (!profileId) {
-      console.log('💰 [useBalances FETCH] ❌ ABORT: No profileId available');
+    if (!currentEntityId) {
+      console.log('💰 [useBalances FETCH] ❌ ABORT: No currentEntityId available');
       return [];
     }
 
-    console.log('💰 [useBalances FETCH 2/6] 🚀 Starting balance fetch for entity:', entityId, 'profileId:', profileId);
+    console.log('💰 [useBalances FETCH 2/6] 🚀 Starting balance fetch for entity:', entityId, 'currentEntityId:', currentEntityId);
 
     // STEP 1: ALWAYS load from local cache first (INSTANT display like WhatsApp)
-    console.log('💰 [useBalances FETCH 3/6] Calling getAllCurrencyWallets with profileId:', profileId);
-    const cachedBalances = await currencyWalletsRepository.getAllCurrencyWallets(profileId);
+    console.log('💰 [useBalances FETCH 3/6] Calling getAllCurrencyWallets with entityId:', currentEntityId);
+    const cachedBalances = await currencyWalletsRepository.getAllCurrencyWallets(currentEntityId);
     console.log('💰 [useBalances FETCH 4/6] SQLite returned', cachedBalances.length, 'wallets');
     logger.debug(`[useBalances] ✅ INSTANT: Loaded ${cachedBalances.length} balances from SQLite cache`);
     
@@ -141,14 +141,14 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
       logger.debug(`[useBalances] ⚡ INSTANT: Returning ${cachedWalletBalances.length} cached balances immediately`);
 
       // STEP 3: Background sync (non-blocking, like WhatsApp)
-      // PROFILE-SAFE: Capture profileId and entityId at schedule time, check for staleness at execution time
-      const capturedProfileId = profileId!;
-      const capturedEntityId = entityId;
+      // ENTITY-SAFE: Capture entityId at schedule time, check for staleness at execution time
+      const capturedEntityId = currentEntityId!;
+      const capturedParamEntityId = entityId;
       setTimeout(async () => {
         try {
           // PROFILE SWITCH GUARD: Skip if profile changed or switching in progress
-          if (profileContextManager.isProfileStale(capturedProfileId) || profileContextManager.isSwitchingProfile()) {
-            logger.debug(`[useBalances] ⏸️ BACKGROUND SYNC SKIPPED: Profile changed (was: ${capturedProfileId})`);
+          if (profileContextManager.isProfileStale(capturedEntityId) || profileContextManager.isSwitchingProfile()) {
+            logger.debug(`[useBalances] ⏸️ BACKGROUND SYNC SKIPPED: Entity changed (was: ${capturedEntityId})`);
             return;
           }
 
@@ -172,13 +172,13 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
           }
 
           logger.debug(`[useBalances] 🔄 BACKGROUND SYNC: Fetching fresh data from API`);
-          const response = await apiClient.get(API_PATHS.WALLET.BY_ENTITY(capturedEntityId));
+          const response = await apiClient.get(API_PATHS.WALLET.BY_ENTITY(capturedParamEntityId));
           const parsedWallets = parseWalletResponse(response.data);
           const transformedBalances = parsedWallets.map(transformToWalletBalance);
 
           // PROFILE SWITCH GUARD: Check again after API call
-          if (profileContextManager.isProfileStale(capturedProfileId) || profileContextManager.isSwitchingProfile()) {
-            logger.debug(`[useBalances] ⏸️ BACKGROUND SYNC SKIPPED: Profile changed during API call`);
+          if (profileContextManager.isProfileStale(capturedEntityId) || profileContextManager.isSwitchingProfile()) {
+            logger.debug(`[useBalances] ⏸️ BACKGROUND SYNC SKIPPED: Entity changed during API call`);
             return;
           }
 
@@ -206,12 +206,12 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
         }));
 
             // Save to local SQLite
-            // SECURITY FIX: Include profileId for proper data isolation
-        await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances, capturedProfileId);
+            // ENTITY-FIRST: Include entityId for proper data isolation
+        await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances, capturedEntityId);
 
             // Update TanStack Query cache with WalletBalance format
-            queryClient.setQueryData(queryKeys.balancesByEntity(capturedProfileId, capturedEntityId), transformedBalances);
-            logger.debug(`[useBalances] ✅ BACKGROUND SYNC: Updated ${transformedBalances.length} balances in cache (profileId: ${capturedProfileId})`);
+            queryClient.setQueryData(queryKeys.balancesByEntity(capturedEntityId), transformedBalances);
+            logger.debug(`[useBalances] ✅ BACKGROUND SYNC: Updated ${transformedBalances.length} balances in cache (entityId: ${capturedEntityId})`);
           }
         } catch (error) {
           logger.debug(`[useBalances] ⚠️ Background sync failed (non-critical): ${error instanceof Error ? error.message : String(error)}`);
@@ -249,37 +249,37 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
       is_synced: true,
     }));
 
-    // SECURITY FIX: Include profileId for proper data isolation
-    await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances, profileId!);
+    // ENTITY-FIRST: Include entityId for proper data isolation
+    await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances, currentEntityId!);
     logger.debug(`[useBalances] ✅ FIRST TIME: Saved ${repositoryBalances.length} balances to cache`);
     
     return apiBalances;
   };
 
   return useQuery({
-    queryKey: queryKeys.balancesByEntity(profileId!, entityId),
+    queryKey: queryKeys.balancesByEntity(entityId),
     queryFn: fetchBalances,
-    enabled: Boolean(shouldExecute), // PROFESSIONAL FIX: Only enable when authenticated and entityId and profileId are valid
+    enabled: Boolean(shouldExecute), // PROFESSIONAL FIX: Only enable when authenticated and entityId is valid
     staleTime: Infinity, // Never show loading for cached data
     gcTime: 1000 * 60 * 30, // 30 minutes
     networkMode: 'always',
     // Return cached data immediately if available
     initialData: () => {
-      console.log('💰 [useBalances INITIAL] Running initialData(), shouldExecute:', shouldExecute, 'profileId:', profileId, 'entityId:', entityId);
+      console.log('💰 [useBalances INITIAL] Running initialData(), shouldExecute:', shouldExecute, 'entityId:', entityId);
 
-      if (!shouldExecute || !profileId) {
-        console.log('💰 [useBalances INITIAL] ❌ Returning empty array - shouldExecute:', shouldExecute, 'profileId:', profileId);
-        return []; // Return empty array for unauthenticated or invalid entityId/profileId
+      if (!shouldExecute || !currentEntityId) {
+        console.log('💰 [useBalances INITIAL] ❌ Returning empty array - shouldExecute:', shouldExecute, 'entityId:', currentEntityId);
+        return []; // Return empty array for unauthenticated or invalid entityId
       }
 
-      const queryKey = queryKeys.balancesByEntity(profileId, entityId);
+      const queryKey = queryKeys.balancesByEntity(entityId);
       console.log('💰 [useBalances INITIAL] Checking TanStack cache with queryKey:', JSON.stringify(queryKey));
       const cached = queryClient.getQueryData<WalletBalance[]>(queryKey);
       console.log('💰 [useBalances INITIAL] TanStack cache result:', cached ? `${cached.length} wallets` : 'null/undefined');
 
       if (cached && cached.length > 0) {
         console.log('💰 [useBalances INITIAL] ✅ Returning', cached.length, 'cached wallets');
-        logger.debug(`[useBalances] ⚡ INITIAL: Using ${cached.length} cached balances (profileId: ${profileId})`);
+        logger.debug(`[useBalances] ⚡ INITIAL: Using ${cached.length} cached balances (entityId: ${entityId})`);
         return cached;
       }
       console.log('💰 [useBalances INITIAL] ⚠️ No cache found, returning undefined (will trigger queryFn)');
@@ -342,12 +342,12 @@ export const useWalletEligibility = (entityId: string, options: UseBalancesOptio
  */
 export const useInitializeWallet = () => {
   const queryClient = useQueryClient();
-  const profileId = useCurrentProfileId();
+  const currentEntityId = useCurrentEntityId();
 
   return useMutation({
     mutationKey: ['initialize_wallet'],
     mutationFn: async (entityId: string): Promise<WalletInitializationResponse> => {
-      logger.debug(`[useInitializeWallet] 🚀 Initializing wallet for entity: ${entityId} (profileId: ${profileId})`);
+      logger.debug(`[useInitializeWallet] 🚀 Initializing wallet for entity: ${entityId}`);
 
       try {
         const response = await apiClient.post(`/wallets/initialize?entityId=${entityId}`);
@@ -409,15 +409,15 @@ export const useInitializeWallet = () => {
       return delay;
     },
     onSuccess: (data, entityId) => {
-      if (!profileId) {
-        logger.warn('[useInitializeWallet] ⚠️ No profileId available, skipping cache update');
+      if (!currentEntityId) {
+        logger.warn('[useInitializeWallet] ⚠️ No entityId available, skipping cache update');
         return;
       }
 
       // Update the balances cache with new wallets
       if (data.wallets && data.wallets.length > 0) {
-        queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), data.wallets);
-        logger.debug(`[useInitializeWallet] ✅ Updated cache with ${data.wallets.length} new wallets (profileId: ${profileId})`);
+        queryClient.setQueryData(queryKeys.balancesByEntity(entityId), data.wallets);
+        logger.debug(`[useInitializeWallet] ✅ Updated cache with ${data.wallets.length} new wallets (entityId: ${entityId})`);
       }
 
       // Invalidate eligibility cache since user now has wallets
@@ -444,10 +444,10 @@ export const useInitializeWallet = () => {
       }));
 
       // Save to local SQLite cache
-      // SECURITY FIX: Include profileId for proper data isolation
-      currencyWalletsRepository.saveCurrencyWallets(repositoryBalances, profileId)
+      // ENTITY-FIRST: Include entityId for proper data isolation
+      currencyWalletsRepository.saveCurrencyWallets(repositoryBalances, currentEntityId)
         .then(() => {
-          logger.debug(`[useInitializeWallet] ✅ Saved ${repositoryBalances.length} wallets to cache (profileId: ${profileId})`);
+          logger.debug(`[useInitializeWallet] ✅ Saved ${repositoryBalances.length} wallets to cache (entityId: ${currentEntityId})`);
         })
         .catch((error) => {
           logger.warn(`[useInitializeWallet] ⚠️ Failed to save wallets to cache:`, error);
@@ -461,12 +461,12 @@ export const useInitializeWallet = () => {
  */
 export const useSetPrimaryWallet = () => {
   const queryClient = useQueryClient();
-  const profileId = useCurrentProfileId();
+  const currentEntityId = useCurrentEntityId();
 
   return useMutation({
     mutationKey: ['set_primary_wallet'],
     mutationFn: async ({ walletId, entityId }: { walletId: string; entityId: string }) => {
-      logger.debug(`[useSetPrimaryWallet] 🔄 Setting primary wallet: ${walletId} (profileId: ${profileId})`);
+      logger.debug(`[useSetPrimaryWallet] 🔄 Setting primary wallet: ${walletId}`);
       const response = await apiClient.patch(`/wallets/${walletId}/primary`);
       logger.debug(`[useSetPrimaryWallet] ✅ Primary wallet set successfully`);
       
@@ -496,16 +496,16 @@ export const useSetPrimaryWallet = () => {
       return transformedWallet;
     },
     onMutate: async ({ walletId, entityId }) => {
-      if (!profileId) {
-        logger.warn('[useSetPrimaryWallet] ⚠️ No profileId available, skipping optimistic update');
+      if (!currentEntityId) {
+        logger.warn('[useSetPrimaryWallet] ⚠️ No entityId available, skipping optimistic update');
         return { previousBalances: undefined };
       }
 
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: queryKeys.balancesByEntity(profileId, entityId) });
+      await queryClient.cancelQueries({ queryKey: queryKeys.balancesByEntity(entityId) });
 
       // Snapshot the previous value
-      const previousBalances = queryClient.getQueryData<WalletBalance[]>(queryKeys.balancesByEntity(profileId, entityId));
+      const previousBalances = queryClient.getQueryData<WalletBalance[]>(queryKeys.balancesByEntity(entityId));
 
       // Optimistically update to the new value
       if (previousBalances) {
@@ -514,55 +514,55 @@ export const useSetPrimaryWallet = () => {
           isPrimary: balance.wallet_id === walletId,
         }));
 
-        queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), optimisticBalances);
-        logger.debug(`[useSetPrimaryWallet] ⚡ OPTIMISTIC: Updated primary wallet to ${walletId} (profileId: ${profileId})`);
+        queryClient.setQueryData(queryKeys.balancesByEntity(entityId), optimisticBalances);
+        logger.debug(`[useSetPrimaryWallet] ⚡ OPTIMISTIC: Updated primary wallet to ${walletId} (entityId: ${entityId})`);
       }
 
       // Return a context object with the snapshotted value
       return { previousBalances };
     },
     onError: (err, { entityId }, context) => {
-      if (!profileId) {
-        logger.warn('[useSetPrimaryWallet] ⚠️ No profileId available for rollback');
+      if (!currentEntityId) {
+        logger.warn('[useSetPrimaryWallet] ⚠️ No entityId available for rollback');
         return;
       }
 
       // If the mutation fails, use the context returned from onMutate to roll back
       if (context?.previousBalances) {
-        queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), context.previousBalances);
-        logger.debug(`[useSetPrimaryWallet] ⚠️ ROLLBACK: Restored previous balances due to error (profileId: ${profileId})`);
+        queryClient.setQueryData(queryKeys.balancesByEntity(entityId), context.previousBalances);
+        logger.debug(`[useSetPrimaryWallet] ⚠️ ROLLBACK: Restored previous balances due to error (entityId: ${entityId})`);
       }
     },
     onSuccess: (data, { entityId }) => {
-      if (!profileId) {
-        logger.warn('[useSetPrimaryWallet] ⚠️ No profileId available for cache update');
+      if (!currentEntityId) {
+        logger.warn('[useSetPrimaryWallet] ⚠️ No entityId available for cache update');
         return;
       }
 
       // Update the cache with the actual server response
       if (data) {
-        const currentBalances = queryClient.getQueryData<WalletBalance[]>(queryKeys.balancesByEntity(profileId, entityId));
+        const currentBalances = queryClient.getQueryData<WalletBalance[]>(queryKeys.balancesByEntity(entityId));
         if (currentBalances) {
           const updatedBalances = currentBalances.map(balance => ({
             ...balance,
             isPrimary: balance.wallet_id === data.wallet_id,
           }));
 
-          queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), updatedBalances);
-          logger.debug(`[useSetPrimaryWallet] ✅ SUCCESS: Updated cache with server response (profileId: ${profileId})`);
+          queryClient.setQueryData(queryKeys.balancesByEntity(entityId), updatedBalances);
+          logger.debug(`[useSetPrimaryWallet] ✅ SUCCESS: Updated cache with server response (entityId: ${entityId})`);
         }
       }
     },
     onSettled: (data, error, { entityId }) => {
-      if (!profileId) {
-        logger.warn('[useSetPrimaryWallet] ⚠️ No profileId available for invalidation');
+      if (!currentEntityId) {
+        logger.warn('[useSetPrimaryWallet] ⚠️ No entityId available for invalidation');
         return;
       }
 
       // Only invalidate on error, not on success (to avoid unnecessary refetches)
       if (error) {
-        logger.debug(`[useSetPrimaryWallet] ⚠️ ERROR: Invalidating cache due to mutation error (profileId: ${profileId})`);
-        queryClient.invalidateQueries({ queryKey: queryKeys.balancesByEntity(profileId, entityId) });
+        logger.debug(`[useSetPrimaryWallet] ⚠️ ERROR: Invalidating cache due to mutation error (entityId: ${entityId})`);
+        queryClient.invalidateQueries({ queryKey: queryKeys.balancesByEntity(entityId) });
       }
     },
   });
@@ -574,7 +574,7 @@ export const useSetPrimaryWallet = () => {
  */
 export const useCreateCurrencyWallet = () => {
   const queryClient = useQueryClient();
-  const profileId = useCurrentProfileId();
+  const currentEntityId = useCurrentEntityId();
 
   return useMutation({
     mutationKey: ['create_currency_wallet'],
@@ -630,13 +630,13 @@ export const useCreateCurrencyWallet = () => {
       return { wallet: transformedWallet, entityId };
     },
     onSuccess: ({ wallet, entityId }) => {
-      if (!profileId) {
-        logger.warn('[useCreateCurrencyWallet] ⚠️ No profileId available for cache update');
+      if (!currentEntityId) {
+        logger.warn('[useCreateCurrencyWallet] ⚠️ No entityId available for cache update');
         return;
       }
 
       // Get current balances and add the new wallet
-      const currentBalances = queryClient.getQueryData<WalletBalance[]>(queryKeys.balancesByEntity(profileId, entityId));
+      const currentBalances = queryClient.getQueryData<WalletBalance[]>(queryKeys.balancesByEntity(entityId));
 
       if (currentBalances) {
         // Check if wallet already exists (avoid duplicates)
@@ -646,7 +646,7 @@ export const useCreateCurrencyWallet = () => {
           // Clear primary from all existing wallets, add new wallet as primary
           const updatedBalances = currentBalances.map(b => ({ ...b, isPrimary: false }));
           updatedBalances.push({ ...wallet, isPrimary: true });
-          queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), updatedBalances);
+          queryClient.setQueryData(queryKeys.balancesByEntity(entityId), updatedBalances);
           logger.debug(`[useCreateCurrencyWallet] ✅ Added ${wallet.currency_code} wallet as primary (now ${updatedBalances.length} wallets)`);
         } else {
           // Wallet exists - just update primary status
@@ -654,12 +654,12 @@ export const useCreateCurrencyWallet = () => {
             ...b,
             isPrimary: b.wallet_id === wallet.wallet_id
           }));
-          queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), updatedBalances);
+          queryClient.setQueryData(queryKeys.balancesByEntity(entityId), updatedBalances);
           logger.debug(`[useCreateCurrencyWallet] ℹ️ Wallet ${wallet.currency_code} already exists, set as primary`);
         }
       } else {
         // No existing balances, set the new wallet as the only one (and primary)
-        queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), [{ ...wallet, isPrimary: true }]);
+        queryClient.setQueryData(queryKeys.balancesByEntity(entityId), [{ ...wallet, isPrimary: true }]);
         logger.debug(`[useCreateCurrencyWallet] ✅ Created initial wallet cache with ${wallet.currency_code} as primary`);
       }
 
@@ -684,12 +684,12 @@ export const useCreateCurrencyWallet = () => {
       };
 
       // Update primary status in local SQLite (clears others, sets this one)
-      currencyWalletsRepository.updatePrimaryWallet(wallet.wallet_id, profileId)
+      currencyWalletsRepository.updatePrimaryWallet(wallet.wallet_id, currentEntityId)
         .catch((error) => {
           logger.warn(`[useCreateCurrencyWallet] ⚠️ Failed to update primary in local cache:`, error);
         });
 
-      currencyWalletsRepository.saveCurrencyWallets([repositoryWallet], profileId)
+      currencyWalletsRepository.saveCurrencyWallets([repositoryWallet], currentEntityId)
         .then(() => {
           logger.debug(`[useCreateCurrencyWallet] ✅ Saved ${wallet.currency_code} wallet to local cache`);
         })
@@ -714,7 +714,7 @@ export const useCreateCurrencyWallet = () => {
  */
 export const useDeactivateWallet = () => {
   const queryClient = useQueryClient();
-  const profileId = useCurrentProfileId();
+  const currentEntityId = useCurrentEntityId();
 
   return useMutation({
     mutationKey: ['deactivate_wallet'],
@@ -737,16 +737,16 @@ export const useDeactivateWallet = () => {
       };
     },
     onMutate: async ({ walletId, entityId }) => {
-      if (!profileId) {
-        logger.warn('[useDeactivateWallet] ⚠️ No profileId available, skipping optimistic update');
+      if (!currentEntityId) {
+        logger.warn('[useDeactivateWallet] ⚠️ No entityId available, skipping optimistic update');
         return { previousBalances: undefined };
       }
 
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: queryKeys.balancesByEntity(profileId, entityId) });
+      await queryClient.cancelQueries({ queryKey: queryKeys.balancesByEntity(entityId) });
 
       // Snapshot the previous value
-      const previousBalances = queryClient.getQueryData<WalletBalance[]>(queryKeys.balancesByEntity(profileId, entityId));
+      const previousBalances = queryClient.getQueryData<WalletBalance[]>(queryKeys.balancesByEntity(entityId));
 
       // Optimistically remove the wallet from the list
       if (previousBalances) {
@@ -758,41 +758,41 @@ export const useDeactivateWallet = () => {
           optimisticBalances[0] = { ...optimisticBalances[0], isPrimary: true };
         }
 
-        queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), optimisticBalances);
+        queryClient.setQueryData(queryKeys.balancesByEntity(entityId), optimisticBalances);
         logger.debug(`[useDeactivateWallet] ⚡ OPTIMISTIC: Removed wallet ${walletId} from cache`);
       }
 
       return { previousBalances };
     },
     onError: (err, { entityId }, context) => {
-      if (!profileId) {
-        logger.warn('[useDeactivateWallet] ⚠️ No profileId available for rollback');
+      if (!currentEntityId) {
+        logger.warn('[useDeactivateWallet] ⚠️ No entityId available for rollback');
         return;
       }
 
       // Rollback to previous state on error
       if (context?.previousBalances) {
-        queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), context.previousBalances);
+        queryClient.setQueryData(queryKeys.balancesByEntity(entityId), context.previousBalances);
         logger.debug(`[useDeactivateWallet] ⚠️ ROLLBACK: Restored wallet due to error`);
       }
 
       logger.error('[useDeactivateWallet] ❌ Failed to deactivate wallet:', err);
     },
     onSuccess: async ({ newPrimaryWalletId, entityId }) => {
-      if (!profileId) {
-        logger.warn('[useDeactivateWallet] ⚠️ No profileId available for cache update');
+      if (!currentEntityId) {
+        logger.warn('[useDeactivateWallet] ⚠️ No entityId available for cache update');
         return;
       }
 
       // If a new primary wallet was set, update the cache
       if (newPrimaryWalletId) {
-        const currentBalances = queryClient.getQueryData<WalletBalance[]>(queryKeys.balancesByEntity(profileId, entityId));
+        const currentBalances = queryClient.getQueryData<WalletBalance[]>(queryKeys.balancesByEntity(entityId));
         if (currentBalances) {
           const updatedBalances = currentBalances.map(balance => ({
             ...balance,
             isPrimary: balance.wallet_id === newPrimaryWalletId,
           }));
-          queryClient.setQueryData(queryKeys.balancesByEntity(profileId, entityId), updatedBalances);
+          queryClient.setQueryData(queryKeys.balancesByEntity(entityId), updatedBalances);
           logger.debug(`[useDeactivateWallet] ✅ Updated primary wallet to ${newPrimaryWalletId}`);
         }
       }
@@ -824,18 +824,18 @@ export const useDeactivateWallet = () => {
         }));
 
         await currencyWalletsRepository.clearAllCurrencyWallets();
-        await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances, profileId);
+        await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances, currentEntityId);
         logger.debug(`[useDeactivateWallet] ✅ Refreshed local cache with ${repositoryBalances.length} wallets`);
       } catch (error) {
         logger.warn(`[useDeactivateWallet] ⚠️ Failed to refresh local cache:`, error);
       }
     },
     onSettled: (_, error, { entityId }) => {
-      if (!profileId) return;
+      if (!currentEntityId) return;
 
       // Only invalidate on error to trigger a full refetch
       if (error) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.balancesByEntity(profileId, entityId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.balancesByEntity(entityId) });
       }
     },
   });

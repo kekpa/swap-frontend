@@ -12,7 +12,7 @@ import { queryKeys } from '../tanstack-query/queryKeys';
 import logger from '../utils/logger';
 import { useAuthContext } from '../features/auth/context/AuthContext';
 import { interactionRepository } from '../localdb/InteractionRepository';
-import { useCurrentProfileId } from '../hooks/useCurrentProfileId';
+import { useCurrentEntityId } from '../hooks/useCurrentEntityId';
 // NOTE: TIMELINE_UPDATED_EVENT listener is centralized in queryClient.ts
 
 export interface InteractionItem {
@@ -105,10 +105,10 @@ export const useInteractions = (
   const isAuthenticated = authContext?.isAuthenticated;
   const isProfileSwitching = authContext?.isProfileSwitching;
   const queryClient = useQueryClient();
-  const profileId = useCurrentProfileId();
+  const entityId = useCurrentEntityId();
 
   // PROFILE SWITCH GUARD: Disable query during profile switch
-  const shouldExecute = enabled && isAuthenticated && !!user && !!profileId && !isProfileSwitching;
+  const shouldExecute = enabled && isAuthenticated && !!user && !!entityId && !isProfileSwitching;
 
   if (isProfileSwitching) {
     logger.debug('[useInteractions] ⏸️ SKIPPING: Profile switch in progress');
@@ -129,7 +129,7 @@ export const useInteractions = (
     // STEP 1: Load from local SQLite first (instant display)
     try {
       logger.debug('[useInteractions] Loading interactions from local cache with members', 'interactions_query');
-      const localInteractionsWithMembers = await interactionRepository.getInteractionsWithMembers(profileId || '');
+      const localInteractionsWithMembers = await interactionRepository.getInteractionsWithMembers(entityId || '');
       
       if (localInteractionsWithMembers.length > 0) {
         // Transform to InteractionItem[] format
@@ -192,7 +192,7 @@ export const useInteractions = (
       // This ensures deleted interactions are removed before saving new ones
       if (deletedIds.length > 0) {
         logger.info(`[useInteractions] Processing ${deletedIds.length} deletions from backend`, 'interactions_query');
-        await interactionRepository.deleteInteractions(deletedIds, profileId || '');
+        await interactionRepository.deleteInteractions(deletedIds, entityId || '');
       }
 
       if (fetchedInteractions.length > 0) {
@@ -214,7 +214,7 @@ export const useInteractions = (
              };
              
              // Save interaction
-             await interactionRepository.upsertInteraction(localInteraction, profileId || '');
+             await interactionRepository.upsertInteraction(localInteraction, entityId || '');
             
                          // Save members if they exist
              if (interaction.members && interaction.members.length > 0) {
@@ -235,7 +235,7 @@ export const useInteractions = (
                  entity_type: member.entity_type || 'profile',
                  joined_at: new Date().toISOString()
                }));
-               await interactionRepository.saveInteractionMembers(membersToSave, profileId || '');
+               await interactionRepository.saveInteractionMembers(membersToSave, entityId || '');
              }
           }
           logger.debug('[useInteractions] Interactions and members saved to local cache', 'interactions_query');
@@ -270,7 +270,7 @@ export const useInteractions = (
   // TanStack Query configuration
   // PROFILE-SAFE: Disabled during profile switch to prevent stale queries
   const queryResult = useQuery({
-    queryKey: queryKeys.interactionsByEntity(profileId || 'anonymous', user?.entityId || 'anonymous'),
+    queryKey: queryKeys.interactionsByEntity(entityId || 'anonymous'),
     queryFn: fetchInteractions,
     enabled: shouldExecute,
     staleTime: 2 * 60 * 1000, // 2 minutes - interactions can be slightly stale
@@ -332,13 +332,13 @@ export const usePrefetchInteractions = () => {
   const queryClient = useQueryClient();
   const authContext = useAuthContext();
   const user = authContext?.user;
-  const profileId = useCurrentProfileId();
+  const entityId = useCurrentEntityId();
 
   return useCallback(() => {
-    if (!user?.entityId || !profileId) return;
+    if (!user?.entityId || !entityId) return;
 
     queryClient.prefetchQuery({
-      queryKey: queryKeys.interactionsByEntity(profileId, user.entityId),
+      queryKey: queryKeys.interactionsByEntity(entityId),
       queryFn: async () => {
         logger.debug('[usePrefetchInteractions] Prefetching interactions', 'interactions_query');
         // This will be automatically deduplicated if already fetching
@@ -346,5 +346,5 @@ export const usePrefetchInteractions = () => {
       },
       staleTime: 2 * 60 * 1000,
     });
-  }, [queryClient, user?.entityId, profileId]);
+  }, [queryClient, user?.entityId, entityId]);
 }; 
