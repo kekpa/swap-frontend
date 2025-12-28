@@ -34,7 +34,7 @@ export async function initializeTransactionSchema(db: SQLiteDatabase): Promise<v
         from_wallet_id TEXT,
         to_wallet_id TEXT,
         status TEXT DEFAULT 'COMPLETED',
-        profile_id TEXT,
+        entity_id TEXT,
         is_synced INTEGER DEFAULT 0,
         client_generated_id TEXT,
         FOREIGN KEY (interaction_id) REFERENCES interactions(id) ON DELETE CASCADE

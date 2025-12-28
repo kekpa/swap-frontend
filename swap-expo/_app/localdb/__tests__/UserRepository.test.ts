@@ -105,18 +105,18 @@ describe('UserRepository', () => {
   });
 
   // ============================================================
-  // GET USER TESTS (PROFILE-ISOLATED)
+  // GET USER TESTS (ENTITY-ISOLATED)
   // ============================================================
 
   describe('getUser', () => {
-    it('should get user by profileId', async () => {
-      const userRow = { id: 'user-123', data: JSON.stringify(mockUser), profile_id: 'profile-123' };
+    it('should get user by entityId', async () => {
+      const userRow = { id: 'user-123', data: JSON.stringify(mockUser), entity_id: 'profile-123' };
       mockDb.getAllAsync.mockResolvedValue([userRow]);
 
       const result = await userRepository.getUser('profile-123');
 
       expect(mockDb.getAllAsync).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT * FROM users WHERE profile_id = ?'),
+        expect.stringContaining('SELECT * FROM users WHERE entity_id = ?'),
         ['profile-123'],
       );
       expect(result).toEqual(userRow);
@@ -140,11 +140,11 @@ describe('UserRepository', () => {
   });
 
   // ============================================================
-  // SAVE USER TESTS (PROFILE-ISOLATED)
+  // SAVE USER TESTS (ENTITY-ISOLATED)
   // ============================================================
 
   describe('saveUser', () => {
-    it('should save user with profileId', async () => {
+    it('should save user with entityId', async () => {
       mockDb.runAsync.mockResolvedValue(undefined);
 
       await userRepository.saveUser(mockUser, 'profile-123');
@@ -185,18 +185,18 @@ describe('UserRepository', () => {
   });
 
   // ============================================================
-  // GET KYC STATUS TESTS (PROFILE-ISOLATED)
+  // GET KYC STATUS TESTS (ENTITY-ISOLATED)
   // ============================================================
 
   describe('getKycStatus', () => {
-    it('should get KYC status by profileId', async () => {
-      const kycRow = { id: 'kyc-123', data: JSON.stringify(mockKycStatus), profile_id: 'profile-123' };
+    it('should get KYC status by entityId', async () => {
+      const kycRow = { id: 'kyc-123', data: JSON.stringify(mockKycStatus), entity_id: 'profile-123' };
       mockDb.getAllAsync.mockResolvedValue([kycRow]);
 
       const result = await userRepository.getKycStatus('profile-123');
 
       expect(mockDb.getAllAsync).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT * FROM kyc_status WHERE profile_id = ?'),
+        expect.stringContaining('SELECT * FROM kyc_status WHERE entity_id = ?'),
         ['profile-123'],
       );
       expect(result).toEqual(kycRow);
@@ -212,23 +212,23 @@ describe('UserRepository', () => {
   });
 
   // ============================================================
-  // SAVE KYC STATUS TESTS (PROFILE-ISOLATED WITH MERGING)
+  // SAVE KYC STATUS TESTS (ENTITY-ISOLATED WITH MERGING)
   // ============================================================
 
   describe('saveKycStatus', () => {
-    it('should require profile_id in kycData', async () => {
-      const kycWithoutProfile = { id: 'kyc-123', status: 'pending' };
+    it('should require entity_id in kycData', async () => {
+      const kycWithoutEntity = { id: 'kyc-123', status: 'pending' };
 
-      await expect(userRepository.saveKycStatus(kycWithoutProfile as any)).rejects.toThrow(
-        'profile_id is required for data isolation',
+      await expect(userRepository.saveKycStatus(kycWithoutEntity as any)).rejects.toThrow(
+        'entity_id is required for data isolation',
       );
     });
 
-    it('should save KYC status with profileId', async () => {
+    it('should save KYC status with entityId', async () => {
       mockDb.getAllAsync.mockResolvedValue([]);
       mockDb.runAsync.mockResolvedValue(undefined);
 
-      await userRepository.saveKycStatus({ ...mockKycStatus, profile_id: 'profile-123' });
+      await userRepository.saveKycStatus({ ...mockKycStatus, entity_id: 'profile-123' });
 
       expect(mockDb.runAsync).toHaveBeenCalledWith(
         expect.stringContaining('INSERT OR REPLACE INTO kyc_status'),
@@ -243,13 +243,13 @@ describe('UserRepository', () => {
         step1Complete: true,
         step2Complete: false,
       };
-      const existingRow = { id: 'kyc-123', data: JSON.stringify(existingKyc), profile_id: 'profile-123' };
+      const existingRow = { id: 'kyc-123', data: JSON.stringify(existingKyc), entity_id: 'profile-123' };
       mockDb.getAllAsync.mockResolvedValue([existingRow]);
       mockDb.runAsync.mockResolvedValue(undefined);
 
       const newKycData = {
         id: 'kyc-123',
-        profile_id: 'profile-123',
+        entity_id: 'profile-123',
         status: 'approved',
         step2Complete: true,
       };
@@ -270,12 +270,12 @@ describe('UserRepository', () => {
         emailComplete: true,
         identityComplete: false,
       };
-      mockDb.getAllAsync.mockResolvedValue([{ id: 'kyc-123', data: JSON.stringify(existingKyc), profile_id: 'profile-123' }]);
+      mockDb.getAllAsync.mockResolvedValue([{ id: 'kyc-123', data: JSON.stringify(existingKyc), entity_id: 'profile-123' }]);
       mockDb.runAsync.mockResolvedValue(undefined);
 
       const newKycData = {
         id: 'kyc-123',
-        profile_id: 'profile-123',
+        entity_id: 'profile-123',
         identityComplete: true,
       };
 
@@ -291,40 +291,29 @@ describe('UserRepository', () => {
       mockDb.getAllAsync.mockResolvedValue([]);
       mockDb.runAsync.mockResolvedValue(undefined);
 
-      await userRepository.saveKycStatus({ ...mockKycStatus, profile_id: 'profile-123' });
+      await userRepository.saveKycStatus({ ...mockKycStatus, entity_id: 'profile-123' });
 
       expect(mockDb.runAsync).toHaveBeenCalled();
     });
 
     it('should handle malformed existing data gracefully', async () => {
-      mockDb.getAllAsync.mockResolvedValue([{ id: 'kyc-123', data: 'invalid-json', profile_id: 'profile-123' }]);
+      mockDb.getAllAsync.mockResolvedValue([{ id: 'kyc-123', data: 'invalid-json', entity_id: 'profile-123' }]);
       mockDb.runAsync.mockResolvedValue(undefined);
 
-      await userRepository.saveKycStatus({ ...mockKycStatus, profile_id: 'profile-123' });
+      await userRepository.saveKycStatus({ ...mockKycStatus, entity_id: 'profile-123' });
 
       // Should not throw, use new data only
       expect(mockDb.runAsync).toHaveBeenCalled();
     });
 
-
-        'kyc',
-        expect.any(Object),
-        expect.objectContaining({
-          source: 'UserRepository.saveKycStatus',
-          kycId: 'kyc-123',
-          priority: 'high',
-        }),
-      );
-    });
-
-    it('should exclude profile_id from saved data object', async () => {
+    it('should exclude entity_id from saved data object', async () => {
       mockDb.getAllAsync.mockResolvedValue([]);
       mockDb.runAsync.mockResolvedValue(undefined);
 
-      await userRepository.saveKycStatus({ id: 'kyc-123', profile_id: 'profile-123', status: 'pending' });
+      await userRepository.saveKycStatus({ id: 'kyc-123', entity_id: 'profile-123', status: 'pending' });
 
       const savedData = JSON.parse(mockDb.runAsync.mock.calls[0][1][1]);
-      expect(savedData.profile_id).toBeUndefined();
+      expect(savedData.entity_id).toBeUndefined();
       expect(savedData.id).toBe('kyc-123');
       expect(savedData.status).toBe('pending');
     });
@@ -357,7 +346,7 @@ describe('UserRepository', () => {
   });
 
   describe('syncKycFromRemote', () => {
-    it('should fetch remote KYC and save locally with profileId', async () => {
+    it('should fetch remote KYC and save locally with entityId', async () => {
       const remoteKyc = { id: 'kyc-123', status: 'approved' };
       const fetchRemote = jest.fn().mockResolvedValue(remoteKyc);
       mockDb.getAllAsync.mockResolvedValue([]);
@@ -369,7 +358,7 @@ describe('UserRepository', () => {
       expect(mockDb.runAsync).toHaveBeenCalled();
     });
 
-    it('should add profile_id to remote KYC data', async () => {
+    it('should add entity_id to remote KYC data', async () => {
       const remoteKyc = { id: 'kyc-456', status: 'pending' };
       const fetchRemote = jest.fn().mockResolvedValue(remoteKyc);
       mockDb.getAllAsync.mockResolvedValue([]);
@@ -377,21 +366,19 @@ describe('UserRepository', () => {
 
       await userRepository.syncKycFromRemote(fetchRemote, 'profile-XYZ');
 
-      // Verify profileId was added and passed correctly
+      // Verify entityId was added and passed correctly
       expect(mockDb.runAsync.mock.calls[0][1][2]).toBe('profile-XYZ');
     });
   });
 
-  describe('syncWithRemote', () => {
-    });
-  });
+  // NOTE: syncWithRemote tests removed - EventCoordinator was removed
 
   // ============================================================
-  // PROFILE ISOLATION TESTS
+  // ENTITY ISOLATION TESTS
   // ============================================================
 
-  describe('profile isolation', () => {
-    it('should always query with profileId for user data', async () => {
+  describe('entity isolation', () => {
+    it('should always query with entityId for user data', async () => {
       mockDb.getAllAsync.mockResolvedValue([]);
 
       await userRepository.getUser('profile-A');
@@ -401,7 +388,7 @@ describe('UserRepository', () => {
       expect(mockDb.getAllAsync).toHaveBeenNthCalledWith(2, expect.any(String), ['profile-B']);
     });
 
-    it('should always query with profileId for KYC data', async () => {
+    it('should always query with entityId for KYC data', async () => {
       mockDb.getAllAsync.mockResolvedValue([]);
 
       await userRepository.getKycStatus('profile-A');
@@ -411,7 +398,7 @@ describe('UserRepository', () => {
       expect(mockDb.getAllAsync).toHaveBeenNthCalledWith(2, expect.any(String), ['profile-B']);
     });
 
-    it('should always save with profileId for user data', async () => {
+    it('should always save with entityId for user data', async () => {
       mockDb.runAsync.mockResolvedValue(undefined);
 
       await userRepository.saveUser(mockUser, 'profile-A');
@@ -419,26 +406,16 @@ describe('UserRepository', () => {
       expect(mockDb.runAsync).toHaveBeenCalledWith(expect.any(String), expect.arrayContaining(['profile-A']));
     });
 
-    it('should always save with profileId for KYC data', async () => {
+    it('should always save with entityId for KYC data', async () => {
       mockDb.getAllAsync.mockResolvedValue([]);
       mockDb.runAsync.mockResolvedValue(undefined);
 
-      await userRepository.saveKycStatus({ ...mockKycStatus, profile_id: 'profile-A' });
+      await userRepository.saveKycStatus({ ...mockKycStatus, entity_id: 'profile-A' });
 
       expect(mockDb.runAsync).toHaveBeenCalledWith(expect.any(String), expect.arrayContaining(['profile-A']));
     });
 
-    it('should include profileId in all event emissions', async () => {
-      mockDb.runAsync.mockResolvedValue(undefined);
-      mockDb.getAllAsync.mockResolvedValue([]);
-
-      await userRepository.saveUser(mockUser, 'profile-TEST');
-
-        'user',
-        expect.any(Object),
-        expect.objectContaining({ profileId: 'profile-TEST' }),
-      );
-    });
+    // NOTE: Event emission tests removed - EventCoordinator was removed, TanStack Query handles reactivity
   });
 
   // ============================================================
@@ -458,14 +435,6 @@ describe('UserRepository', () => {
       await expect(userRepository.saveUser(mockUser, 'profile-123')).rejects.toThrow('Write error');
     });
 
-    it('should handle event coordinator errors gracefully', async () => {
-      mockDb.runAsync.mockResolvedValue(undefined);
-      mockDb.getAllAsync.mockResolvedValue([]);
-
-      // Should propagate the error
-      await expect(userRepository.saveKycStatus({ ...mockKycStatus, profile_id: 'profile-123' })).rejects.toThrow(
-        'Event error',
-      );
-    });
+    // NOTE: Event coordinator error test removed - EventCoordinator was removed
   });
 });

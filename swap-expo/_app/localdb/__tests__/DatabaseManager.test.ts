@@ -66,11 +66,11 @@ jest.mock('../schema', () => ({
   initializeUserContactsSchema: mockInitializeUserContactsSchema,
 }));
 
-jest.mock('../migrations/add-profile-id-columns', () => ({
+jest.mock('../migrations/add-entity-id-columns', () => ({
   runMigration: mockRunMigration,
   isMigrationApplied: mockIsMigrationApplied,
   MIGRATION_VERSION: '1',
-  MIGRATION_NAME: 'add_profile_id_columns',
+  MIGRATION_NAME: 'add_entity_id_columns',
 }));
 
 // Get fresh DatabaseManager instance for each test
@@ -113,11 +113,11 @@ const getDatabaseManager = async () => {
     initializeUserContactsSchema: mockInitializeUserContactsSchema,
   }));
 
-  jest.doMock('../migrations/add-profile-id-columns', () => ({
+  jest.doMock('../migrations/add-entity-id-columns', () => ({
     runMigration: mockRunMigration,
     isMigrationApplied: mockIsMigrationApplied,
     MIGRATION_VERSION: '1',
-    MIGRATION_NAME: 'add_profile_id_columns',
+    MIGRATION_NAME: 'add_entity_id_columns',
   }));
 
   const { databaseManager } = await import('../DatabaseManager');
@@ -289,11 +289,11 @@ describe('DatabaseManager', () => {
         initializeNotificationsSchema: mockInitializeNotificationsSchema,
         initializeUserContactsSchema: mockInitializeUserContactsSchema,
       }));
-      jest.doMock('../migrations/add-profile-id-columns', () => ({
+      jest.doMock('../migrations/add-entity-id-columns', () => ({
         runMigration: mockRunMigration,
         isMigrationApplied: mockIsMigrationApplied,
         MIGRATION_VERSION: '1',
-        MIGRATION_NAME: 'add_profile_id_columns',
+        MIGRATION_NAME: 'add_entity_id_columns',
       }));
 
       const { databaseManager } = await import('../DatabaseManager');

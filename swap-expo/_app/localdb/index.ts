@@ -69,15 +69,16 @@ export const clearAllCachedData = async (): Promise<void> => {
 };
 
 /**
- * Clear all cached data for a specific profile (PROFILE-ISOLATED)
+ * Clear all cached data for a specific entity (ENTITY-ISOLATED)
  * Used during profile switching for privacy and data isolation
+ * Updated: 2025-12-28 - Migrated from profileId to entityId (entity-first architecture)
  */
-export const clearProfileLocalDB = async (profileId: string): Promise<void> => {
+export const clearEntityLocalDB = async (entityId: string): Promise<void> => {
   const logger = require('../utils/logger').default;
   const { databaseManager } = require('./DatabaseManager');
 
   try {
-    logger.info(`[LocalDB] Clearing all local data for profile: ${profileId}`, 'localdb');
+    logger.info(`[LocalDB] Clearing all local data for entity: ${entityId}`, 'localdb');
 
     // Ensure database is initialized and get instance
     const initialized = await databaseManager.initialize();
@@ -92,7 +93,7 @@ export const clearProfileLocalDB = async (profileId: string): Promise<void> => {
       return;
     }
 
-    // Clear all profile-scoped tables (PROFILE-ISOLATED DELETE)
+    // Clear all entity-scoped tables (ENTITY-ISOLATED DELETE)
     const tablesToClear = [
       'users',
       'kyc_status',
@@ -102,6 +103,7 @@ export const clearProfileLocalDB = async (profileId: string): Promise<void> => {
       'interaction_members',
       'currency_wallets',
       'timeline',
+      'local_timeline',
       'notifications',
       'user_contacts'
     ];
@@ -109,30 +111,33 @@ export const clearProfileLocalDB = async (profileId: string): Promise<void> => {
     let clearedCount = 0;
     for (const table of tablesToClear) {
       try {
-        // Delete only rows for this profile
-        const result = await db.runAsync(`DELETE FROM ${table} WHERE profile_id = ?`, [profileId]);
-        logger.debug(`[LocalDB] Cleared ${result.changes || 0} rows from ${table} for profile ${profileId}`, 'localdb');
+        // Delete only rows for this entity
+        const result = await db.runAsync(`DELETE FROM ${table} WHERE entity_id = ?`, [entityId]);
+        logger.debug(`[LocalDB] Cleared ${result.changes || 0} rows from ${table} for entity ${entityId}`, 'localdb');
         clearedCount++;
       } catch (tableError: any) {
         // Check if it's a "no such table" error
         if (tableError.message && tableError.message.includes('no such table')) {
           logger.debug(`[LocalDB] Table ${table} doesn't exist, skipping`, 'localdb');
         } else if (tableError.message && tableError.message.includes('no such column')) {
-          logger.debug(`[LocalDB] Table ${table} doesn't have profile_id column, skipping`, 'localdb');
+          logger.debug(`[LocalDB] Table ${table} doesn't have entity_id column, skipping`, 'localdb');
         } else {
-          logger.warn(`[LocalDB] Error clearing table ${table} for profile ${profileId}:`, tableError, 'localdb');
+          logger.warn(`[LocalDB] Error clearing table ${table} for entity ${entityId}:`, tableError, 'localdb');
           // Don't throw, continue with other tables
         }
       }
     }
 
-    logger.info(`[LocalDB] Successfully cleared ${clearedCount} tables for profile ${profileId}`, 'localdb');
+    logger.info(`[LocalDB] Successfully cleared ${clearedCount} tables for entity ${entityId}`, 'localdb');
   } catch (error) {
-    logger.error(`[LocalDB] Error clearing profile ${profileId} from local database`, error, 'localdb');
+    logger.error(`[LocalDB] Error clearing entity ${entityId} from local database`, error, 'localdb');
     // Don't re-throw the error to prevent profile switch flow interruption
     logger.warn('[LocalDB] Continuing with profile switch despite cache clearing error', 'localdb');
   }
 };
+
+// Legacy alias for backward compatibility during migration
+export const clearProfileLocalDB = clearEntityLocalDB;
 
 // Re-export database types from db-interfaces
 export type { Database, Transaction } from './db-interfaces';

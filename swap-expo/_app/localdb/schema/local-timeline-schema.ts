@@ -23,7 +23,7 @@ export interface LocalTimelineItem {
 
   // === COMMON FIELDS (both messages & transactions) ===
   interaction_id: string;        // FK to interactions
-  profile_id: string;            // For multi-profile isolation
+  entity_id: string;             // For multi-profile isolation (backend's universal identifier)
   item_type: 'message' | 'transaction';  // Discriminator
   created_at: string;            // ISO timestamp
 
@@ -138,7 +138,7 @@ export async function initializeLocalTimelineSchema(db: SQLiteDatabase): Promise
 
         -- Common fields
         interaction_id TEXT NOT NULL,
-        profile_id TEXT NOT NULL,
+        entity_id TEXT NOT NULL,
         item_type TEXT NOT NULL CHECK (item_type IN ('message', 'transaction')),
         from_entity_id TEXT NOT NULL,
         to_entity_id TEXT,
@@ -179,8 +179,8 @@ export async function initializeLocalTimelineSchema(db: SQLiteDatabase): Promise
     `);
 
     await db.execAsync(`
-      CREATE INDEX IF NOT EXISTS idx_local_timeline_profile
-        ON local_timeline(profile_id);
+      CREATE INDEX IF NOT EXISTS idx_local_timeline_entity
+        ON local_timeline(entity_id);
     `);
 
     await db.execAsync(`

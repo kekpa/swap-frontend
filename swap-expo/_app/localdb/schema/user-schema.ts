@@ -40,19 +40,19 @@ export async function initializeUserSchema(db: SQLiteDatabase): Promise<void> {
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY NOT NULL,
-        profile_id TEXT,
+        entity_id TEXT,
         data TEXT NOT NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
         is_synced INTEGER DEFAULT 0
       );
     `);
-    
+
     // Create kyc_status table
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS kyc_status (
         id TEXT PRIMARY KEY NOT NULL,
-        profile_id TEXT,
+        entity_id TEXT,
         data TEXT NOT NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,

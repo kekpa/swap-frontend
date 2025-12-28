@@ -70,7 +70,7 @@ const mockTransaction = {
   to_entity_id: 'entity-receiver',
 };
 
-const mockProfileId = 'profile-123';
+const mockEntityId = 'entity-123';
 
 describe('TransactionRepository', () => {
   beforeEach(() => {
@@ -162,7 +162,7 @@ describe('TransactionRepository', () => {
 
       const result = await transactionRepository.getTransactionsForInteraction(
         'int-456',
-        mockProfileId,
+        mockEntityId,
         100,
       );
 
@@ -174,19 +174,19 @@ describe('TransactionRepository', () => {
     it('should filter by profile ID', async () => {
       await transactionRepository.getTransactionsForInteraction(
         'int-456',
-        mockProfileId,
+        mockEntityId,
         100,
       );
 
       expect(mockDatabase.prepareAsync).toHaveBeenCalledWith(
-        expect.stringContaining('profile_id = ?'),
+        expect.stringContaining('entity_id = ?'),
       );
     });
 
     it('should apply user perspective filtering when provided', async () => {
       await transactionRepository.getTransactionsForInteraction(
         'int-456',
-        mockProfileId,
+        mockEntityId,
         100,
         'entity-user',
       );
@@ -201,7 +201,7 @@ describe('TransactionRepository', () => {
 
       const result = await transactionRepository.getTransactionsForInteraction(
         'int-456',
-        mockProfileId,
+        mockEntityId,
       );
 
       expect(result).toEqual([]);
@@ -212,7 +212,7 @@ describe('TransactionRepository', () => {
 
       const result = await transactionRepository.getTransactionsForInteraction(
         'int-456',
-        mockProfileId,
+        mockEntityId,
       );
 
       expect(result).toEqual([]);
@@ -229,7 +229,7 @@ describe('TransactionRepository', () => {
 
       const result = await transactionRepository.getTransactionsForInteraction(
         'int-456',
-        mockProfileId,
+        mockEntityId,
       );
 
       expect(result[0].metadata).toBeDefined();
@@ -247,7 +247,7 @@ describe('TransactionRepository', () => {
       mockDatabase.getAllAsync.mockImplementation(async () => [mockTransaction]);
 
       const result = await transactionRepository.getTransactionsByAccount(
-        mockProfileId,
+        mockEntityId,
         'account-123',
         20,
       );
@@ -260,27 +260,27 @@ describe('TransactionRepository', () => {
 
     it('should query by both from and to account', async () => {
       await transactionRepository.getTransactionsByAccount(
-        mockProfileId,
+        mockEntityId,
         'account-123',
         20,
       );
 
       expect(mockDatabase.getAllAsync).toHaveBeenCalledWith(
         expect.stringContaining('from_account_id = ?'),
-        expect.arrayContaining(['account-123', 'account-123', mockProfileId]),
+        expect.arrayContaining(['account-123', 'account-123', mockEntityId]),
       );
     });
 
     it('should filter by profile ID', async () => {
       await transactionRepository.getTransactionsByAccount(
-        mockProfileId,
+        mockEntityId,
         'account-123',
         20,
       );
 
       expect(mockDatabase.getAllAsync).toHaveBeenCalledWith(
-        expect.stringContaining('profile_id = ?'),
-        expect.arrayContaining([mockProfileId]),
+        expect.stringContaining('entity_id = ?'),
+        expect.arrayContaining([mockEntityId]),
       );
     });
 
@@ -288,7 +288,7 @@ describe('TransactionRepository', () => {
       mockDatabaseManager.isDatabaseReady.mockReturnValue(false);
 
       const result = await transactionRepository.getTransactionsByAccount(
-        mockProfileId,
+        mockEntityId,
         'account-123',
       );
 
@@ -307,7 +307,7 @@ describe('TransactionRepository', () => {
         { ...mockTransaction, id: 'txn-2' },
       ];
 
-      await transactionRepository.saveTransactions(transactions as any, mockProfileId);
+      await transactionRepository.saveTransactions(transactions as any, mockEntityId);
 
       expect(mockDatabase.runAsync).toHaveBeenCalledTimes(4); // 2 ensures + 2 inserts
     });
@@ -319,7 +319,7 @@ describe('TransactionRepository', () => {
         { ...mockTransaction, id: 'txn-2' },
       ];
 
-      await transactionRepository.saveTransactions(transactions as any, mockProfileId);
+      await transactionRepository.saveTransactions(transactions as any, mockEntityId);
 
       // Should only save 2 unique transactions
       expect(mockLogger.info).toHaveBeenCalledWith(
@@ -328,13 +328,13 @@ describe('TransactionRepository', () => {
     });
 
     it('should handle empty transactions array', async () => {
-      await transactionRepository.saveTransactions([], mockProfileId);
+      await transactionRepository.saveTransactions([], mockEntityId);
 
       expect(mockDatabase.runAsync).not.toHaveBeenCalled();
     });
 
     it('should handle null transactions', async () => {
-      await transactionRepository.saveTransactions(null as any, mockProfileId);
+      await transactionRepository.saveTransactions(null as any, mockEntityId);
 
       expect(mockDatabase.runAsync).not.toHaveBeenCalled();
     });
@@ -345,7 +345,7 @@ describe('TransactionRepository', () => {
         { ...mockTransaction, id: 'txn-1' },
       ];
 
-      await transactionRepository.saveTransactions(transactions as any, mockProfileId);
+      await transactionRepository.saveTransactions(transactions as any, mockEntityId);
 
       // Should only process 1 transaction
       expect(mockLogger.info).toHaveBeenCalledWith(
@@ -357,12 +357,12 @@ describe('TransactionRepository', () => {
       mockDatabaseManager.isDatabaseReady.mockReturnValue(false);
 
       await expect(
-        transactionRepository.saveTransactions([mockTransaction] as any, mockProfileId),
+        transactionRepository.saveTransactions([mockTransaction] as any, mockEntityId),
       ).resolves.not.toThrow();
     });
 
     it('should ensure interaction exists before saving', async () => {
-      await transactionRepository.saveTransactions([mockTransaction] as any, mockProfileId);
+      await transactionRepository.saveTransactions([mockTransaction] as any, mockEntityId);
 
       // Should check for existing interaction
       expect(mockDatabase.getFirstAsync).toHaveBeenCalledWith(
@@ -374,7 +374,7 @@ describe('TransactionRepository', () => {
     it('should create interaction if not exists', async () => {
       mockDatabase.getFirstAsync.mockResolvedValue(null); // No existing interaction
 
-      await transactionRepository.saveTransactions([mockTransaction] as any, mockProfileId);
+      await transactionRepository.saveTransactions([mockTransaction] as any, mockEntityId);
 
       // Should insert interaction
       expect(mockDatabase.runAsync).toHaveBeenCalledWith(
@@ -392,26 +392,26 @@ describe('TransactionRepository', () => {
     it('should update transaction status', async () => {
       await transactionRepository.updateTransactionStatus(
         'txn-123',
-        mockProfileId,
+        mockEntityId,
         'completed',
       );
 
       expect(mockDatabase.prepareAsync).toHaveBeenCalledWith(
-        'UPDATE transactions SET status = ? WHERE id = ? AND profile_id = ?',
+        'UPDATE transactions SET status = ? WHERE id = ? AND entity_id = ?',
       );
     });
 
-    it('should filter by profile ID', async () => {
+    it('should filter by entity ID', async () => {
       await transactionRepository.updateTransactionStatus(
         'txn-123',
-        mockProfileId,
+        mockEntityId,
         'completed',
       );
 
       expect(mockStatement.executeAsync).toHaveBeenCalledWith(
         'completed',
         'txn-123',
-        mockProfileId,
+        mockEntityId,
       );
     });
 
@@ -419,7 +419,7 @@ describe('TransactionRepository', () => {
       mockDatabaseManager.isDatabaseReady.mockReturnValue(false);
 
       await expect(
-        transactionRepository.updateTransactionStatus('txn-123', mockProfileId, 'completed'),
+        transactionRepository.updateTransactionStatus('txn-123', mockEntityId, 'completed'),
       ).resolves.not.toThrow();
     });
   });
@@ -436,7 +436,7 @@ describe('TransactionRepository', () => {
 
       const result = await transactionRepository.hasLocalTransactions(
         'int-456',
-        mockProfileId,
+        mockEntityId,
       );
 
       expect(result).toBe(true);
@@ -449,7 +449,7 @@ describe('TransactionRepository', () => {
 
       const result = await transactionRepository.hasLocalTransactions(
         'int-456',
-        mockProfileId,
+        mockEntityId,
       );
 
       expect(result).toBe(false);
@@ -460,7 +460,7 @@ describe('TransactionRepository', () => {
 
       const result = await transactionRepository.hasLocalTransactions(
         'int-456',
-        mockProfileId,
+        mockEntityId,
       );
 
       expect(result).toBe(false);
@@ -473,7 +473,7 @@ describe('TransactionRepository', () => {
 
   describe('upsertTransaction', () => {
     it('should insert or replace transaction', async () => {
-      await transactionRepository.upsertTransaction(mockTransaction, mockProfileId);
+      await transactionRepository.upsertTransaction(mockTransaction, mockEntityId);
 
       expect(mockDatabase.runAsync).toHaveBeenCalledWith(
         expect.stringContaining('INSERT OR REPLACE INTO transactions'),
@@ -482,21 +482,21 @@ describe('TransactionRepository', () => {
     });
 
     it('should emit data_updated event', async () => {
-      await transactionRepository.upsertTransaction(mockTransaction, mockProfileId);
+      await transactionRepository.upsertTransaction(mockTransaction, mockEntityId);
 
       expect(mockEmit).toHaveBeenCalledWith('data_updated', {
         type: 'transactions',
         data: mockTransaction,
-        profileId: mockProfileId,
+        entityId: mockEntityId,
       });
     });
 
     it('should include profile ID in insert', async () => {
-      await transactionRepository.upsertTransaction(mockTransaction, mockProfileId);
+      await transactionRepository.upsertTransaction(mockTransaction, mockEntityId);
 
       expect(mockDatabase.runAsync).toHaveBeenCalledWith(
         expect.any(String),
-        expect.arrayContaining([mockProfileId]),
+        expect.arrayContaining([mockEntityId]),
       );
     });
   });
@@ -506,21 +506,21 @@ describe('TransactionRepository', () => {
   // ============================================================
 
   describe('deleteTransaction', () => {
-    it('should delete transaction by ID and profile', async () => {
-      await transactionRepository.deleteTransaction('txn-123', mockProfileId);
+    it('should delete transaction by ID and entity', async () => {
+      await transactionRepository.deleteTransaction('txn-123', mockEntityId);
 
       expect(mockDatabase.runAsync).toHaveBeenCalledWith(
-        'DELETE FROM transactions WHERE id = ? AND profile_id = ?',
-        ['txn-123', mockProfileId],
+        'DELETE FROM transactions WHERE id = ? AND entity_id = ?',
+        ['txn-123', mockEntityId],
       );
     });
 
     it('should emit data_updated event with removed flag', async () => {
-      await transactionRepository.deleteTransaction('txn-123', mockProfileId);
+      await transactionRepository.deleteTransaction('txn-123', mockEntityId);
 
       expect(mockEmit).toHaveBeenCalledWith('data_updated', {
         type: 'transactions',
-        data: { id: 'txn-123', removed: true, profileId: mockProfileId },
+        data: { id: 'txn-123', removed: true, entityId: mockEntityId },
       });
     });
   });
@@ -533,32 +533,32 @@ describe('TransactionRepository', () => {
     it('should return recent transactions for profile', async () => {
       mockDatabase.getAllAsync.mockResolvedValue([mockTransaction]);
 
-      const result = await transactionRepository.getRecentTransactions(mockProfileId, 5);
+      const result = await transactionRepository.getRecentTransactions(mockEntityId, 5);
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('txn-123');
     });
 
     it('should use default limit of 5', async () => {
-      await transactionRepository.getRecentTransactions(mockProfileId);
+      await transactionRepository.getRecentTransactions(mockEntityId);
 
       expect(mockDatabase.getAllAsync).toHaveBeenCalledWith(
         expect.any(String),
-        [mockProfileId, 5],
+        [mockEntityId, 5],
       );
     });
 
-    it('should filter by profile ID', async () => {
-      await transactionRepository.getRecentTransactions(mockProfileId, 10);
+    it('should filter by entity ID', async () => {
+      await transactionRepository.getRecentTransactions(mockEntityId, 10);
 
       expect(mockDatabase.getAllAsync).toHaveBeenCalledWith(
-        expect.stringContaining('profile_id = ?'),
-        [mockProfileId, 10],
+        expect.stringContaining('entity_id = ?'),
+        [mockEntityId, 10],
       );
     });
 
     it('should order by created_at descending', async () => {
-      await transactionRepository.getRecentTransactions(mockProfileId);
+      await transactionRepository.getRecentTransactions(mockEntityId);
 
       expect(mockDatabase.getAllAsync).toHaveBeenCalledWith(
         expect.stringContaining('ORDER BY datetime(created_at) DESC'),
@@ -569,7 +569,7 @@ describe('TransactionRepository', () => {
     it('should return empty array when SQLite not available', async () => {
       mockDatabaseManager.isDatabaseReady.mockReturnValue(false);
 
-      const result = await transactionRepository.getRecentTransactions(mockProfileId);
+      const result = await transactionRepository.getRecentTransactions(mockEntityId);
 
       expect(result).toEqual([]);
     });
@@ -577,7 +577,7 @@ describe('TransactionRepository', () => {
     it('should return empty array when no transactions', async () => {
       mockDatabase.getAllAsync.mockResolvedValue([]);
 
-      const result = await transactionRepository.getRecentTransactions(mockProfileId);
+      const result = await transactionRepository.getRecentTransactions(mockEntityId);
 
       expect(result).toEqual([]);
     });
@@ -595,7 +595,7 @@ describe('TransactionRepository', () => {
       ];
       const fetchRemote = jest.fn().mockResolvedValue(remoteTransactions);
 
-      await transactionRepository.syncTransactionsFromRemote(fetchRemote, mockProfileId);
+      await transactionRepository.syncTransactionsFromRemote(fetchRemote, mockEntityId);
 
       expect(fetchRemote).toHaveBeenCalled();
       expect(mockDatabase.runAsync).toHaveBeenCalledTimes(2);
@@ -605,19 +605,19 @@ describe('TransactionRepository', () => {
       const remoteTransactions = [mockTransaction];
       const fetchRemote = jest.fn().mockResolvedValue(remoteTransactions);
 
-      await transactionRepository.syncTransactionsFromRemote(fetchRemote, mockProfileId);
+      await transactionRepository.syncTransactionsFromRemote(fetchRemote, mockEntityId);
 
       expect(mockEmit).toHaveBeenCalledWith('data_updated', {
         type: 'transactions',
         data: remoteTransactions,
-        profileId: mockProfileId,
+        entityId: mockEntityId,
       });
     });
 
     it('should handle empty remote response', async () => {
       const fetchRemote = jest.fn().mockResolvedValue([]);
 
-      await transactionRepository.syncTransactionsFromRemote(fetchRemote, mockProfileId);
+      await transactionRepository.syncTransactionsFromRemote(fetchRemote, mockEntityId);
 
       // Should not throw
       expect(fetchRemote).toHaveBeenCalled();
@@ -628,7 +628,7 @@ describe('TransactionRepository', () => {
 
       // Should not throw
       await expect(
-        transactionRepository.syncTransactionsFromRemote(fetchRemote, mockProfileId),
+        transactionRepository.syncTransactionsFromRemote(fetchRemote, mockEntityId),
       ).resolves.not.toThrow();
     });
   });
@@ -645,7 +645,7 @@ describe('TransactionRepository', () => {
       await transactionRepository.getTransactionsForInteraction('int-1', profile1);
       await transactionRepository.getTransactionsForInteraction('int-1', profile2);
 
-      // Both calls should include their respective profileIds
+      // Both calls should include their respective entityIds
       expect(mockStatement.executeAsync).toHaveBeenCalledWith(
         'int-1',
         profile1,
@@ -660,7 +660,7 @@ describe('TransactionRepository', () => {
       await transactionRepository.saveTransactions([mockTransaction] as any, profile1);
       await transactionRepository.saveTransactions([mockTransaction] as any, profile2);
 
-      // Both saves should use their respective profileIds
+      // Both saves should use their respective entityIds
       const calls = mockDatabase.runAsync.mock.calls;
       const insertCalls = calls.filter((call: any) =>
         call[0].includes('INSERT OR REPLACE INTO transactions'),

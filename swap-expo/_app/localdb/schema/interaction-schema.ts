@@ -26,23 +26,23 @@ export async function initializeInteractionSchema(db: SQLiteDatabase): Promise<v
         unread_count INTEGER DEFAULT 0,
         icon_url TEXT,
         metadata TEXT,
-        profile_id TEXT
+        entity_id TEXT
       );
     `);
-    
+
     // Create interaction_members table - matches Supabase schema exactly
     await db.runAsync(`
       CREATE TABLE IF NOT EXISTS interaction_members (
         id TEXT PRIMARY KEY NOT NULL,
         interaction_id TEXT NOT NULL,
-        entity_id TEXT NOT NULL,
+        member_entity_id TEXT NOT NULL,
         role TEXT DEFAULT 'member',
         joined_at TEXT DEFAULT CURRENT_TIMESTAMP,
         last_read_at TEXT DEFAULT CURRENT_TIMESTAMP,
         display_name TEXT,
         avatar_url TEXT,
         entity_type TEXT NOT NULL,
-        profile_id TEXT,
+        entity_id TEXT,
         FOREIGN KEY (interaction_id) REFERENCES interactions(id) ON DELETE CASCADE
       );
     `);

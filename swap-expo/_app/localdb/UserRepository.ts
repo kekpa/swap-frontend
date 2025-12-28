@@ -28,61 +28,61 @@ export class UserRepository {
     return db;
   }
 
-  // Get user profile from local DB (PROFILE-ISOLATED)
-  async getUser(profileId: string): Promise<any | null> { // TODO: Replace any with UserProfile
+  // Get user profile from local DB (ENTITY-ISOLATED)
+  async getUser(entityId: string): Promise<any | null> { // TODO: Replace any with UserProfile
     const db = await this.getDatabase();
     const rows = await db.getAllAsync(
-      `SELECT * FROM ${UserRepository.USER_TABLE} WHERE profile_id = ? LIMIT 1`,
-      [profileId]
+      `SELECT * FROM ${UserRepository.USER_TABLE} WHERE entity_id = ? LIMIT 1`,
+      [entityId]
     );
     return rows.length > 0 ? rows[0] : null;
   }
 
-  // Save user to local SQLite (PROFILE-ISOLATED)
-  async saveUser(user: any, profileId: string): Promise<void> { // TODO: type
+  // Save user to local SQLite (ENTITY-ISOLATED)
+  async saveUser(user: any, entityId: string): Promise<void> { // TODO: type
     const db = await this.getDatabase();
     await db.runAsync(
-      `INSERT OR REPLACE INTO ${UserRepository.USER_TABLE} (id, data, profile_id) VALUES (?, ?, ?)`,
-      [user.id, JSON.stringify(user), profileId]
+      `INSERT OR REPLACE INTO ${UserRepository.USER_TABLE} (id, data, entity_id) VALUES (?, ?, ?)`,
+      [user.id, JSON.stringify(user), entityId]
     );
     // Data saved - TanStack Query will fetch fresh data when needed
   }
 
-  // Update user profile fields (PROFILE-ISOLATED)
-  async updateUser(user: any, profileId: string): Promise<void> { // TODO: type
-    await this.saveUser(user, profileId);
+  // Update user profile fields (ENTITY-ISOLATED)
+  async updateUser(user: any, entityId: string): Promise<void> { // TODO: type
+    await this.saveUser(user, entityId);
   }
 
-  // Get KYC status from local DB (PROFILE-ISOLATED)
-  async getKycStatus(profileId: string): Promise<any | null> { // TODO: Replace any with KycStatus
+  // Get KYC status from local DB (ENTITY-ISOLATED)
+  async getKycStatus(entityId: string): Promise<any | null> { // TODO: Replace any with KycStatus
     const db = await this.getDatabase();
     const rows = await db.getAllAsync(
-      `SELECT * FROM ${UserRepository.KYC_TABLE} WHERE profile_id = ? LIMIT 1`,
-      [profileId]
+      `SELECT * FROM ${UserRepository.KYC_TABLE} WHERE entity_id = ? LIMIT 1`,
+      [entityId]
     );
     return rows.length > 0 ? rows[0] : null;
   }
 
-  // PROFESSIONAL: Save KYC with navigation-aware event coordination and data merging (PROFILE-ISOLATED)
-  // SECURITY FIX: Accept object with profile_id to prevent signature mismatch bugs
-  async saveKycStatus(kycData: any & { profile_id: string }): Promise<void> { // TODO: type
+  // PROFESSIONAL: Save KYC with navigation-aware event coordination and data merging (ENTITY-ISOLATED)
+  // SECURITY FIX: Accept object with entity_id to prevent signature mismatch bugs
+  async saveKycStatus(kycData: any & { entity_id: string }): Promise<void> { // TODO: type
     const db = await this.getDatabase();
 
-    // Extract profileId from the data object (prevents profile_id = NULL bugs)
-    const profileId = kycData.profile_id;
-    if (!profileId) {
-      throw new Error('[UserRepository] saveKycStatus: profile_id is required for data isolation');
+    // Extract entityId from the data object (prevents entity_id = NULL bugs)
+    const entityId = kycData.entity_id;
+    if (!entityId) {
+      throw new Error('[UserRepository] saveKycStatus: entity_id is required for data isolation');
     }
 
-    // Extract kyc data without the profile_id property
-    const { profile_id, ...kyc } = kycData;
+    // Extract kyc data without the entity_id property
+    const { entity_id, ...kyc } = kycData;
 
     // CRITICAL FIX: Read existing local data first to preserve all completion flags
     let existingData = {};
     try {
       const existingRows = await db.getAllAsync(
-        `SELECT * FROM ${UserRepository.KYC_TABLE} WHERE id = ? AND profile_id = ?`,
-        [kyc.id, profileId]
+        `SELECT * FROM ${UserRepository.KYC_TABLE} WHERE id = ? AND entity_id = ?`,
+        [kyc.id, entityId]
       );
 
       if (existingRows.length > 0) {
@@ -120,30 +120,30 @@ export class UserRepository {
 
     // Save the complete merged data
     await db.runAsync(
-      `INSERT OR REPLACE INTO ${UserRepository.KYC_TABLE} (id, data, profile_id) VALUES (?, ?, ?)`,
-      [kyc.id, JSON.stringify(mergedData), profileId]
+      `INSERT OR REPLACE INTO ${UserRepository.KYC_TABLE} (id, data, entity_id) VALUES (?, ?, ?)`,
+      [kyc.id, JSON.stringify(mergedData), entityId]
     );
 
     console.log('[UserRepository] KYC status saved:', { kycId: kyc.id });
     // Data saved - TanStack Query will fetch fresh data when needed
   }
 
-  // Background sync: fetch from remote, update local, emit event (PROFILE-ISOLATED)
-  async syncUserFromRemote(fetchRemote: () => Promise<any>, profileId: string): Promise<void> { // TODO: Replace any with UserProfile
+  // Background sync: fetch from remote, update local, emit event (ENTITY-ISOLATED)
+  async syncUserFromRemote(fetchRemote: () => Promise<any>, entityId: string): Promise<void> { // TODO: Replace any with UserProfile
     const remoteUser = await fetchRemote();
-    await this.saveUser(remoteUser, profileId);
+    await this.saveUser(remoteUser, entityId);
   }
 
-  async syncKycFromRemote(fetchRemote: () => Promise<any>, profileId: string): Promise<void> { // TODO: Replace any with KycStatus
+  async syncKycFromRemote(fetchRemote: () => Promise<any>, entityId: string): Promise<void> { // TODO: Replace any with KycStatus
     const remoteKyc = await fetchRemote();
-    await this.saveKycStatus({ ...remoteKyc, profile_id: profileId });
+    await this.saveKycStatus({ ...remoteKyc, entity_id: entityId });
   }
 
-  // Sync with remote data (PROFILE-ISOLATED)
-  async syncWithRemote(remoteData: any, profileId: string): Promise<void> { // TODO: type
+  // Sync with remote data (ENTITY-ISOLATED)
+  async syncWithRemote(remoteData: any, entityId: string): Promise<void> { // TODO: type
     // Save remote data to local SQLite
     if (remoteData?.id) {
-      await this.saveUser(remoteData, profileId);
+      await this.saveUser(remoteData, entityId);
     }
     // Data saved - TanStack Query will fetch fresh data when needed
   }

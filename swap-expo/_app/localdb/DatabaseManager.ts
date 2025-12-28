@@ -16,11 +16,11 @@ import {
   initializeUserContactsSchema
 } from './schema';
 import {
-  runMigration as runProfileIdMigration,
+  runMigration as runEntityIdMigration,
   isMigrationApplied,
   MIGRATION_VERSION,
   MIGRATION_NAME
-} from './migrations/add-profile-id-columns';
+} from './migrations/add-entity-id-columns';
 
 // Database configuration
 const getDatabaseName = (): string => {
@@ -258,7 +258,7 @@ class DatabaseManager {
     }
 
     try {
-      // Check if profile_id migration is already applied
+      // Check if entity_id migration is already applied
       const alreadyApplied = await isMigrationApplied(this.database);
 
       if (alreadyApplied) {
@@ -268,7 +268,7 @@ class DatabaseManager {
 
       // Run the migration
       logger.info(`[DatabaseManager] Running migration ${MIGRATION_NAME} (v${MIGRATION_VERSION})`);
-      await runProfileIdMigration(this.database);
+      await runEntityIdMigration(this.database);
       logger.info(`[DatabaseManager] ✅ Migration ${MIGRATION_NAME} completed successfully`);
 
     } catch (error) {

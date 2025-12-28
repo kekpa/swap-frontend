@@ -17,7 +17,7 @@ export type TimelineUpdateEvent = {
   interactionId: string;
   itemId: string;
   action: 'add' | 'update' | 'delete';
-  profileId: string;
+  entityId: string;  // Backend's universal identifier
 };
 
 // Timeline event name
@@ -108,7 +108,7 @@ export class UnifiedTimelineRepository {
 
       await db.runAsync(
         `INSERT INTO local_timeline (
-          id, server_id, interaction_id, profile_id, item_type, from_entity_id, to_entity_id, created_at,
+          id, server_id, interaction_id, entity_id, item_type, from_entity_id, to_entity_id, created_at,
           sync_status, local_status, retry_count, last_error,
           content, message_type,
           amount, currency_id, currency_code, currency_symbol, transaction_type,
@@ -119,7 +119,7 @@ export class UnifiedTimelineRepository {
           item.id,
           item.server_id,
           item.interaction_id,
-          item.profile_id,
+          item.entity_id,
           item.item_type,
           item.from_entity_id,
           item.to_entity_id,
@@ -149,7 +149,7 @@ export class UnifiedTimelineRepository {
         interactionId: item.interaction_id,
         itemId: item.id,
         action: 'add',
-        profileId: item.profile_id,
+        entityId: item.entity_id,
       } as TimelineUpdateEvent);
 
     } catch (error) {
@@ -198,7 +198,7 @@ export class UnifiedTimelineRepository {
           interactionId: item.interaction_id,
           itemId: item.id,
           action: 'update',
-          profileId: item.profile_id,
+          entityId: item.entity_id,
         } as TimelineUpdateEvent);
       }
 
@@ -239,7 +239,7 @@ export class UnifiedTimelineRepository {
   /**
    * Delete item from timeline
    */
-  public async deleteItem(itemId: string, profileId: string): Promise<void> {
+  public async deleteItem(itemId: string, entityId: string): Promise<void> {
     logger.debug(`[UnifiedTimelineRepository] Deleting item: ${itemId}`);
 
     if (!(await this.isSQLiteAvailable())) {
@@ -253,8 +253,8 @@ export class UnifiedTimelineRepository {
       const item = await this.getItemById(itemId);
 
       await db.runAsync(
-        `DELETE FROM local_timeline WHERE id = ? AND profile_id = ?`,
-        [itemId, profileId]
+        `DELETE FROM local_timeline WHERE id = ? AND entity_id = ?`,
+        [itemId, entityId]
       );
 
       if (item) {
@@ -262,7 +262,7 @@ export class UnifiedTimelineRepository {
           interactionId: item.interaction_id,
           itemId: itemId,
           action: 'delete',
-          profileId: profileId,
+          entityId: entityId,
         } as TimelineUpdateEvent);
       }
 
@@ -285,7 +285,7 @@ export class UnifiedTimelineRepository {
    */
   public async getTimeline(
     interactionId: string,
-    profileId: string,
+    entityId: string,
     limit: number = 50,
     offset: number = 0
   ): Promise<LocalTimelineItem[]> {
@@ -303,10 +303,10 @@ export class UnifiedTimelineRepository {
 
       const rows = await db.getAllAsync<Record<string, any>>(
         `SELECT * FROM local_timeline
-         WHERE interaction_id = ? AND profile_id = ?
+         WHERE interaction_id = ? AND entity_id = ?
          ORDER BY created_at ASC
          LIMIT ? OFFSET ?`,
-        [interactionId, profileId, limit, offset]
+        [interactionId, entityId, limit, offset]
       );
 
       const items = this.mapRowsToItems(rows);
@@ -392,8 +392,8 @@ export class UnifiedTimelineRepository {
   /**
    * Get pending items for sync (not yet sent to API)
    */
-  public async getPendingItems(profileId: string): Promise<LocalTimelineItem[]> {
-    logger.debug(`[UnifiedTimelineRepository] Getting pending items for profileId: ${profileId}`);
+  public async getPendingItems(entityId: string): Promise<LocalTimelineItem[]> {
+    logger.debug(`[UnifiedTimelineRepository] Getting pending items for entityId: ${entityId}`);
 
     if (!(await this.isSQLiteAvailable())) {
       return [];
@@ -404,9 +404,9 @@ export class UnifiedTimelineRepository {
 
       const rows = await db.getAllAsync<Record<string, any>>(
         `SELECT * FROM local_timeline
-         WHERE sync_status = 'pending' AND profile_id = ?
+         WHERE sync_status = 'pending' AND entity_id = ?
          ORDER BY created_at ASC`,
-        [profileId]
+        [entityId]
       );
 
       const items = this.mapRowsToItems(rows);
@@ -426,8 +426,8 @@ export class UnifiedTimelineRepository {
   /**
    * Get failed items for retry (with retry_count < 3)
    */
-  public async getFailedItems(profileId: string, maxRetries: number = 3): Promise<LocalTimelineItem[]> {
-    logger.debug(`[UnifiedTimelineRepository] Getting failed items for retry (profileId: ${profileId})`);
+  public async getFailedItems(entityId: string, maxRetries: number = 3): Promise<LocalTimelineItem[]> {
+    logger.debug(`[UnifiedTimelineRepository] Getting failed items for retry (entityId: ${entityId})`);
 
     if (!(await this.isSQLiteAvailable())) {
       return [];
@@ -438,9 +438,9 @@ export class UnifiedTimelineRepository {
 
       const rows = await db.getAllAsync<Record<string, any>>(
         `SELECT * FROM local_timeline
-         WHERE sync_status = 'failed' AND profile_id = ? AND retry_count < ?
+         WHERE sync_status = 'failed' AND entity_id = ? AND retry_count < ?
          ORDER BY created_at ASC`,
-        [profileId, maxRetries]
+        [entityId, maxRetries]
       );
 
       const items = this.mapRowsToItems(rows);
@@ -460,8 +460,8 @@ export class UnifiedTimelineRepository {
   /**
    * Get all items needing sync (pending or failed with retries left)
    */
-  public async getItemsNeedingSync(profileId: string, maxRetries: number = 3): Promise<LocalTimelineItem[]> {
-    logger.debug(`[UnifiedTimelineRepository] Getting items needing sync (profileId: ${profileId})`);
+  public async getItemsNeedingSync(entityId: string, maxRetries: number = 3): Promise<LocalTimelineItem[]> {
+    logger.debug(`[UnifiedTimelineRepository] Getting items needing sync (entityId: ${entityId})`);
 
     if (!(await this.isSQLiteAvailable())) {
       return [];
@@ -472,12 +472,12 @@ export class UnifiedTimelineRepository {
 
       const rows = await db.getAllAsync<Record<string, any>>(
         `SELECT * FROM local_timeline
-         WHERE profile_id = ? AND (
+         WHERE entity_id = ? AND (
            sync_status = 'pending'
            OR (sync_status = 'failed' AND retry_count < ?)
          )
          ORDER BY created_at ASC`,
-        [profileId, maxRetries]
+        [entityId, maxRetries]
       );
 
       const items = this.mapRowsToItems(rows);
@@ -602,7 +602,7 @@ export class UnifiedTimelineRepository {
           interactionId: existingItem.interaction_id,
           itemId: shouldUpdateId ? item.id : existingItem.id,
           action: 'update',
-          profileId: existingItem.profile_id,
+          entityId: existingItem.entity_id,
         } as TimelineUpdateEvent);
 
       } else {
@@ -611,7 +611,7 @@ export class UnifiedTimelineRepository {
           id: item.id,
           server_id: item.id,
           interaction_id: item.interaction_id || '',
-          profile_id: item.profile_id || '',
+          entity_id: item.entity_id || '',
           item_type: item.item_type || 'message',
           created_at: item.created_at || new Date().toISOString(),
           from_entity_id: item.from_entity_id || '',
@@ -756,7 +756,7 @@ export class UnifiedTimelineRepository {
         // Insert new item (SILENT - use direct insert, not addItem which emits event)
         await db.runAsync(
           `INSERT INTO local_timeline (
-            id, server_id, interaction_id, profile_id, item_type, from_entity_id, to_entity_id, created_at,
+            id, server_id, interaction_id, entity_id, item_type, from_entity_id, to_entity_id, created_at,
             sync_status, local_status, retry_count, last_error,
             content, message_type,
             amount, currency_id, currency_code, currency_symbol, transaction_type,
@@ -767,7 +767,7 @@ export class UnifiedTimelineRepository {
             item.id,
             item.id, // server_id = id for server-originated items
             item.interaction_id || '',
-            item.profile_id || '',
+            item.entity_id || '',
             item.item_type || 'message',
             item.from_entity_id || '',
             item.to_entity_id || null,
@@ -806,12 +806,12 @@ export class UnifiedTimelineRepository {
    *
    * @param items - Array of items to upsert
    * @param interactionId - The interaction these items belong to
-   * @param profileId - The profile these items belong to
+   * @param entityId - The profile these items belong to
    */
   public async batchUpsertFromServer(
     items: Array<Partial<LocalTimelineItem> & { id: string }>,
     interactionId: string,
-    profileId: string
+    entityId: string
   ): Promise<void> {
     if (items.length === 0) {
       logger.debug('[UnifiedTimelineRepository] batchUpsertFromServer: No items to upsert');
@@ -837,7 +837,7 @@ export class UnifiedTimelineRepository {
         interactionId,
         itemId: 'batch', // Special marker for batch operations
         action: 'batch_sync',
-        profileId,
+        entityId,
       } as TimelineUpdateEvent);
 
       logger.info(`[UnifiedTimelineRepository] ✅ Batch upserted ${items.length} items for ${interactionId}`);
@@ -861,7 +861,7 @@ export class UnifiedTimelineRepository {
    */
   public async getTransactionsByWallet(
     walletId: string,
-    profileId: string,
+    entityId: string,
     limit: number = 20
   ): Promise<LocalTimelineItem[]> {
     logger.debug(`[UnifiedTimelineRepository] Getting transactions for wallet: ${walletId}`);
@@ -877,8 +877,8 @@ export class UnifiedTimelineRepository {
       // DEBUG: First check ALL transactions to see wallet_id values
       const allTxDebug = await db.getAllAsync<Record<string, any>>(
         `SELECT id, from_wallet_id, to_wallet_id, amount FROM local_timeline
-         WHERE profile_id = ? AND item_type = 'transaction' LIMIT 5`,
-        [profileId]
+         WHERE entity_id = ? AND item_type = 'transaction' LIMIT 5`,
+        [entityId]
       );
       logger.info(`[WALLET DEBUG] All transactions in SQLite:`,
         JSON.stringify(allTxDebug.map(t => ({
@@ -897,14 +897,14 @@ export class UnifiedTimelineRepository {
          INNER JOIN (
            SELECT MIN(id) as min_id
            FROM local_timeline
-           WHERE profile_id = ?
+           WHERE entity_id = ?
              AND item_type = 'transaction'
              AND (from_wallet_id = ? OR to_wallet_id = ?)
            GROUP BY created_at, amount, from_wallet_id, to_wallet_id
          ) t2 ON t1.id = t2.min_id
          ORDER BY t1.created_at DESC
          LIMIT ?`,
-        [profileId, walletId, walletId, limit]
+        [entityId, walletId, walletId, limit]
       );
 
       const items = this.mapRowsToItems(rows);
@@ -925,11 +925,11 @@ export class UnifiedTimelineRepository {
    * Get all transactions for a profile (all wallets) - used by transaction list page
    */
   public async getAllTransactions(
-    profileId: string,
+    entityId: string,
     limit: number = 50,
     offset: number = 0
   ): Promise<LocalTimelineItem[]> {
-    logger.debug(`[UnifiedTimelineRepository] Getting all transactions for profile: ${profileId}`);
+    logger.debug(`[UnifiedTimelineRepository] Getting all transactions for profile: ${entityId}`);
 
     if (!(await this.isSQLiteAvailable())) {
       return [];
@@ -945,13 +945,13 @@ export class UnifiedTimelineRepository {
          INNER JOIN (
            SELECT MIN(id) as min_id
            FROM local_timeline
-           WHERE profile_id = ?
+           WHERE entity_id = ?
              AND item_type = 'transaction'
            GROUP BY created_at, amount, from_wallet_id, to_wallet_id
          ) t2 ON t1.id = t2.min_id
          ORDER BY t1.created_at DESC
          LIMIT ? OFFSET ?`,
-        [profileId, limit, offset]
+        [entityId, limit, offset]
       );
 
       const items = this.mapRowsToItems(rows);
@@ -971,7 +971,7 @@ export class UnifiedTimelineRepository {
   /**
    * Count transactions for a wallet
    */
-  public async getTransactionCountByWallet(walletId: string, profileId: string): Promise<number> {
+  public async getTransactionCountByWallet(walletId: string, entityId: string): Promise<number> {
     if (!(await this.isSQLiteAvailable())) {
       return 0;
     }
@@ -981,10 +981,10 @@ export class UnifiedTimelineRepository {
 
       const result = await db.getFirstAsync<{ count: number }>(
         `SELECT COUNT(*) as count FROM local_timeline
-         WHERE profile_id = ?
+         WHERE entity_id = ?
            AND item_type = 'transaction'
            AND (from_wallet_id = ? OR to_wallet_id = ?)`,
-        [profileId, walletId, walletId]
+        [entityId, walletId, walletId]
       );
 
       return result?.count || 0;
@@ -1005,7 +1005,7 @@ export class UnifiedTimelineRepository {
   /**
    * Count items in timeline for an interaction
    */
-  public async getTimelineCount(interactionId: string, profileId: string): Promise<number> {
+  public async getTimelineCount(interactionId: string, entityId: string): Promise<number> {
     if (!(await this.isSQLiteAvailable())) {
       return 0;
     }
@@ -1015,8 +1015,8 @@ export class UnifiedTimelineRepository {
 
       const result = await db.getFirstAsync<{ count: number }>(
         `SELECT COUNT(*) as count FROM local_timeline
-         WHERE interaction_id = ? AND profile_id = ?`,
-        [interactionId, profileId]
+         WHERE interaction_id = ? AND entity_id = ?`,
+        [interactionId, entityId]
       );
 
       return result?.count || 0;
@@ -1033,8 +1033,8 @@ export class UnifiedTimelineRepository {
   /**
    * Clear all timeline data for a profile (for logout/profile switch)
    */
-  public async clearAllData(profileId: string): Promise<void> {
-    logger.warn(`[UnifiedTimelineRepository] Clearing all timeline data for profileId: ${profileId}`);
+  public async clearAllData(entityId: string): Promise<void> {
+    logger.warn(`[UnifiedTimelineRepository] Clearing all timeline data for entityId: ${entityId}`);
 
     if (!(await this.isSQLiteAvailable())) {
       return;
@@ -1043,9 +1043,9 @@ export class UnifiedTimelineRepository {
     try {
       const db = await this.getDatabase();
 
-      await db.runAsync(`DELETE FROM local_timeline WHERE profile_id = ?`, [profileId]);
+      await db.runAsync(`DELETE FROM local_timeline WHERE entity_id = ?`, [entityId]);
 
-      logger.info(`[UnifiedTimelineRepository] ✅ Cleared all timeline data for profileId: ${profileId}`);
+      logger.info(`[UnifiedTimelineRepository] ✅ Cleared all timeline data for entityId: ${entityId}`);
 
     } catch (error) {
       logger.error(
@@ -1067,7 +1067,7 @@ export class UnifiedTimelineRepository {
       id: String(row.id),
       server_id: row.server_id ? String(row.server_id) : null,
       interaction_id: String(row.interaction_id),
-      profile_id: String(row.profile_id),
+      entity_id: String(row.entity_id),
       item_type: row.item_type as 'message' | 'transaction',
       created_at: String(row.created_at),
       from_entity_id: String(row.from_entity_id || ''),

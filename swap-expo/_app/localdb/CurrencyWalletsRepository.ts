@@ -78,11 +78,11 @@ export class CurrencyWalletsRepository {
   }
 
   /**
-   * Insert or update a currency wallet with optimistic UI updates (PROFILE-ISOLATED)
+   * Insert or update a currency wallet with optimistic UI updates (ENTITY-ISOLATED)
    */
-  public async insertCurrencyWallet(wallet: CurrencyWallet, profileId: string): Promise<void> {
-    logger.debug(`[CurrencyWalletsRepository] Inserting currency wallet: ${wallet.id} (profileId: ${profileId})`);
-    logger.debug(`[CurrencyWalletsRepository] 🔍 WALLET DATA DEBUG:`, JSON.stringify(wallet, null, 2));
+  public async insertCurrencyWallet(wallet: CurrencyWallet, entityId: string): Promise<void> {
+    logger.debug(`[CurrencyWalletsRepository] Inserting currency wallet: ${wallet.id} (entityId: ${entityId})`);
+    logger.debug(`[CurrencyWalletsRepository] WALLET DATA DEBUG:`, JSON.stringify(wallet, null, 2));
 
     if (!(await this.isSQLiteAvailable())) {
       logger.warn(`[CurrencyWalletsRepository] SQLite not available, aborting save for: ${wallet.id}`);
@@ -91,7 +91,7 @@ export class CurrencyWalletsRepository {
 
     if (!wallet.id || !wallet.account_id || !wallet.currency_id) {
       logger.warn('[CurrencyWalletsRepository] Missing required fields (id, account_id, currency_id), aborting save');
-      logger.warn(`[CurrencyWalletsRepository] 🔍 MISSING FIELDS DEBUG: id=${wallet.id}, account_id=${wallet.account_id}, currency_id=${wallet.currency_id}`);
+      logger.warn(`[CurrencyWalletsRepository] MISSING FIELDS DEBUG: id=${wallet.id}, account_id=${wallet.account_id}, currency_id=${wallet.currency_id}`);
       return;
     }
 
@@ -101,7 +101,7 @@ export class CurrencyWalletsRepository {
         INSERT OR REPLACE INTO currency_wallets (
           id, account_id, currency_id, currency_code, currency_symbol, currency_name,
           currency_color, balance, reserved_balance, available_balance, balance_last_updated,
-          is_active, is_primary, created_at, updated_at, is_synced, profile_id
+          is_active, is_primary, created_at, updated_at, is_synced, entity_id
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
@@ -122,14 +122,14 @@ export class CurrencyWalletsRepository {
         wallet.created_at || new Date().toISOString(),
         wallet.updated_at || new Date().toISOString(),
         1, // Mark as synced since it came from API
-        profileId
+        entityId
       );
 
       await statement.finalizeAsync();
-      logger.info(`[CurrencyWalletsRepository] Successfully saved currency wallet: ${wallet.id} (profileId: ${profileId})`);
+      logger.info(`[CurrencyWalletsRepository] Successfully saved currency wallet: ${wallet.id} (entityId: ${entityId})`);
 
       // Emit event for real-time UI updates
-      eventEmitter.emit('data_updated', { type: 'wallets', data: wallet, profileId });
+      eventEmitter.emit('data_updated', { type: 'wallets', data: wallet, entityId });
 
     } catch (error) {
       logger.error(`[CurrencyWalletsRepository] Error saving currency wallet ${wallet.id}: ${error instanceof Error ? error.message : String(error)}`);
@@ -137,10 +137,10 @@ export class CurrencyWalletsRepository {
   }
 
   /**
-   * Get all currency wallets from local database (PROFILE-ISOLATED)
+   * Get all currency wallets from local database (ENTITY-ISOLATED)
    */
-  public async getAllCurrencyWallets(profileId: string): Promise<CurrencyWallet[]> {
-    logger.debug(`[CurrencyWalletsRepository] Getting all currency wallets from local database (profileId: ${profileId})`);
+  public async getAllCurrencyWallets(entityId: string): Promise<CurrencyWallet[]> {
+    logger.debug(`[CurrencyWalletsRepository] Getting all currency wallets from local database (entityId: ${entityId})`);
 
     if (!(await this.isSQLiteAvailable())) {
       logger.debug('[CurrencyWalletsRepository] SQLite not available, returning empty array');
@@ -151,9 +151,9 @@ export class CurrencyWalletsRepository {
       const db = await this.getDatabase();
       const result = await db.getAllAsync(`
         SELECT * FROM currency_wallets
-        WHERE is_active = 1 AND profile_id = ?
+        WHERE is_active = 1 AND entity_id = ?
         ORDER BY is_primary DESC, currency_code ASC
-      `, [profileId]);
+      `, [entityId]);
 
       const wallets = result.map((row: any) => ({
         id: row.id as string,
@@ -174,7 +174,7 @@ export class CurrencyWalletsRepository {
         is_synced: Boolean(row.is_synced),
       }));
 
-      logger.debug(`[CurrencyWalletsRepository] Retrieved ${wallets.length} currency wallets from local database (profileId: ${profileId})`);
+      logger.debug(`[CurrencyWalletsRepository] Retrieved ${wallets.length} currency wallets from local database (entityId: ${entityId})`);
       return wallets;
     } catch (error) {
       logger.error('[CurrencyWalletsRepository] Error getting currency wallets:', error instanceof Error ? error.message : String(error));
@@ -183,10 +183,10 @@ export class CurrencyWalletsRepository {
   }
 
   /**
-   * Save multiple currency wallets with deduplication and batch processing (PROFILE-ISOLATED)
+   * Save multiple currency wallets with deduplication and batch processing (ENTITY-ISOLATED)
    */
-  public async saveCurrencyWallets(walletsToSave: CurrencyWallet[], profileId: string): Promise<void> {
-    logger.debug(`[CurrencyWalletsRepository] Saving ${walletsToSave?.length || 0} currency wallets (profileId: ${profileId})`);
+  public async saveCurrencyWallets(walletsToSave: CurrencyWallet[], entityId: string): Promise<void> {
+    logger.debug(`[CurrencyWalletsRepository] Saving ${walletsToSave?.length || 0} currency wallets (entityId: ${entityId})`);
 
     if (!(await this.isSQLiteAvailable())) {
       logger.warn('[CurrencyWalletsRepository] SQLite not available, aborting save');
@@ -219,7 +219,7 @@ export class CurrencyWalletsRepository {
 
       await Promise.all(batch.map(async (wallet) => {
         try {
-          await this.insertCurrencyWallet(wallet, profileId);
+          await this.insertCurrencyWallet(wallet, entityId);
           successfulSaves++;
         } catch (error) {
           failedSaves++;
@@ -228,21 +228,21 @@ export class CurrencyWalletsRepository {
       }));
     }
 
-    logger.info(`[CurrencyWalletsRepository] Save batch complete (profileId: ${profileId}). Successful: ${successfulSaves}, Failed: ${failedSaves}`);
+    logger.info(`[CurrencyWalletsRepository] Save batch complete (entityId: ${entityId}). Successful: ${successfulSaves}, Failed: ${failedSaves}`);
   }
 
   /**
-   * Alias for saveCurrencyWallets - for compatibility with BalanceManager (PROFILE-ISOLATED)
+   * Alias for saveCurrencyWallets - for compatibility with BalanceManager (ENTITY-ISOLATED)
    */
-  public async saveWalletBalances(walletsToSave: CurrencyWallet[], profileId: string): Promise<void> {
-    return this.saveCurrencyWallets(walletsToSave, profileId);
+  public async saveWalletBalances(walletsToSave: CurrencyWallet[], entityId: string): Promise<void> {
+    return this.saveCurrencyWallets(walletsToSave, entityId);
   }
 
   /**
-   * Clear all currency wallets from local database (PROFILE-ISOLATED)
+   * Clear all currency wallets from local database (ENTITY-ISOLATED)
    */
-  public async clearAllCurrencyWallets(profileId: string): Promise<void> {
-    logger.debug(`[CurrencyWalletsRepository] Clearing all currency wallets (profileId: ${profileId})`);
+  public async clearAllCurrencyWallets(entityId: string): Promise<void> {
+    logger.debug(`[CurrencyWalletsRepository] Clearing all currency wallets (entityId: ${entityId})`);
 
     if (!(await this.isSQLiteAvailable())) {
       logger.warn('[CurrencyWalletsRepository] SQLite not available, aborting clear');
@@ -251,21 +251,21 @@ export class CurrencyWalletsRepository {
 
     try {
       const db = await this.getDatabase();
-      const statement = await db.prepareAsync('DELETE FROM currency_wallets WHERE profile_id = ?');
-      await statement.executeAsync(profileId);
+      const statement = await db.prepareAsync('DELETE FROM currency_wallets WHERE entity_id = ?');
+      await statement.executeAsync(entityId);
       await statement.finalizeAsync();
 
-      logger.info(`[CurrencyWalletsRepository] Successfully cleared all currency wallets (profileId: ${profileId})`);
+      logger.info(`[CurrencyWalletsRepository] Successfully cleared all currency wallets (entityId: ${entityId})`);
     } catch (error) {
       logger.error('[CurrencyWalletsRepository] Error clearing currency wallets:', error instanceof Error ? error.message : String(error));
     }
   }
 
   /**
-   * Update primary wallet status (PROFILE-ISOLATED)
+   * Update primary wallet status (ENTITY-ISOLATED)
    */
-  public async updatePrimaryWallet(walletId: string, profileId: string): Promise<void> {
-    logger.debug(`[CurrencyWalletsRepository] Setting wallet ${walletId} as primary (profileId: ${profileId})`);
+  public async updatePrimaryWallet(walletId: string, entityId: string): Promise<void> {
+    logger.debug(`[CurrencyWalletsRepository] Setting wallet ${walletId} as primary (entityId: ${entityId})`);
 
     if (!(await this.isSQLiteAvailable())) {
       logger.warn('[CurrencyWalletsRepository] SQLite not available, aborting update');
@@ -275,16 +275,16 @@ export class CurrencyWalletsRepository {
     try {
       const db = await this.getDatabase();
 
-      // First, set all wallets to non-primary (only for this profile)
-      await db.runAsync('UPDATE currency_wallets SET is_primary = 0, updated_at = ? WHERE profile_id = ?', [new Date().toISOString(), profileId]);
+      // First, set all wallets to non-primary (only for this entity)
+      await db.runAsync('UPDATE currency_wallets SET is_primary = 0, updated_at = ? WHERE entity_id = ?', [new Date().toISOString(), entityId]);
 
       // Then set the selected wallet as primary
-      await db.runAsync('UPDATE currency_wallets SET is_primary = 1, updated_at = ? WHERE id = ? AND profile_id = ?', [new Date().toISOString(), walletId, profileId]);
+      await db.runAsync('UPDATE currency_wallets SET is_primary = 1, updated_at = ? WHERE id = ? AND entity_id = ?', [new Date().toISOString(), walletId, entityId]);
 
-      logger.info(`[CurrencyWalletsRepository] Successfully updated primary wallet to: ${walletId} (profileId: ${profileId})`);
+      logger.info(`[CurrencyWalletsRepository] Successfully updated primary wallet to: ${walletId} (entityId: ${entityId})`);
 
       // Emit event for real-time UI updates
-      eventEmitter.emit('data_updated', { type: 'primary_wallet_changed', data: { walletId, profileId } });
+      eventEmitter.emit('data_updated', { type: 'primary_wallet_changed', data: { walletId, entityId } });
 
     } catch (error) {
       logger.error(`[CurrencyWalletsRepository] Error updating primary wallet: ${error instanceof Error ? error.message : String(error)}`);
@@ -292,10 +292,10 @@ export class CurrencyWalletsRepository {
   }
 
   /**
-   * Get wallet by currency code (PROFILE-ISOLATED)
+   * Get wallet by currency code (ENTITY-ISOLATED)
    */
-  public async getWalletByCurrencyCode(currencyCode: string, profileId: string): Promise<CurrencyWallet | null> {
-    logger.debug(`[CurrencyWalletsRepository] Getting wallet for currency: ${currencyCode} (profileId: ${profileId})`);
+  public async getWalletByCurrencyCode(currencyCode: string, entityId: string): Promise<CurrencyWallet | null> {
+    logger.debug(`[CurrencyWalletsRepository] Getting wallet for currency: ${currencyCode} (entityId: ${entityId})`);
 
     if (!(await this.isSQLiteAvailable())) {
       logger.debug('[CurrencyWalletsRepository] SQLite not available, returning null');
@@ -306,8 +306,8 @@ export class CurrencyWalletsRepository {
       const db = await this.getDatabase();
       const result = await db.getFirstAsync(`
         SELECT * FROM currency_wallets
-        WHERE currency_code = ? AND is_active = 1 AND profile_id = ?
-      `, [currencyCode, profileId]);
+        WHERE currency_code = ? AND is_active = 1 AND entity_id = ?
+      `, [currencyCode, entityId]);
 
       if (!result) {
         return null;
@@ -339,15 +339,15 @@ export class CurrencyWalletsRepository {
   }
 
   /**
-   * Background sync: fetch from remote, update local, emit event (PROFILE-ISOLATED)
+   * Background sync: fetch from remote, update local, emit event (ENTITY-ISOLATED)
    */
-  public async syncWalletsFromRemote(fetchRemote: () => Promise<any[]>, profileId: string): Promise<void> {
+  public async syncWalletsFromRemote(fetchRemote: () => Promise<any[]>, entityId: string): Promise<void> {
     try {
       const remoteWallets = await fetchRemote();
       for (const wallet of remoteWallets) {
-        await this.insertCurrencyWallet(wallet, profileId);
+        await this.insertCurrencyWallet(wallet, entityId);
       }
-      eventEmitter.emit('data_updated', { type: 'wallets', data: remoteWallets, profileId });
+      eventEmitter.emit('data_updated', { type: 'wallets', data: remoteWallets, entityId });
     } catch (error) {
       logger.error('Background wallet sync failed', error);
       // Fail silently to not disrupt user experience

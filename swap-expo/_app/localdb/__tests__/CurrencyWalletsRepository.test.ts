@@ -76,7 +76,7 @@ const mockWallet: CurrencyWallet = {
   is_synced: true,
 };
 
-const mockProfileId = 'profile-123';
+const mockEntityId = 'entity-123';
 
 describe('CurrencyWalletsRepository', () => {
   beforeEach(() => {
@@ -158,7 +158,7 @@ describe('CurrencyWalletsRepository', () => {
 
   describe('insertCurrencyWallet', () => {
     it('should insert wallet successfully', async () => {
-      await currencyWalletsRepository.insertCurrencyWallet(mockWallet, mockProfileId);
+      await currencyWalletsRepository.insertCurrencyWallet(mockWallet, mockEntityId);
 
       expect(mockDatabase.prepareAsync).toHaveBeenCalledWith(
         expect.stringContaining('INSERT OR REPLACE INTO currency_wallets'),
@@ -167,8 +167,8 @@ describe('CurrencyWalletsRepository', () => {
       expect(mockStatement.finalizeAsync).toHaveBeenCalled();
     });
 
-    it('should include profileId in insert', async () => {
-      await currencyWalletsRepository.insertCurrencyWallet(mockWallet, mockProfileId);
+    it('should include entityId in insert', async () => {
+      await currencyWalletsRepository.insertCurrencyWallet(mockWallet, mockEntityId);
 
       expect(mockStatement.executeAsync).toHaveBeenCalledWith(
         mockWallet.id,
@@ -186,24 +186,24 @@ describe('CurrencyWalletsRepository', () => {
         expect.any(String), // created_at
         expect.any(String), // updated_at
         1, // is_synced
-        mockProfileId,
+        mockEntityId,
       );
     });
 
     it('should emit data_updated event', async () => {
-      await currencyWalletsRepository.insertCurrencyWallet(mockWallet, mockProfileId);
+      await currencyWalletsRepository.insertCurrencyWallet(mockWallet, mockEntityId);
 
       expect(mockEmit).toHaveBeenCalledWith('data_updated', {
         type: 'wallets',
         data: mockWallet,
-        profileId: mockProfileId,
+        entityId: mockEntityId,
       });
     });
 
     it('should not insert when SQLite not available', async () => {
       mockDatabaseManager.isDatabaseReady.mockReturnValue(false);
 
-      await currencyWalletsRepository.insertCurrencyWallet(mockWallet, mockProfileId);
+      await currencyWalletsRepository.insertCurrencyWallet(mockWallet, mockEntityId);
 
       expect(mockDatabase.prepareAsync).not.toHaveBeenCalled();
     });
@@ -211,7 +211,7 @@ describe('CurrencyWalletsRepository', () => {
     it('should not insert when missing required fields', async () => {
       const invalidWallet = { ...mockWallet, id: null } as any;
 
-      await currencyWalletsRepository.insertCurrencyWallet(invalidWallet, mockProfileId);
+      await currencyWalletsRepository.insertCurrencyWallet(invalidWallet, mockEntityId);
 
       expect(mockDatabase.prepareAsync).not.toHaveBeenCalled();
       expect(mockLogger.warn).toHaveBeenCalledWith(
@@ -222,7 +222,7 @@ describe('CurrencyWalletsRepository', () => {
     it('should not insert when missing account_id', async () => {
       const invalidWallet = { ...mockWallet, account_id: null } as any;
 
-      await currencyWalletsRepository.insertCurrencyWallet(invalidWallet, mockProfileId);
+      await currencyWalletsRepository.insertCurrencyWallet(invalidWallet, mockEntityId);
 
       expect(mockDatabase.prepareAsync).not.toHaveBeenCalled();
     });
@@ -230,7 +230,7 @@ describe('CurrencyWalletsRepository', () => {
     it('should not insert when missing currency_id', async () => {
       const invalidWallet = { ...mockWallet, currency_id: '' };
 
-      await currencyWalletsRepository.insertCurrencyWallet(invalidWallet, mockProfileId);
+      await currencyWalletsRepository.insertCurrencyWallet(invalidWallet, mockEntityId);
 
       expect(mockDatabase.prepareAsync).not.toHaveBeenCalled();
     });
@@ -239,7 +239,7 @@ describe('CurrencyWalletsRepository', () => {
       mockStatement.executeAsync.mockRejectedValue(new Error('DB error'));
 
       await expect(
-        currencyWalletsRepository.insertCurrencyWallet(mockWallet, mockProfileId),
+        currencyWalletsRepository.insertCurrencyWallet(mockWallet, mockEntityId),
       ).resolves.not.toThrow();
 
       expect(mockLogger.error).toHaveBeenCalled();
@@ -257,24 +257,24 @@ describe('CurrencyWalletsRepository', () => {
       ];
       mockDatabase.getAllAsync.mockResolvedValue(mockRows);
 
-      const result = await currencyWalletsRepository.getAllCurrencyWallets(mockProfileId);
+      const result = await currencyWalletsRepository.getAllCurrencyWallets(mockEntityId);
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('wallet-123');
       expect(result[0].is_active).toBe(true);
     });
 
-    it('should filter by profile ID', async () => {
-      await currencyWalletsRepository.getAllCurrencyWallets(mockProfileId);
+    it('should filter by entity ID', async () => {
+      await currencyWalletsRepository.getAllCurrencyWallets(mockEntityId);
 
       expect(mockDatabase.getAllAsync).toHaveBeenCalledWith(
-        expect.stringContaining('profile_id = ?'),
-        [mockProfileId],
+        expect.stringContaining('entity_id = ?'),
+        [mockEntityId],
       );
     });
 
     it('should filter only active wallets', async () => {
-      await currencyWalletsRepository.getAllCurrencyWallets(mockProfileId);
+      await currencyWalletsRepository.getAllCurrencyWallets(mockEntityId);
 
       expect(mockDatabase.getAllAsync).toHaveBeenCalledWith(
         expect.stringContaining('is_active = 1'),
@@ -283,7 +283,7 @@ describe('CurrencyWalletsRepository', () => {
     });
 
     it('should order by primary then currency code', async () => {
-      await currencyWalletsRepository.getAllCurrencyWallets(mockProfileId);
+      await currencyWalletsRepository.getAllCurrencyWallets(mockEntityId);
 
       expect(mockDatabase.getAllAsync).toHaveBeenCalledWith(
         expect.stringContaining('ORDER BY is_primary DESC, currency_code ASC'),
@@ -294,7 +294,7 @@ describe('CurrencyWalletsRepository', () => {
     it('should return empty array when SQLite not available', async () => {
       mockDatabaseManager.isDatabaseReady.mockReturnValue(false);
 
-      const result = await currencyWalletsRepository.getAllCurrencyWallets(mockProfileId);
+      const result = await currencyWalletsRepository.getAllCurrencyWallets(mockEntityId);
 
       expect(result).toEqual([]);
     });
@@ -302,7 +302,7 @@ describe('CurrencyWalletsRepository', () => {
     it('should return empty array on error', async () => {
       mockDatabase.getAllAsync.mockRejectedValue(new Error('DB error'));
 
-      const result = await currencyWalletsRepository.getAllCurrencyWallets(mockProfileId);
+      const result = await currencyWalletsRepository.getAllCurrencyWallets(mockEntityId);
 
       expect(result).toEqual([]);
     });
@@ -313,7 +313,7 @@ describe('CurrencyWalletsRepository', () => {
       ];
       mockDatabase.getAllAsync.mockResolvedValue(mockRows);
 
-      const result = await currencyWalletsRepository.getAllCurrencyWallets(mockProfileId);
+      const result = await currencyWalletsRepository.getAllCurrencyWallets(mockEntityId);
 
       expect(typeof result[0].balance).toBe('number');
       expect(result[0].balance).toBe(1000.5);
@@ -325,7 +325,7 @@ describe('CurrencyWalletsRepository', () => {
       ];
       mockDatabase.getAllAsync.mockResolvedValue(mockRows);
 
-      const result = await currencyWalletsRepository.getAllCurrencyWallets(mockProfileId);
+      const result = await currencyWalletsRepository.getAllCurrencyWallets(mockEntityId);
 
       expect(result[0].is_active).toBe(true);
       expect(result[0].is_primary).toBe(false);
@@ -344,7 +344,7 @@ describe('CurrencyWalletsRepository', () => {
         { ...mockWallet, id: 'wallet-2' },
       ];
 
-      await currencyWalletsRepository.saveCurrencyWallets(wallets, mockProfileId);
+      await currencyWalletsRepository.saveCurrencyWallets(wallets, mockEntityId);
 
       expect(mockDatabase.prepareAsync).toHaveBeenCalledTimes(2);
     });
@@ -356,7 +356,7 @@ describe('CurrencyWalletsRepository', () => {
         { ...mockWallet, id: 'wallet-2' },
       ];
 
-      await currencyWalletsRepository.saveCurrencyWallets(wallets, mockProfileId);
+      await currencyWalletsRepository.saveCurrencyWallets(wallets, mockEntityId);
 
       expect(mockLogger.info).toHaveBeenCalledWith(
         expect.stringContaining('Deduplication removed 1'),
@@ -364,13 +364,13 @@ describe('CurrencyWalletsRepository', () => {
     });
 
     it('should handle empty array', async () => {
-      await currencyWalletsRepository.saveCurrencyWallets([], mockProfileId);
+      await currencyWalletsRepository.saveCurrencyWallets([], mockEntityId);
 
       expect(mockDatabase.prepareAsync).not.toHaveBeenCalled();
     });
 
     it('should handle null input', async () => {
-      await currencyWalletsRepository.saveCurrencyWallets(null as any, mockProfileId);
+      await currencyWalletsRepository.saveCurrencyWallets(null as any, mockEntityId);
 
       expect(mockDatabase.prepareAsync).not.toHaveBeenCalled();
     });
@@ -381,7 +381,7 @@ describe('CurrencyWalletsRepository', () => {
         { ...mockWallet, id: 'wallet-1' },
       ];
 
-      await currencyWalletsRepository.saveCurrencyWallets(wallets, mockProfileId);
+      await currencyWalletsRepository.saveCurrencyWallets(wallets, mockEntityId);
 
       // Only 1 wallet should be processed
       expect(mockDatabase.prepareAsync).toHaveBeenCalledTimes(1);
@@ -391,7 +391,7 @@ describe('CurrencyWalletsRepository', () => {
       mockDatabaseManager.isDatabaseReady.mockReturnValue(false);
 
       await expect(
-        currencyWalletsRepository.saveCurrencyWallets([mockWallet], mockProfileId),
+        currencyWalletsRepository.saveCurrencyWallets([mockWallet], mockEntityId),
       ).resolves.not.toThrow();
     });
   });
@@ -404,7 +404,7 @@ describe('CurrencyWalletsRepository', () => {
     it('should call saveCurrencyWallets', async () => {
       const wallets = [mockWallet];
 
-      await currencyWalletsRepository.saveWalletBalances(wallets, mockProfileId);
+      await currencyWalletsRepository.saveWalletBalances(wallets, mockEntityId);
 
       expect(mockDatabase.prepareAsync).toHaveBeenCalled();
     });
@@ -415,20 +415,20 @@ describe('CurrencyWalletsRepository', () => {
   // ============================================================
 
   describe('clearAllCurrencyWallets', () => {
-    it('should delete all wallets for profile', async () => {
-      await currencyWalletsRepository.clearAllCurrencyWallets(mockProfileId);
+    it('should delete all wallets for entity', async () => {
+      await currencyWalletsRepository.clearAllCurrencyWallets(mockEntityId);
 
       expect(mockDatabase.prepareAsync).toHaveBeenCalledWith(
-        'DELETE FROM currency_wallets WHERE profile_id = ?',
+        'DELETE FROM currency_wallets WHERE entity_id = ?',
       );
-      expect(mockStatement.executeAsync).toHaveBeenCalledWith(mockProfileId);
+      expect(mockStatement.executeAsync).toHaveBeenCalledWith(mockEntityId);
     });
 
     it('should not throw when SQLite not available', async () => {
       mockDatabaseManager.isDatabaseReady.mockReturnValue(false);
 
       await expect(
-        currencyWalletsRepository.clearAllCurrencyWallets(mockProfileId),
+        currencyWalletsRepository.clearAllCurrencyWallets(mockEntityId),
       ).resolves.not.toThrow();
     });
 
@@ -436,7 +436,7 @@ describe('CurrencyWalletsRepository', () => {
       mockStatement.executeAsync.mockRejectedValue(new Error('DB error'));
 
       await expect(
-        currencyWalletsRepository.clearAllCurrencyWallets(mockProfileId),
+        currencyWalletsRepository.clearAllCurrencyWallets(mockEntityId),
       ).resolves.not.toThrow();
 
       expect(mockLogger.error).toHaveBeenCalled();
@@ -449,37 +449,37 @@ describe('CurrencyWalletsRepository', () => {
 
   describe('updatePrimaryWallet', () => {
     it('should update primary wallet status', async () => {
-      await currencyWalletsRepository.updatePrimaryWallet('wallet-123', mockProfileId);
+      await currencyWalletsRepository.updatePrimaryWallet('wallet-123', mockEntityId);
 
       // Should first set all to non-primary
       expect(mockDatabase.runAsync).toHaveBeenCalledWith(
-        'UPDATE currency_wallets SET is_primary = 0, updated_at = ? WHERE profile_id = ?',
+        'UPDATE currency_wallets SET is_primary = 0, updated_at = ? WHERE entity_id = ?',
         expect.any(Array),
       );
 
       // Then set the selected as primary
       expect(mockDatabase.runAsync).toHaveBeenCalledWith(
-        'UPDATE currency_wallets SET is_primary = 1, updated_at = ? WHERE id = ? AND profile_id = ?',
+        'UPDATE currency_wallets SET is_primary = 1, updated_at = ? WHERE id = ? AND entity_id = ?',
         expect.any(Array),
       );
     });
 
     it('should emit primary_wallet_changed event', async () => {
-      await currencyWalletsRepository.updatePrimaryWallet('wallet-123', mockProfileId);
+      await currencyWalletsRepository.updatePrimaryWallet('wallet-123', mockEntityId);
 
       expect(mockEmit).toHaveBeenCalledWith('data_updated', {
         type: 'primary_wallet_changed',
-        data: { walletId: 'wallet-123', profileId: mockProfileId },
+        data: { walletId: 'wallet-123', entityId: mockEntityId },
       });
     });
 
-    it('should filter by profile ID', async () => {
-      await currencyWalletsRepository.updatePrimaryWallet('wallet-123', mockProfileId);
+    it('should filter by entity ID', async () => {
+      await currencyWalletsRepository.updatePrimaryWallet('wallet-123', mockEntityId);
 
-      // Both updates should include profileId
+      // Both updates should include entityId
       expect(mockDatabase.runAsync).toHaveBeenCalledWith(
-        expect.stringContaining('profile_id = ?'),
-        expect.arrayContaining([mockProfileId]),
+        expect.stringContaining('entity_id = ?'),
+        expect.arrayContaining([mockEntityId]),
       );
     });
 
@@ -487,7 +487,7 @@ describe('CurrencyWalletsRepository', () => {
       mockDatabaseManager.isDatabaseReady.mockReturnValue(false);
 
       await expect(
-        currencyWalletsRepository.updatePrimaryWallet('wallet-123', mockProfileId),
+        currencyWalletsRepository.updatePrimaryWallet('wallet-123', mockEntityId),
       ).resolves.not.toThrow();
     });
   });
@@ -503,7 +503,7 @@ describe('CurrencyWalletsRepository', () => {
 
       const result = await currencyWalletsRepository.getWalletByCurrencyCode(
         'HTG',
-        mockProfileId,
+        mockEntityId,
       );
 
       expect(result).not.toBeNull();
@@ -511,16 +511,16 @@ describe('CurrencyWalletsRepository', () => {
     });
 
     it('should filter by currency code and profile ID', async () => {
-      await currencyWalletsRepository.getWalletByCurrencyCode('HTG', mockProfileId);
+      await currencyWalletsRepository.getWalletByCurrencyCode('HTG', mockEntityId);
 
       expect(mockDatabase.getFirstAsync).toHaveBeenCalledWith(
         expect.stringContaining('currency_code = ?'),
-        ['HTG', mockProfileId],
+        ['HTG', mockEntityId],
       );
     });
 
     it('should only return active wallets', async () => {
-      await currencyWalletsRepository.getWalletByCurrencyCode('HTG', mockProfileId);
+      await currencyWalletsRepository.getWalletByCurrencyCode('HTG', mockEntityId);
 
       expect(mockDatabase.getFirstAsync).toHaveBeenCalledWith(
         expect.stringContaining('is_active = 1'),
@@ -533,7 +533,7 @@ describe('CurrencyWalletsRepository', () => {
 
       const result = await currencyWalletsRepository.getWalletByCurrencyCode(
         'USD',
-        mockProfileId,
+        mockEntityId,
       );
 
       expect(result).toBeNull();
@@ -544,7 +544,7 @@ describe('CurrencyWalletsRepository', () => {
 
       const result = await currencyWalletsRepository.getWalletByCurrencyCode(
         'HTG',
-        mockProfileId,
+        mockEntityId,
       );
 
       expect(result).toBeNull();
@@ -555,7 +555,7 @@ describe('CurrencyWalletsRepository', () => {
 
       const result = await currencyWalletsRepository.getWalletByCurrencyCode(
         'HTG',
-        mockProfileId,
+        mockEntityId,
       );
 
       expect(result).toBeNull();
@@ -574,7 +574,7 @@ describe('CurrencyWalletsRepository', () => {
       ];
       const fetchRemote = jest.fn().mockResolvedValue(remoteWallets);
 
-      await currencyWalletsRepository.syncWalletsFromRemote(fetchRemote, mockProfileId);
+      await currencyWalletsRepository.syncWalletsFromRemote(fetchRemote, mockEntityId);
 
       expect(fetchRemote).toHaveBeenCalled();
       expect(mockDatabase.prepareAsync).toHaveBeenCalledTimes(2);
@@ -584,19 +584,19 @@ describe('CurrencyWalletsRepository', () => {
       const remoteWallets = [mockWallet];
       const fetchRemote = jest.fn().mockResolvedValue(remoteWallets);
 
-      await currencyWalletsRepository.syncWalletsFromRemote(fetchRemote, mockProfileId);
+      await currencyWalletsRepository.syncWalletsFromRemote(fetchRemote, mockEntityId);
 
       expect(mockEmit).toHaveBeenCalledWith('data_updated', {
         type: 'wallets',
         data: remoteWallets,
-        profileId: mockProfileId,
+        entityId: mockEntityId,
       });
     });
 
     it('should handle empty remote response', async () => {
       const fetchRemote = jest.fn().mockResolvedValue([]);
 
-      await currencyWalletsRepository.syncWalletsFromRemote(fetchRemote, mockProfileId);
+      await currencyWalletsRepository.syncWalletsFromRemote(fetchRemote, mockEntityId);
 
       expect(fetchRemote).toHaveBeenCalled();
     });
@@ -605,7 +605,7 @@ describe('CurrencyWalletsRepository', () => {
       const fetchRemote = jest.fn().mockRejectedValue(new Error('Network error'));
 
       await expect(
-        currencyWalletsRepository.syncWalletsFromRemote(fetchRemote, mockProfileId),
+        currencyWalletsRepository.syncWalletsFromRemote(fetchRemote, mockEntityId),
       ).resolves.not.toThrow();
 
       expect(mockLogger.error).toHaveBeenCalled();
@@ -637,7 +637,7 @@ describe('CurrencyWalletsRepository', () => {
 
       const calls = mockStatement.executeAsync.mock.calls;
 
-      // Last parameter should be profileId
+      // Last parameter should be entityId
       expect(calls[0][calls[0].length - 1]).toBe('profile-1');
       expect(calls[1][calls[1].length - 1]).toBe('profile-2');
     });
