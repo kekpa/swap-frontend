@@ -13,7 +13,7 @@ export enum AuthLevel {
 export interface User {
   id: string;
   profileId: string;
-  entityId?: string;
+  entityId: string;  // Required - universal backend identifier (entities.id)
   email?: string;
   firstName?: string;
   lastName?: string;
