@@ -15,7 +15,7 @@ const generateClientId = (prefix: string): string => {
 // Uses from_entity_id/to_entity_id for consistency with Supabase and transaction_ledger
 export interface SendMessageParams {
   interactionId: string;
-  profileId: string;
+  entityId: string;          // Current user's entity_id (backend's universal identifier)
   fromEntityId: string;      // Who is sending the message
   toEntityId?: string;       // Who is receiving the message
   content: string;
@@ -27,7 +27,7 @@ export interface SendMessageParams {
 // Uses from_entity_id/to_entity_id for consistency with Supabase and messages
 export interface SendTransactionParams {
   interactionId: string;
-  profileId: string;
+  entityId: string;           // Current user's entity_id (backend's universal identifier)
   fromEntityId: string;       // Who is sending the money
   toEntityId: string;         // Who is receiving the money
   amount: number;
@@ -62,7 +62,7 @@ export interface SendResult {
  * // Send message - instant UI update
  * const { localId } = await unifiedTimelineService.sendMessage({
  *   interactionId,
- *   profileId,
+ *   entityId: currentUser.entityId,
  *   fromEntityId: currentUser.entityId,
  *   content: 'Hello!',
  * });
@@ -99,7 +99,7 @@ class UnifiedTimelineService {
   public async sendMessage(params: SendMessageParams): Promise<SendResult> {
     const {
       interactionId,
-      profileId,
+      entityId,
       fromEntityId,
       toEntityId,
       content,
@@ -108,7 +108,7 @@ class UnifiedTimelineService {
     } = params;
 
     // Validate required fields
-    if (!interactionId || !profileId || !fromEntityId) {
+    if (!interactionId || !entityId || !fromEntityId) {
       logger.error('[UnifiedTimelineService] Missing required fields for sendMessage');
       return { localId: '', success: false, error: 'Missing required fields' };
     }
@@ -130,7 +130,7 @@ class UnifiedTimelineService {
         id: localId,
         server_id: null, // Will be set after API sync
         interaction_id: interactionId,
-        profile_id: profileId,
+        entity_id: entityId,
         item_type: 'message',
         created_at: new Date().toISOString(),
         // Entity direction (consistent with Supabase)
@@ -183,7 +183,7 @@ class UnifiedTimelineService {
   public async sendTransaction(params: SendTransactionParams): Promise<SendResult> {
     const {
       interactionId,
-      profileId,
+      entityId,
       fromEntityId,
       toEntityId,
       amount,
@@ -198,7 +198,7 @@ class UnifiedTimelineService {
     } = params;
 
     // Validate required fields
-    if (!interactionId || !profileId || !fromEntityId || !toEntityId) {
+    if (!interactionId || !entityId || !fromEntityId || !toEntityId) {
       logger.error('[UnifiedTimelineService] Missing required fields for sendTransaction');
       return { localId: '', success: false, error: 'Missing required fields' };
     }
@@ -225,7 +225,7 @@ class UnifiedTimelineService {
         id: localId,
         server_id: null, // Will be set after API sync
         interaction_id: interactionId,
-        profile_id: profileId,
+        entity_id: entityId,
         item_type: 'transaction',
         created_at: new Date().toISOString(),
         // Entity direction (consistent with Supabase)
@@ -288,7 +288,7 @@ class UnifiedTimelineService {
   /**
    * Cancel a pending item (before it's synced)
    */
-  public async cancelItem(localId: string, profileId: string): Promise<boolean> {
+  public async cancelItem(localId: string, entityId: string): Promise<boolean> {
     logger.info(`[UnifiedTimelineService] 🚫 Cancelling item: ${localId}`);
 
     try {
@@ -320,9 +320,9 @@ class UnifiedTimelineService {
   /**
    * Get pending items count (for UI indicators)
    */
-  public async getPendingCount(profileId: string): Promise<number> {
+  public async getPendingCount(entityId: string): Promise<number> {
     try {
-      const pending = await unifiedTimelineRepository.getPendingItems(profileId);
+      const pending = await unifiedTimelineRepository.getPendingItems(entityId);
       return pending.length;
     } catch (error) {
       logger.error(`[UnifiedTimelineService] ❌ Failed to get pending count: ${error}`);
@@ -333,9 +333,9 @@ class UnifiedTimelineService {
   /**
    * Get failed items count (for UI indicators)
    */
-  public async getFailedCount(profileId: string): Promise<number> {
+  public async getFailedCount(entityId: string): Promise<number> {
     try {
-      const failed = await unifiedTimelineRepository.getFailedItems(profileId);
+      const failed = await unifiedTimelineRepository.getFailedItems(entityId);
       return failed.length;
     } catch (error) {
       logger.error(`[UnifiedTimelineService] ❌ Failed to get failed count: ${error}`);

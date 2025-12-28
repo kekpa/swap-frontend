@@ -224,7 +224,7 @@ class WebSocketHandler {
           id: data.id,
           server_id: data.id, // WebSocket message = from server
           interaction_id: data.interaction_id,
-          profile_id: data.profile_id || '', // Will be set by repository if empty
+          entity_id: data.entity_id || data.from_entity_id || '', // Use entity_id for data isolation
           item_type: 'message',
           created_at: data.created_at || data.createdAt || new Date().toISOString(),
           content: data.content || '',

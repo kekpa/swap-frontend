@@ -44,7 +44,7 @@ class TimelineSyncService {
   private lastSyncTime = 0;
   private syncInterval: NodeJS.Timeout | null = null;
   private networkListener: (() => void) | null = null;
-  private currentProfileId: string | null = null; // Track current profile for sync operations
+  private currentEntityId: string | null = null; // Track current entity for sync operations (backend's universal ID)
   private readonly SYNC_INTERVAL_MS = 30000; // 30 seconds
   private readonly MAX_SYNC_RETRIES = 3;
 
@@ -95,8 +95,8 @@ class TimelineSyncService {
       logger.info(`[TimelineSyncService] ✅ Profile switch complete - resuming sync (${data.profileType})`);
       this.isPausedForProfileSwitch = false;
 
-      // Update to new profile ID
-      this.currentProfileId = data.profileId;
+      // Update to new entity ID (backend's universal identifier)
+      this.currentEntityId = data.entityId;
 
       // Trigger immediate sync with new profile context
       this.syncMessages().catch(error => {
@@ -112,12 +112,12 @@ class TimelineSyncService {
   }
 
   /**
-   * Update the current profile ID for sync operations
+   * Update the current entity ID for sync operations
    * Should be called when user switches profiles
    */
-  setCurrentProfileId(profileId: string | null): void {
-    this.currentProfileId = profileId;
-    logger.debug(`[TimelineSyncService] Profile ID updated: ${profileId || 'null'}`);
+  setCurrentEntityId(entityId: string | null): void {
+    this.currentEntityId = entityId;
+    logger.debug(`[TimelineSyncService] Entity ID updated: ${entityId || 'null'}`);
   }
 
   /**
@@ -171,7 +171,7 @@ class TimelineSyncService {
       logger.info('[TimelineSyncService] 🔄 Starting message synchronization...');
 
       // 1. Get all active interactions
-      const interactions = await interactionRepository.getInteractionsWithMembers(this.currentProfileId || '');
+      const interactions = await interactionRepository.getInteractionsWithMembers(this.currentEntityId || '');
       logger.debug(`[TimelineSyncService] Found ${interactions.length} interactions to sync`);
 
       // 2. Check for missed messages in each interaction
@@ -218,7 +218,7 @@ class TimelineSyncService {
   private async checkMissedMessages(interactionId: string): Promise<MissedMessageCheck> {
     try {
       // Get the latest item time from local_timeline (sorted by created_at DESC, so first is latest)
-      const latestItems = await unifiedTimelineRepository.getTimeline(interactionId, this.currentProfileId || '', 1, 0);
+      const latestItems = await unifiedTimelineRepository.getTimeline(interactionId, this.currentEntityId || '', 1, 0);
       const lastKnownTime = latestItems.length > 0 ? latestItems[0].created_at : new Date(0).toISOString();
 
       logger.debug(`[TimelineSyncService] Fetching timeline for ${interactionId} since ${lastKnownTime}`);
@@ -285,7 +285,10 @@ class TimelineSyncService {
 
       // Store timeline items in unified local_timeline table
       // This handles BOTH messages AND transactions from the backend
-      if (newMessages.length > 0 && this.currentProfileId) {
+      // DEBUG: Log entity ID for troubleshooting empty timeline issues
+      logger.debug(`[TimelineSyncService] 📝 Storing ${newMessages.length} items with entity_id: ${this.currentEntityId} for interaction: ${interactionId}`);
+
+      if (newMessages.length > 0 && this.currentEntityId) {
         // Map ALL items first (no awaits in loop)
         const localItems = newMessages.map((item) => {
           // Map backend interaction_timeline item to LocalTimelineItem format
@@ -295,7 +298,7 @@ class TimelineSyncService {
             id: item.id,
             server_id: item.id,
             interaction_id: interactionId,
-            profile_id: this.currentProfileId!,
+            entity_id: this.currentEntityId!,
             // Determine item type from backend 'type' field
             item_type: (item as any).type === 'transaction' ? 'transaction' : 'message',
             created_at: (item as any).createdAt || item.created_at || new Date().toISOString(),
@@ -318,8 +321,8 @@ class TimelineSyncService {
             local_status: (item as any).type === 'transaction'
               ? ((item as any).status || 'completed')
               : 'delivered',
-            // Store full item as metadata for debugging
-            metadata: item as any,
+            // Store full item as timeline_metadata for debugging
+            timeline_metadata: JSON.stringify(item),
           };
           return localItem;
         });
@@ -328,7 +331,7 @@ class TimelineSyncService {
         await unifiedTimelineRepository.batchUpsertFromServer(
           localItems,
           interactionId,
-          this.currentProfileId
+          this.currentEntityId
         );
 
         logger.info(`[TimelineSyncService] ✅ Batch stored ${newMessages.length} timeline items for ${interactionId}`);
@@ -489,7 +492,7 @@ class TimelineSyncService {
    */
   reset(): void {
     this.cleanup();
-    this.currentProfileId = null;
+    this.currentEntityId = null;
     logger.debug('[TimelineSyncService] Reset completed');
   }
 }

@@ -1,6 +1,7 @@
 // Created: BackgroundSyncService for WhatsApp-grade local-first architecture - 2025-12-22
 // BACKGROUND: Processes pending items without blocking UI
 // RELIABLE: Handles retries, failures, and network changes
+// ENTITY-FIRST: Uses entityId (entities.id) as universal identifier
 
 import logger from '../utils/logger';
 import { unifiedTimelineRepository } from '../localdb/UnifiedTimelineRepository';
@@ -32,11 +33,12 @@ const WS_MESSAGE_RECEIVED = 'message.received';
  * - Updates SQLite status which triggers UI updates
  * - Handles network changes (retry when back online)
  * - Subscribes to WebSocket for real-time status updates
+ * - ENTITY-FIRST: Uses entityId as universal identifier (aligned with backend)
  *
  * @example
  * ```typescript
  * // Start the service on app launch
- * backgroundSyncService.start(profileId);
+ * backgroundSyncService.start(user.entityId);
  *
  * // Service automatically:
  * // - Processes pending messages/transactions
@@ -50,7 +52,7 @@ class BackgroundSyncService {
   private isRunning = false;
   private isProcessing = false;
   private syncInterval: NodeJS.Timeout | null = null;
-  private currentProfileId: string | null = null;
+  private currentEntityId: string | null = null; // Entity-first: backend's universal identifier
 
   // Profile switch safety - pause sync during switch
   private isPausedForProfileSwitch = false;
@@ -85,13 +87,13 @@ class BackgroundSyncService {
       this.isProcessing = false; // Cancel any in-progress processing
     });
 
-    // On profile switch COMPLETE: Resume with new profile context
+    // On profile switch COMPLETE: Resume with new entity context
     this.unsubscribeSwitchComplete = profileContextManager.onSwitchComplete((data: ProfileSwitchCompleteData) => {
       logger.info(`[BackgroundSyncService] ✅ Profile switch complete - resuming (${data.profileType})`);
       this.isPausedForProfileSwitch = false;
-      this.currentProfileId = data.profileId;
+      this.currentEntityId = data.entityId; // Entity-first
 
-      // Process queue with new profile context
+      // Process queue with new entity context
       setTimeout(() => this.processQueue(), 500);
     });
 
@@ -104,22 +106,23 @@ class BackgroundSyncService {
 
   /**
    * Start the background sync service
+   * @param entityId - The entity ID (backend's universal identifier)
    */
-  public start(profileId: string): void {
-    if (this.isRunning && this.currentProfileId === profileId) {
-      logger.debug('[BackgroundSyncService] Already running for this profile');
+  public start(entityId: string): void {
+    if (this.isRunning && this.currentEntityId === entityId) {
+      logger.debug('[BackgroundSyncService] Already running for this entity');
       return;
     }
 
-    // Stop existing service if running for different profile
+    // Stop existing service if running for different entity
     if (this.isRunning) {
       this.stop();
     }
 
-    this.currentProfileId = profileId;
+    this.currentEntityId = entityId;
     this.isRunning = true;
 
-    logger.info(`[BackgroundSyncService] 🚀 Starting for profile: ${profileId}`);
+    logger.info(`[BackgroundSyncService] 🚀 Starting for entityId: ${entityId}`);
 
     // Subscribe to profile switch events
     this.subscribeToProfileSwitch();
@@ -146,7 +149,7 @@ class BackgroundSyncService {
     logger.info('[BackgroundSyncService] 🛑 Stopping');
 
     this.isRunning = false;
-    this.currentProfileId = null;
+    this.currentEntityId = null;
     this.isPausedForProfileSwitch = false;
 
     if (this.syncInterval) {
@@ -185,7 +188,7 @@ class BackgroundSyncService {
    */
   private async processQueue(): Promise<void> {
     // Prevent concurrent processing
-    if (this.isProcessing || !this.currentProfileId) {
+    if (this.isProcessing || !this.currentEntityId) {
       return;
     }
 
@@ -205,9 +208,9 @@ class BackgroundSyncService {
     this.isProcessing = true;
 
     try {
-      // Get items needing sync
+      // Get items needing sync (uses entity_id)
       const pendingItems = await unifiedTimelineRepository.getItemsNeedingSync(
-        this.currentProfileId,
+        this.currentEntityId,
         MAX_RETRIES
       );
 
@@ -469,7 +472,7 @@ class BackgroundSyncService {
    * Uses from_entity_id/to_entity_id for consistency with Supabase
    */
   private async handleIncomingMessage(data: any): Promise<void> {
-    if (!this.currentProfileId || !data) {
+    if (!this.currentEntityId || !data) {
       return;
     }
 
@@ -485,7 +488,7 @@ class BackgroundSyncService {
       await unifiedTimelineRepository.upsertFromServer({
         id: data.id,
         interaction_id: data.interaction_id,
-        profile_id: this.currentProfileId,
+        entity_id: this.currentEntityId, // Entity-first
         item_type: 'message',
         from_entity_id: data.from_entity_id || '',
         to_entity_id: data.to_entity_id || null,
@@ -527,10 +530,10 @@ class BackgroundSyncService {
   /**
    * Get sync status for debugging
    */
-  public getStatus(): { isRunning: boolean; profileId: string | null; isProcessing: boolean } {
+  public getStatus(): { isRunning: boolean; entityId: string | null; isProcessing: boolean } {
     return {
       isRunning: this.isRunning,
-      profileId: this.currentProfileId,
+      entityId: this.currentEntityId,
       isProcessing: this.isProcessing,
     };
   }

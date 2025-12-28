@@ -61,13 +61,13 @@ class WalletManager {
   async getRecentTransactions(limit: number = 5): Promise<Transaction[]> {
     try {
       const context = profileContextManager.getCurrentContext();
-      if (!context.profileId) {
-        logger.warn('[WalletManager] No profile ID available');
+      if (!context.entityId) {
+        logger.warn('[WalletManager] No entity ID available');
         return [];
       }
 
       logger.debug(`[WalletManager] Getting ${limit} recent transactions`);
-      const transactions = await transactionRepository.getRecentTransactions(context.profileId, limit);
+      const transactions = await transactionRepository.getRecentTransactions(context.entityId, limit);
       return transactions as Transaction[];
     } catch (error) {
       logger.error('[WalletManager] Failed to get recent transactions:', error);
@@ -111,8 +111,8 @@ class WalletManager {
         logger.debug('[WalletManager] OFFLINE: Returning cached transactions');
 
         const context = profileContextManager.getCurrentContext();
-        if (!context.profileId) {
-          logger.warn('[WalletManager] No profile ID available offline');
+        if (!context.entityId) {
+          logger.warn('[WalletManager] No entity ID available offline');
           return {
             data: [],
             pagination: { total: 0, limit, offset, hasMore: false },
@@ -121,7 +121,7 @@ class WalletManager {
         }
 
         const cachedTransactions = await transactionRepository.getTransactionsByAccount(
-          context.profileId,
+          context.entityId,
           accountId,
           limit
         );

@@ -429,15 +429,15 @@ class AppLifecycleManager {
   /**
    * 🚀 PHASE 2.5: Initialize message sync for offline message reliability
    */
-  private initializeMessageSync(user?: { profileId?: string }): void {
+  private initializeMessageSync(user?: { entityId?: string }): void {
     try {
       logger.debug('[AppLifecycleManager] 🔄 Initializing message sync...');
       timelineSyncService.initialize();
 
-      // Set current profile ID for sync operations
-      if (user?.profileId) {
-        timelineSyncService.setCurrentProfileId(user.profileId);
-        logger.debug(`[AppLifecycleManager] Profile ID set for message sync: ${user.profileId}`);
+      // Set current entity ID for sync operations
+      if (user?.entityId) {
+        timelineSyncService.setCurrentEntityId(user.entityId);
+        logger.debug(`[AppLifecycleManager] Entity ID set for message sync: ${user.entityId}`);
       }
 
       logger.info('[AppLifecycleManager] ✅ Message sync initialized');
