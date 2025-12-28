@@ -8,8 +8,9 @@
  * - Persistent cache with AsyncStorage
  *
  * SECURITY UPDATE 2025-01-18:
- * - Profile isolation guards to prevent data bleeding
- * - Development warnings for missing profile context
+ * - Entity isolation guards to prevent data bleeding
+ * - Development warnings for missing entity context
+ * Updated 2025-12-28: Migrated from profileId to entityId (entity-first architecture)
  */
 
 import { QueryClient } from '@tanstack/react-query';
@@ -21,7 +22,7 @@ import logger from '../utils/logger';
 import { eventEmitter } from '../utils/eventEmitter';
 import { networkService } from '../services/NetworkService';
 import { staleTimeManager } from './config/staleTimeConfig';
-import { validateQueryKeyForProfileIsolation } from './profileIsolationGuards';
+import { validateQueryKeyForEntityIsolation } from './entityIsolationGuards';
 import { queryKeys } from './queryKeys';
 import { TIMELINE_UPDATED_EVENT, TimelineUpdateEvent } from '../localdb/UnifiedTimelineRepository';
 
@@ -95,16 +96,16 @@ export const queryClient = new QueryClient({
       // UX: Use placeholder data for smoother transitions
       placeholderData: (previousData: any) => previousData,
 
-      // SECURITY (DEV ONLY): Profile isolation validation
+      // SECURITY (DEV ONLY): Entity isolation validation
       onError: __DEV__ ? (error: unknown, query: any) => {
-        // Validate query key for profile isolation in development
+        // Validate query key for entity isolation in development
         try {
           if (query?.queryKey) {
-            validateQueryKeyForProfileIsolation(query.queryKey);
+            validateQueryKeyForEntityIsolation(query.queryKey);
           }
         } catch (validationError) {
           // Don't throw, just log the validation error
-          logger.error('[Profile Isolation Guard] Validation failed:', validationError);
+          logger.error('[Entity Isolation Guard] Validation failed:', validationError);
         }
       } : undefined,
     },
@@ -137,7 +138,7 @@ let timelineEventUnsubscribe: (() => void) | null = null;
  * We listen here and invalidate the relevant queries so they refetch from SQLite.
  */
 const setupDataUpdatedListener = (): void => {
-  const handler = (payload: { type: string; data?: any; profileId?: string }) => {
+  const handler = (payload: { type: string; data?: any; entityId?: string }) => {
     logger.debug(`[QueryClient] data_updated event received - type: ${payload.type}`);
 
     switch (payload.type) {

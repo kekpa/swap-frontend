@@ -2,7 +2,7 @@
  * QueryKeys Tests
  *
  * Tests the centralized query key factory for TanStack Query.
- * Tests query key generation, utilities, validation, profile-awareness,
+ * Tests query key generation, utilities, validation, entity-awareness,
  * and type safety helpers.
  */
 
@@ -17,12 +17,12 @@ import {
   createQueryKeyPredicate,
   typedQueryKeys,
   debugQueryKeys,
-  assertProfileAware,
-  isProfileAware,
-  extractProfileId,
-  validateProfileQueryKey,
-  getProfileQueryKeys,
-  profileQueryDebug,
+  assertEntityAware,
+  isEntityAware,
+  extractEntityIdFromKey,
+  validateEntityQueryKey,
+  getEntityQueryKeys,
+  entityQueryDebug,
 } from '../queryKeys';
 
 // Mock __DEV__ for testing
@@ -90,19 +90,19 @@ describe('queryKeys', () => {
     });
 
     describe('parameterized keys', () => {
-      it('should generate balancesByEntity key with profile and entity', () => {
-        const key = queryKeys.balancesByEntity('profile-123', 'entity-456');
-        expect(key).toEqual(['balances', 'profile', 'profile-123', 'entity', 'entity-456']);
+      it('should generate balancesByEntity key', () => {
+        const key = queryKeys.balancesByEntity('entity-123');
+        expect(key).toEqual(['balances', 'entity', 'entity-123']);
       });
 
       it('should generate walletsByEntity key', () => {
-        const key = queryKeys.walletsByEntity('profile-123', 'entity-456');
-        expect(key).toEqual(['wallets', 'profile', 'profile-123', 'entity', 'entity-456']);
+        const key = queryKeys.walletsByEntity('entity-123');
+        expect(key).toEqual(['wallets', 'entity', 'entity-123']);
       });
 
       it('should generate interactionsByEntity key', () => {
-        const key = queryKeys.interactionsByEntity('profile-123', 'entity-456');
-        expect(key).toEqual(['interactions', 'profile', 'profile-123', 'entity', 'entity-456']);
+        const key = queryKeys.interactionsByEntity('entity-123');
+        expect(key).toEqual(['interactions', 'entity', 'entity-123']);
       });
 
       it('should generate interactionDetails key', () => {
@@ -131,28 +131,28 @@ describe('queryKeys', () => {
       });
 
       it('should generate recentMessages key', () => {
-        const key = queryKeys.recentMessages('profile-123', 'entity-456', 10);
-        expect(key).toEqual(['messages', 'profile', 'profile-123', 'recent', 'entity-456', 'limit', 10]);
+        const key = queryKeys.recentMessages('entity-123', 10);
+        expect(key).toEqual(['messages', 'entity', 'entity-123', 'recent', 'limit', 10]);
       });
 
       it('should generate transactionsByEntity key', () => {
-        const key = queryKeys.transactionsByEntity('profile-123', 'entity-456');
-        expect(key).toEqual(['transactions', 'profile', 'profile-123', 'entity', 'entity-456']);
+        const key = queryKeys.transactionsByEntity('entity-123');
+        expect(key).toEqual(['transactions', 'entity', 'entity-123']);
       });
 
       it('should generate transactionsByWallet key', () => {
-        const key = queryKeys.transactionsByWallet('profile-123', 'wallet-789');
-        expect(key).toEqual(['transactions', 'profile', 'profile-123', 'wallet', 'wallet-789']);
+        const key = queryKeys.transactionsByWallet('entity-123', 'wallet-789');
+        expect(key).toEqual(['transactions', 'entity', 'entity-123', 'wallet', 'wallet-789']);
       });
 
       it('should generate transactionsByAccount key', () => {
-        const key = queryKeys.transactionsByAccount('profile-123', 'account-456', 20);
-        expect(key).toEqual(['transactions', 'profile', 'profile-123', 'account', 'account-456', 'limit', 20]);
+        const key = queryKeys.transactionsByAccount('entity-123', 'account-456', 20);
+        expect(key).toEqual(['transactions', 'entity', 'entity-123', 'account', 'account-456', 'limit', 20]);
       });
 
       it('should generate recentTransactions key', () => {
-        const key = queryKeys.recentTransactions('profile-123', 'entity-456', 5);
-        expect(key).toEqual(['transactions', 'profile', 'profile-123', 'recent', 'entity-456', 'limit', 5]);
+        const key = queryKeys.recentTransactions('entity-123', 5);
+        expect(key).toEqual(['transactions', 'entity', 'entity-123', 'recent', 'limit', 5]);
       });
 
       it('should generate transactionDetails key', () => {
@@ -171,48 +171,48 @@ describe('queryKeys', () => {
       });
 
       it('should generate userProfile key', () => {
-        const key = queryKeys.userProfile('profile-123');
-        expect(key).toEqual(['profile', 'profile-123']);
+        const key = queryKeys.userProfile('entity-123');
+        expect(key).toEqual(['profile', 'entity', 'entity-123']);
       });
 
       it('should generate currentProfile key', () => {
-        const key = queryKeys.currentProfile('profile-123');
-        expect(key).toEqual(['profile', 'current', 'profile-123']);
+        const key = queryKeys.currentProfile('entity-123');
+        expect(key).toEqual(['profile', 'current', 'entity', 'entity-123']);
       });
 
       it('should generate profileDetails key', () => {
-        const key = queryKeys.profileDetails('profile-123');
-        expect(key).toEqual(['profile', 'details', 'profile-123']);
+        const key = queryKeys.profileDetails('entity-123');
+        expect(key).toEqual(['profile', 'details', 'entity', 'entity-123']);
       });
 
       it('should generate kycStatus key', () => {
-        const key = queryKeys.kycStatus('profile-123');
-        expect(key).toEqual(['kyc', 'status', 'profile', 'profile-123']);
+        const key = queryKeys.kycStatus('entity-123');
+        expect(key).toEqual(['kyc', 'status', 'entity', 'entity-123']);
       });
 
       it('should generate verificationStatus key', () => {
-        const key = queryKeys.verificationStatus('profile-123');
-        expect(key).toEqual(['verification', 'status', 'profile', 'profile-123']);
+        const key = queryKeys.verificationStatus('entity-123');
+        expect(key).toEqual(['verification', 'status', 'entity', 'entity-123']);
       });
 
       it('should generate kycByEntity key', () => {
-        const key = queryKeys.kycByEntity('profile-123', 'entity-456');
-        expect(key).toEqual(['kyc', 'profile', 'profile-123', 'entity', 'entity-456']);
+        const key = queryKeys.kycByEntity('entity-123');
+        expect(key).toEqual(['kyc', 'entity', 'entity-123']);
       });
 
       it('should generate kycStep key', () => {
-        const key = queryKeys.kycStep('profile-123', 'entity-456', 'document_verification');
-        expect(key).toEqual(['kyc', 'profile', 'profile-123', 'step', 'entity-456', 'document_verification']);
+        const key = queryKeys.kycStep('entity-123', 'document_verification');
+        expect(key).toEqual(['kyc', 'entity', 'entity-123', 'step', 'document_verification']);
       });
 
       it('should generate kycProgress key', () => {
-        const key = queryKeys.kycProgress('profile-123', 'entity-456');
-        expect(key).toEqual(['kyc', 'profile', 'profile-123', 'progress', 'entity-456']);
+        const key = queryKeys.kycProgress('entity-123');
+        expect(key).toEqual(['kyc', 'entity', 'entity-123', 'progress']);
       });
 
       it('should generate contactsByEntity key', () => {
-        const key = queryKeys.contactsByEntity('profile-123', 'entity-456');
-        expect(key).toEqual(['contacts', 'profile', 'profile-123', 'entity', 'entity-456']);
+        const key = queryKeys.contactsByEntity('entity-123');
+        expect(key).toEqual(['contacts', 'entity', 'entity-123']);
       });
 
       it('should generate contactDetails key', () => {
@@ -221,9 +221,9 @@ describe('queryKeys', () => {
       });
 
       it('should generate recentConversations key', () => {
-        const key = queryKeys.recentConversations('profile-123', 'entity-456', { unread: true });
+        const key = queryKeys.recentConversations('entity-123', { unread: true });
         expect(key).toEqual([
-          'conversations', 'profile', 'profile-123', 'recent', 'entity-456', { unread: true },
+          'conversations', 'entity', 'entity-123', 'recent', { unread: true },
         ]);
       });
 
@@ -233,13 +233,13 @@ describe('queryKeys', () => {
       });
 
       it('should generate liveBalances key', () => {
-        const key = queryKeys.liveBalances('profile-123', 'entity-456');
-        expect(key).toEqual(['live', 'balances', 'profile', 'profile-123', 'entity-456']);
+        const key = queryKeys.liveBalances('entity-123');
+        expect(key).toEqual(['live', 'balances', 'entity', 'entity-123']);
       });
 
       it('should generate liveTransactions key', () => {
-        const key = queryKeys.liveTransactions('profile-123', 'entity-456');
-        expect(key).toEqual(['live', 'transactions', 'profile', 'profile-123', 'entity-456']);
+        const key = queryKeys.liveTransactions('entity-123');
+        expect(key).toEqual(['live', 'transactions', 'entity', 'entity-123']);
       });
 
       it('should generate liveMessages key', () => {
@@ -256,20 +256,20 @@ describe('queryKeys', () => {
   describe('queryKeyUtils', () => {
     describe('getUserDataKeys', () => {
       it('should return all user-related query keys', () => {
-        const keys = queryKeyUtils.getUserDataKeys('profile-123', 'entity-456');
+        const keys = queryKeyUtils.getUserDataKeys('entity-123');
 
-        expect(keys).toContainEqual(queryKeys.balancesByEntity('profile-123', 'entity-456'));
-        expect(keys).toContainEqual(queryKeys.walletsByEntity('profile-123', 'entity-456'));
-        expect(keys).toContainEqual(queryKeys.interactionsByEntity('profile-123', 'entity-456'));
-        expect(keys).toContainEqual(queryKeys.transactionsByEntity('profile-123', 'entity-456'));
-        expect(keys).toContainEqual(queryKeys.contactsByEntity('profile-123', 'entity-456'));
-        expect(keys).toContainEqual(queryKeys.currentProfile('profile-123'));
-        expect(keys).toContainEqual(queryKeys.kycByEntity('profile-123', 'entity-456'));
-        expect(keys).toContainEqual(queryKeys.kycProgress('profile-123', 'entity-456'));
+        expect(keys).toContainEqual(queryKeys.balancesByEntity('entity-123'));
+        expect(keys).toContainEqual(queryKeys.walletsByEntity('entity-123'));
+        expect(keys).toContainEqual(queryKeys.interactionsByEntity('entity-123'));
+        expect(keys).toContainEqual(queryKeys.transactionsByEntity('entity-123'));
+        expect(keys).toContainEqual(queryKeys.contactsByEntity('entity-123'));
+        expect(keys).toContainEqual(queryKeys.currentProfile('entity-123'));
+        expect(keys).toContainEqual(queryKeys.kycByEntity('entity-123'));
+        expect(keys).toContainEqual(queryKeys.kycProgress('entity-123'));
       });
 
       it('should include correct number of keys', () => {
-        const keys = queryKeyUtils.getUserDataKeys('profile-123', 'entity-456');
+        const keys = queryKeyUtils.getUserDataKeys('entity-123');
         expect(keys.length).toBe(8);
       });
     });
@@ -309,32 +309,32 @@ describe('queryKeys', () => {
 
     describe('getWalletKeys', () => {
       it('should return wallet-related query keys', () => {
-        const keys = queryKeyUtils.getWalletKeys('profile-123', 'wallet-456', 'entity-789');
+        const keys = queryKeyUtils.getWalletKeys('entity-123', 'wallet-456');
 
-        expect(keys).toContainEqual(queryKeys.transactionsByWallet('profile-123', 'wallet-456'));
-        expect(keys).toContainEqual(queryKeys.balancesByEntity('profile-123', 'entity-789'));
-        expect(keys).toContainEqual(queryKeys.walletsByEntity('profile-123', 'entity-789'));
+        expect(keys).toContainEqual(queryKeys.transactionsByWallet('entity-123', 'wallet-456'));
+        expect(keys).toContainEqual(queryKeys.balancesByEntity('entity-123'));
+        expect(keys).toContainEqual(queryKeys.walletsByEntity('entity-123'));
       });
 
       it('should return 3 wallet keys', () => {
-        const keys = queryKeyUtils.getWalletKeys('profile-123', 'wallet-456', 'entity-789');
+        const keys = queryKeyUtils.getWalletKeys('entity-123', 'wallet-456');
         expect(keys.length).toBe(3);
       });
     });
 
     describe('getAccountKeys', () => {
       it('should return account-related query keys', () => {
-        const keys = queryKeyUtils.getAccountKeys('profile-123', 'account-456', 'entity-789');
+        const keys = queryKeyUtils.getAccountKeys('entity-123', 'account-456');
 
-        expect(keys).toContainEqual(queryKeys.transactionsByAccount('profile-123', 'account-456', 20));
-        expect(keys).toContainEqual(queryKeys.balancesByEntity('profile-123', 'entity-789'));
-        expect(keys).toContainEqual(queryKeys.walletsByEntity('profile-123', 'entity-789'));
+        expect(keys).toContainEqual(queryKeys.transactionsByAccount('entity-123', 'account-456', 20));
+        expect(keys).toContainEqual(queryKeys.balancesByEntity('entity-123'));
+        expect(keys).toContainEqual(queryKeys.walletsByEntity('entity-123'));
       });
 
       it('should use default limit of 20', () => {
-        const keys = queryKeyUtils.getAccountKeys('profile-123', 'account-456', 'entity-789');
+        const keys = queryKeyUtils.getAccountKeys('entity-123', 'account-456');
         const accountKey = keys[0];
-        expect(accountKey).toEqual(queryKeys.transactionsByAccount('profile-123', 'account-456', 20));
+        expect(accountKey).toEqual(queryKeys.transactionsByAccount('entity-123', 'account-456', 20));
       });
     });
   });
@@ -358,33 +358,33 @@ describe('queryKeys', () => {
     });
 
     it('should accept parameterized keys', () => {
-      const key = queryKeys.balancesByEntity('profile-123', 'entity-456');
+      const key = queryKeys.balancesByEntity('entity-123');
       expect(() => validateQueryKey(key)).not.toThrow();
     });
   });
 
   describe('matchesQueryKey', () => {
     it('should return true for exact match', () => {
-      const key = ['balances', 'profile', 'profile-123', 'entity', 'entity-456'];
-      const pattern = queryKeys.balancesByEntity('profile-123', 'entity-456');
+      const key = ['balances', 'entity', 'entity-123'];
+      const pattern = queryKeys.balancesByEntity('entity-123');
       expect(matchesQueryKey(key, pattern)).toBe(true);
     });
 
     it('should return false for different length', () => {
       const key = ['balances', 'entity'];
-      const pattern = queryKeys.balancesByEntity('profile-123', 'entity-456');
+      const pattern = queryKeys.balancesByEntity('entity-123');
       expect(matchesQueryKey(key, pattern)).toBe(false);
     });
 
     it('should return false for different values', () => {
-      const key = ['balances', 'profile', 'different-profile', 'entity', 'entity-456'];
-      const pattern = queryKeys.balancesByEntity('profile-123', 'entity-456');
+      const key = ['balances', 'entity', 'different-entity'];
+      const pattern = queryKeys.balancesByEntity('entity-123');
       expect(matchesQueryKey(key, pattern)).toBe(false);
     });
 
     it('should support wildcard matching', () => {
-      const key = ['balances', 'profile', 'any-profile'];
-      const pattern = ['balances', '*', 'any-profile'] as const;
+      const key = ['balances', 'entity', 'any-entity'];
+      const pattern = ['balances', '*', 'any-entity'] as const;
       expect(matchesQueryKey(key, pattern)).toBe(true);
     });
   });
@@ -401,9 +401,9 @@ describe('queryKeys', () => {
     });
 
     it('should extract from profile query keys', () => {
-      const key = queryKeys.userProfile('profile-123');
-      // This key is ['profile', 'profile-123'] so index 2 doesn't exist
-      expect(extractEntityId(key)).toBeNull();
+      const key = queryKeys.userProfile('entity-123');
+      // This key is ['profile', 'entity', 'entity-123'] so it should extract 'entity-123'
+      expect(extractEntityId(key)).toBe('entity-123');
     });
 
     it('should return null for static keys', () => {
@@ -440,9 +440,9 @@ describe('queryKeys', () => {
     it('should group keys by first segment', () => {
       const keys = [
         queryKeys.balances,
-        queryKeys.balancesByEntity('p1', 'e1'),
+        queryKeys.balancesByEntity('entity-123'),
         queryKeys.transactions,
-        queryKeys.transactionsByEntity('p1', 'e1'),
+        queryKeys.transactionsByEntity('entity-123'),
       ];
 
       const grouped = groupQueryKeysByType(keys);
@@ -474,15 +474,15 @@ describe('queryKeys', () => {
       const predicate = createQueryKeyPredicate(['balances'] as const);
 
       expect(predicate(queryKeys.balances)).toBe(true);
-      expect(predicate(queryKeys.balancesByEntity('p1', 'e1'))).toBe(true);
+      expect(predicate(queryKeys.balancesByEntity('entity-123'))).toBe(true);
       expect(predicate(queryKeys.transactions)).toBe(false);
     });
 
     it('should skip undefined segments in pattern', () => {
-      const predicate = createQueryKeyPredicate([undefined, 'profile'] as any);
+      const predicate = createQueryKeyPredicate([undefined, 'entity'] as any);
 
-      expect(predicate(queryKeys.balancesByEntity('p1', 'e1'))).toBe(true);
-      expect(predicate(queryKeys.transactionsByEntity('p1', 'e1'))).toBe(true);
+      expect(predicate(queryKeys.balancesByEntity('entity-123'))).toBe(true);
+      expect(predicate(queryKeys.transactionsByEntity('entity-123'))).toBe(true);
     });
   });
 
@@ -558,11 +558,11 @@ describe('queryKeys', () => {
   describe('debugQueryKeys', () => {
     describe('format', () => {
       it('should format query key as string', () => {
-        const key = queryKeys.balancesByEntity('profile-123', 'entity-456');
+        const key = queryKeys.balancesByEntity('entity-123');
         const formatted = debugQueryKeys.format(key);
 
         expect(formatted).toBe(
-          '["balances", "profile", "profile-123", "entity", "entity-456"]',
+          '["balances", "entity", "entity-123"]',
         );
       });
 
@@ -574,11 +574,11 @@ describe('queryKeys', () => {
 
     describe('analyze', () => {
       it('should return query key info', () => {
-        const key = queryKeys.balancesByEntity('profile-123', 'entity-456');
+        const key = queryKeys.balancesByEntity('entity-123');
         const info = debugQueryKeys.analyze(key);
 
         expect(info.type).toBe('balances');
-        expect(info.segments).toBe(5);
+        expect(info.segments).toBe(3);
         expect(info.formatted).toBeDefined();
       });
 
@@ -591,84 +591,99 @@ describe('queryKeys', () => {
   });
 
   // ============================================================
-  // PROFILE-AWARE ASSERTIONS TESTS
+  // ENTITY-AWARE ASSERTIONS TESTS
   // ============================================================
 
-  describe('assertProfileAware', () => {
-    it('should pass for valid profile-aware key', () => {
-      const key = ['kyc', 'profile', 'profile-123', 'entity', 'entity-456'];
-      expect(() => assertProfileAware(key)).not.toThrow();
+  describe('assertEntityAware', () => {
+    it('should pass for valid entity-aware key', () => {
+      const key = ['kyc', 'entity', 'entity-123'];
+      expect(() => assertEntityAware(key)).not.toThrow();
+    });
+
+    it('should pass for entity-aware key with extra segments', () => {
+      const key = ['kyc', 'entity', 'entity-123', 'status'];
+      expect(() => assertEntityAware(key)).not.toThrow();
     });
 
     it('should throw for non-array', () => {
-      expect(() => assertProfileAware('not-array' as any)).toThrow(
+      expect(() => assertEntityAware('not-array' as any)).toThrow(
         'Query key must be an array',
       );
     });
 
     it('should throw for short array', () => {
-      expect(() => assertProfileAware(['kyc', 'status'])).toThrow(
+      expect(() => assertEntityAware(['kyc', 'status'])).toThrow(
         'Query key must have at least 3 segments',
       );
     });
 
-    it('should throw when profile segment missing', () => {
-      expect(() => assertProfileAware(['kyc', 'entity', 'entity-123'])).toThrow(
-        "Query key must include 'profile' at index 1",
+    it('should throw when entity segment missing', () => {
+      expect(() => assertEntityAware(['kyc', 'status', 'pending'])).toThrow(
+        "Query key must include 'entity' at index 1",
       );
     });
 
-    it('should throw when profileId is empty', () => {
-      expect(() => assertProfileAware(['kyc', 'profile', ''])).toThrow(
-        'Query key must include profileId (string) at index 2',
+    it('should throw when entityId is empty', () => {
+      expect(() => assertEntityAware(['kyc', 'entity', ''])).toThrow(
+        'Query key must include entityId (string) at index 2',
       );
     });
 
     it('should include context in error message', () => {
-      expect(() => assertProfileAware(['kyc'], 'useKycStatus')).toThrow(
+      expect(() => assertEntityAware(['kyc'], 'useKycStatus')).toThrow(
         /context: useKycStatus/,
       );
     });
   });
 
-  describe('isProfileAware', () => {
-    it('should return true for profile-aware key', () => {
-      const key = ['kyc', 'profile', 'profile-123', 'status'];
-      expect(isProfileAware(key)).toBe(true);
+  describe('isEntityAware', () => {
+    it('should return true for entity-aware key', () => {
+      const key = ['kyc', 'entity', 'entity-123'];
+      expect(isEntityAware(key)).toBe(true);
     });
 
-    it('should return false for non-profile-aware key', () => {
+    it('should return true for entity-aware key with extra segments', () => {
+      const key = ['kyc', 'entity', 'entity-123', 'status'];
+      expect(isEntityAware(key)).toBe(true);
+    });
+
+    it('should return false for non-entity-aware key', () => {
       const key = ['kyc', 'status'];
-      expect(isProfileAware(key)).toBe(false);
+      expect(isEntityAware(key)).toBe(false);
     });
 
     it('should return false for invalid key', () => {
-      expect(isProfileAware([])).toBe(false);
-      expect(isProfileAware(['kyc'])).toBe(false);
+      expect(isEntityAware([])).toBe(false);
+      expect(isEntityAware(['kyc'])).toBe(false);
     });
   });
 
-  describe('extractProfileId', () => {
-    it('should extract profileId from profile-aware key', () => {
-      const key = ['kyc', 'profile', 'profile-123', 'status'];
-      expect(extractProfileId(key)).toBe('profile-123');
+  describe('extractEntityIdFromKey', () => {
+    it('should extract entityId from entity-aware key', () => {
+      const key = ['kyc', 'entity', 'entity-123'];
+      expect(extractEntityIdFromKey(key)).toBe('entity-123');
     });
 
-    it('should return null for non-profile-aware key', () => {
+    it('should extract entityId from key with extra segments', () => {
+      const key = ['kyc', 'entity', 'entity-123', 'status'];
+      expect(extractEntityIdFromKey(key)).toBe('entity-123');
+    });
+
+    it('should return null for non-entity-aware key', () => {
       const key = ['kyc', 'status'];
-      expect(extractProfileId(key)).toBeNull();
+      expect(extractEntityIdFromKey(key)).toBeNull();
     });
 
     it('should return null for empty key', () => {
-      expect(extractProfileId([])).toBeNull();
+      expect(extractEntityIdFromKey([])).toBeNull();
     });
   });
 
   // ============================================================
-  // PROFILE QUERY KEY VALIDATION TESTS
+  // ENTITY QUERY KEY VALIDATION TESTS
   // ============================================================
 
-  describe('validateProfileQueryKey', () => {
+  describe('validateEntityQueryKey', () => {
     beforeEach(() => {
       jest.spyOn(console, 'error').mockImplementation(() => {});
     });
@@ -677,14 +692,14 @@ describe('queryKeys', () => {
       jest.restoreAllMocks();
     });
 
-    it('should return key unchanged', () => {
-      const key = queryKeys.kycByEntity('profile-123', 'entity-456');
-      expect(validateProfileQueryKey(key)).toBe(key);
+    it('should return key unchanged for valid entity-aware key', () => {
+      const key = ['kyc', 'entity', 'entity-123'] as const;
+      expect(validateEntityQueryKey(key)).toBe(key);
     });
 
-    it('should log error for non-profile-aware sensitive key', () => {
+    it('should log error for non-entity-aware sensitive key', () => {
       const key = ['kyc', 'status'] as const;
-      validateProfileQueryKey(key, 'useKycStatus');
+      validateEntityQueryKey(key, 'useKycStatus');
 
       expect(console.error).toHaveBeenCalledWith(
         expect.stringContaining('[QueryKey Validation]'),
@@ -693,92 +708,101 @@ describe('queryKeys', () => {
 
     it('should not log for non-sensitive keys', () => {
       const key = queryKeys.currencies;
-      validateProfileQueryKey(key, 'useCurrencies');
+      validateEntityQueryKey(key, 'useCurrencies');
 
       expect(console.error).not.toHaveBeenCalled();
     });
   });
 
-  describe('getProfileQueryKeys', () => {
-    it('should return all profile-specific query keys', () => {
-      const keys = getProfileQueryKeys('profile-123');
+  describe('getEntityQueryKeys', () => {
+    it('should return all entity-specific query keys', () => {
+      const keys = getEntityQueryKeys('entity-123');
 
       expect(keys.length).toBeGreaterThan(0);
       keys.forEach((key) => {
-        expect(key[2]).toBe('profile-123');
+        expect(key[2]).toBe('entity-123');
       });
     });
 
-    it('should include profile and KYC keys', () => {
-      const keys = getProfileQueryKeys('profile-123');
+    it('should include profile, KYC, and verification keys', () => {
+      const keys = getEntityQueryKeys('entity-123');
 
       const types = keys.map((k) => k[0]);
       expect(types).toContain('profile');
       expect(types).toContain('kyc');
       expect(types).toContain('verification');
     });
+
+    it('should return entity-aware keys', () => {
+      const keys = getEntityQueryKeys('entity-123');
+
+      keys.forEach((key) => {
+        expect(key[1]).toBe('entity');
+        expect(isEntityAware(key)).toBe(true);
+      });
+    });
   });
 
   // ============================================================
-  // PROFILE QUERY DEBUG TESTS
+  // ENTITY QUERY DEBUG TESTS
   // ============================================================
 
-  describe('profileQueryDebug', () => {
-    describe('isMissingProfile', () => {
-      it('should return true for sensitive keys without profile', () => {
-        expect(profileQueryDebug.isMissingProfile(['kyc', 'status'])).toBe(true);
-        expect(profileQueryDebug.isMissingProfile(['balances', 'entity', 'e1'])).toBe(true);
-        expect(profileQueryDebug.isMissingProfile(['transactions', 'all'])).toBe(true);
+  describe('entityQueryDebug', () => {
+    describe('isMissingEntity', () => {
+      it('should return true for sensitive keys without entity', () => {
+        expect(entityQueryDebug.isMissingEntity(['kyc', 'status'])).toBe(true);
+        expect(entityQueryDebug.isMissingEntity(['balances', 'all'])).toBe(true);
+        expect(entityQueryDebug.isMissingEntity(['transactions', 'recent'])).toBe(true);
       });
 
-      it('should return false for profile-aware keys', () => {
-        const key = ['kyc', 'profile', 'profile-123', 'status'];
-        expect(profileQueryDebug.isMissingProfile(key)).toBe(false);
+      it('should return false for entity-aware keys', () => {
+        const key = ['kyc', 'entity', 'entity-123'];
+        expect(entityQueryDebug.isMissingEntity(key)).toBe(false);
       });
 
       it('should return false for non-sensitive keys', () => {
-        expect(profileQueryDebug.isMissingProfile(['currencies'])).toBe(false);
-        expect(profileQueryDebug.isMissingProfile(['countries'])).toBe(false);
-        expect(profileQueryDebug.isMissingProfile(['exchange-rates'])).toBe(false);
+        expect(entityQueryDebug.isMissingEntity(['currencies'])).toBe(false);
+        expect(entityQueryDebug.isMissingEntity(['countries'])).toBe(false);
+        expect(entityQueryDebug.isMissingEntity(['exchange-rates'])).toBe(false);
       });
 
       it('should return false for empty array', () => {
-        expect(profileQueryDebug.isMissingProfile([])).toBe(false);
+        expect(entityQueryDebug.isMissingEntity([])).toBe(false);
       });
     });
 
     describe('analyze', () => {
-      it('should return full analysis for profile-aware key', () => {
-        const key = ['kyc', 'profile', 'profile-123', 'status'];
-        const analysis = profileQueryDebug.analyze(key);
+      it('should return full analysis for entity-aware key', () => {
+        const key = ['kyc', 'entity', 'entity-123'];
+        const analysis = entityQueryDebug.analyze(key);
 
-        expect(analysis.isProfileAware).toBe(true);
-        expect(analysis.profileId).toBe('profile-123');
-        expect(analysis.needsProfile).toBe(false);
+        expect(analysis.isEntityAware).toBe(true);
+        expect(analysis.entityId).toBe('entity-123');
+        expect(analysis.needsEntity).toBe(false);
         expect(analysis.recommendation).toBe('OK');
       });
 
-      it('should flag missing profile for sensitive keys', () => {
+      it('should flag missing entity for sensitive keys', () => {
         const key = ['kyc', 'status'];
-        const analysis = profileQueryDebug.analyze(key);
+        const analysis = entityQueryDebug.analyze(key);
 
-        expect(analysis.isProfileAware).toBe(false);
-        expect(analysis.needsProfile).toBe(true);
+        expect(analysis.isEntityAware).toBe(false);
+        expect(analysis.needsEntity).toBe(true);
         expect(analysis.recommendation).toContain('CRITICAL');
       });
 
       it('should suggest consideration for non-standard keys', () => {
         const key = ['custom-feature', 'data'];
-        const analysis = profileQueryDebug.analyze(key);
+        const analysis = entityQueryDebug.analyze(key);
 
-        expect(analysis.isProfileAware).toBe(false);
-        expect(analysis.needsProfile).toBe(false);
+        expect(analysis.isEntityAware).toBe(false);
+        expect(analysis.needsEntity).toBe(false);
         expect(analysis.recommendation).toContain('Consider');
       });
 
       it('should return OK for system/reference keys', () => {
         const key = ['currencies'];
-        const analysis = profileQueryDebug.analyze(key);
+        const analysis = entityQueryDebug.analyze(key);
 
         expect(analysis.recommendation).toBe('OK');
       });

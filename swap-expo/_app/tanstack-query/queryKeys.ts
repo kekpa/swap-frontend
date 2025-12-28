@@ -4,25 +4,25 @@
  * Centralized query key management for TanStack Query.
  * Provides type-safe, consistent query keys across the application.
  *
- * UPDATED: 2025-01-18 - Added profile-aware cache keys for security isolation
- * All profile-sensitive queries now include profileId to prevent data bleeding
- * between personal and business profiles.
+ * UPDATED: 2025-01-28 - Migrated to entity-only cache keys
+ * All user-sensitive queries now use entityId only (entity-first architecture).
+ * Entity ID is the backend's universal identifier (entities.id).
  */
 
 export const queryKeys = {
   // Wallet/Balance related queries
   balances: ['balances'] as const,
-  balancesByEntity: (profileId: string, entityId: string) =>
-    ['balances', 'profile', profileId, 'entity', entityId] as const,
-  walletsByEntity: (profileId: string, entityId: string) =>
-    ['wallets', 'profile', profileId, 'entity', entityId] as const,
-  
+  balancesByEntity: (entityId: string) =>
+    ['balances', 'entity', entityId] as const,
+  walletsByEntity: (entityId: string) =>
+    ['wallets', 'entity', entityId] as const,
+
   // Interaction related queries
   interactions: ['interactions'] as const,
-  interactionsByEntity: (profileId: string, entityId: string) =>
-    ['interactions', 'profile', profileId, 'entity', entityId] as const,
+  interactionsByEntity: (entityId: string) =>
+    ['interactions', 'entity', entityId] as const,
   interactionDetails: (interactionId: string) => ['interactions', 'details', interactionId] as const,
-  
+
   // Timeline related queries
   timeline: (interactionId: string) => ['timeline', interactionId] as const,
   timelineWithLimit: (interactionId: string, limit: number) => ['timeline', interactionId, 'limit', limit] as const,
@@ -31,91 +31,91 @@ export const queryKeys = {
   // Message related queries
   messages: ['messages'] as const,
   messagesByInteraction: (interactionId: string) => ['messages', 'interaction', interactionId] as const,
-  recentMessages: (profileId: string, entityId: string, limit: number) =>
-    ['messages', 'profile', profileId, 'recent', entityId, 'limit', limit] as const,
-  
+  recentMessages: (entityId: string, limit: number) =>
+    ['messages', 'entity', entityId, 'recent', 'limit', limit] as const,
+
   // Transaction related queries
   transactions: ['transactions'] as const,
-  transactionsByEntity: (profileId: string, entityId: string) =>
-    ['transactions', 'profile', profileId, 'entity', entityId] as const,
-  transactionsByWallet: (profileId: string, walletId: string) =>
-    ['transactions', 'profile', profileId, 'wallet', walletId] as const,
-  transactionsByAccount: (profileId: string, accountId: string, limit: number) =>
-    ['transactions', 'profile', profileId, 'account', accountId, 'limit', limit] as const,
-  recentTransactions: (profileId: string, entityId: string, limit: number) =>
-    ['transactions', 'profile', profileId, 'recent', entityId, 'limit', limit] as const,
+  transactionsByEntity: (entityId: string) =>
+    ['transactions', 'entity', entityId] as const,
+  transactionsByWallet: (entityId: string, walletId: string) =>
+    ['transactions', 'entity', entityId, 'wallet', walletId] as const,
+  transactionsByAccount: (entityId: string, accountId: string, limit: number) =>
+    ['transactions', 'entity', entityId, 'account', accountId, 'limit', limit] as const,
+  recentTransactions: (entityId: string, limit: number) =>
+    ['transactions', 'entity', entityId, 'recent', 'limit', limit] as const,
   transactionDetails: (transactionId: string) => ['transactions', 'details', transactionId] as const,
-  
+
   // Search related queries
   search: ['search'] as const,
   searchEntities: (query: string) => ['search', 'entities', query] as const,
   searchContacts: (query: string) => ['search', 'contacts', query] as const,
-  
+
   // User/Profile related queries
   profile: ['profile'] as const,
-  userProfile: (profileId: string) => ['profile', profileId] as const,
-  currentProfile: (profileId: string) => ['profile', 'current', profileId] as const,
-  profileDetails: (profileId: string) => ['profile', 'details', profileId] as const,
-  availableProfiles: ['profile', 'available'] as const, // Multi-profile switching (profile-agnostic)
-  kycStatus: (profileId: string) => ['kyc', 'status', 'profile', profileId] as const,
-  verificationStatus: (profileId: string) => ['verification', 'status', 'profile', profileId] as const,
+  userProfile: (entityId: string) => ['profile', 'entity', entityId] as const,
+  currentProfile: (entityId: string) => ['profile', 'current', 'entity', entityId] as const,
+  profileDetails: (entityId: string) => ['profile', 'details', 'entity', entityId] as const,
+  availableProfiles: ['profile', 'available'] as const, // Multi-profile switching (entity-agnostic)
+  kycStatus: (entityId: string) => ['kyc', 'status', 'entity', entityId] as const,
+  verificationStatus: (entityId: string) => ['verification', 'status', 'entity', entityId] as const,
 
-  // KYC related queries (Phase 3)
+  // KYC related queries
   kyc: ['kyc'] as const,
-  kycByEntity: (profileId: string, entityId: string) =>
-    ['kyc', 'profile', profileId, 'entity', entityId] as const,
-  kycStep: (profileId: string, entityId: string, stepType: string) =>
-    ['kyc', 'profile', profileId, 'step', entityId, stepType] as const,
-  kycProgress: (profileId: string, entityId: string) =>
-    ['kyc', 'profile', profileId, 'progress', entityId] as const,
-  
+  kycByEntity: (entityId: string) =>
+    ['kyc', 'entity', entityId] as const,
+  kycStep: (entityId: string, stepType: string) =>
+    ['kyc', 'entity', entityId, 'step', stepType] as const,
+  kycProgress: (entityId: string) =>
+    ['kyc', 'entity', entityId, 'progress'] as const,
+
   // Contact related queries
   contacts: ['contacts'] as const,
-  contactsByEntity: (profileId: string, entityId: string) =>
-    ['contacts', 'profile', profileId, 'entity', entityId] as const,
+  contactsByEntity: (entityId: string) =>
+    ['contacts', 'entity', entityId] as const,
   contactDetails: (contactId: string) => ['contacts', 'details', contactId] as const,
 
   // Conversation related queries
   conversations: ['conversations'] as const,
-  recentConversations: (profileId: string, entityId: string, options?: any) =>
-    ['conversations', 'profile', profileId, 'recent', entityId, options] as const,
+  recentConversations: (entityId: string, options?: any) =>
+    ['conversations', 'entity', entityId, 'recent', options] as const,
   conversationDetails: (conversationId: string) => ['conversations', 'details', conversationId] as const,
-  
+
   // System/Reference data queries
   currencies: ['currencies'] as const,
   countries: ['countries'] as const,
   exchangeRates: ['exchange-rates'] as const,
-  
+
   // Real-time/Live data queries
-  liveBalances: (profileId: string, entityId: string) =>
-    ['live', 'balances', 'profile', profileId, entityId] as const,
-  liveTransactions: (profileId: string, entityId: string) =>
-    ['live', 'transactions', 'profile', profileId, entityId] as const,
+  liveBalances: (entityId: string) =>
+    ['live', 'balances', 'entity', entityId] as const,
+  liveTransactions: (entityId: string) =>
+    ['live', 'transactions', 'entity', entityId] as const,
   liveMessages: (interactionId: string) => ['live', 'messages', interactionId] as const,
 } as const;
 
 /**
  * Query key utilities for common operations
  *
- * UPDATED: 2025-01-18 - Now requires profileId for security isolation
+ * UPDATED: 2025-01-28 - Migrated to entity-only (entity-first architecture)
  */
 export const queryKeyUtils = {
   /**
    * Get all query keys that should be invalidated when user data changes
    *
-   * SECURITY: Now requires profileId to ensure only the current profile's data is invalidated
+   * Entity-first: Uses entityId only for cache isolation
    */
-  getUserDataKeys: (profileId: string, entityId: string) => [
-    queryKeys.balancesByEntity(profileId, entityId),
-    queryKeys.walletsByEntity(profileId, entityId),
-    queryKeys.interactionsByEntity(profileId, entityId),
-    queryKeys.transactionsByEntity(profileId, entityId),
-    queryKeys.contactsByEntity(profileId, entityId),
-    queryKeys.currentProfile(profileId),
-    queryKeys.kycByEntity(profileId, entityId),
-    queryKeys.kycProgress(profileId, entityId),
+  getUserDataKeys: (entityId: string) => [
+    queryKeys.balancesByEntity(entityId),
+    queryKeys.walletsByEntity(entityId),
+    queryKeys.interactionsByEntity(entityId),
+    queryKeys.transactionsByEntity(entityId),
+    queryKeys.contactsByEntity(entityId),
+    queryKeys.currentProfile(entityId),
+    queryKeys.kycByEntity(entityId),
+    queryKeys.kycProgress(entityId),
   ],
-  
+
   /**
    * Get all query keys that should be invalidated when network reconnects
    */
@@ -126,7 +126,7 @@ export const queryKeyUtils = {
     queryKeys.currencies,
     queryKeys.exchangeRates,
   ],
-  
+
   /**
    * Get all query keys for a specific interaction
    */
@@ -136,27 +136,27 @@ export const queryKeyUtils = {
     queryKeys.messagesByInteraction(interactionId),
     queryKeys.liveMessages(interactionId),
   ],
-  
+
   /**
    * Get all query keys for a specific wallet
    *
-   * SECURITY: Now requires profileId for profile isolation
+   * Entity-first: Uses entityId only for cache isolation
    */
-  getWalletKeys: (profileId: string, walletId: string, entityId: string) => [
-    queryKeys.transactionsByWallet(profileId, walletId),
-    queryKeys.balancesByEntity(profileId, entityId),
-    queryKeys.walletsByEntity(profileId, entityId),
+  getWalletKeys: (entityId: string, walletId: string) => [
+    queryKeys.transactionsByWallet(entityId, walletId),
+    queryKeys.balancesByEntity(entityId),
+    queryKeys.walletsByEntity(entityId),
   ],
 
   /**
    * Get all query keys for a specific account
    *
-   * SECURITY: Now requires profileId for profile isolation
+   * Entity-first: Uses entityId only for cache isolation
    */
-  getAccountKeys: (profileId: string, accountId: string, entityId: string) => [
-    queryKeys.transactionsByAccount(profileId, accountId, 20), // Default limit
-    queryKeys.balancesByEntity(profileId, entityId),
-    queryKeys.walletsByEntity(profileId, entityId),
+  getAccountKeys: (entityId: string, accountId: string) => [
+    queryKeys.transactionsByAccount(entityId, accountId, 20), // Default limit
+    queryKeys.balancesByEntity(entityId),
+    queryKeys.walletsByEntity(entityId),
   ],
 };
 
@@ -385,24 +385,24 @@ export const debugQueryKeys = {
 };
 
 /**
- * PHASE 5: Profile-Aware Query Key Type Safety (2025-01-18)
+ * Entity-Aware Query Key Type Safety (2025-01-28)
  *
  * Compile-time and runtime validation to ensure all user-sensitive queries
- * include profileId for proper data isolation between personal/business profiles.
+ * include entityId for proper data isolation (entity-first architecture).
  */
 
-// Type for profile-aware query keys
-export type ProfileAwareQueryKey<T extends readonly unknown[] = readonly unknown[]> =
-  readonly [string, 'profile', string, ...T];
+// Type for entity-aware query keys
+export type EntityAwareQueryKey<T extends readonly unknown[] = readonly unknown[]> =
+  readonly [string, 'entity', string, ...T];
 
 /**
- * Runtime assertion to verify a query key is profile-aware
- * Throws if query key doesn't follow the profile-aware pattern
+ * Runtime assertion to verify a query key is entity-aware
+ * Throws if query key doesn't follow the entity-aware pattern
  */
-export function assertProfileAware(
+export function assertEntityAware(
   queryKey: unknown[],
   context?: string
-): asserts queryKey is ProfileAwareQueryKey<unknown[]> {
+): asserts queryKey is EntityAwareQueryKey<unknown[]> {
   const contextMsg = context ? ` (context: ${context})` : '';
 
   if (!Array.isArray(queryKey)) {
@@ -411,33 +411,33 @@ export function assertProfileAware(
 
   if (queryKey.length < 3) {
     throw new Error(
-      `Query key must have at least 3 segments: [feature, 'profile', profileId]${contextMsg}. ` +
+      `Query key must have at least 3 segments: [feature, 'entity', entityId]${contextMsg}. ` +
       `Got: ${JSON.stringify(queryKey)}`
     );
   }
 
-  if (queryKey[1] !== 'profile') {
+  if (queryKey[1] !== 'entity') {
     throw new Error(
-      `Query key must include 'profile' at index 1 for data isolation${contextMsg}. ` +
+      `Query key must include 'entity' at index 1 for data isolation${contextMsg}. ` +
       `Got: ${JSON.stringify(queryKey)}`
     );
   }
 
   if (typeof queryKey[2] !== 'string' || !queryKey[2]) {
     throw new Error(
-      `Query key must include profileId (string) at index 2${contextMsg}. ` +
+      `Query key must include entityId (string) at index 2${contextMsg}. ` +
       `Got: ${JSON.stringify(queryKey)}`
     );
   }
 }
 
 /**
- * Type guard to check if a query key is profile-aware
- * Non-throwing version of assertProfileAware
+ * Type guard to check if a query key is entity-aware
+ * Non-throwing version of assertEntityAware
  */
-export function isProfileAware(queryKey: unknown[]): queryKey is ProfileAwareQueryKey<unknown[]> {
+export function isEntityAware(queryKey: unknown[]): queryKey is EntityAwareQueryKey<unknown[]> {
   try {
-    assertProfileAware(queryKey);
+    assertEntityAware(queryKey);
     return true;
   } catch {
     return false;
@@ -445,11 +445,11 @@ export function isProfileAware(queryKey: unknown[]): queryKey is ProfileAwareQue
 }
 
 /**
- * Extract profileId from a profile-aware query key
- * Returns null if query key is not profile-aware
+ * Extract entityId from an entity-aware query key
+ * Returns null if query key is not entity-aware
  */
-export function extractProfileId(queryKey: unknown[]): string | null {
-  if (!isProfileAware(queryKey)) {
+export function extractEntityIdFromKey(queryKey: unknown[]): string | null {
+  if (!isEntityAware(queryKey)) {
     return null;
   }
   return queryKey[2];
@@ -457,15 +457,15 @@ export function extractProfileId(queryKey: unknown[]): string | null {
 
 /**
  * Development mode validator for query hooks
- * Call this in development to catch missing profileId early
+ * Call this in development to catch missing entityId early
  *
  * Usage:
  * const query = useQuery({
- *   queryKey: validateProfileQueryKey(queryKeys.kycStatus(profileId), 'useKycStatus'),
+ *   queryKey: validateEntityQueryKey(queryKeys.kycStatus(entityId), 'useKycStatus'),
  *   ...
  * });
  */
-export function validateProfileQueryKey<T extends readonly unknown[]>(
+export function validateEntityQueryKey<T extends readonly unknown[]>(
   queryKey: T,
   hookName?: string
 ): T {
@@ -479,17 +479,17 @@ export function validateProfileQueryKey<T extends readonly unknown[]>(
     if (Array.isArray(queryKey) && queryKey.length > 0) {
       const feature = String(queryKey[0]);
 
-      // If this is a user-sensitive feature, it MUST be profile-aware
+      // If this is a user-sensitive feature, it MUST be entity-aware
       if (features.includes(feature)) {
         try {
-          assertProfileAware(queryKey, hookName);
+          assertEntityAware(queryKey, hookName);
         } catch (error: any) {
           // Log warning but don't crash in development
           console.error(
             `[QueryKey Validation] ${error.message}\n` +
             `Hook: ${hookName || 'unknown'}\n` +
             `Feature: ${feature}\n` +
-            `This query MUST include profileId for data isolation!`
+            `This query MUST include entityId for data isolation!`
           );
         }
       }
@@ -500,31 +500,31 @@ export function validateProfileQueryKey<T extends readonly unknown[]>(
 }
 
 /**
- * Get all query keys for a specific profile
+ * Get all query keys for a specific entity
  * Used for surgical cache invalidation during profile switching
  */
-export function getProfileQueryKeys(profileId: string): Array<ProfileAwareQueryKey> {
+export function getEntityQueryKeys(entityId: string): Array<EntityAwareQueryKey> {
   return [
     // User profile queries
-    ['profile', 'profile', profileId] as ProfileAwareQueryKey,
-    ['profile', 'profile', profileId, 'current'] as ProfileAwareQueryKey,
-    ['profile', 'profile', profileId, 'details'] as ProfileAwareQueryKey,
+    ['profile', 'entity', entityId] as EntityAwareQueryKey,
+    ['profile', 'entity', entityId, 'current'] as EntityAwareQueryKey,
+    ['profile', 'entity', entityId, 'details'] as EntityAwareQueryKey,
 
     // KYC queries
-    ['kyc', 'profile', profileId] as ProfileAwareQueryKey,
-    ['kyc', 'profile', profileId, 'status'] as ProfileAwareQueryKey,
-    ['verification', 'profile', profileId, 'status'] as ProfileAwareQueryKey,
+    ['kyc', 'entity', entityId] as EntityAwareQueryKey,
+    ['kyc', 'entity', entityId, 'status'] as EntityAwareQueryKey,
+    ['verification', 'entity', entityId, 'status'] as EntityAwareQueryKey,
   ];
 }
 
 /**
- * Development utilities for profile-aware query debugging
+ * Development utilities for entity-aware query debugging
  */
-export const profileQueryDebug = {
+export const entityQueryDebug = {
   /**
-   * Check if query key needs profileId but is missing it
+   * Check if query key needs entityId but is missing it
    */
-  isMissingProfile: (queryKey: unknown[]): boolean => {
+  isMissingEntity: (queryKey: unknown[]): boolean => {
     if (!Array.isArray(queryKey) || queryKey.length === 0) {
       return false;
     }
@@ -535,36 +535,36 @@ export const profileQueryDebug = {
       'interactions', 'contacts', 'conversations'
     ];
 
-    return sensitiveFeatures.includes(feature) && !isProfileAware(queryKey);
+    return sensitiveFeatures.includes(feature) && !isEntityAware(queryKey);
   },
 
   /**
-   * Analyze a query key and report profile isolation status
+   * Analyze a query key and report entity isolation status
    */
   analyze: (queryKey: unknown[]): {
-    isProfileAware: boolean;
-    profileId: string | null;
-    needsProfile: boolean;
+    isEntityAware: boolean;
+    entityId: string | null;
+    needsEntity: boolean;
     recommendation: string;
   } => {
-    const aware = isProfileAware(queryKey);
-    const profileId = extractProfileId(queryKey);
-    const needsProfile = profileQueryDebug.isMissingProfile(queryKey);
+    const aware = isEntityAware(queryKey);
+    const entityId = extractEntityIdFromKey(queryKey);
+    const needsEntity = entityQueryDebug.isMissingEntity(queryKey);
 
     let recommendation = 'OK';
-    if (needsProfile) {
-      recommendation = 'CRITICAL: This query MUST include profileId for data isolation!';
+    if (needsEntity) {
+      recommendation = 'CRITICAL: This query MUST include entityId for data isolation!';
     } else if (!aware && Array.isArray(queryKey) && queryKey.length > 0) {
       const feature = String(queryKey[0]);
       if (!['currencies', 'countries', 'exchange-rates'].includes(feature)) {
-        recommendation = 'Consider adding profileId if this query returns user-specific data';
+        recommendation = 'Consider adding entityId if this query returns user-specific data';
       }
     }
 
     return {
-      isProfileAware: aware,
-      profileId,
-      needsProfile,
+      isEntityAware: aware,
+      entityId,
+      needsEntity,
       recommendation,
     };
   },
