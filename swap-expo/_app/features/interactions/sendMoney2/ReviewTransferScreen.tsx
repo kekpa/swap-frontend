@@ -47,7 +47,7 @@ interface ReviewTransferScreenProps {
 const ReviewTransferScreen: React.FC<ReviewTransferScreenProps> = ({ route }) => {
   const navigation = useNavigation<StackNavigationProp<any>>();
   const { theme } = useTheme();
-  const { user: currentUser, currentProfileId } = useAuthContext();
+  const { user: currentUser } = useAuthContext();
   const [editingMessage, setEditingMessage] = React.useState(false);
   const [messageText, setMessageText] = React.useState('');
   const [isSending, setIsSending] = React.useState(false);
@@ -111,8 +111,8 @@ const ReviewTransferScreen: React.FC<ReviewTransferScreenProps> = ({ route }) =>
 
     logger.debug(`[ReviewTransferScreen] 🚀 LOCAL-FIRST: Starting transaction`, "ReviewTransferScreen");
 
-    // Validation
-    if (!fromEntityId || !currentProfileId) {
+    // Validation (entity-first: only need entityId)
+    if (!fromEntityId) {
       alert('Authentication error: Please log in again');
       return;
     }
@@ -146,8 +146,8 @@ const ReviewTransferScreen: React.FC<ReviewTransferScreenProps> = ({ route }) =>
       // Uses from_entity_id/to_entity_id for consistency with Supabase
       const { localId, success, error } = await unifiedTimelineService.sendTransaction({
         interactionId,
-        profileId: currentProfileId,
-        fromEntityId,      // Who is sending money
+        entityId: fromEntityId,  // Current user's entity_id (entity-first architecture)
+        fromEntityId,            // Who is sending money
         toEntityId,        // Who is receiving money
         amount,
         currencyId,

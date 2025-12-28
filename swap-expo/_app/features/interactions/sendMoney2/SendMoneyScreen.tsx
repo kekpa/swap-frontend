@@ -141,23 +141,11 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
 
   useEffect(() => {
     const fetchSenderWallets = async () => {
-      if (!currentUser?.profileId) return;
+      if (!currentUser?.entityId) return;
       setIsLoadingSenderAccounts(true);
 
       try {
-        // Get current user's entity ID
-        let entityId = currentUser.entityId;
-
-        if (!entityId) {
-          // If not available in JWT, fetch it from the entities service
-          try {
-            const entityResp = await apiClient.get(`/entities/reference/profile/${currentUser.profileId}`);
-            entityId = entityResp?.data?.id || currentUser.profileId;
-          } catch (err) {
-            console.warn('Failed to fetch entity ID for current user', err);
-            entityId = currentUser.profileId; // Fallback to profileId
-          }
-        }
+        const entityId = currentUser.entityId;
 
         // Use new wallet endpoint to get all wallets for the entity
         const resp = await apiClient.get(WALLET_PATHS.BY_ENTITY(entityId));
@@ -203,7 +191,7 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
               currency_symbol: 'G',
               balance: 1000.00,
               account_name: 'Main',
-              entity_id: currentUser.profileId!,
+              entity_id: currentUser.entityId!,
               account_type: { name: 'regular', display_name: 'Main' },
               account_type_display_name: 'Main',
               account_number_last4: '1234'
@@ -215,7 +203,7 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
               currency_symbol: '$',
               balance: 250.00,
               account_name: 'Main',
-              entity_id: currentUser.profileId!,
+              entity_id: currentUser.entityId!,
               account_type: { name: 'regular', display_name: 'Main' },
               account_type_display_name: 'Main',
               account_number_last4: '5678'
@@ -229,7 +217,7 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
       }
     };
     fetchSenderWallets();
-  }, [currentUser?.profileId, currentUser?.entityId]);
+  }, [currentUser?.entityId]);
 
   const handleClose = () => {
     navigation.goBack();

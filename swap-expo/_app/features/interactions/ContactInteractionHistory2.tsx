@@ -157,7 +157,7 @@ const createGlobalStyles = (theme: Theme) => StyleSheet.create({
   headerActions: { flexDirection: 'row' },
   headerButton: { width: 34, height: 34, borderRadius: 17, justifyContent: 'center', alignItems: 'center', marginLeft: theme.spacing.sm },
   filterBar: { flexDirection: 'row', justifyContent: 'center', gap: theme.spacing.sm, padding: theme.spacing.sm, backgroundColor: theme.colors.card, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  contentArea: { flex: 1, backgroundColor: theme.colors.white },
+  contentArea: { flex: 1, backgroundColor: theme.colors.background },
   filterBadge: { paddingVertical: theme.spacing.xs + 2, paddingHorizontal: theme.spacing.md, borderRadius: theme.borderRadius.xl, backgroundColor: theme.colors.grayUltraLight },
   activeFilterBadge: { backgroundColor: theme.colors.primaryLight },
   filterBadgeText: { fontSize: theme.typography.fontSize.sm, fontWeight: '500', color: theme.colors.textSecondary },
@@ -316,7 +316,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     isLoadingMore: isFetchingNextPage,
     error: timelineError,
   } = useLocalTimeline(currentInteractionId, {
-    enabled: !!currentInteractionId && !!currentUser?.profileId,
+    enabled: !!currentInteractionId && !!currentUser?.entityId,
     pageSize: 50,
   });
 
@@ -363,13 +363,13 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
 
   const hasTimelineError = !!timelineError;
 
-  // 🚀 Start background sync service on mount
+  // 🚀 Start background sync service on mount (entity-first)
   useEffect(() => {
-    if (currentUser?.profileId) {
-      backgroundSyncService.start(currentUser.profileId);
+    if (currentUser?.entityId) {
+      backgroundSyncService.start(currentUser.entityId);
       logger.debug('[ContactInteractionHistory] 🚀 BackgroundSyncService started');
     }
-  }, [currentUser?.profileId]);
+  }, [currentUser?.entityId]);
 
   // Debug logging for timeline state
   useEffect(() => {
@@ -564,15 +564,14 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
 
   const handleSendMessage = async () => {
     // Validate input and user
-    if (!messageInput.trim() || !currentUser?.entityId || !contactId || !currentUser?.profileId) {
+    if (!messageInput.trim() || !currentUser?.entityId || !contactId) {
       const errorDetails = {
         messageInputEmpty: !messageInput.trim(),
-        currentUserMissing: !currentUser?.entityId,
+        entityIdMissing: !currentUser?.entityId,
         contactIdMissing: !contactId,
-        profileIdMissing: !currentUser?.profileId,
       };
       logger.warn(
-        'Cannot send message: Missing input, user/entity ID, contact ID, or profile ID.',
+        'Cannot send message: Missing input, entity ID, or contact ID.',
         `Details: ${JSON.stringify(errorDetails)}`
       );
       return;
@@ -614,8 +613,8 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
       // Uses from_entity_id/to_entity_id for consistency with Supabase
       const { localId, success, error } = await unifiedTimelineService.sendMessage({
         interactionId: interactionIdToUse,
-        profileId: currentUser.profileId,
-        fromEntityId: currentUser.entityId,  // Who is sending
+        entityId: currentUser.entityId,       // Current user's entity_id
+        fromEntityId: currentUser.entityId,   // Who is sending
         toEntityId: contactId,                // Who is receiving
         content: messageToSend,
         messageType: 'text',

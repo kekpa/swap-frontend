@@ -188,10 +188,10 @@ const WalletDashboard: React.FC = () => {
       logger.debug('[WalletDashboard] ✅ Wallet initialization successful');
 
       // CRITICAL: Invalidate balance cache so WalletStackCard shows the new wallet
-      if (user?.profileId) {
+      if (entityId) {
         logger.debug('[WalletDashboard] 🔄 Invalidating balance cache...');
         await queryClient.invalidateQueries({
-          queryKey: queryKeys.balancesByEntity(user.profileId, entityId)
+          queryKey: queryKeys.balancesByEntity(entityId)
         });
         // Force immediate refetch to get fresh wallet data
         await refreshBalances();

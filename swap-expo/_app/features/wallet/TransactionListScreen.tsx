@@ -20,7 +20,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useAuthContext } from '../auth/context/AuthContext';
 import { useTransactionList } from '../../hooks-data/useRecentTransactions';
 import { useBalances } from '../../hooks-data/useBalances';
-import { useCurrentProfileId } from '../../hooks/useCurrentProfileId';
+import { useCurrentEntityId } from '../../hooks/useCurrentEntityId';
 import { useInteractions } from '../../hooks-data/useInteractions';
 import { formatRelativeTimestamp } from '../../utils/dateFormatting';
 import logger from '../../utils/logger';
@@ -57,7 +57,7 @@ const TransactionListScreen: React.FC = () => {
   const { theme } = useTheme();
   const authContext = useAuthContext();
   const user = authContext.user;
-  const profileId = useCurrentProfileId();
+  const entityId = useCurrentEntityId();
 
   // Entity name cache for resolving contact names from interaction_members
   const [entityNameCache, setEntityNameCache] = useState<Map<string, string>>(new Map());

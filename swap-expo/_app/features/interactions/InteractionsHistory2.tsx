@@ -498,7 +498,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         // Note: We don't leave profile room here since we want to receive messages
         // even when navigating to other screens within the app
       };
-    }, [route.params?.navigateToContact, route.params?.navigateToNewChat, contactsSynced, hasContactsPermission, initializeContacts, navigation, user?.profileId])
+    }, [route.params?.navigateToContact, route.params?.navigateToNewChat, contactsSynced, hasContactsPermission, initializeContacts, navigation, user?.entityId])
   );
 
   // Handle search activation
