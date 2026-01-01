@@ -163,12 +163,11 @@ class WebSocketService {
         const socketUrl = `${ENV.REALTIME_URL}/messaging`;
         logger.debug(`[WebSocket] 🔌 Connecting to: ${socketUrl}`);
         logger.info(`[WebSocket] 🔌 Full URL for debugging: ${socketUrl}`);
-        console.log('🔥🔥🔥 [websocketService] ATTEMPTING CONNECTION:', {
+        logger.debug('Attempting connection', 'ws', {
           url: socketUrl,
           realtimeUrl: ENV.REALTIME_URL,
           hasToken: !!token,
-          isOfflineMode: this.isOfflineMode,
-          timestamp: new Date().toISOString()
+          isOfflineMode: this.isOfflineMode
         });
         
         this.socket = io(socketUrl, {
@@ -204,27 +203,15 @@ class WebSocketService {
           this.isConnected = true;
           this.reconnectAttempts = 0;
           logger.info('[WebSocket] ✅ Connected successfully');
-          console.log('🔥🔥🔥 [websocketService] SOCKET CONNECTED:', {
-            socketId: this.socket?.id,
-            willAuthenticate: true,
-            timestamp: new Date().toISOString()
-          });
 
           // Send authentication message to backend
-          logger.debug('[WebSocket] 🔐 Sending authentication token...');
-          console.log('🔥🔥🔥 [websocketService] SENDING AUTH TOKEN:', {
-            tokenLength: token ? token.length : 0,
-            tokenStart: token ? token.substring(0, 20) : 'null',
-            socketId: this.socket?.id,
-            timestamp: new Date().toISOString()
-          });
+          logger.debug('[WebSocket] 🔐 Sending authentication...');
           this.socket!.emit('authenticate', { token });
 
           // Wait for 'authenticated' event before resolving (5 second timeout)
           authTimeout = setTimeout(() => {
             if (!this.isAuthenticated) {
               logger.warn('[WebSocket] ⏰ Authentication timeout - no response from backend');
-              console.log('🔥🔥🔥 [websocketService] AUTH TIMEOUT - NO BACKEND RESPONSE');
               resolve(false);
             }
           }, 5000);
@@ -265,11 +252,10 @@ class WebSocketService {
           if (authTimeout) clearTimeout(authTimeout);
           this.isAuthenticated = true;
           logger.info('[WebSocket] 🔐 Authentication successful');
-          console.log('🔥🔥🔥 [websocketService] AUTHENTICATED EVENT RECEIVED:', {
+          logger.debug('Authenticated event received', 'ws', {
             isAuthenticated: this.isAuthenticated,
             isConnected: this.isConnected,
-            socketId: this.socket?.id,
-            timestamp: new Date().toISOString()
+            socketId: this.socket?.id
           });
 
           // ✅ WhatsApp/Telegram pattern: Auto-rejoin all rooms after reconnection
@@ -356,32 +342,29 @@ class WebSocketService {
 
     if (!this.isConnected || !this.socket) {
       logger.warn(`[WebSocket] ⚠️ Cannot join interaction ${interactionId} - not connected`);
-      console.log('🔥🔥🔥 [websocketService] INTERACTION JOIN FAILED - NOT CONNECTED:', {
+      logger.warn('Interaction join failed - not connected', 'ws', {
         interactionId,
         isConnected: this.isConnected,
-        hasSocket: !!this.socket,
-        timestamp: new Date().toISOString()
+        hasSocket: !!this.socket
       });
       return;
     }
 
     if (!this.isAuthenticated) {
       logger.warn(`[WebSocket] Socket not authenticated. Cannot join interaction room.`);
-      console.log('🔥🔥🔥 [websocketService] INTERACTION JOIN FAILED - NOT AUTHENTICATED:', {
+      logger.warn('Interaction join failed - not authenticated', 'ws', {
         interactionId,
-        isAuthenticated: this.isAuthenticated,
-        timestamp: new Date().toISOString()
+        isAuthenticated: this.isAuthenticated
       });
       return;
     }
 
     logger.info(`[WebSocket] 🏠 Attempting to join interaction: ${interactionId}`);
-    console.log('🔥🔥🔥 [websocketService] JOINING INTERACTION ROOM:', {
+    logger.debug('Joining interaction room', 'ws', {
       interactionId,
       socketId: this.socket?.id,
       isConnected: this.isConnected,
-      isAuthenticated: this.isAuthenticated,
-      timestamp: new Date().toISOString()
+      isAuthenticated: this.isAuthenticated
     });
 
     this.socket.emit('join_interaction', { interactionId }, (response: any) => {
@@ -389,25 +372,22 @@ class WebSocketService {
         // ✅ Track this room for auto-rejoin after reconnection
         this.activeInteractionRooms.add(interactionId);
         logger.info(`[WebSocket] 🏠 Successfully joined interaction: ${interactionId}`);
-        console.log('🔥🔥🔥 [websocketService] INTERACTION ROOM JOIN SUCCESS:', {
+        logger.debug('Interaction room join success', 'ws', {
           interactionId,
-          response,
-          socketId: this.socket?.id,
-          timestamp: new Date().toISOString()
+          socketId: this.socket?.id
         });
       } else {
         logger.error(`[WebSocket] 🚫 Failed to join interaction: ${interactionId}`, response?.error);
-        console.log('🔥🔥🔥 [websocketService] INTERACTION ROOM JOIN FAILED:', {
+        logger.warn('Interaction room join failed', 'ws', {
           interactionId,
           error: response?.error,
-          socketId: this.socket?.id,
-          timestamp: new Date().toISOString()
+          socketId: this.socket?.id
         });
 
         // Retry once after a short delay if authentication failed
         if (response?.error === 'Not authenticated') {
           setTimeout(() => {
-            console.log('🔥🔥🔥 [websocketService] RETRYING INTERACTION ROOM JOIN after authentication failure...');
+            logger.debug('Retrying interaction room join after auth failure', 'ws');
             if (this.isConnected && this.socket && this.isAuthenticated) {
               this.joinInteraction(interactionId);
             }
@@ -453,25 +433,23 @@ class WebSocketService {
         // ✅ Track current entity room for auto-rejoin after reconnection
         this.currentEntityId = entityId;
         logger.info(`[WebSocket] 🏠 Successfully joined entity room: ${entityId}`);
-        console.log('🔥🔥🔥 [websocketService] ENTITY ROOM JOIN SUCCESS:', {
+        logger.debug('Entity room join success', 'ws', {
           entityId,
           entityRoom: response.entityRoom,
-          socketId: this.socket?.id,
-          timestamp: new Date().toISOString()
+          socketId: this.socket?.id
         });
       } else {
         logger.error(`[WebSocket] 🚫 Failed to join entity room: ${entityId}`, response?.error);
-        console.log('🔥🔥🔥 [websocketService] ENTITY ROOM JOIN FAILED:', {
+        logger.warn('Entity room join failed', 'ws', {
           entityId,
           error: response?.error,
-          socketId: this.socket?.id,
-          timestamp: new Date().toISOString()
+          socketId: this.socket?.id
         });
 
         // Retry once after a short delay if authentication failed
         if (response?.error === 'Not authenticated') {
           setTimeout(() => {
-            console.log('🔥🔥🔥 [websocketService] RETRYING ENTITY ROOM JOIN after authentication failure...');
+            logger.debug('Retrying entity room join after auth failure', 'ws');
             if (this.isConnected && this.socket && this.isAuthenticated) {
               this.joinEntityRoom(entityId);
             }
@@ -507,25 +485,20 @@ class WebSocketService {
   onMessage(callback: (data: any) => void): () => void {
     if (!this.socket) {
       logger.warn('[WebSocket] ⚠️ Cannot listen for messages - socket not initialized');
-      console.warn('🔥🔥🔥 [websocketService] ❌ EVENT LISTENER ATTACHMENT FAILED:', {
-        reason: 'SOCKET_NOT_INITIALIZED',
+      logger.warn('Event listener attachment failed - socket not initialized', 'ws', {
         isConnected: this.isConnected,
         isAuthenticated: this.isAuthenticated,
-        hasSocket: !!this.socket,
-        timestamp: new Date().toISOString(),
-        hint: 'WebSocketHandler was initialized before WebSocket connection succeeded'
+        hasSocket: !!this.socket
       });
       return () => {};
     }
 
     // Wrap callback with logging to track raw Socket.IO events
     const wrappedCallback = (data: any) => {
-      console.log('🔥🔥🔥 [websocketService] RAW SOCKET.IO EVENT RECEIVED:', {
-        event: 'new_message',
+      logger.debug('Raw socket event received: new_message', 'ws', {
         messageId: data?.id,
         interactionId: data?.interaction_id,
         fromEntityId: data?.from_entity_id,
-        timestamp: new Date().toISOString(),
         socketConnected: this.isConnected,
         socketAuthenticated: this.isAuthenticated,
       });
@@ -534,12 +507,10 @@ class WebSocketService {
 
     this.socket.on('new_message', wrappedCallback);
 
-    console.log('🔥🔥🔥 [websocketService] ✅ EVENT LISTENER ATTACHED:', {
-      event: 'new_message',
+    logger.debug('Event listener attached: new_message', 'ws', {
       socketId: this.socket.id,
       isConnected: this.isConnected,
-      isAuthenticated: this.isAuthenticated,
-      timestamp: new Date().toISOString()
+      isAuthenticated: this.isAuthenticated
     });
 
     return () => {

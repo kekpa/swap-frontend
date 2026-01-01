@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useTheme } from '../../theme/ThemeContext';
+import logger from '../../utils/logger';
 import { Theme } from '../../theme/theme';
 
 // Define a navigation stack param list
@@ -75,7 +76,7 @@ const OfferDetailsScreen: React.FC = () => {
   
   const handleRedeemPress = () => {
     // Handle offer redemption
-    console.log(`Redeeming offer ${offerDetails.id} for ${offerDetails.pointsCost} points`);
+    logger.debug("Redeeming offer", "data", { offerId: offerDetails.id, pointsCost: offerDetails.pointsCost });
     // Normally you would call an API here and show success/failure
     
     // For demo, we'll just go back to the offers list

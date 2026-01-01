@@ -33,6 +33,9 @@ export * from './localStoragePolyfill';
 // Pin user storage
 export * from './pinUserStorage';
 
+// Rosca utilities
+export * from './roscaUtils';
+
 // NOTE: refreshManager.ts was replaced by RefreshContext.tsx
 // Use: import { useRefresh } from '../contexts/RefreshContext'
 

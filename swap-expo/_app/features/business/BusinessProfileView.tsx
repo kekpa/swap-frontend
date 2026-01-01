@@ -15,6 +15,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useTheme } from '../../theme/ThemeContext';
 import api from '../../services/api';
+import logger from '../../utils/logger';
 
 type BusinessProfileViewRouteProp = RouteProp<
   { BusinessProfileView: { businessId: string } },
@@ -56,7 +57,7 @@ const BusinessProfileView: React.FC = () => {
       const response = await api.get(`/businesses/${businessId}`);
       setBusiness(response.data);
     } catch (error: any) {
-      console.error('[BusinessProfileView] Error fetching business:', error);
+      logger.error('Error fetching business', error, 'business');
       Alert.alert('Error', 'Failed to load business information');
     } finally {
       setLoading(false);

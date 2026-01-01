@@ -283,8 +283,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ============================================
 
   const logout = useCallback(async (): Promise<void> => {
-    console.log('🚪 [AuthContext] LOGOUT: Starting instant logout');
-    logger.debug('[AuthContext] Starting logout...');
+    logger.debug("Starting instant logout", "auth");
 
     // STEP 1: Reset auth state IMMEDIATELY (Instagram/WhatsApp-style instant logout)
     // Navigator shows sign-in screen instantly - no loading screen
@@ -303,7 +302,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       timestamp: Date.now()
     });
 
-    console.log('🚪 [AuthContext] LOGOUT: Auth state reset - user on sign-in screen');
+    logger.debug("Auth state reset - user on sign-in screen", "auth");
 
     // STEP 2: Background cleanup (invisible to user - they're already on sign-in)
     try {
@@ -317,10 +316,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await loginService.clearBiometricCredentials();
       await clearAllCachedData();
       await walletSecurity.lock();
-      console.log('🚪 [AuthContext] LOGOUT: Background cleanup complete');
-      logger.debug('[AuthContext] Logout completed');
+      logger.debug("Background cleanup complete", "auth");
     } catch (error) {
-      logger.error('[AuthContext] Logout cleanup error:', error);
+      logger.error("Logout cleanup error", error, "auth");
     }
   }, [authHook]);
 
@@ -626,7 +624,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     checkEmailConfirmation,
     setIsAuthenticated,
     setUser: (newUser: User | null) => {
-      console.log('🔐 [AuthContext] setUser called:', {
+      logger.debug("setUser called", "auth", {
         entityId: newUser?.entityId,
         profileId: newUser?.profileId,
         firstName: newUser?.firstName,

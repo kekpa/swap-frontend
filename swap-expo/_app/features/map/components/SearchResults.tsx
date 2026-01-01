@@ -25,6 +25,7 @@ import { SearchResult } from '../../../types/map';
 import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { useMapStore } from '../../../store/mapStore';
 import { useTheme } from '../../../theme/ThemeContext';
+import logger from '../../../utils/logger';
 
 interface SearchResultsProps {
   visible: boolean;
@@ -69,10 +70,10 @@ const useClickOutside = (
         const searchResults = document.getElementById('search-results-container');
         const searchBar = document.getElementById('search-bar-container');
         
-        if (searchResults && searchBar && 
-            !searchResults.contains(event.target as Node) && 
+        if (searchResults && searchBar &&
+            !searchResults.contains(event.target as Node) &&
             !searchBar.contains(event.target as Node)) {
-          console.log('[SearchResults] Click outside detected');
+          logger.debug("Click outside detected", "navigation");
           onClickOutside();
         }
       };
@@ -247,7 +248,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
     // Cleanup when component unmounts or visibility changes
     return () => {
       if (Platform.OS === 'web' && !visible) {
-        console.log('[SearchResults] Cleaning up web-specific resources');
+        logger.debug("Cleaning up web-specific resources", "navigation");
         if (document.body) {
           document.body.classList.remove('search-closed');
         }

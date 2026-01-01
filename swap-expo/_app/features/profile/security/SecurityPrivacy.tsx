@@ -316,12 +316,12 @@ const SecurityPrivacyScreen: React.FC = () => {
   };
 
   const handleEntityAccess = () => {
-    console.log('Navigate to Entity Relationship Access');
+    logger.debug("Navigate to Entity Relationship Access", "navigation");
     // Implement navigation when screen is available
   };
 
   const handle2FAToggle = (value: boolean) => {
-    console.log('2FA toggled:', value);
+    logger.debug("2FA toggled", "auth", { value });
     // Implement 2FA functionality
   };
 
@@ -366,7 +366,7 @@ const SecurityPrivacyScreen: React.FC = () => {
   };
 
   const handleTransactionVerification = (value: boolean) => {
-    console.log('Transaction verification toggled:', value);
+    logger.debug("Transaction verification toggled", "auth", { value });
     // Implement transaction verification
   };
 

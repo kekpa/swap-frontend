@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { Theme } from '../../theme/theme';
 import { useFullTextSearch } from '../../hooks-data/useFullTextSearch';
+import logger from '../../utils/logger';
 
 interface Transaction {
   id: string;
@@ -276,7 +277,7 @@ const TransactionSearchScreen: React.FC<TransactionSearchScreenProps> = ({
             onTransactionPress(item.id);
           } else if (item.type === 'contact') {
             // Handle contact navigation
-            console.log('Navigate to contact:', item.id);
+            logger.debug('Navigate to contact', 'data', { contactId: item.id });
           }
         }}
       >

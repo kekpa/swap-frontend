@@ -7,6 +7,7 @@
 // Updated: Added Sign Up navigation link - 2025-05-30
 // Updated: Changed PIN login from 4-digit to 6-digit passcode for consistency with KYC flow - 2025-06-07
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import logger from "../../../utils/logger";
 import {
   View,
   Text,
@@ -83,7 +84,7 @@ const SignInScreen = ({ route }: any) => {
       // Don't show if: already shown, no hardware, or already has biometric credentials stored
       return !hasShownPrompt && hasHardware && !hasStoredCredentials;
     } catch (error) {
-      console.error('Error checking biometric prompt status:', error);
+      logger.error('Error checking biometric prompt status', error, 'auth');
       return false;
     }
   };
@@ -92,7 +93,7 @@ const SignInScreen = ({ route }: any) => {
     try {
       await AsyncStorage.setItem('biometric_prompt_shown', 'true');
     } catch (error) {
-      console.error('Error marking biometric prompt as shown:', error);
+      logger.error('Error marking biometric prompt as shown', error, 'auth');
     }
   };
 
@@ -118,20 +119,20 @@ const SignInScreen = ({ route }: any) => {
     (async () => {
       const compatible = await LocalAuthentication.hasHardwareAsync();
       if (!compatible) {
-        console.log('[Biometrics] Device does not have biometric hardware.');
+        logger.debug('Device does not have biometric hardware', 'auth');
         return;
       }
-      
+
       const savedBiometrics = await LocalAuthentication.isEnrolledAsync();
       if (!savedBiometrics) {
-        console.log('[Biometrics] No biometrics are enrolled on this device.');
+        logger.debug('No biometrics are enrolled on this device', 'auth');
         return;
       }
-      
+
       const supported = await LocalAuthentication.supportedAuthenticationTypesAsync();
       setSupportedBiometrics(supported);
       setIsBiometricAvailable(true);
-      console.log('[Biometrics] Supported types:', supported.map(type => LocalAuthentication.AuthenticationType[type]).join(', '));
+      logger.debug('Biometric supported types', 'auth', { types: supported.map(type => LocalAuthentication.AuthenticationType[type]) });
     })();
   }, []);
   
@@ -229,11 +230,11 @@ const SignInScreen = ({ route }: any) => {
         const loginResult = await authContext.loginWithBiometric();
 
         if (loginResult.success) {
-          console.log('Biometric login successful, RootNavigator will handle LoadingScreen');
+          logger.info('Biometric login successful', 'auth');
 
           // If in profile switch mode, switch profile after auth
           if (isProfileSwitchMode && targetProfileId) {
-            console.log('[SignInScreen] Profile switch mode detected (Biometric), switching profile...');
+            logger.debug('Profile switch mode detected (Biometric), switching profile...', 'auth');
             await handleProfileSwitch();
             return; // Exit early
           }
@@ -247,14 +248,14 @@ const SignInScreen = ({ route }: any) => {
         }
       } else {
         // Biometric authentication failed or was cancelled
-        console.log('Biometric authentication failed or cancelled:', result.error);
+        logger.debug('Biometric authentication failed or cancelled', 'auth', { error: result.error });
         Alert.alert(
-          'Authentication Failed', 
+          'Authentication Failed',
           'Biometric authentication failed. Please try again or use your password.'
         );
       }
     } catch (error) {
-      console.error('Biometric authentication error:', error);
+      logger.error('Biometric authentication error', error, 'auth');
       Alert.alert(
         'Error', 
         'An error occurred during biometric authentication. Please try using your password.'
@@ -279,24 +280,24 @@ const SignInScreen = ({ route }: any) => {
       // Continue with login using the identifier as is (could be email, username, or phone)
       try {
         // Use unified login that automatically detects user type
-        console.log('Using unified login that automatically detects user type...');
+        logger.debug('Using unified login that automatically detects user type', 'auth');
         const response = await authContext.unifiedLogin(identifierToLogin, password);
         const loginType = response?.user_type || 'unknown';
 
         if (response && response.success) {
-          console.log(`🚀 [SignInScreen] ${loginType} sign in successful, RootNavigator will handle LoadingScreen`);
+          logger.info(`${loginType} sign in successful`, 'auth');
 
           // Save identifier for next time (Instagram/Revolut pattern)
           try {
             await SecureStore.setItemAsync(LAST_IDENTIFIER_KEY, identifierToLogin);
-            console.log('[SignInScreen] Saved identifier to SecureStore for next login');
+            logger.debug('Saved identifier to SecureStore for next login', 'auth');
           } catch (saveError) {
-            console.log('[SignInScreen] Could not save identifier:', saveError);
+            logger.warn('Could not save identifier', 'auth');
           }
 
           // If in profile switch mode, switch profile after auth
           if (isProfileSwitchMode && targetProfileId) {
-            console.log('[SignInScreen] Profile switch mode detected, switching profile...');
+            logger.debug('Profile switch mode detected, switching profile', 'auth');
             await handleProfileSwitch();
             return; // Exit early, don't do normal login flow
           }
@@ -345,7 +346,7 @@ const SignInScreen = ({ route }: any) => {
           Alert.alert("Login Failed", errorMessage);
         }
       } catch (error: any) {
-        console.error('Unified login error:', error);
+        logger.error('Unified login error', error, 'auth');
         let errorMessage = "Failed to sign in. Please try again.";
 
         // Handle specific error cases
@@ -379,20 +380,20 @@ const SignInScreen = ({ route }: any) => {
       try {
         const response = await authContext.loginWithPin(pinUserIdentifier, currentPin);
         if (response && response.success) {
-          console.log("PIN sign in successful, RootNavigator will handle LoadingScreen");
+          logger.info('PIN sign in successful', 'auth');
 
           // Store PIN for future biometric access (non-blocking)
           // Get the profile ID to associate the PIN with
           const profileId = targetProfileId || await getLastActiveProfileId();
           if (profileId) {
             storePinForBiometric(profileId, currentPin).catch((err) => {
-              console.log('[SignInScreen] Failed to store PIN for biometric (non-fatal):', err);
+              logger.warn('Failed to store PIN for biometric (non-fatal)', 'auth');
             });
           }
 
           // If in profile switch mode, switch profile after auth
           if (isProfileSwitchMode && targetProfileId) {
-            console.log('[SignInScreen] Profile switch mode detected (PIN), switching profile...');
+            logger.debug('Profile switch mode detected (PIN), switching profile', 'auth');
             await handleProfileSwitch();
             return; // Exit early
           }
@@ -409,7 +410,7 @@ const SignInScreen = ({ route }: any) => {
   };
   
   const handleProfileSwitch = async () => {
-    console.log('🔑 [SignInScreen] handleProfileSwitch triggered!', {
+    logger.debug('handleProfileSwitch triggered', 'auth', {
       targetProfileId,
       sourceUserId,
       currentUser: authContext?.user?.entityId
@@ -420,7 +421,7 @@ const SignInScreen = ({ route }: any) => {
       const currentUserId = authContext?.user?.user_id;
 
       if (sourceUserId && currentUserId && currentUserId !== sourceUserId) {
-        console.warn('🔑 [SignInScreen] ⚠️ Profile switch aborted: Different user logged in', {
+        logger.warn('Profile switch aborted: Different user logged in', 'auth', {
           expected: sourceUserId,
           actual: currentUserId,
         });
@@ -435,14 +436,14 @@ const SignInScreen = ({ route }: any) => {
         return;
       }
 
-      console.log('🔑 [SignInScreen] 🔄 Starting profile switch with orchestrator...', { targetProfileId });
+      logger.debug('Starting profile switch with orchestrator', 'auth', { targetProfileId });
 
       // PROFESSIONAL: Use ProfileSwitchOrchestrator (state machine pattern)
       const { profileSwitchOrchestrator } = await import('../../../services/ProfileSwitchOrchestrator');
 
       // Set progress callback for UI feedback (optional)
       profileSwitchOrchestrator.setProgressCallback((state, message) => {
-        console.log(`[ProfileSwitch] State: ${state}, Message: ${message}`);
+        logger.debug(`ProfileSwitch state: ${state}`, 'auth', { message });
         // TODO: Show progress UI here if needed
       });
 
@@ -457,14 +458,13 @@ const SignInScreen = ({ route }: any) => {
       });
 
       if (result.success) {
-        console.log('[SignInScreen] ✅ PROFESSIONAL profile switch completed successfully!');
-        console.log('[SignInScreen] ✅ User will land on default screen with new profile.');
+        logger.info('PROFESSIONAL profile switch completed successfully', 'auth');
       } else {
-        console.error('[SignInScreen] ❌ Profile switch failed:', result.error);
+        logger.error('Profile switch failed', result.error, 'auth');
         // Error already shown by orchestrator
       }
     } catch (error: any) {
-      console.error('[SignInScreen] ❌ Profile switch orchestrator error:', error);
+      logger.error('Profile switch orchestrator error', error, 'auth');
       // Orchestrator handles its own error alerts, but catch unexpected errors
       Alert.alert('Unexpected Error', error.message || 'An unexpected error occurred. Please try again.');
     }
@@ -535,11 +535,11 @@ const SignInScreen = ({ route }: any) => {
       try {
         const saved = await SecureStore.getItemAsync(LAST_IDENTIFIER_KEY);
         if (saved && !identifier) {
-          console.log('[SignInScreen] Loaded last identifier from SecureStore');
+          logger.debug('Loaded last identifier from SecureStore', 'auth');
           setIdentifier(saved);
         }
       } catch (error) {
-        console.log('[SignInScreen] Could not load saved identifier:', error);
+        logger.warn('Could not load saved identifier', 'auth');
       }
     };
     loadLastIdentifier();
@@ -559,7 +559,7 @@ const SignInScreen = ({ route }: any) => {
           if (isProfileSwitchMode && targetId) {
             // Use sourceIdentifier passed from profile.tsx (JWT is cleared during switch)
             const jwtIdentifier = sourceIdentifier || tokenManager.getAuthUserIdentifier();
-            console.log('[PIN Auth] Profile switch mode - using identifier:', {
+            logger.debug('Profile switch mode - using identifier', 'auth', {
               hasJwtIdentifier: !!jwtIdentifier,
               fromSourceParam: !!sourceIdentifier,
               targetProfileId: targetId,
@@ -582,7 +582,7 @@ const SignInScreen = ({ route }: any) => {
           // NORMAL LOGIN: Use stored profile data
           const profileData = await getProfilePinData(targetId);
 
-          console.log('[PIN Auth] Loading PIN data for:', {
+          logger.debug('Loading PIN data', 'auth', {
             isProfileSwitchMode,
             targetProfileId: targetId,
             foundData: !!profileData
@@ -593,11 +593,10 @@ const SignInScreen = ({ route }: any) => {
             setPinUserIdentifier(profileData.identifier);
             setHasPinUser(true);
             setActiveTab('pin'); // Stay on PIN tab if user found
-            console.log('[PIN Auth] Found stored profile PIN data:', {
+            logger.debug('Found stored profile PIN data', 'auth', {
               profileType: profileData.profileType,
               hasUsername: !!profileData.username,
               hasBusinessName: !!profileData.businessName,
-              identifier: profileData.identifier,
               hasIdentifier: !!profileData.identifier,
               displayName: profileData.displayName,
             });
@@ -610,17 +609,17 @@ const SignInScreen = ({ route }: any) => {
               setPinUserIdentifier(storedPinUser);
               setHasPinUser(true);
               setActiveTab('pin');
-              console.log('[PIN Auth] Found legacy stored PIN user');
+              logger.debug('Found legacy stored PIN user', 'auth');
             } else {
               setPinUserIdentifier(null);
               setPinUserData(null);
               setHasPinUser(false);
               setActiveTab('password');
-              console.log('[PIN Auth] No stored PIN user found');
+              logger.debug('No stored PIN user found', 'auth');
             }
           }
         } catch (error) {
-          console.error('[PIN Auth] Error loading stored PIN user:', error);
+          logger.error('Error loading stored PIN user', error, 'auth');
           setPinUserIdentifier(null);
           setPinUserData(null);
           setHasPinUser(false);

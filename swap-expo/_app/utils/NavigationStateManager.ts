@@ -189,7 +189,7 @@ class NavigationStateManager {
    * Start transition tracking with timeout protection
    */
   private startTransition(route: string, timestamp: number): void {
-    console.log('🔀 [NavigationStateManager] startTransition() - isTransitioning=true', { route });
+    logger.trace("startTransition() - isTransitioning=true", "navigation", { route });
     this.state.isTransitioning = true;
     this.state.pendingNavigation = false;
 
@@ -228,7 +228,7 @@ class NavigationStateManager {
   private endTransition(route: string, timestamp: number): void {
     const transitionDuration = timestamp - this.state.lastRouteChange;
 
-    console.log('🔀 [NavigationStateManager] endTransition() - isTransitioning=false', { route, transitionDuration });
+    logger.trace("endTransition() - isTransitioning=false", "navigation", { route, transitionDuration });
     this.state.isTransitioning = false;
     this.clearTransitionTimer();
 

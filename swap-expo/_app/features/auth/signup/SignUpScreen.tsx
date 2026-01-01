@@ -65,7 +65,7 @@ const SignUpScreen = () => {
   if (!theme || !theme.colors) {
     return (
       <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff' }}>
-        <ActivityIndicator size="large" color="#8b14fd" />
+        <ActivityIndicator size="large" color="#888888" />
       </SafeAreaView>
     );
   }

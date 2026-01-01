@@ -25,6 +25,7 @@ import apiClient from '../../../_api/apiClient';
 import API_PATHS, { WALLET_PATHS } from '../../../_api/apiPaths';
 import { getPresetAmounts, formatPresetAmount } from '../../../constants/currencyConstants';
 import { getInitials, getAvatarColor } from '../../../utils/avatarUtils';
+import logger from '../../../utils/logger';
 
 // Recipient interface - fetched fresh from API
 interface Recipient {
@@ -83,7 +84,7 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
   const [isLoadingRecipient, setIsLoadingRecipient] = useState(false);
 
   const toEntityId = route?.params?.toEntityId;
-  console.log('[SendMoney] toEntityId from params:', toEntityId, 'full params:', route?.params);
+  logger.debug('toEntityId from params', 'wallet', { toEntityId, params: route?.params });
 
   const senderInitial = useMemo(() => {
     // For business users, use business name initials
@@ -126,10 +127,10 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
             color: getAvatarColor(entity.id),
             type: 'entity',
           });
-          console.log('[SendMoney] Fetched recipient:', entity.display_name);
+          logger.debug('Fetched recipient', 'wallet', { displayName: entity.display_name });
         }
       } catch (err) {
-        console.error('[SendMoney] Failed to fetch recipient:', err);
+        logger.error('Failed to fetch recipient', err, 'wallet');
         // No fallback - UI shows error state when recipient is null
       } finally {
         setIsLoadingRecipient(false);
@@ -150,7 +151,7 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
         // Use new wallet endpoint to get all wallets for the entity
         const resp = await apiClient.get(WALLET_PATHS.BY_ENTITY(entityId));
         const wallets = Array.isArray(resp.data) ? resp.data : resp.data?.data || resp.data?.result || [];
-        console.log('[SendMoney] Fetched wallets:', JSON.stringify(wallets).substring(0, 500));
+        logger.debug('Fetched wallets', 'wallet', { count: wallets.length });
 
         // Map wallet response to Account interface
         // API returns flat fields: wallet_id, currency_code, currency_symbol, currency_name, account_type_display_name
@@ -171,7 +172,7 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
             account_number_last4: walletId.substring(walletId.length - 4),
           };
         });
-        console.log('[SendMoney] Mapped accounts:', mapped.map(m => ({ code: m.currency_code, symbol: m.currency_symbol, balance: m.balance })));
+        logger.debug('Mapped accounts', 'wallet', { accounts: mapped.map(m => ({ code: m.currency_code, symbol: m.currency_symbol, balance: m.balance })) });
 
         setSenderAccounts(mapped);
         if (mapped.length > 0) {
@@ -180,7 +181,7 @@ const SendMoneyScreen: React.FC<SendMoneyScreenProps> = ({ route }) => {
           setSelectedSenderAccount(htgWallet || mapped[0]);
         }
       } catch (err) {
-        console.warn('Failed to fetch sender wallets', err);
+        logger.warn('Failed to fetch sender wallets', 'wallet', { error: err });
         // Show mock wallets if API fails in development
         if (__DEV__) {
           const mockAccounts: Account[] = [

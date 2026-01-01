@@ -202,12 +202,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   // Debug logging for profile switcher
   React.useEffect(() => {
-    console.log('🔍 [ProfileScreen] Available profiles data:', {
-      profiles: availableProfiles,
+    logger.debug('Available profiles data', 'profile', {
       count: availableProfiles?.length,
       isLoading: isLoadingProfiles,
       currentProfileId: user?.profileId,
-      showChevron: availableProfiles && availableProfiles.length > 1,
     });
   }, [availableProfiles, isLoadingProfiles, user?.profileId]);
 
@@ -215,9 +213,12 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const isInitialLoadComplete = !isKycLoading && !isLoadingUserProfile;
   const isLoadingUserData = isLoadingUserProfile;
   
-  console.log("🔥 [ProfileScreen] 📊 KYC status from useKycStatus:", kycStatus);
-  console.log("🔥 [ProfileScreen] 📊 User profile from useUserProfile:", userProfile);
-  console.log("🔥 [ProfileScreen] 📊 Loading states:", { isInitialLoadComplete, isLoadingUserData, isKycLoading });
+  logger.debug('KYC and profile data', 'profile', {
+    hasKycStatus: !!kycStatus,
+    hasUserProfile: !!userProfile,
+    isInitialLoadComplete,
+    isKycLoading,
+  });
 
   const user = authContext.user; // Get user from AuthContext
 
@@ -232,52 +233,39 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   }, [kycStatus]);
 
   const allStepsCompleted = useMemo(() => {
-    console.log('🔥 [ProfileScreen] 📊 allStepsCompleted calculation triggered');
-    console.log('🔥 [ProfileScreen] 📊 kycStatus:', kycStatus);
-
     // Check both possible data structures (kycStatus.steps or kycStatus.data.steps)
     const steps = kycStatus?.steps || kycStatus?.data?.steps;
 
     if (!steps) {
-      console.log('🔥 [ProfileScreen] ❌ No KYC steps available');
       return false;
     }
 
-    // Get all KYC steps
-    console.log('🔥 [ProfileScreen] ✅ Found KYC steps:', Object.keys(steps));
     const stepKeys = Object.keys(steps) as Array<keyof typeof steps>;
-    
+
     // Check if all steps are completed (skip biometric if device doesn't support it)
     const completed = stepKeys.every(stepKey => {
       const step = steps[stepKey];
-      // Check for both 'completed' field and 'status' === 'completed'
       const isCompleted = step?.completed || step?.status === 'completed';
 
       // Skip biometric step if device doesn't support biometrics
       if (stepKey === 'biometricSetup' && !isBiometricAvailable) {
-        console.log(`🔥 [ProfileScreen] Step ${stepKey}: SKIPPED (no biometric hardware)`);
-        return true; // Consider biometric step as "completed" if device doesn't support it
+        return true;
       }
 
       // Skip email verification step (disabled for Haiti market)
       if (stepKey === 'emailVerification') {
-        console.log(`🔥 [ProfileScreen] Step ${stepKey}: SKIPPED (email disabled for Haiti market)`);
-        return true; // Email is not required
+        return true;
       }
 
-      console.log(`🔥 [ProfileScreen] Step ${stepKey}: isCompleted=${isCompleted}, status=${step?.status}`);
       return isCompleted;
     });
-    
-    // Debug logging
-    console.log('🔥 [ProfileScreen] 📊 KYC status check:', {
-      hasKycSteps: !!kycStatus?.steps,
+
+    logger.debug('KYC status check', 'profile', {
       totalSteps: stepKeys.length,
       allCompleted: completed,
-      currentLevel: kycStatus.currentLevel,
-      actualOverallStatus: actualOverallStatus
+      actualOverallStatus,
     });
-    
+
     return completed;
   }, [kycStatus, isBiometricAvailable, actualOverallStatus]);
 
@@ -520,26 +508,22 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       const parentRoute = parentState.routes[parentState.index];
       if (parentRoute?.params && (parentRoute.params as ProfileModalRouteParams).sourceRoute) {
         sourceRouteFromParams = (parentRoute.params as ProfileModalRouteParams).sourceRoute;
-        console.log(`[ProfileScreen] Found sourceRoute in PARENT route: ${sourceRouteFromParams}`);
+        logger.debug('Found sourceRoute in PARENT route', 'profile', { sourceRoute: sourceRouteFromParams });
       }
     }
   }
 
-  console.log(`[ProfileScreen] Mounted/Re-focused. sourceRouteFromParams: ${sourceRouteFromParams}, currentScreenRoute.key: ${currentScreenRoute.key}, currentScreenRoute.name: ${currentScreenRoute.name}`);
-  if(currentScreenRoute.params) console.log(`[ProfileScreen] currentScreenRoute.params: ${JSON.stringify(currentScreenRoute.params)}`);
+  logger.debug('Mounted/Re-focused', 'profile', { sourceRouteFromParams, routeKey: currentScreenRoute.key });
 
   // Make sure status bar height is calculated immediately
   useEffect(() => {
     // Status bar is now handled globally by ThemeContext, no need to set it here
-    
-    // Log when params change on ProfileScreen, which might indicate an update from a child screen
-    console.log(`[ProfileScreen] useEffect for route.params. sourceRouteFromParams after potential update: ${currentScreenRoute.params?.sourceRoute}, and derived: ${sourceRouteFromParams}`);
+    logger.debug('Route params updated', 'profile', { sourceRouteFromParams });
   }, [currentScreenRoute.params, sourceRouteFromParams]);
 
   const handleBack = () => {
-    console.log(`[ProfileScreen] handleBack called. Effective sourceRouteFromParams: ${sourceRouteFromParams}`);
+    logger.debug('handleBack called', 'profile', { sourceRouteFromParams });
     if (onClose) {
-      console.log("[ProfileScreen] handleBack: Calling onClose prop.");
       onClose();
       return;
     }
@@ -547,12 +531,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     if (sourceRouteFromParams) {
       const rootNavigation = navigation.getParent();
       if (rootNavigation) {
-        console.log(`[ProfileScreen] handleBack: Attempting to goBack on parent navigator (RootStack) to return to ${sourceRouteFromParams}.`);
+        logger.debug('Going back on parent navigator', 'profile', { sourceRoute: sourceRouteFromParams });
         rootNavigation.goBack();
-        console.log(`[ProfileScreen] handleBack: Dispatched goBack() on parent navigator.`);
       } else {
-        console.warn("[ProfileScreen] handleBack: Could not get parent navigator to go back.");
-        // Fallback to original dispatch if parent cannot be found, though unlikely
+        logger.warn('Could not get parent navigator to go back', 'profile');
         navigation.dispatch(
           CommonActions.navigate({
             name: 'App',
@@ -564,25 +546,22 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       }
       return;
     }
-    
+
     // Default goBack if no sourceRoute and no onClose
-    console.log("[ProfileScreen] handleBack: No sourceRoute, attempting navigation.goBack() within current stack.");
     if (navigation.canGoBack()) {
-        navigation.goBack();
+      navigation.goBack();
     } else {
-        console.warn("[ProfileScreen] handleBack: No sourceRoute and cannot goBack(). This might be the initial screen of a stack.");
-        // As a last resort, if it's truly stuck, maybe navigate to a default home/tab screen
-        // For example: navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Wallet' }] })); // Example
+      logger.warn('No sourceRoute and cannot goBack', 'profile');
     }
   };
 
   const handleCopyUsername = () => {
-    console.log("Username copied to clipboard");
+    logger.debug('Username copied to clipboard', 'profile');
     // Add actual clipboard logic here
   };
 
   const handleContinueSetup = () => {
-    console.log(`[ProfileScreen] handleContinueSetup. Navigating to VerifyYourIdentity. Passing sourceRoute: ${sourceRouteFromParams}`);
+    logger.debug('handleContinueSetup, navigating to VerifyYourIdentity', 'profile', { sourceRoute: sourceRouteFromParams });
     navigation.navigate("VerifyYourIdentity", { sourceRoute: sourceRouteFromParams });
   };
 
@@ -692,10 +671,10 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         navigation.navigate("Account");
         break;
       case "Documents and Statements":
-        console.log("Navigate to Documents and Statements");
+        logger.debug('Navigate to Documents and Statements', 'profile');
         break;
       case "Verify Your Identity":
-        console.log(`[ProfileScreen] handleMenuItemPress for Verify Your Identity. Passing sourceRoute: ${sourceRouteFromParams}`);
+        logger.debug('handleMenuItemPress for Verify Your Identity', 'profile', { sourceRoute: sourceRouteFromParams });
         navigation.navigate("VerifyYourIdentity", { sourceRoute: sourceRouteFromParams });
         break;
       case "Fees and Rates":
@@ -711,7 +690,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         navigation.navigate("SecurityPrivacy");
         break;
       default:
-        console.log(`Navigate to ${item}`);
+        logger.debug(`Navigate to ${item}`, 'profile');
     }
   };
 
@@ -750,7 +729,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         {
           text: "Delete",
           style: "destructive",
-          onPress: () => console.log("Delete account confirmed")
+          onPress: () => logger.debug('Delete account confirmed', 'profile')
         }
       ]
     );

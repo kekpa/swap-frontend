@@ -43,30 +43,27 @@ class WebSocketHandler {
    */
   initialize(queryClient?: QueryClient, entityId?: string): void {
     if (this.isInitialized) {
-      console.log('🔥 [WebSocketHandler] ⚠️ Already initialized, skipping...');
+      logger.debug('Already initialized, skipping', 'ws');
       return;
     }
 
-    console.log('🔥 [WebSocketHandler] 🚀 INITIALIZING WebSocketHandler...');
+    logger.info('Initializing WebSocketHandler', 'ws');
 
     // Store QueryClient for cache invalidation on reconnect
     if (queryClient) {
       this.queryClient = queryClient;
       // NOTE: Local-first updates now handled by BackgroundSyncService via SQLite
-      console.log('🔥 [WebSocketHandler] ✅ Local-first architecture enabled');
+      logger.debug('Local-first architecture enabled', 'ws');
     }
-    
+
     // Check WebSocket connection status
     const isConnected = websocketService.isSocketConnected();
     const isAuthenticated = websocketService.isSocketAuthenticated();
-    
-    console.log('🔥 [WebSocketHandler] WebSocket connection status:', {
-      isConnected,
-      isAuthenticated
-    });
-    
+
+    logger.debug('WebSocket connection status', 'ws', { isConnected, isAuthenticated });
+
     if (!isConnected) {
-      console.warn('🔥 [WebSocketHandler] ⚠️ WebSocket not connected, handlers may not work until connection is established');
+      logger.warn('WebSocket not connected, handlers may not work until connection is established', 'ws');
     }
     
     // Set up message handlers using the correct WebSocket service methods
@@ -76,15 +73,14 @@ class WebSocketHandler {
     this.setupCleanupInterval();
     
     this.isInitialized = true;
-    console.log('🔥 [WebSocketHandler] ✅ INITIALIZATION COMPLETE');
-    logger.info('[WebSocketHandler] Initialized successfully');
+    logger.info('WebSocketHandler initialized successfully', 'ws');
   }
   
   /**
    * Clean up WebSocket handlers and intervals
    */
   cleanup(): void {
-    console.log('🔥 [WebSocketHandler] 🧹 CLEANING UP...');
+    logger.debug('Cleaning up WebSocketHandler', 'ws');
     
     // Clear cleanup interval
     if (this.cleanupInterval) {
@@ -109,55 +105,43 @@ class WebSocketHandler {
     }
 
     this.isInitialized = false;
-    console.log('🔥 [WebSocketHandler] ✅ CLEANUP COMPLETE');
-    logger.info('[WebSocketHandler] Cleaned up successfully');
+    logger.info('WebSocketHandler cleaned up successfully', 'ws');
   }
   
   /**
    * Setup message handlers for different WebSocket events
    */
   private setupMessageHandlers(): void {
-    console.log('🔥 [WebSocketHandler] 📡 SETTING UP MESSAGE HANDLERS...');
-    
+    logger.debug('Setting up message handlers', 'ws');
+
     // Handle new messages from WebSocket using the correct onMessage method
-    console.log('🔥 [WebSocketHandler] Registering new_message handler...');
     this.messageCleanup = websocketService.onMessage((data) => {
-      console.log('🔥 [WebSocketHandler] 🎯 HANDLER CALLED for new_message:', {
+      logger.debug('Handler called for new_message', 'ws', {
         messageId: data?.id,
-        interactionId: data?.interaction_id,
-        content: data?.content?.substring(0, 30),
-        timestamp: new Date().toISOString()
+        interactionId: data?.interaction_id
       });
       this.handleNewMessage(data);
     });
-    
+
     // Handle transaction updates from WebSocket
-    console.log('🔥 [WebSocketHandler] Registering transaction_update handler...');
     this.transactionCleanup = websocketService.onTransactionUpdate((data) => {
-      console.log('🔥 [WebSocketHandler] 🎯 HANDLER CALLED for transaction_update:', data);
+      logger.debug('Handler called for transaction_update', 'ws', { transactionId: data?.transaction_id });
       this.handleTransactionUpdate(data);
     });
 
     // Handle reconnection events - invalidate transaction cache on reconnect
-    console.log('🔥 [WebSocketHandler] Registering reconnect handler...');
     this.reconnectCleanup = websocketService.onReconnect(() => {
-      console.log('🔥 [WebSocketHandler] 🔄 RECONNECTED - Invalidating transaction cache');
+      logger.info('Reconnected - invalidating transaction cache', 'ws');
       if (this.queryClient) {
         this.queryClient.invalidateQueries({ queryKey: ['transactions'] });
-        logger.info('[WebSocketHandler] ✅ Transaction cache invalidated on reconnect');
       }
     });
 
-    console.log('🔥 [WebSocketHandler] ✅ ALL MESSAGE HANDLERS REGISTERED');
-    console.log('🔥 [WebSocketHandler] Handler registration verification:', {
+    logger.debug('All message handlers registered', 'ws', {
       messageCleanupExists: !!this.messageCleanup,
       transactionCleanupExists: !!this.transactionCleanup,
-      reconnectCleanupExists: !!this.reconnectCleanup,
-      socketConnected: websocketService.isSocketConnected(),
-      socketAuthenticated: websocketService.isSocketAuthenticated(),
-      timestamp: new Date().toISOString()
+      reconnectCleanupExists: !!this.reconnectCleanup
     });
-    logger.debug('[WebSocketHandler] Message handlers set up successfully');
   }
   
   /**
@@ -191,11 +175,9 @@ class WebSocketHandler {
    */
   private handleNewMessage(data: any): void {
     try {
-      console.log(`🔥 [WebSocketHandler] ✅ RECEIVED new_message event:`, {
+      logger.debug('Received new_message event', 'ws', {
         messageId: data?.id,
-        interactionId: data?.interaction_id,
-        content: data?.content?.substring(0, 30),
-        fromEntityId: data?.from_entity_id
+        interactionId: data?.interaction_id
       });
       
       if (!data || !data.id) {
@@ -251,7 +233,7 @@ class WebSocketHandler {
       }
       
       // 4. Professional Real-time Update (WhatsApp/Slack pattern)
-      console.log(`🔥 [WebSocketHandler] ✅ Processing real-time update`);
+      logger.debug('Processing real-time update', 'ws');
       
       // Create properly typed timeline item for cache update
       const timelineItem: MessageTimelineItem = {
@@ -271,7 +253,7 @@ class WebSocketHandler {
       // Emit for direct cache update (professional pattern)
       eventEmitter.emit('message:new', timelineItem);
       
-      logger.info(`[WebSocketHandler] ✅ Real-time message processed: ${messageId}`);
+      logger.info(`Real-time message processed: ${messageId}`, 'ws');
       
     } catch (error) {
       logger.error('[WebSocketHandler] Error handling new message', 
@@ -293,7 +275,7 @@ class WebSocketHandler {
       const status = data.status;
       
       // Emit transaction update event through the EventEmitter mechanism
-      console.log(`🔥 [WebSocketHandler] ✅ EMITTING transaction:update event`);
+      logger.debug('Emitting transaction:update event', 'ws');
       eventEmitter.emit('transaction:update', {
         id: transactionId,
         status: status,

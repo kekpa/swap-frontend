@@ -48,8 +48,7 @@ export const RefreshProvider: React.FC<{ children: React.ReactNode }> = ({
    */
   const registerRefreshFn = useCallback((key: string, fn: () => Promise<void>) => {
     refreshFunctions.current[key] = fn;
-    console.log(`🔄 [RefreshProvider] REGISTERED: ${key}`);
-    console.log(`🔄 [RefreshProvider] Total registered: ${Object.keys(refreshFunctions.current).length}`);
+    logger.debug(`Registered refresh function: ${key}`, "data", { totalRegistered: Object.keys(refreshFunctions.current).length });
   }, []);
 
   /**
@@ -57,7 +56,7 @@ export const RefreshProvider: React.FC<{ children: React.ReactNode }> = ({
    */
   const unregisterRefreshFn = useCallback((key: string) => {
     delete refreshFunctions.current[key];
-    logger.debug(`[RefreshProvider] Unregistered: ${key}`);
+    logger.debug(`Unregistered: ${key}`, 'data');
   }, []);
 
   /**
@@ -69,26 +68,25 @@ export const RefreshProvider: React.FC<{ children: React.ReactNode }> = ({
    * - Error resilience
    */
   const refresh = useCallback(async () => {
-    console.log('🔄 [RefreshProvider] refresh() CALLED');
-    console.log('🔄 [RefreshProvider] isRefreshing:', isRefreshing);
+    logger.debug("refresh() called", "data", { isRefreshing });
 
     // Guard against double-refresh
     if (isRefreshing) {
-      console.log('🔄 [RefreshProvider] Already refreshing, SKIPPING');
+      logger.debug("Already refreshing, skipping", "data");
       return;
     }
 
     // Check registered functions BEFORE setting isRefreshing
     const keys = Object.keys(refreshFunctions.current);
-    console.log('🔄 [RefreshProvider] Registered keys:', keys);
+    logger.debug("Registered refresh keys", "data", { keys });
 
     if (keys.length === 0) {
-      console.log('🔄 [RefreshProvider] NO REFRESH FUNCTIONS - returning early (safe)');
+      logger.debug("No refresh functions registered, returning early", "data");
       return;
     }
 
     setIsRefreshing(true);
-    console.log('🔄 [RefreshProvider] setIsRefreshing(true)');
+    logger.debug("Starting refresh", "data");
 
     // Haptic feedback like Revolut
     try {
@@ -97,7 +95,7 @@ export const RefreshProvider: React.FC<{ children: React.ReactNode }> = ({
       // Vibration may not be available on all devices
     }
 
-    console.log('🔄 [RefreshProvider] Starting refresh for keys:', keys);
+    logger.debug("Starting refresh for keys", "data", { keys });
 
     try {
       // Create timeout promise for protection
@@ -107,12 +105,12 @@ export const RefreshProvider: React.FC<{ children: React.ReactNode }> = ({
 
       const refreshPromises = keys.map(async (key) => {
         try {
-          console.log(`🔄 [RefreshProvider] Calling refresh for: ${key}`);
+          logger.debug(`Calling refresh for: ${key}`, "data");
           await refreshFunctions.current[key]();
-          console.log(`🔄 [RefreshProvider] ${key} DONE`);
+          logger.debug(`${key} refresh completed`, "data");
         } catch (error) {
           // Log but don't throw - one failing refresh shouldn't break others
-          console.error(`🔄 [RefreshProvider] ${key} FAILED:`, error);
+          logger.error(`${key} refresh failed`, error, "data");
         }
       });
 
@@ -123,13 +121,13 @@ export const RefreshProvider: React.FC<{ children: React.ReactNode }> = ({
       ]);
 
       setLastRefreshed(new Date());
-      console.log('🔄 [RefreshProvider] All refreshes COMPLETED');
+      logger.debug("All refreshes completed", "data");
     } catch (error) {
       // Timeout or unexpected error
-      console.error('🔄 [RefreshProvider] Refresh FAILED or timed out:', error);
+      logger.error("Refresh failed or timed out", error, "data");
     } finally {
       // ALWAYS reset - this is the critical fix for spinner freeze
-      console.log('🔄 [RefreshProvider] FINALLY - setIsRefreshing(false)');
+      logger.debug("Resetting isRefreshing to false", "data");
       setIsRefreshing(false);
     }
   }, [isRefreshing]);
@@ -148,7 +146,7 @@ export const RefreshProvider: React.FC<{ children: React.ReactNode }> = ({
           try {
             await refreshFunctions.current[key]();
           } catch (error) {
-            logger.error(`[RefreshProvider] Background refresh ${key} failed:`, error);
+            logger.error(`Background refresh ${key} failed`, error, 'data');
           }
         })
       );
@@ -161,7 +159,7 @@ export const RefreshProvider: React.FC<{ children: React.ReactNode }> = ({
   const refreshByKey = useCallback(async (key: string, background = false) => {
     const fn = refreshFunctions.current[key];
     if (!fn) {
-      logger.warn(`[RefreshProvider] No refresh function for key: ${key}`);
+      logger.warn(`No refresh function for key: ${key}`, 'data');
       return;
     }
 
@@ -171,9 +169,9 @@ export const RefreshProvider: React.FC<{ children: React.ReactNode }> = ({
 
     try {
       await fn();
-      logger.debug(`[RefreshProvider] ${key} refreshed successfully`);
+      logger.debug(`${key} refreshed successfully`, 'data');
     } catch (error) {
-      logger.error(`[RefreshProvider] ${key} refresh failed:`, error);
+      logger.error(`${key} refresh failed`, error, 'data');
     } finally {
       if (!background) {
         setIsRefreshing(false);

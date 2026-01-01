@@ -13,7 +13,6 @@ import logger from '../utils/logger';
 import { websocketService } from './websocketService';
 import { webSocketHandler } from './WebSocketHandler';
 import { backgroundSyncService } from './BackgroundSyncService'; // LOCAL-FIRST: Replaces MessageManager & TransactionManager
-import { IS_DEVELOPMENT } from '../config/env';
 import { InteractionTimelineCache } from './InteractionTimelineCache';
 import { networkService } from './NetworkService';
 import { userStateManager } from './UserStateManager';
@@ -56,8 +55,7 @@ class AppLifecycleManager {
 
     // Check if WebSocket is actually connected, reset if stale (handles Metro hot-reload)
     if (this.isInitialized && !websocketService.isSocketConnected()) {
-      logger.info('[AppLifecycleManager] 🔄 Detected stale initialization (WebSocket disconnected), resetting...');
-      if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🔄 Resetting stale initialization state');
+      logger.info('Detected stale initialization (WebSocket disconnected), resetting', 'app');
       this.isInitialized = false;
     }
 
@@ -65,8 +63,7 @@ class AppLifecycleManager {
       return;
     }
 
-    logger.debug('[AppLifecycleManager] User authenticated, initializing services', 'lifecycle');
-    if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🚀 STARTING service initialization...');
+    logger.debug('User authenticated, initializing services', 'app');
 
     try {
       // CRITICAL: Initialize network monitoring FIRST - must detect online/offline before WebSocket attempts connection
@@ -79,21 +76,20 @@ class AppLifecycleManager {
       // 🔧 DATABASE-FIRST FIX: Use entity_id for unified messaging system
       const apiEntityId = await apiClient.getEntityId();
       const userEntityId = user?.entityId;
-      
-      console.log('🔥🔥🔥 [AppLifecycleManager] USER STATE MANAGER ENTITY ID COMPARISON:', {
+
+      logger.debug('Entity ID comparison', 'app', {
         apiEntityId,
         userEntityId,
-        match: apiEntityId === userEntityId,
-        timestamp: new Date().toISOString()
+        match: apiEntityId === userEntityId
       });
-      
+
       if (apiEntityId) {
         userStateManager.initialize(apiEntityId);
-        logger.info('[AppLifecycleManager] ✅ Global user subscription model initialized with API entity ID');
+        logger.info('Global user subscription model initialized with API entity ID', 'app');
       } else if (userEntityId) {
         // Fallback to user entity ID if API entity ID not available
         userStateManager.initialize(userEntityId);
-        logger.warn('[AppLifecycleManager] ⚠️ Using fallback user entity ID for user state manager');
+        logger.warn('Using fallback user entity ID for user state manager', 'app');
       }
 
       // 🚀 PHASE 2.3: Initialize app state monitoring for smart notifications
@@ -113,11 +109,10 @@ class AppLifecycleManager {
       this.prefetchTimelines(user);
 
       this.isInitialized = true;
-      if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] ✅ All services initialized successfully');
-      
+      logger.info('All services initialized successfully', 'app');
+
     } catch (error) {
-      logger.error('[AppLifecycleManager] ❌ Service initialization failed:', error);
-      console.error('🔥 [AppLifecycleManager] ❌ Service initialization failed:', error);
+      logger.error('Service initialization failed', error, 'app');
     }
   }
 
@@ -128,51 +123,38 @@ class AppLifecycleManager {
     try {
       // CRITICAL: Log NetworkService state BEFORE attempting WebSocket connection
       const networkState = networkService.getNetworkState();
-      if (IS_DEVELOPMENT) {
-        console.log('🔥 [AppLifecycleManager] 🌐 NetworkService state before WebSocket:', {
-          isConnected: networkState.isConnected,
-          isInternetReachable: networkState.isInternetReachable,
-          isOfflineMode: networkState.isOfflineMode,
-          type: networkState.type
-        });
-      }
+      logger.debug('NetworkService state before WebSocket', 'app', {
+        isConnected: networkState.isConnected,
+        isInternetReachable: networkState.isInternetReachable,
+        isOfflineMode: networkState.isOfflineMode,
+        type: networkState.type
+      });
 
       if (networkState.isOfflineMode) {
-        logger.warn('[AppLifecycleManager] ⚠️ NetworkService reports OFFLINE - WebSocket connection may fail');
-        if (IS_DEVELOPMENT) console.warn('🔥 [AppLifecycleManager] ⚠️ WARNING: NetworkService reports OFFLINE mode!');
+        logger.warn('NetworkService reports OFFLINE - WebSocket connection may fail', 'app');
       }
 
-      if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🧪 Testing WebSocket connection...');
+      logger.debug('Testing WebSocket connection', 'app');
       const isConnected = websocketService.isSocketConnected();
       const isAuthenticated = websocketService.isSocketAuthenticated();
 
-      if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] WebSocket status:', {
-        isConnected,
-        isAuthenticated
-      });
+      logger.debug('WebSocket status', 'app', { isConnected, isAuthenticated });
 
       if (!isConnected) {
-        if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🔌 WebSocket not connected, attempting to connect...');
+        logger.debug('WebSocket not connected, attempting to connect', 'app');
         const token = await getAccessToken();
         if (token) {
-          console.log('🔥🔥🔥 [AppLifecycleManager] STARTING WEBSOCKET CONNECTION:', {
+          logger.debug('Starting WebSocket connection', 'app', {
             hasToken: !!token,
-            tokenLength: token.length,
-            userEntityId: user?.entityId,
-            userProfileId: user?.profileId,
-            timestamp: new Date().toISOString(),
-            deviceType: 'DEBUGGING_WEBSOCKET_INIT'
+            userEntityId: user?.entityId
           });
-          
+
           const connected = await websocketService.connect(token);
-          
-          console.log('🔥🔥🔥 [AppLifecycleManager] WEBSOCKET CONNECTION RESULT:', {
+
+          logger.debug('WebSocket connection result', 'app', {
             connected,
             isSocketConnected: websocketService.isSocketConnected(),
-            isSocketAuthenticated: websocketService.isSocketAuthenticated(),
-            userEntityId: user?.entityId,
-            userProfileId: user?.profileId,
-            timestamp: new Date().toISOString()
+            isSocketAuthenticated: websocketService.isSocketAuthenticated()
           });
 
           // CRITICAL: Only join profile room AFTER successful authentication
@@ -181,94 +163,59 @@ class AppLifecycleManager {
           // 🔧 DATABASE-FIRST FIX: Use entity_id for messaging rooms (unified personal/business system)
           const apiEntityId = await apiClient.getEntityId();
           const userEntityId = user?.entityId;
-          
-          console.log('🔥🔥🔥 [AppLifecycleManager] ENTITY ID COMPARISON (DATABASE-FIRST):', {
+
+          logger.debug('Entity ID comparison (DATABASE-FIRST)', 'app', {
             apiEntityId,
             userEntityId,
             match: apiEntityId === userEntityId,
-            connected,
-            timestamp: new Date().toISOString()
+            connected
           });
-          
+
           if (connected && apiEntityId) {
-            if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🏠 WebSocket authenticated, joining entity room...');
-            
-            console.log('🔥🔥🔥 [AppLifecycleManager] PREPARING ENTITY ROOM JOIN (DATABASE-FIRST):', {
-              entityId: apiEntityId,
-              userEntityId: user?.entityId,
-              connected,
-              isAuthenticated: websocketService.isSocketAuthenticated(),
-              source: 'JWT_TOKEN_ENTITY_ID',
-              timestamp: new Date().toISOString()
-            });
-            
+            logger.debug('WebSocket authenticated, joining entity room', 'app');
+
             // Add small delay to ensure authentication is fully processed by backend
             setTimeout(() => {
-              if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🏠 Attempting to join entity room:', apiEntityId);
-              console.log('🔥🔥🔥 [AppLifecycleManager] EXECUTING ENTITY ROOM JOIN (DATABASE-FIRST):', {
-                entityId: apiEntityId,
-                userEntityId: user?.entityId,
-                source: 'JWT_TOKEN_ENTITY_ID',
-                timestamp: new Date().toISOString()
-              });
+              logger.debug(`Joining entity room: ${apiEntityId}`, 'app');
               websocketService.joinEntityRoom(apiEntityId);
             }, 100);
           } else {
-            if (IS_DEVELOPMENT) console.warn('🔥 [AppLifecycleManager] ⚠️ Cannot join entity room - not authenticated or no entityId:', {
-              connected,
-              apiEntityId,
-              userEntityId
-            });
-            console.log('🔥🔥🔥 [AppLifecycleManager] ENTITY ROOM JOIN FAILED (DATABASE-FIRST):', {
+            logger.warn('Cannot join entity room - not authenticated or no entityId', 'app', {
               connected,
               apiEntityId,
               userEntityId,
-              isSocketConnected: websocketService.isSocketConnected(),
-              isSocketAuthenticated: websocketService.isSocketAuthenticated(),
-              reason: !connected ? 'NOT_CONNECTED' : !apiEntityId ? 'NO_API_ENTITY_ID' : 'UNKNOWN',
-              timestamp: new Date().toISOString()
+              reason: !connected ? 'NOT_CONNECTED' : !apiEntityId ? 'NO_API_ENTITY_ID' : 'UNKNOWN'
             });
           }
         } else {
-          console.log('🔥🔥🔥 [AppLifecycleManager] NO ACCESS TOKEN AVAILABLE:', {
-            hasToken: !!token,
-            userEntityId: user?.entityId,
-            userProfileId: user?.profileId,
-            timestamp: new Date().toISOString()
-          });
+          logger.warn('No access token available for WebSocket', 'app');
         }
       }
 
       // ✅ FIX: Only initialize handlers if WebSocket is connected and authenticated
       // This prevents event listeners from being attached to null socket
       if (websocketService.isSocketConnected() && websocketService.isSocketAuthenticated()) {
-        if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🧪 Initializing WebSocket event handlers with direct cache updates...');
+        logger.debug('Initializing WebSocket event handlers', 'app');
         // Get entityId for proper cache key matching
         const entityIdForCache = await apiClient.getEntityId() || user?.entityId;
         webSocketHandler.initialize(queryClient, entityIdForCache);
-        if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] ✅ WebSocket handlers initialized successfully', {
-          hasEntityId: !!entityIdForCache
-        });
+        logger.debug('WebSocket handlers initialized successfully', 'app', { hasEntityId: !!entityIdForCache });
       } else {
-        logger.warn('[AppLifecycleManager] ⚠️ Cannot initialize WebSocket handlers - socket not connected/authenticated');
-        if (IS_DEVELOPMENT) console.warn('🔥 [AppLifecycleManager] ⚠️ Skipping handler initialization:', {
+        logger.warn('Cannot initialize WebSocket handlers - socket not connected/authenticated', 'app');
+        logger.debug('Skipping handler initialization, will retry on reconnection', 'app', {
           isConnected: websocketService.isSocketConnected(),
-          isAuthenticated: websocketService.isSocketAuthenticated(),
-          willRetryOnReconnection: true
+          isAuthenticated: websocketService.isSocketAuthenticated()
         });
 
         // ✅ Set up one-time listener for successful connection to initialize handlers
         // This handles cases where initial connection failed but later succeeds
         const retryInitialization = async () => {
           if (websocketService.isSocketConnected() && websocketService.isSocketAuthenticated()) {
-            logger.info('[AppLifecycleManager] 🔄 WebSocket connected - initializing handlers now');
-            if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 🔄 Retrying handler initialization after connection success');
+            logger.info('WebSocket connected - initializing handlers now', 'app');
             // Get entityId for proper cache key matching
             const entityIdForCache = await apiClient.getEntityId() || user?.entityId;
             webSocketHandler.initialize(queryClient, entityIdForCache);
-            if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] ✅ WebSocket handlers initialized successfully (retry)', {
-              hasEntityId: !!entityIdForCache
-            });
+            logger.debug('WebSocket handlers initialized successfully (retry)', 'app', { hasEntityId: !!entityIdForCache });
           }
         };
 
@@ -290,8 +237,7 @@ class AppLifecycleManager {
               this.handlerRetryInterval = null;
             }
           } else if (attempts >= maxAttempts) {
-            logger.warn('[AppLifecycleManager] ⚠️ WebSocket handlers not initialized after 30s - user may need to reconnect');
-            if (IS_DEVELOPMENT) console.warn('🔥 [AppLifecycleManager] ⚠️ Handler initialization retry timeout');
+            logger.warn('WebSocket handlers not initialized after 30s - user may need to reconnect', 'app');
             if (this.handlerRetryInterval) {
               clearInterval(this.handlerRetryInterval);
               this.handlerRetryInterval = null;
@@ -300,10 +246,10 @@ class AppLifecycleManager {
         }, 2000);
       }
 
-      if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] 💰 Balance data handled by TanStack Query hooks');
-      
+      logger.debug('Balance data handled by TanStack Query hooks', 'app');
+
     } catch (error) {
-      console.error('🔥 [AppLifecycleManager] ❌ WebSocket initialization failed:', error);
+      logger.error('WebSocket initialization failed', error, 'app');
       throw error;
     }
   }
@@ -312,36 +258,28 @@ class AppLifecycleManager {
    * Initialize network monitoring service
    */
   private async initializeNetworkService(authContext: AuthContext): Promise<void> {
-    console.log('🌐 [AppLifecycleManager] 🚀 Initializing network monitoring...');
-    
+    logger.debug('Initializing network monitoring', 'app');
+
     try {
-      // Initialize network service
-      logger.debug('[AppLifecycleManager] 🌐 Initializing NetworkService...');
       await networkService.initialize();
-      logger.info('[AppLifecycleManager] ✅ NetworkService initialized successfully');
-      
+      logger.info('NetworkService initialized successfully', 'app');
+
       // Set up network state listener
       this.networkCleanup = networkService.onNetworkStateChange((state) => {
-        logger.info(`[AppLifecycleManager] 🌐 Network state changed: ${state.isOfflineMode ? 'OFFLINE' : 'ONLINE'}`);
-        
+        logger.info(`Network state changed: ${state.isOfflineMode ? 'OFFLINE' : 'ONLINE'}`, 'app');
+
         if (!state.isOfflineMode && state.isConnected) {
           // Coming back online - trigger background sync for critical data
-          logger.debug('[AppLifecycleManager] 🔄 Back online - triggering background sync');
-          
-          // Only sync if we have authenticated user
-          if (authContext.isAuthenticated && authContext.user) {
-            // Background balance sync handled by TanStack Query
-            logger.debug('[AppLifecycleManager] TanStack Query will handle background sync');
-          }
+          logger.debug('Back online - TanStack Query will handle background sync', 'app');
         }
       });
-      
+
       // Get initial network state
       const initialState = networkService.getNetworkState();
-      logger.debug(`[AppLifecycleManager] Initial network state: ${JSON.stringify(initialState)}`);
-      
+      logger.debug('Initial network state', 'app', initialState);
+
     } catch (error) {
-      logger.error('[AppLifecycleManager] ❌ Failed to initialize NetworkService:', error);
+      logger.error('Failed to initialize NetworkService', error, 'app');
       // Continue without network service - app should still work offline
       this.networkCleanup = () => {}; // Return empty cleanup function
     }
@@ -351,15 +289,15 @@ class AppLifecycleManager {
    * 🚀 PHASE 2.3: Initialize app state monitoring for smart notifications
    */
   private initializeAppStateMonitoring(): void {
-    logger.debug('[AppLifecycleManager] 📱 Initializing app state monitoring');
-    
+    logger.debug('Initializing app state monitoring', 'app');
+
     // Set initial app state
     const currentState = AppState.currentState;
     userStateManager.setAppState(currentState === 'active' ? 'foreground' : 'background');
-    
+
     // Monitor app state changes
     this.appStateSubscription = AppState.addEventListener('change', async (nextAppState) => {
-      logger.debug(`[AppLifecycleManager] 📱 App state changed: ${nextAppState}`);
+      logger.debug(`App state changed: ${nextAppState}`, 'app');
 
       const appState = nextAppState === 'active' ? 'foreground' : 'background';
       userStateManager.setAppState(appState);
@@ -370,15 +308,15 @@ class AppLifecycleManager {
 
       // ✅ WhatsApp/Telegram pattern: Check WebSocket connection when app resumes
       if (nextAppState === 'active') {
-        logger.debug('[AppLifecycleManager] 📱 App resumed to foreground - checking WebSocket connection');
+        logger.debug('App resumed to foreground - checking WebSocket connection', 'app');
 
         // 🔄 Smart Fallback: Invalidate transaction cache on foreground (Revolut/Square pattern)
-        logger.debug('[AppLifecycleManager] 💰 Invalidating transaction cache on app foreground');
+        logger.debug('Invalidating transaction cache on app foreground', 'app');
         queryClient.invalidateQueries({ queryKey: ['transactions'] });
 
         // Check if WebSocket is connected
         if (!websocketService.isSocketConnected()) {
-          logger.info('[AppLifecycleManager] 🔄 WebSocket disconnected, triggering reconnection...');
+          logger.info('WebSocket disconnected, triggering reconnection', 'app');
 
           // Get fresh token and reconnect
           try {
@@ -387,7 +325,7 @@ class AppLifecycleManager {
               const connected = await websocketService.connect(token);
 
               if (connected) {
-                logger.info('[AppLifecycleManager] ✅ WebSocket reconnected successfully after app resume');
+                logger.info('WebSocket reconnected successfully after app resume', 'app');
 
                 // Rejoin entity room (rooms will be auto-rejoined by websocketService)
                 const apiEntityId = await apiClient.getEntityId();
@@ -397,19 +335,19 @@ class AppLifecycleManager {
                   }, 100);
                 }
               } else {
-                logger.warn('[AppLifecycleManager] ⚠️ WebSocket reconnection failed after app resume');
+                logger.warn('WebSocket reconnection failed after app resume', 'app');
               }
             }
           } catch (error) {
-            logger.error('[AppLifecycleManager] ❌ Error reconnecting WebSocket on app resume:', error);
+            logger.error('Error reconnecting WebSocket on app resume', error, 'app');
           }
         } else {
-          logger.debug('[AppLifecycleManager] ✅ WebSocket already connected');
+          logger.debug('WebSocket already connected', 'app');
         }
       }
     });
-    
-    logger.info('[AppLifecycleManager] ✅ App state monitoring initialized');
+
+    logger.info('App state monitoring initialized', 'app');
   }
 
   /**
@@ -417,11 +355,11 @@ class AppLifecycleManager {
    */
   private async initializePushNotifications(): Promise<void> {
     try {
-      logger.debug('[AppLifecycleManager] 📱 Initializing push notifications...');
+      logger.debug('Initializing push notifications', 'app');
       await pushNotificationService.initialize();
-      logger.info('[AppLifecycleManager] ✅ Push notifications initialized');
+      logger.info('Push notifications initialized', 'app');
     } catch (error) {
-      logger.error('[AppLifecycleManager] ❌ Push notification initialization failed:', error);
+      logger.error('Push notification initialization failed', error, 'app');
       // Continue without push notifications - WebSocket will still work
     }
   }
@@ -431,18 +369,18 @@ class AppLifecycleManager {
    */
   private initializeMessageSync(user?: { entityId?: string }): void {
     try {
-      logger.debug('[AppLifecycleManager] 🔄 Initializing message sync...');
+      logger.debug('Initializing message sync', 'app');
       timelineSyncService.initialize();
 
       // Set current entity ID for sync operations
       if (user?.entityId) {
         timelineSyncService.setCurrentEntityId(user.entityId);
-        logger.debug(`[AppLifecycleManager] Entity ID set for message sync: ${user.entityId}`);
+        logger.debug(`Entity ID set for message sync: ${user.entityId}`, 'app');
       }
 
-      logger.info('[AppLifecycleManager] ✅ Message sync initialized');
+      logger.info('Message sync initialized', 'app');
     } catch (error) {
-      logger.error('[AppLifecycleManager] ❌ Message sync initialization failed:', error);
+      logger.error('Message sync initialization failed', error, 'app');
       // Continue without message sync - basic messaging will still work
     }
   }
@@ -452,11 +390,11 @@ class AppLifecycleManager {
    */
   private initializeDeliveryConfirmation(): void {
     try {
-      logger.debug('[AppLifecycleManager] 📨 Initializing delivery confirmation...');
+      logger.debug('Initializing delivery confirmation', 'app');
       deliveryConfirmationManager.initialize();
-      logger.info('[AppLifecycleManager] ✅ Delivery confirmation initialized');
+      logger.info('Delivery confirmation initialized', 'app');
     } catch (error) {
-      logger.error('[AppLifecycleManager] ❌ Delivery confirmation initialization failed:', error);
+      logger.error('Delivery confirmation initialization failed', error, 'app');
       // Continue without delivery confirmation - basic messaging will still work
     }
   }
@@ -531,14 +469,13 @@ class AppLifecycleManager {
    * Cleanup all services when user logs out
    */
   cleanup(): void {
-    if (IS_DEVELOPMENT) console.log('🔥 [AppLifecycleManager] ⚠️  CLEANING UP ALL SERVICES');
-    logger.debug('[AppLifecycleManager] Cleaning up all services for user logout', 'lifecycle');
+    logger.debug('Cleaning up all services for user logout', 'app');
 
     // Clear handler retry interval if running
     if (this.handlerRetryInterval) {
       clearInterval(this.handlerRetryInterval);
       this.handlerRetryInterval = null;
-      logger.debug('[AppLifecycleManager] Cleared WebSocket handler retry interval');
+      logger.debug('Cleared WebSocket handler retry interval', 'app');
     }
 
     // Clear all InteractionTimelineCache instances
@@ -565,39 +502,39 @@ class AppLifecycleManager {
     // Disconnect and clear WebSocket state
     try {
       websocketService.disconnect();
-      logger.debug('[AppLifecycleManager] WebSocket disconnected for logout', 'lifecycle');
+      logger.debug('WebSocket disconnected for logout', 'app');
     } catch (error) {
-      logger.warn('[AppLifecycleManager] Error disconnecting WebSocket', 'lifecycle', { 
-        error: error instanceof Error ? error.message : String(error) 
+      logger.warn('Error disconnecting WebSocket', 'app', {
+        error: error instanceof Error ? error.message : String(error)
       });
     }
-    
+
     // Clear BackgroundSyncService state (LOCAL-FIRST: replaces MessageManager & TransactionManager)
     try {
       backgroundSyncService.stop();
       webSocketHandler.cleanup();
-      logger.debug('[AppLifecycleManager] Background sync and handlers cleaned up for logout', 'lifecycle');
+      logger.debug('Background sync and handlers cleaned up for logout', 'app');
     } catch (error) {
-      logger.warn('[AppLifecycleManager] Error cleaning up sync service', 'lifecycle', {
+      logger.warn('Error cleaning up sync service', 'app', {
         error: error instanceof Error ? error.message : String(error)
       });
     }
-    
+
     // Cleanup network service
     if (this.networkCleanup) {
       try {
         this.networkCleanup();
         this.networkCleanup = null;
-        logger.debug('[AppLifecycleManager] Network service cleaned up', 'lifecycle');
+        logger.debug('Network service cleaned up', 'app');
       } catch (error) {
-        logger.warn('[AppLifecycleManager] Error cleaning up network service', 'lifecycle', { 
-          error: error instanceof Error ? error.message : String(error) 
+        logger.warn('Error cleaning up network service', 'app', {
+          error: error instanceof Error ? error.message : String(error)
         });
       }
     }
-    
+
     this.isInitialized = false;
-    logger.debug('[AppLifecycleManager] All services cleaned up successfully', 'lifecycle');
+    logger.debug('All services cleaned up successfully', 'app');
   }
 
   /**

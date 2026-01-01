@@ -154,9 +154,10 @@ export const debugEntityQueries = (queries: any[]): void => {
     return isEntitySensitiveFeature(feature);
   });
 
-  console.group('🔍 Entity-Sensitive Queries');
-  console.log(`Total queries: ${queries.length}`);
-  console.log(`Entity-sensitive: ${entityQueries.length}`);
+  logger.debug('Entity-Sensitive Queries', 'data', {
+    totalQueries: queries.length,
+    entitySensitive: entityQueries.length
+  });
 
   const grouped = entityQueries.reduce((acc, query) => {
     const entityId = extractEntityId(query.queryKey) || 'MISSING_ENTITY';
@@ -168,12 +169,8 @@ export const debugEntityQueries = (queries: any[]): void => {
   }, {} as Record<string, any[]>);
 
   Object.entries(grouped).forEach(([entityId, keys]) => {
-    console.group(`Entity: ${entityId}`);
-    keys.forEach((key) => console.log(key));
-    console.groupEnd();
+    logger.debug(`Entity: ${entityId}`, 'data', { keys });
   });
-
-  console.groupEnd();
 };
 
 export default {

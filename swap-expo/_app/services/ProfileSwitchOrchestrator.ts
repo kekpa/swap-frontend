@@ -168,7 +168,7 @@ export class ProfileSwitchOrchestrator {
   async switchProfile(options: ProfileSwitchOptions): Promise<ProfileSwitchResult> {
     const { targetProfileId, requireBiometric = true, apiClient, authContext, queryClient, availableProfiles } = options;
 
-    console.log('🎭 [ProfileSwitchOrchestrator] switchProfile() called', {
+    logger.debug('switchProfile() called', 'auth', {
       targetProfileId,
       currentUser: authContext?.user?.entityId,
       requireBiometric
@@ -176,7 +176,7 @@ export class ProfileSwitchOrchestrator {
 
     // Prevent concurrent switches
     if (this.isSwitching) {
-      console.log('🎭 [ProfileSwitchOrchestrator] ⚠️ Profile switch already in progress');
+      logger.warn('Profile switch already in progress', 'auth');
       return {
         success: false,
         error: 'Profile switch already in progress',
@@ -190,15 +190,15 @@ export class ProfileSwitchOrchestrator {
 
       // CRITICAL: Set isProfileSwitching flag to prevent stale queries during switch
       authContext.setIsProfileSwitching?.(true);
-      console.log('🎭 [ProfileSwitchOrchestrator] 🔒 isProfileSwitching = true (queries disabled)');
+      logger.debug('isProfileSwitching = true (queries disabled)', 'auth');
 
       // CRITICAL: Notify ProfileContextManager to abort all pending requests and pause services
       // This prevents stale closure bugs where background sync uses old profile IDs
       const currentEntityId = tokenManager.getCurrentEntityId() || '';
       profileContextManager.onProfileSwitchStart(targetProfileId, currentEntityId);
-      console.log('🎭 [ProfileSwitchOrchestrator] ✅ ProfileContextManager notified - all pending requests aborted');
+      logger.debug('ProfileContextManager notified - all pending requests aborted', 'auth');
 
-      console.log('🎭 [ProfileSwitchOrchestrator] STEP 0: Starting profile switch');
+      logger.debug('STEP 0: Starting profile switch', 'auth');
 
       // ============================================================================
       // OPTIMIZATION: Non-blocking token refresh (if needed)
@@ -213,11 +213,11 @@ export class ProfileSwitchOrchestrator {
       // ============================================================================
       // STEP 1: Capture current state (snapshot for rollback)
       // ============================================================================
-      console.log('🎭 [ProfileSwitchOrchestrator] STEP 1: Capturing snapshot...');
+      logger.debug('STEP 1: Capturing snapshot...', 'auth');
       this.updateProgress(ProfileSwitchState.IDLE, 'Preparing profile switch...');
       this.snapshot = await this.captureSnapshot(authContext);
 
-      console.log('🎭 [ProfileSwitchOrchestrator] STEP 1 DONE: Snapshot captured', {
+      logger.debug('STEP 1 DONE: Snapshot captured', 'auth', {
         oldProfileId: this.snapshot?.profileId,
         oldEntityId: this.snapshot?.entityId
       });
@@ -337,24 +337,21 @@ export class ProfileSwitchOrchestrator {
       // ============================================================================
       // STEP 4: Update tokens (ATOMIC)
       // ============================================================================
-      console.log('🎭 [ProfileSwitchOrchestrator] STEP 4: Updating tokens atomically...');
       this.state = ProfileSwitchState.TOKEN_UPDATE_PENDING;
       this.updateProgress(this.state, 'Updating credentials...');
 
       await this.atomicTokenUpdate(apiResponse, apiClient);
 
-      console.log('🎭 [ProfileSwitchOrchestrator] STEP 4 DONE: Tokens updated atomically');
-
       // ============================================================================
       // STEP 5: Fetch new profile data
       // ============================================================================
-      console.log('🎭 [ProfileSwitchOrchestrator] STEP 5: Fetching profile data...');
+      logger.debug('STEP 5: Fetching profile data...', 'auth');
       this.state = ProfileSwitchState.DATA_FETCH_PENDING;
       this.updateProgress(this.state, 'Loading profile...');
 
       const newProfile = await this.fetchProfileData(apiClient);
 
-      console.log('🎭 [ProfileSwitchOrchestrator] STEP 5 DONE: Profile data fetched', {
+      logger.debug('STEP 5 DONE: Profile data fetched', 'auth', {
         newProfileId: newProfile?.id,
         firstName: newProfile?.first_name,
         lastName: newProfile?.last_name,
@@ -366,10 +363,10 @@ export class ProfileSwitchOrchestrator {
       // STEP 6: Update AuthContext FIRST (CRITICAL: before cache clearing)
       // This ensures hooks have new profile IDs when TanStack Query refetches
       // ============================================================================
-      console.log('🎭 [ProfileSwitchOrchestrator] STEP 6: Updating AuthContext (CRITICAL - before cache clear)...');
+      logger.debug('STEP 6: Updating AuthContext (CRITICAL - before cache clear)...', 'auth');
       await this.updateAuthContext(authContext, newProfile);
 
-      console.log('🎭 [ProfileSwitchOrchestrator] STEP 6 DONE: AuthContext updated');
+      logger.debug('STEP 6 DONE: AuthContext updated', 'auth');
 
       // ============================================================================
       // STEP 7: Parallel operations for better performance
@@ -425,7 +422,7 @@ export class ProfileSwitchOrchestrator {
         }
       }
 
-      console.log('🎭 [ProfileSwitchOrchestrator] STEP 7 DONE: Cache clearing completed');
+      logger.debug('STEP 7 DONE: Cache clearing completed', 'auth');
       logger.debug('[ProfileSwitchOrchestrator] ✅ Cache operations completed (cache + WebSocket)');
 
       // ============================================================================
@@ -439,11 +436,7 @@ export class ProfileSwitchOrchestrator {
         // Business profiles share auth user with personal profile
         const identifier = tokenManager.getAuthUserIdentifier();
 
-        console.log('🎭 [ProfileSwitchOrchestrator] STEP 8: Storing PIN data for profile', {
-          profileId: newProfile.id,
-          profileType: newProfile.type,
-          identifier: identifier ? `${identifier.slice(0, 5)}...` : 'MISSING',
-        });
+        logger.debug(`[ProfileSwitchOrchestrator] STEP 8: Storing PIN data for ${newProfile.type} profile`);
 
         if (!identifier) {
           logger.warn('[ProfileSwitchOrchestrator] ⚠️ Cannot store PIN data - no phone in JWT');
@@ -475,7 +468,7 @@ export class ProfileSwitchOrchestrator {
       // ============================================================================
       const profileType = newProfile.type === 'business' ? 'business' : 'personal';
       profileContextManager.onProfileSwitchComplete(newProfile.id, newProfile.entity_id, profileType);
-      console.log('🎭 [ProfileSwitchOrchestrator] ✅ ProfileContextManager notified - services can resume with new context');
+      logger.debug('ProfileContextManager notified - services can resume with new context', 'auth');
 
       // ============================================================================
       // SUCCESS
@@ -546,11 +539,11 @@ export class ProfileSwitchOrchestrator {
       if (isPinError) {
         // PIN error - don't rollback, just return error to modal for retry
         logger.debug('[ProfileSwitchOrchestrator] PIN error detected - skipping rollback, user can retry');
-        console.log('🎭 [ProfileSwitchOrchestrator] ⚠️ PIN error - no rollback needed, user can retry in modal');
+        logger.debug('[ProfileSwitchOrchestrator] PIN error - user can retry in modal');
       } else {
         // System/network error - rollback to previous state
         profileContextManager.onProfileSwitchFailed();
-        console.log('🎭 [ProfileSwitchOrchestrator] ⚠️ System error - rolling back to previous profile');
+        logger.warn('System error - rolling back to previous profile', 'auth');
         await this.rollback(apiClient, authContext);
       }
 
@@ -564,7 +557,7 @@ export class ProfileSwitchOrchestrator {
       this.isSwitching = false;
       // CRITICAL: Reset isProfileSwitching flag to re-enable queries
       authContext.setIsProfileSwitching?.(false);
-      console.log('🎭 [ProfileSwitchOrchestrator] 🔓 isProfileSwitching = false (queries enabled)');
+      logger.debug('isProfileSwitching = false (queries enabled)', 'auth');
     }
   }
 
@@ -827,30 +820,30 @@ export class ProfileSwitchOrchestrator {
         // STEP A: Prefetch wallet/balance data from API and store in SQLite
         // This happens BEFORE clearing old data so wallet screen never shows skeleton
         try {
-          console.log('🏦 [PREFETCH 1/8] Starting prefetch for:', { newProfileId, newEntityId });
+          logger.debug('PREFETCH 1/8: Starting prefetch', 'auth', { newProfileId, newEntityId });
 
           const { API_PATHS } = await import('../_api/apiPaths');
           const apiUrl = API_PATHS.WALLET.BY_ENTITY(newEntityId);
-          console.log('🏦 [PREFETCH 2/8] API URL:', apiUrl);
+          logger.debug('PREFETCH 2/8: API URL', 'auth', { apiUrl });
 
           const walletResponse = await apiClient.get(apiUrl);
-          console.log('🏦 [PREFETCH 3/8] API response status:', walletResponse?.status, 'hasData:', !!walletResponse?.data);
-          console.log('🏦 [PREFETCH 3b/8] Raw response data type:', typeof walletResponse?.data, 'isArray:', Array.isArray(walletResponse?.data));
-          console.log('🏦 [PREFETCH 3c/8] Raw response data (first 500 chars):', JSON.stringify(walletResponse?.data)?.substring(0, 500));
+          logger.debug('PREFETCH 3/8: API response received', 'auth', {
+            status: walletResponse?.status,
+            hasData: !!walletResponse?.data,
+            dataType: typeof walletResponse?.data,
+            isArray: Array.isArray(walletResponse?.data)
+          });
 
           if (walletResponse?.data) {
             // Import repository instance (not class) from the repository file directly
             const { currencyWalletsRepository } = await import('../localdb/CurrencyWalletsRepository');
-            console.log('🏦 [PREFETCH 4/8] Repository imported successfully');
+            logger.debug('PREFETCH 4/8: Repository imported', 'auth');
 
             // PROFESSIONAL: Use shared API response parser (same as useBalances.ts)
             // This handles all backend response formats: {result: [...]}, {data: [...]}, direct array, etc.
             const { parseWalletResponse } = await import('../utils/apiResponseParser');
             const wallets = parseWalletResponse(walletResponse.data);
-            console.log('🏦 [PREFETCH 5/8] Wallets parsed:', wallets.length, 'items');
-            if (wallets.length > 0) {
-              console.log('🏦 [PREFETCH 5b/8] First wallet sample:', JSON.stringify(wallets[0])?.substring(0, 300));
-            }
+            logger.debug('PREFETCH 5/8: Wallets parsed', 'auth', { count: wallets.length });
 
             if (wallets.length > 0) {
               // Transform to repository format
@@ -872,11 +865,11 @@ export class ProfileSwitchOrchestrator {
                 updated_at: wallet.updated_at || new Date().toISOString(),
                 is_synced: true,
               }));
-              console.log('🏦 [PREFETCH 6/8] Transformed', repositoryBalances.length, 'wallets for SQLite');
+              logger.debug('PREFETCH 6/8: Transformed wallets for SQLite', 'auth', { count: repositoryBalances.length });
 
               // Save to SQLite for new profile
               await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances, newProfileId);
-              console.log('🏦 [PREFETCH 7/8] ✅ Saved to SQLite for profileId:', newProfileId);
+              logger.debug('PREFETCH 7/8: Saved to SQLite', 'auth', { profileId: newProfileId });
 
               // Also cache in TanStack Query for immediate availability
               if (queryClient) {
@@ -897,22 +890,20 @@ export class ProfileSwitchOrchestrator {
                 }));
 
                 const queryKey = queryKeys.balancesByEntity(newProfileId, newEntityId);
-                console.log('🏦 [PREFETCH 8/8] Caching in TanStack with queryKey:', JSON.stringify(queryKey));
+                logger.debug('PREFETCH 8/8: Caching in TanStack', 'auth');
                 queryClient.setQueryData(queryKey, transformedBalances);
-                console.log('🏦 [PREFETCH COMPLETE] ✅ All steps completed successfully!');
+                logger.debug('PREFETCH COMPLETE: All steps finished', 'auth');
               } else {
-                console.log('🏦 [PREFETCH 8/8] ⚠️ queryClient is null, skipping TanStack cache');
+                logger.debug('PREFETCH 8/8: queryClient is null, skipping TanStack cache', 'auth');
               }
             } else {
-              console.log('🏦 [PREFETCH 5/8] ℹ️ Empty wallets array - new profile has no wallets');
+              logger.debug('PREFETCH 5/8: Empty wallets array - new profile has no wallets', 'auth');
             }
           } else {
-            console.log('🏦 [PREFETCH 3/8] ⚠️ No data in response');
+            logger.debug('PREFETCH 3/8: No data in response', 'auth');
           }
         } catch (walletError: any) {
           // Wallet prefetch failure is non-critical - useBalances will fetch later
-          console.log('🏦 [PREFETCH ERROR] ❌ Failed at some step:', walletError?.message);
-          console.log('🏦 [PREFETCH ERROR] Full error:', walletError);
           logger.warn('[ProfileSwitchOrchestrator] ⚠️ Wallet prefetch failed (non-critical):', walletError?.message);
         }
 

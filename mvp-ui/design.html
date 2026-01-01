@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moto-Taxi + Sòl App - MVP UI Design System</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+        .flow-section {
+            margin-bottom: 30px;
+        }
+        .flow-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            padding-left: 20px;
+            color: #111827;
+        }
+        .flow-list {
+            background-color: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+        }
+        .flow-item {
+            padding: 16px 20px;
+            border-bottom: 1px solid #f1f5f9;
+            transition: all 0.2s;
+        }
+        .flow-item:hover {
+            background-color: #fffbeb;
+        }
+        .flow-item:last-child {
+            border-bottom: none;
+        }
+        .flow-link {
+            color: #111827;
+            font-weight: 500;
+            text-decoration: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .flow-link:hover {
+            color: #F59E0B;
+        }
+
+        /* Brand Colors - Black + Gold */
+        .brand-black {
+            color: #111827;
+        }
+        .brand-gold {
+            color: #F59E0B;
+        }
+        .bg-brand-black {
+            background-color: #111827;
+        }
+        .bg-brand-gold {
+            background-color: #F59E0B;
+        }
+
+        /* Status badges */
+        .status-badge {
+            font-size: 12px;
+            font-weight: 500;
+            padding: 3px 8px;
+            border-radius: 12px;
+            margin-left: 10px;
+        }
+        .status-completed {
+            background-color: #dcfce7;
+            color: #16a34a;
+        }
+        .status-in-progress {
+            background-color: #fef3c7;
+            color: #d97706;
+        }
+        .status-planned {
+            background-color: #e5e7eb;
+            color: #4b5563;
+        }
+
+        .link-content {
+            display: flex;
+            align-items: center;
+        }
+
+        .right-content {
+            display: flex;
+            align-items: center;
+        }
+
+        .screen-count {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-right: 12px;
+        }
+
+        /* Header styling */
+        .header-bar {
+            background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+            color: white;
+            padding: 40px 20px;
+            margin-bottom: 40px;
+            border-radius: 0 0 24px 24px;
+        }
+        .header-bar h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .header-bar p {
+            color: #9ca3af;
+            font-size: 16px;
+        }
+        .gold-accent {
+            color: #F59E0B;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-bar text-center">
+        <h1>Moto-Taxi + <span class="gold-accent">Sòl</span> App</h1>
+        <p>MVP UI Design System - 26 Screens</p>
+        <p class="text-sm mt-2 opacity-60">Target: Moto-taxi drivers in Haiti | Language: Haitian Creole</p>
+    </div>
+
+    <div class="container mx-auto p-6 max-w-4xl">
+
+        <!-- Color Palette Reference -->
+        <div class="flow-section">
+            <h2 class="flow-title">Color Palette</h2>
+            <div class="flow-list p-6">
+                <div class="flex flex-wrap gap-4">
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 rounded-lg mr-3" style="background-color: #111827;"></div>
+                        <div>
+                            <div class="font-medium text-sm">Primary</div>
+                            <div class="text-xs text-gray-500">#111827</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 rounded-lg mr-3" style="background-color: #F59E0B;"></div>
+                        <div>
+                            <div class="font-medium text-sm">Gold Accent</div>
+                            <div class="text-xs text-gray-500">#F59E0B</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 rounded-lg mr-3 border" style="background-color: #F9FAFB;"></div>
+                        <div>
+                            <div class="font-medium text-sm">Background</div>
+                            <div class="text-xs text-gray-500">#F9FAFB</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 rounded-lg mr-3" style="background-color: #10B981;"></div>
+                        <div>
+                            <div class="font-medium text-sm">Success</div>
+                            <div class="text-xs text-gray-500">#10B981</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 rounded-lg mr-3" style="background-color: #EF4444;"></div>
+                        <div>
+                            <div class="font-medium text-sm">Error</div>
+                            <div class="text-xs text-gray-500">#EF4444</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Onboarding Flow -->
+        <div class="flow-section">
+            <h2 class="flow-title">Onboarding Flow</h2>
+            <div class="flow-list">
+                <div class="flow-item">
+                    <a href="flows/onboarding/onboarding.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Complete Onboarding Flow</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="screen-count">5 screens</span>
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Core Tabs -->
+        <div class="flow-section">
+            <h2 class="flow-title">Core Tabs</h2>
+            <div class="flow-list">
+                <div class="flow-item">
+                    <a href="flows/home/home.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Lakay (Home)</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="screen-count">1 screen</span>
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/send/send.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Voye (Send Money)</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="screen-count">5 screens</span>
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/sol/sol.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Sòl (ROSCA Groups)</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="screen-count">6 screens</span>
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+                <div class="flow-item">
+                    <a href="flows/profile/profile.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Mwen (Profile)</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="screen-count">4 screens</span>
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Receive Flow -->
+        <div class="flow-section">
+            <h2 class="flow-title">Receive Flow</h2>
+            <div class="flow-list">
+                <div class="flow-item">
+                    <a href="flows/receive/receive.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Resevwa (Receive Money)</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="screen-count">2 screens</span>
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cash In/Out Flow -->
+        <div class="flow-section">
+            <h2 class="flow-title">Cash In/Out Flow</h2>
+            <div class="flow-list">
+                <div class="flow-item">
+                    <a href="flows/cash/cash.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Lajan Cash (Cash Operations)</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="screen-count">3 screens</span>
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Components -->
+        <div class="flow-section mb-8">
+            <h2 class="flow-title">Components</h2>
+            <div class="flow-list">
+                <div class="flow-item">
+                    <a href="components/components.html" class="flow-link">
+                        <div class="link-content">
+                            <span>Shared Components</span>
+                        </div>
+                        <div class="right-content">
+                            <span class="screen-count">Bottom Nav, Headers</span>
+                            <span class="status-badge status-completed">Completed</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer info -->
+        <div class="text-center text-gray-400 text-sm mb-10">
+            <p>Target Market: Moto-taxi drivers in Haiti</p>
+            <p>Design: Black + Gold theme for masculine, premium feel</p>
+            <p>Language: Haitian Creole (Kreyòl)</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -19,6 +19,7 @@ import { API_PATHS } from "./../_api/apiPaths";
 import { useAuthContext } from "./../features/auth/context/AuthContext";
 import defaultTheme from "./../theme/theme";
 import { tokenManager } from "./../services/token";
+import logger from "./../utils/logger";
 
 // Define type for route and navigation - now supports both phone and email
 type AuthStackParamList = {
@@ -79,7 +80,7 @@ const VerificationCodeScreen = () => {
   if (!theme || !theme.colors) {
     return (
       <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff' }}>
-        <ActivityIndicator size="large" color="#8b14fd" />
+        <ActivityIndicator size="large" color="#888888" />
       </SafeAreaView>
     );
   }
@@ -177,13 +178,13 @@ const VerificationCodeScreen = () => {
             phone: contact,
             channel: channel?.toLowerCase() === 'whatsapp' ? 'whatsapp' : 'sms'
           });
-          console.log("Phone OTP resent successfully:", response.data);
+          logger.debug('Phone OTP resent successfully', 'auth');
         } else {
           // Resend email verification code
           const response = await apiClient.post(API_PATHS.AUTH.RESEND_EMAIL_CODE, {
             email: contact
         });
-          console.log("Email OTP resent successfully:", response.data);
+          logger.debug('Email OTP resent successfully', 'auth');
         }
         
         setOtpStatus('sent');
@@ -199,7 +200,7 @@ const VerificationCodeScreen = () => {
         );
         
       } catch (error) {
-        console.error(`Error resending ${type} OTP:`, error);
+        logger.error(`Error resending ${type} OTP`, error, 'auth');
         setOtpStatus('error');
         Alert.alert(
           "Error", 
@@ -228,7 +229,7 @@ const VerificationCodeScreen = () => {
         await handleEmailVerification(verificationCode);
       }
     } catch (error) {
-      console.error(`${type} verification error:`, error);
+      logger.error(`${type} verification error`, error, 'auth');
       Alert.alert(
         "Verification Failed", 
         "The code you entered is incorrect or has expired. Please try again or request a new code."
@@ -246,7 +247,7 @@ const VerificationCodeScreen = () => {
         code: verificationCode,
         channel: channel?.toLowerCase() || 'sms',
       });
-      console.log("KYC Phone verification successful");
+      logger.info('KYC Phone verification successful', 'kyc');
       // Navigate back to the timeline, which will refetch the status
       navigation.navigate('VerifyYourIdentity', { sourceRoute });
     } else {
@@ -257,7 +258,7 @@ const VerificationCodeScreen = () => {
       // Choose registration endpoint based on account type
       let response;
       if (accountType === 'business') {
-        console.log("Creating business profile via phone registration");
+        logger.debug('Creating business profile via phone registration', 'auth');
         // TODO: Backend needs to support phone-based business registration
         // For now, pass accountType to help backend identify business registration intent
         response = await apiClient.post(API_PATHS.AUTH.REGISTER_PHONE, {
@@ -266,7 +267,7 @@ const VerificationCodeScreen = () => {
           password: tempPassword,
           accountType: 'business'
         });
-        console.log("Business phone registration successful:", response.data);
+        logger.info('Business phone registration successful', 'auth');
       } else {
         // Personal registration (existing flow)
         response = await apiClient.post(API_PATHS.AUTH.REGISTER_PHONE, {
@@ -274,7 +275,7 @@ const VerificationCodeScreen = () => {
           code: verificationCode,
           password: tempPassword
         });
-        console.log("Personal phone registration successful:", response.data);
+        logger.info('Personal phone registration successful', 'auth');
       }
 
       const authData = response.data;
@@ -317,7 +318,7 @@ const VerificationCodeScreen = () => {
         email: contact,
         code: verificationCode
       });
-      console.log("Email verification successful for KYC:", response.data);
+      logger.info('Email verification successful for KYC', 'kyc');
       navigation.navigate('VerifyYourIdentity', { sourceRoute });
     } else {
       // Forgot password email verification
@@ -325,7 +326,7 @@ const VerificationCodeScreen = () => {
         email: contact,
         code: verificationCode
       });
-      console.log("Password reset code verified:", response.data);
+      logger.info('Password reset code verified', 'auth');
       navigation.navigate("ResetPassword", { email: contact });
     }
   };

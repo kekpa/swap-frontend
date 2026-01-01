@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { PersonalInfoData } from '../features/profile/kyc/personal-info/PersonalInfoFlow';
 import apiClient from '../_api/apiClient';
+import logger from '../utils/logger';
 
 export interface SavePersonalInfoRequest {
   firstName: string;
@@ -45,17 +46,17 @@ export const usePersonalInfoSave = () => {
         }
       };
 
-      console.log('🔍 [usePersonalInfoSave] INVESTIGATION: Starting simple API call (original working pattern)');
-      console.log('[usePersonalInfoSave] Saving personal info:', requestData);
+      logger.debug('Starting simple API call (original working pattern)', 'kyc');
+      logger.debug('Saving personal info', 'kyc', { requestData });
 
       const response = await apiClient.post('/kyc/personal-information', requestData);
 
-      console.log('🔍 [usePersonalInfoSave] INVESTIGATION: Simple API call completed successfully - NO EVENT EMISSION');
-      console.log('[usePersonalInfoSave] Personal info saved successfully:', response.data);
+      logger.debug('Simple API call completed successfully - NO EVENT EMISSION', 'kyc');
+      logger.debug('Personal info saved successfully', 'kyc', { response: response.data });
       return true;
 
     } catch (err: any) {
-      console.error('[usePersonalInfoSave] Error saving personal info:', err);
+      logger.error('Error saving personal info', err, 'kyc');
       setError(err.response?.data?.message || err.message || 'Failed to save personal information');
       return false;
     } finally {

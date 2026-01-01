@@ -1,3 +1,5 @@
+import logger from './logger';
+
 type EventCallback = (payload?: any) => void;
 
 class EventEmitter {
@@ -8,19 +10,17 @@ class EventEmitter {
       this.listeners[event] = new Set();
     }
     this.listeners[event].add(callback);
-    console.log(`🔥🔥🔥 [EventEmitter] LISTENER REGISTERED for '${event}':`, {
+    logger.trace(`Listener registered for '${event}'`, 'app', {
       event,
-      totalListeners: this.listeners[event].size,
-      timestamp: new Date().toISOString()
+      totalListeners: this.listeners[event].size
     });
   }
 
   off(event: string, callback: EventCallback) {
     this.listeners[event]?.delete(callback);
-    console.log(`🔥🔥🔥 [EventEmitter] LISTENER REMOVED for '${event}':`, {
+    logger.trace(`Listener removed for '${event}'`, 'app', {
       event,
-      remainingListeners: this.listeners[event]?.size || 0,
-      timestamp: new Date().toISOString()
+      remainingListeners: this.listeners[event]?.size || 0
     });
   }
 
@@ -34,23 +34,22 @@ class EventEmitter {
 
   emit(event: string, payload?: any) {
     const listenerCount = this.listeners[event]?.size || 0;
-    console.log(`🔥🔥🔥 [EventEmitter] EMITTING '${event}' to ${listenerCount} listener(s):`, {
+    logger.trace(`Emitting '${event}' to ${listenerCount} listener(s)`, 'app', {
       event,
       listenerCount,
       hasPayload: !!payload,
-      payloadKeys: payload ? Object.keys(payload) : [],
-      timestamp: new Date().toISOString()
+      payloadKeys: payload ? Object.keys(payload) : []
     });
 
     if (listenerCount === 0) {
-      console.log(`🔥🔥🔥 [EventEmitter] ℹ️ INFO: No listeners for '${event}' event (fire-and-forget)`);
+      logger.trace(`No listeners for '${event}' event (fire-and-forget)`, 'app');
     }
 
     this.listeners[event]?.forEach(cb => {
       try {
         cb(payload);
       } catch (e) {
-        console.error(`🔥🔥🔥 [EventEmitter] ❌ Error in '${event}' listener:`, e);
+        logger.error(`Error in '${event}' listener`, e, 'app');
       }
     });
   }

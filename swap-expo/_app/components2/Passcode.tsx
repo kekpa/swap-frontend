@@ -17,6 +17,7 @@ import { useTheme } from '../theme/ThemeContext';
 import { useKycCompletion } from '../hooks-actions/useKycCompletion';
 import PinPad from './PinPad';
 import appLockService from '../services/AppLockService';
+import logger from '../utils/logger';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 type PasscodeScreenRouteProp = RouteProp<ProfileStackParamList, 'Passcode'>;
@@ -45,7 +46,7 @@ const PasscodeScreen: React.FC<PasscodeProps> = ({
   const returnToTimeline = route.params?.returnToTimeline;
   const sourceRoute = route.params?.sourceRoute;
   
-  console.log(`[PasscodeScreen] Mounted/Focused. isKycFlow: ${isKycFlow}, returnToTimeline: ${returnToTimeline}, sourceRoute: ${sourceRoute}`);
+  logger.debug('PasscodeScreen mounted', 'auth', { isKycFlow, returnToTimeline, sourceRoute });
 
   const [mode, setMode] = useState<PasscodeMode>('create');
   const [passcode, setPasscode] = useState<string>('');
@@ -65,12 +66,12 @@ const PasscodeScreen: React.FC<PasscodeProps> = ({
       try {
         const isConfigured = await appLockService.isConfigured();
         if (isConfigured) {
-          console.log('[PasscodeScreen] ✅ PIN already exists from AppLock - switching to verify mode');
+          logger.debug('PIN already exists from AppLock - switching to verify mode', 'auth');
           setHasExistingPin(true);
           setMode('confirm'); // Skip create, just verify existing PIN
         }
       } catch (error) {
-        console.warn('[PasscodeScreen] Error checking existing PIN:', error);
+        logger.warn('Error checking existing PIN', 'auth');
       } finally {
         setIsCheckingExistingPin(false);
       }
@@ -84,14 +85,14 @@ const PasscodeScreen: React.FC<PasscodeProps> = ({
   const isTinyScreen = screenHeight < 600; // Even smaller screens
 
   const handleBack = () => {
-    console.log(`[PasscodeScreen] handleBack called. mode: ${mode}, isKycFlow: ${isKycFlow}, returnToTimeline: ${returnToTimeline}, sourceRoute: ${sourceRoute}`);
+    logger.debug('handleBack called', 'auth', { mode, isKycFlow, returnToTimeline, sourceRoute });
     if (mode === 'confirm') {
       setMode('create');
       setPasscode('');
     } else if (isKycFlow) {
       // Always return to timeline when in KYC flow
       if (returnToTimeline) {
-        console.log(`[PasscodeScreen] Returning to VerifyYourIdentity timeline`);
+        logger.debug('Returning to VerifyYourIdentity timeline', 'auth');
         navigation.navigate('VerifyYourIdentity', sourceRoute ? { sourceRoute } : undefined);
       } else {
         // Default KYC back behavior
@@ -116,16 +117,16 @@ const PasscodeScreen: React.FC<PasscodeProps> = ({
         // Confirm mode - either verifying against originalPasscode OR existing AppLock PIN
         if (hasExistingPin) {
           // Verify against existing AppLock PIN
-          console.log('[PasscodeScreen] Verifying against existing AppLock PIN...');
+          logger.debug('Verifying against existing AppLock PIN', 'auth');
           verifyExistingPin(passcode);
         } else if (passcode === originalPasscode) {
           // Passcode confirmed successfully (normal create flow)
-          console.log('Passcode set successfully');
+          logger.info('Passcode set successfully', 'auth');
 
           if (onPasscodeConfirmed) {
             onPasscodeConfirmed(passcode);
           } else if (isKycFlow) {
-            console.log(`[PasscodeScreen] KYC flow confirmed. Storing passcode in backend...`);
+            logger.debug('KYC flow confirmed. Storing passcode in backend', 'auth');
             // Store passcode in backend during KYC flow
             storePasscodeInBackend(passcode);
           } else {
@@ -136,7 +137,7 @@ const PasscodeScreen: React.FC<PasscodeProps> = ({
           }
         } else {
           // Passcode doesn't match
-          console.log('Passcodes do not match');
+          logger.warn('Passcodes do not match', 'auth');
           setPasscode('');
           // Show error message
         }
@@ -147,26 +148,26 @@ const PasscodeScreen: React.FC<PasscodeProps> = ({
   // Verify existing PIN from AppLock and sync to backend
   const verifyExistingPin = async (enteredPin: string) => {
     try {
-      console.log('[PasscodeScreen] 🔐 Verifying PIN against AppLockService...');
+      logger.debug('Verifying PIN against AppLockService', 'auth');
       const result = await appLockService.unlockWithPin(enteredPin);
 
       if (result.success) {
-        console.log('[PasscodeScreen] ✅ PIN verified! Syncing to backend for KYC...');
+        logger.info('PIN verified! Syncing to backend for KYC', 'auth');
         // PIN is correct - sync to backend for KYC completion
         storePasscodeInBackend(enteredPin);
       } else {
-        console.log('[PasscodeScreen] ❌ PIN incorrect');
+        logger.warn('PIN incorrect', 'auth');
         setPasscode('');
         // Could show an error here
       }
     } catch (error) {
-      console.error('[PasscodeScreen] PIN verification error:', error);
+      logger.error('PIN verification error', error, 'auth');
       setPasscode('');
     }
   };
 
   const storePasscodeInBackend = async (confirmedPasscode: string) => {
-    console.log(`[PasscodeScreen] 🚀 Starting professional KYC completion for passcode...`);
+    logger.debug('Starting professional KYC completion for passcode', 'auth');
 
     // Use professional KYC completion system
     const result = await completeStep('passcode_setup', { passcode: confirmedPasscode }, {
@@ -178,16 +179,16 @@ const PasscodeScreen: React.FC<PasscodeProps> = ({
     });
 
     if (result.success) {
-      console.log(`[PasscodeScreen] ✅ Professional passcode completion successful!`);
+      logger.info('Professional passcode completion successful', 'auth');
 
       // PROFESSIONAL: Sync KYC passcode to local AppLockService for unified PIN experience
       // This ensures user only needs ONE PIN for both transactions and app lock (Revolut-style)
       try {
-        console.log(`[PasscodeScreen] 🔐 Syncing passcode to AppLockService for unified PIN...`);
+        logger.debug('Syncing passcode to AppLockService for unified PIN', 'auth');
         await appLockService.setupPin(confirmedPasscode);
-        console.log(`[PasscodeScreen] ✅ AppLockService PIN synced successfully - user has ONE PIN for everything!`);
+        logger.info('AppLockService PIN synced successfully - user has ONE PIN for everything', 'auth');
       } catch (pinError) {
-        console.warn(`[PasscodeScreen] ⚠️ Failed to sync PIN to AppLockService:`, pinError);
+        logger.warn('Failed to sync PIN to AppLockService (non-fatal)', 'auth');
         // Non-fatal: KYC passcode is still saved to backend
       }
 
@@ -195,13 +196,13 @@ const PasscodeScreen: React.FC<PasscodeProps> = ({
       setTimeout(() => {
         if (!isKycFlow) {
           // Default behavior for non-KYC usage
-          console.log(`[PasscodeScreen] Non-KYC flow, navigating to VerificationComplete`);
+          logger.debug('Non-KYC flow, navigating to VerificationComplete', 'auth');
           navigation.navigate('VerificationComplete');
         }
         // KYC navigation is handled by the completion system
       }, 500);
     } else {
-      console.log(`[PasscodeScreen] ❌ Professional passcode completion failed - handled by completion system`);
+      logger.warn('Professional passcode completion failed - handled by completion system', 'auth');
     }
   };
 

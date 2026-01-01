@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import { useTheme } from '../theme/ThemeContext';
 import { DocumentType } from '../hooks-actions/useDocumentUpload';
+import logger from '../utils/logger';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -100,7 +101,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
         onCapture(photo.uri);
       }
     } catch (error) {
-      console.error(`Error taking ${mode} photo:`, error);
+      logger.error(`Error taking ${mode} photo`, error, 'app');
       Alert.alert(
         'Camera Error',
         'There was an error taking the photo. Please try again.',

@@ -8,7 +8,7 @@
 import { logger } from '../../utils/logger';
 
 // Data type categories for stale time optimization
-export type DataType = 
+export type DataType =
   | 'balance'           // Account balances - critical, frequent updates
   | 'transaction'       // Transaction history - append-only, stable
   | 'interaction'       // Messages/interactions - real-time updates
@@ -17,7 +17,8 @@ export type DataType =
   | 'static'            // Static data (countries, currencies) - very stable
   | 'realtime'          // Real-time data (exchange rates) - frequent updates
   | 'analytics'         // Analytics/reports - can be cached longer
-  | 'settings';         // User settings - infrequent updates
+  | 'settings'          // User settings - infrequent updates
+  | 'rosca';            // Rosca (Sol) enrollments - medium frequency updates
 
 // User behavior patterns that affect caching strategy
 export interface UserBehavior {
@@ -54,6 +55,9 @@ const BASE_STALE_TIMES: Record<DataType, number> = {
   // Static/analytical data - very long stale times
   static: 1 * TIME.HOUR,          // 1h - countries, currencies rarely change
   analytics: 5 * TIME.MINUTE,     // 5m - reports can be slightly stale
+
+  // Rosca (Sol) - pool-based savings
+  rosca: 2 * TIME.MINUTE,         // 2m - similar to interactions, medium priority
 };
 
 // Stale time multipliers based on user behavior
@@ -222,6 +226,12 @@ export const getStaleTimeForQuery = (queryType: string, userBehavior?: Partial<U
     'analytics': 'analytics',
     'reports': 'analytics',
     'insights': 'analytics',
+
+    // Rosca (Sol) queries
+    'roscaEnrollments': 'rosca',
+    'roscaPools': 'static',  // Pools don't change often
+    'roscaPayments': 'rosca',
+    'roscaFriends': 'rosca',
   };
 
   const dataType = queryTypeMap[queryType] || 'static';

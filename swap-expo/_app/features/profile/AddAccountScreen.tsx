@@ -18,6 +18,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
+import logger from '../../utils/logger';
 
 const AddAccountScreen: React.FC = () => {
   const { theme } = useTheme();
@@ -111,12 +112,12 @@ const AddAccountScreen: React.FC = () => {
   };
 
   const handleCreateBusinessProfile = () => {
-    console.log('[AddAccountScreen] Navigating to BusinessSetup');
+    logger.debug("Navigating to BusinessSetup", "navigation");
     navigation.navigate('BusinessSetup' as never);
   };
 
   const handleAddPersonalAccount = () => {
-    console.log('[AddAccountScreen] Navigating to signup flow with isAddingAccount flag');
+    logger.debug("Navigating to signup flow with isAddingAccount flag", "navigation");
     // Navigate to SignUpScreen with isAddingAccount flag
     // This tells signup to preserve current session and add new account
     navigation.navigate('SignUpScreen' as never, { isAddingAccount: true } as never);

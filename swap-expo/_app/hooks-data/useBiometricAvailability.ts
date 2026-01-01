@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import * as LocalAuthentication from 'expo-local-authentication';
+import logger from '../utils/logger';
 
 interface BiometricAvailability {
   isAvailable: boolean;
@@ -32,7 +33,7 @@ export const useBiometricAvailability = (): BiometricAvailability => {
         setHasHardware(compatible);
 
         if (!compatible) {
-          console.log('[useBiometricAvailability] Device does not have biometric hardware');
+          logger.debug("Device does not have biometric hardware", "auth");
           setIsLoading(false);
           return;
         }
@@ -42,7 +43,7 @@ export const useBiometricAvailability = (): BiometricAvailability => {
         setHasEnrolledBiometrics(enrolled);
 
         if (!enrolled) {
-          console.log('[useBiometricAvailability] No biometrics enrolled on device');
+          logger.debug("No biometrics enrolled on device", "auth");
           setIsLoading(false);
           return;
         }
@@ -51,12 +52,12 @@ export const useBiometricAvailability = (): BiometricAvailability => {
         const supported = await LocalAuthentication.supportedAuthenticationTypesAsync();
         setSupportedTypes(supported);
 
-        console.log('[useBiometricAvailability] Supported types:',
-          supported.map(type => LocalAuthentication.AuthenticationType[type]).join(', ')
-        );
+        logger.debug("Biometric supported types", "auth", {
+          types: supported.map(type => LocalAuthentication.AuthenticationType[type]).join(', ')
+        });
 
       } catch (error) {
-        console.error('[useBiometricAvailability] Error checking biometric availability:', error);
+        logger.error("Error checking biometric availability", error, "auth");
         setHasHardware(false);
         setHasEnrolledBiometrics(false);
         setSupportedTypes([]);

@@ -337,23 +337,23 @@ class ContactsService {
       try {
         const token = await getAccessToken();
         if (!token) {
-          console.warn("🔒 [ContactsService] No access token available for contact sync - aborting to prevent 401 errors");
+          logger.warn("No access token available for contact sync - aborting to prevent 401 errors", "auth");
           throw new Error("No access token available");
         }
-        
+
         // Test if token is valid by making a lightweight request first
         try {
           await apiClient.get('/auth/verify-token');
-          console.log("✅ [ContactsService] Token validation successful, proceeding with contact sync");
+          logger.debug("Token validation successful, proceeding with contact sync", "auth");
         } catch (tokenValidationError: any) {
           if (tokenValidationError.response?.status === 401) {
-            console.warn("🔒 [ContactsService] Token invalid (401), aborting contact sync to prevent cascade failure");
+            logger.warn("Token invalid (401), aborting contact sync to prevent cascade failure", "auth");
             throw new Error("Token invalid (401)");
           }
           // If it's not a 401, continue anyway (might be network issue)
-          console.warn("⚠️ [ContactsService] Token validation failed but not 401, continuing with contact sync");
+          logger.warn("Token validation failed but not 401, continuing with contact sync", "auth");
         }
-             } catch (authError) {
+      } catch (authError) {
          // Return empty result instead of throwing to prevent cascade failures
          logger.warn("[ContactsService] Authentication check failed, returning empty sync result", String(authError));
         return { 

@@ -54,6 +54,10 @@ export * from './useKycWebSocketSync';
 // Adaptive configuration hooks
 export * from './useAdaptiveStaleTime';
 
+// Rosca (Sol) hooks - Pool-based savings system
+export * from './useRoscaEnrollments';
+export * from './useRoscaPools';
+
 /**
  * Quick reference for common hooks:
  * 
@@ -78,4 +82,11 @@ export * from './useAdaptiveStaleTime';
  * - `useWebSocketQuerySync(entityId)` - Enable real-time updates
  * - `useKycWebSocketSync(entityId)` - Enable KYC real-time updates (Phase 3)
  * - `useBackgroundSync(entityId)` - Background data sync
+ *
+ * **Rosca (Sol) - Pool-based Savings:**
+ * - `useRoscaEnrollments(entityId)` - Get user's pool enrollments (local-first)
+ * - `useRoscaPools()` - Get available pools to join
+ * - `useRoscaPoolDetails(poolId)` - Get detailed pool info
+ * - `useJoinPool()` - Join a pool (mutation)
+ * - `useMakePayment()` - Make a contribution payment (mutation)
  */

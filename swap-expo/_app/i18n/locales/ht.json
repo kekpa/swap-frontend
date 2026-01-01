@@ -1,0 +1,64 @@
+{
+  "common": {
+    "loading": "Ap chaje...",
+    "error": "Ere",
+    "cancel": "Anile",
+    "confirm": "Konfime",
+    "save": "Anrejistre",
+    "send": "Voye",
+    "receive": "Resevwa",
+    "done": "Fini",
+    "next": "Pwochen",
+    "back": "Retounen",
+    "close": "Femen",
+    "search": "Cheche",
+    "retry": "Eseye anko",
+    "success": "Sikse"
+  },
+  "rosca": {
+    "frequency": {
+      "daily": "jou",
+      "weekly": "semen",
+      "biweekly": "kenzen",
+      "monthly": "mwa"
+    },
+    "frequencyFull": {
+      "daily": "Chak jou",
+      "weekly": "Chak semen",
+      "biweekly": "Chak kenzen",
+      "monthly": "Chak mwa"
+    },
+    "frequencyShort": {
+      "daily": "Jounen",
+      "weekly": "Semenn",
+      "biweekly": "Kenzen",
+      "monthly": "Mwa"
+    },
+    "paymentDue": "Peman dwe",
+    "joinPool": "Antre nan sol",
+    "yourPosition": "Pozisyon ou",
+    "members": "manm",
+    "calendar": "Kalandriye",
+    "lastDayToJoin": "Denye jou pou antre",
+    "poolStarts": "Sol la komanse"
+  },
+  "wallet": {
+    "balance": "Balans",
+    "transactions": "Tranzaksyon",
+    "send": "Voye",
+    "receive": "Resevwa",
+    "history": "Istwa"
+  },
+  "auth": {
+    "login": "Konekte",
+    "logout": "Dekonekte",
+    "welcome": "Byenveni",
+    "signUp": "Enskri",
+    "forgotPassword": "Bliye modpas?"
+  },
+  "errors": {
+    "network": "Pa kapab konekte. Tcheke koneksyon entenet ou.",
+    "sessionExpired": "Sesyon ou fini. Tanpri konekte anko.",
+    "generic": "Gen yon pwoblem. Tanpri eseye anko."
+  }
+}

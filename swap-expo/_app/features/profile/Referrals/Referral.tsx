@@ -26,6 +26,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { ProfileStackParamList } from "../../../navigation/profileNavigator";
+import logger from "../../../utils/logger";
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 type ReferralRouteProp = RouteProp<ProfileStackParamList, "Referral">;
@@ -65,7 +66,7 @@ const ReferralScreen: React.FC<ReferralScreenProps> = (props) => {
             "Join me on SWAP and get €10 when you sign up using my invite code: SWAP123",
         });
       } catch (error) {
-        console.log("Error sharing:", error);
+        logger.debug("Error sharing", 'profile', { error });
       }
     }
   };

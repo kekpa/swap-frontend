@@ -27,6 +27,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { WalletStackParamList } from "../../../../navigation/walletNavigator";
+import logger from "../../../../utils/logger";
 
 type NavigationProp = StackNavigationProp<WalletStackParamList>;
 
@@ -87,7 +88,7 @@ Address: ${accountDetails.bankAddress}
         title: "Bank Transfer Details",
       });
     } catch (error) {
-      console.error("Error sharing details:", error);
+      logger.error("Error sharing details", error, 'wallet');
     }
   };
 

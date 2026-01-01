@@ -19,6 +19,7 @@ import { ProfileStackParamList } from '../../../../navigation/profileNavigator';
 import { useTheme } from '../../../../theme/ThemeContext';
 import apiClient from '../../../../_api/apiClient';
 import contactsService, { ContactMatch } from '../../../../services/ContactsService';
+import logger from '../../../../utils/logger';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -73,7 +74,7 @@ const BeneficialOwnersList: React.FC = () => {
     try {
       // NEW: Use unified team-members endpoint
       const response = await apiClient.get('/kyc/team-members');
-      console.log('[TeamMembers] API Response:', response);
+      logger.debug('API Response', 'kyc', { response: response.data });
 
       // BUGFIX: API returns { result: [...], meta: {...} }, not direct array
       const membersData = Array.isArray(response.data.result) ? response.data.result : (Array.isArray(response.data) ? response.data : []);
@@ -105,9 +106,9 @@ const BeneficialOwnersList: React.FC = () => {
       }));
 
       setOwners(mappedMembers);
-      console.log('[TeamMembers] Fetched members:', mappedMembers.length);
+      logger.debug('Fetched members', 'kyc', { count: mappedMembers.length });
     } catch (error) {
-      console.error('[TeamMembers] Failed to fetch members:', error);
+      logger.error('Failed to fetch members', error, 'kyc');
       // Don't show alert on fetch error, just log it
     } finally {
       setIsLoading(false);
@@ -156,9 +157,9 @@ const BeneficialOwnersList: React.FC = () => {
             try {
               await apiClient.delete(`/kyc/team-members/${ownerId}`);
               setOwners(prev => prev.filter(o => o.id !== ownerId));
-              console.log('[TeamMembers] Team member removed:', ownerId);
+              logger.debug('Team member removed', 'kyc', { ownerId });
             } catch (error) {
-              console.error('[TeamMembers] Failed to remove team member:', error);
+              logger.error('Failed to remove team member', error, 'kyc');
               Alert.alert('Error', 'Failed to remove team member. Please try again.');
             }
           },
@@ -206,7 +207,7 @@ const BeneficialOwnersList: React.FC = () => {
       setContacts(platformContacts);
       setShowContactPicker(true);
     } catch (error) {
-      console.error('[TeamMembers] Error loading contacts:', error);
+      logger.error('Error loading contacts', error, 'kyc');
       Alert.alert('Error', 'Failed to load contacts. Please try again.');
     }
   };

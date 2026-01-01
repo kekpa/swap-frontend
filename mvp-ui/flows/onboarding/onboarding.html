@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="ht">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Onboarding Flow - Moto-Taxi + Sòl App</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #f8fafc;
+            min-width: 1800px;
+        }
+        .container-wide { max-width: 2000px; margin: 0 auto; padding: 0 20px; }
+        .device-frame {
+            width: 350px; height: 750px; border-radius: 36px;
+            border: 10px solid #111827; overflow: hidden; position: relative;
+            margin: 10px; display: inline-block;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2); background-color: #F9FAFB;
+        }
+        .device-content {
+            height: 100%; overflow-y: auto; position: relative;
+            -ms-overflow-style: none; scrollbar-width: none;
+        }
+        .device-content::-webkit-scrollbar { display: none; }
+        .bg-brand-black { background-color: #111827; }
+        .bg-brand-gold { background-color: #F59E0B; }
+        .text-brand-black { color: #111827; }
+        .text-brand-gold { color: #F59E0B; }
+        .back-link {
+            display: inline-block; margin: 20px 0; color: #111827;
+            font-weight: 600; text-decoration: none;
+        }
+        .back-link:hover { color: #F59E0B; }
+        .screen-label {
+            text-align: center; font-size: 12px; color: #6b7280;
+            margin-top: 8px; font-weight: 500;
+        }
+        /* OTP input */
+        .otp-input {
+            width: 48px; height: 56px; background: white;
+            border-radius: 12px; border: 2px solid #e5e7eb;
+            font-size: 24px; font-weight: bold; text-align: center;
+        }
+        .otp-input:focus { border-color: #F59E0B; outline: none; }
+        .otp-input.filled { border-color: #F59E0B; background: #fffbeb; }
+        /* PIN dot */
+        .pin-dot {
+            width: 16px; height: 16px; border-radius: 50%;
+            background: #374151; opacity: 0.3;
+        }
+        .pin-dot.filled { background: #F59E0B; opacity: 1; }
+        /* Success circle */
+        .success-circle {
+            width: 120px; height: 120px; border-radius: 50%;
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto; box-shadow: 0 15px 40px rgba(16, 185, 129, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="container-wide">
+        <a href="../../design.html" class="back-link">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            Retounen nan Design System
+        </a>
+
+        <h1 class="text-3xl font-bold mb-2 text-center text-brand-black">Onboarding Flow</h1>
+        <p class="text-center text-gray-500 mb-6">5 screens: Welcome → Phone → OTP → PIN → Ready</p>
+
+        <div class="flex flex-wrap justify-center">
+
+            <!-- Screen 1: Welcome -->
+            <div>
+                <div class="device-frame">
+                    <div class="device-content bg-brand-black">
+                        <div class="h-full flex flex-col px-6 py-8">
+                            <!-- Logo Area -->
+                            <div class="flex-1 flex flex-col items-center justify-center">
+                                <!-- Logo -->
+                                <div class="w-24 h-24 rounded-2xl bg-brand-gold flex items-center justify-center mb-8">
+                                    <span class="text-4xl font-bold text-brand-black">S</span>
+                                </div>
+
+                                <h1 class="text-3xl font-bold text-white mb-3">SWAP</h1>
+                                <p class="text-gray-400 text-center text-lg mb-8">Lajan nan pòch ou</p>
+
+                                <!-- Value Props -->
+                                <div class="space-y-4 w-full max-w-xs">
+                                    <div class="flex items-center">
+                                        <div class="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center mr-4">
+                                            <svg class="w-5 h-5 text-brand-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                                            </svg>
+                                        </div>
+                                        <p class="text-white text-sm">Voye lajan rapid</p>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <div class="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center mr-4">
+                                            <svg class="w-5 h-5 text-brand-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                            </svg>
+                                        </div>
+                                        <p class="text-white text-sm">Patisipe nan Sòl</p>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <div class="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center mr-4">
+                                            <svg class="w-5 h-5 text-brand-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                                            </svg>
+                                        </div>
+                                        <p class="text-white text-sm">Sekirite garanti</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- CTA -->
+                            <div class="mt-8">
+                                <button class="w-full bg-brand-gold text-brand-black font-bold py-4 rounded-xl text-lg">
+                                    KÒMANSE
+                                </button>
+                                <p class="text-center text-gray-500 text-sm mt-4">
+                                    Ou gen kont deja? <span class="text-brand-gold font-medium">Konekte</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">1. Welcome</p>
+            </div>
+
+            <!-- Screen 2: Phone Entry -->
+            <div>
+                <div class="device-frame">
+                    <div class="device-content">
+                        <div class="bg-brand-black text-white px-5 py-2 flex justify-between items-center text-xs">
+                            <span>9:41</span>
+                            <span>100%</span>
+                        </div>
+
+                        <div class="px-6 pt-8 pb-6">
+                            <!-- Back -->
+                            <button class="mb-6">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                </svg>
+                            </button>
+
+                            <!-- Title -->
+                            <h1 class="text-2xl font-bold text-brand-black mb-2">Antre nimewo ou</h1>
+                            <p class="text-gray-500 mb-8">Nap voye yon kòd verifikasyon sou telefòn ou</p>
+
+                            <!-- Phone Input -->
+                            <div class="mb-6">
+                                <label class="text-sm text-gray-600 mb-2 block">Nimewo Telefòn</label>
+                                <div class="flex gap-2">
+                                    <div class="bg-gray-100 rounded-xl px-4 py-4 flex items-center">
+                                        <span class="text-2xl mr-2">🇭🇹</span>
+                                        <span class="font-medium">+509</span>
+                                    </div>
+                                    <input type="tel" placeholder="3456 7890" class="flex-1 bg-gray-100 rounded-xl px-4 py-4 text-lg font-medium outline-none">
+                                </div>
+                            </div>
+
+                            <!-- Continue Button -->
+                            <button class="w-full bg-brand-gold text-white font-semibold py-4 rounded-xl">
+                                Kontinye
+                            </button>
+
+                            <!-- Terms -->
+                            <p class="text-center text-xs text-gray-500 mt-6">
+                                Lè ou kontinye, ou aksepte <span class="text-brand-gold">Kondisyon yo</span> ak <span class="text-brand-gold">Politik Konfidansyalite</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">2. Phone Entry</p>
+            </div>
+
+            <!-- Screen 3: OTP Verification -->
+            <div>
+                <div class="device-frame">
+                    <div class="device-content">
+                        <div class="bg-brand-black text-white px-5 py-2 flex justify-between items-center text-xs">
+                            <span>9:41</span>
+                            <span>100%</span>
+                        </div>
+
+                        <div class="px-6 pt-8 pb-6">
+                            <!-- Back -->
+                            <button class="mb-6">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                </svg>
+                            </button>
+
+                            <!-- Title -->
+                            <h1 class="text-2xl font-bold text-brand-black mb-2">Verifye Nimewo ou</h1>
+                            <p class="text-gray-500 mb-8">Antre kòd 6 chif nou voye nan <span class="font-medium text-brand-black">+509 3456 7890</span></p>
+
+                            <!-- OTP Input -->
+                            <div class="flex justify-center gap-3 mb-6">
+                                <input type="text" maxlength="1" class="otp-input filled" value="4">
+                                <input type="text" maxlength="1" class="otp-input filled" value="7">
+                                <input type="text" maxlength="1" class="otp-input filled" value="2">
+                                <input type="text" maxlength="1" class="otp-input" placeholder="•">
+                                <input type="text" maxlength="1" class="otp-input" placeholder="•">
+                                <input type="text" maxlength="1" class="otp-input" placeholder="•">
+                            </div>
+
+                            <!-- Timer -->
+                            <p class="text-center text-gray-500 text-sm mb-6">
+                                Kòd ap ekspire nan <span class="font-medium text-brand-black">2:45</span>
+                            </p>
+
+                            <!-- Verify Button -->
+                            <button class="w-full bg-brand-gold text-white font-semibold py-4 rounded-xl mb-4">
+                                Verifye
+                            </button>
+
+                            <!-- Resend -->
+                            <p class="text-center text-gray-500 text-sm">
+                                Ou pa resevwa kòd la? <span class="text-brand-gold font-medium">Voye ankò</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">3. OTP Verification</p>
+            </div>
+
+            <!-- Screen 4: PIN Setup -->
+            <div>
+                <div class="device-frame">
+                    <div class="device-content bg-brand-black">
+                        <div class="text-white px-5 py-2 flex justify-between items-center text-xs">
+                            <span>9:41</span>
+                            <span>100%</span>
+                        </div>
+
+                        <div class="px-6 pt-12 pb-6 text-center">
+                            <!-- Lock Icon -->
+                            <div class="w-20 h-20 rounded-full bg-gray-800 flex items-center justify-center mx-auto mb-6">
+                                <svg class="w-10 h-10 text-brand-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                                </svg>
+                            </div>
+
+                            <h1 class="text-2xl font-bold text-white mb-2">Kreye PIN ou</h1>
+                            <p class="text-gray-400 mb-8">Chwazi yon kòd 4 chif pou pwoteje kont ou</p>
+
+                            <!-- PIN Dots -->
+                            <div class="flex justify-center gap-6 mb-10">
+                                <div class="pin-dot filled"></div>
+                                <div class="pin-dot filled"></div>
+                                <div class="pin-dot"></div>
+                                <div class="pin-dot"></div>
+                            </div>
+
+                            <!-- Keypad -->
+                            <div class="flex flex-col items-center">
+                                <div class="flex">
+                                    <button class="w-20 h-16 text-white text-2xl font-medium">1</button>
+                                    <button class="w-20 h-16 text-white text-2xl font-medium">2</button>
+                                    <button class="w-20 h-16 text-white text-2xl font-medium">3</button>
+                                </div>
+                                <div class="flex">
+                                    <button class="w-20 h-16 text-white text-2xl font-medium">4</button>
+                                    <button class="w-20 h-16 text-white text-2xl font-medium">5</button>
+                                    <button class="w-20 h-16 text-white text-2xl font-medium">6</button>
+                                </div>
+                                <div class="flex">
+                                    <button class="w-20 h-16 text-white text-2xl font-medium">7</button>
+                                    <button class="w-20 h-16 text-white text-2xl font-medium">8</button>
+                                    <button class="w-20 h-16 text-white text-2xl font-medium">9</button>
+                                </div>
+                                <div class="flex">
+                                    <button class="w-20 h-16"></button>
+                                    <button class="w-20 h-16 text-white text-2xl font-medium">0</button>
+                                    <button class="w-20 h-16 text-white flex items-center justify-center">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 001.414.586H19a2 2 0 002-2V7a2 2 0 00-2-2h-8.172a2 2 0 00-1.414.586L3 12z"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">4. PIN Setup</p>
+            </div>
+
+            <!-- Screen 5: Ready/Success -->
+            <div>
+                <div class="device-frame">
+                    <div class="device-content bg-white">
+                        <div class="text-brand-black px-5 py-2 flex justify-between items-center text-xs">
+                            <span>9:41</span>
+                            <span>100%</span>
+                        </div>
+
+                        <div class="px-6 pt-16 pb-6 text-center h-full flex flex-col">
+                            <!-- Success Icon -->
+                            <div class="success-circle mb-8">
+                                <svg class="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </div>
+
+                            <h1 class="text-2xl font-bold text-brand-black mb-2">Kont ou Prè!</h1>
+                            <p class="text-gray-500 mb-8">Ou kapab kòmanse itilize SWAP kounye a</p>
+
+                            <!-- Features recap -->
+                            <div class="bg-gray-50 rounded-xl p-5 text-left mb-8">
+                                <p class="text-sm font-medium text-brand-black mb-3">Ou kapab:</p>
+                                <div class="space-y-3">
+                                    <div class="flex items-center">
+                                        <svg class="w-5 h-5 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                        </svg>
+                                        <span class="text-sm text-gray-700">Voye ak resevwa lajan</span>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <svg class="w-5 h-5 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                        </svg>
+                                        <span class="text-sm text-gray-700">Kreye oswa antre nan Sòl</span>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <svg class="w-5 h-5 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                        </svg>
+                                        <span class="text-sm text-gray-700">Depoze ak retire lajan cash</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Bonus -->
+                            <div class="bg-brand-black rounded-xl p-4 mb-8">
+                                <div class="flex items-center justify-center">
+                                    <span class="text-2xl mr-2">🎉</span>
+                                    <div>
+                                        <p class="text-white font-bold">Byenveni!</p>
+                                        <p class="text-gray-400 text-xs">Premye transfè gratis</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- CTA -->
+                            <div class="mt-auto">
+                                <button class="w-full bg-brand-gold text-white font-bold py-4 rounded-xl text-lg">
+                                    Ale nan Lakay
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">5. Ready!</p>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>

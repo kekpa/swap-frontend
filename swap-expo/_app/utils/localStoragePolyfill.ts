@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from './logger';
 
 // Create a synchronized wrapper for AsyncStorage to make it behave like localStorage
 class LocalStoragePolyfill {
@@ -20,9 +21,9 @@ class LocalStoragePolyfill {
       });
       
       this.initialized = true;
-      console.log('LocalStoragePolyfill initialized with', Object.keys(this.items).length, 'items');
+      logger.debug('LocalStoragePolyfill initialized', 'data', { itemCount: Object.keys(this.items).length });
     } catch (error) {
-      console.error('Failed to initialize localStorage polyfill:', error);
+      logger.error('Failed to initialize localStorage polyfill', error, 'data');
       this.initialized = true; // Set to true to avoid retrying on failure
     }
   }
@@ -62,7 +63,7 @@ class LocalStoragePolyfill {
   // These will work once initialization is complete
   getItemSync(key: string): string | null {
     if (!this.initialized) {
-      console.warn('LocalStoragePolyfill not initialized yet - falling back to null');
+      logger.warn('LocalStoragePolyfill not initialized yet - falling back to null', 'data');
       return null;
     }
     return this.items[key] || null;
@@ -70,7 +71,7 @@ class LocalStoragePolyfill {
   
   setItemSync(key: string, value: string): void {
     if (!this.initialized) {
-      console.warn('LocalStoragePolyfill not initialized yet - operation may be lost');
+      logger.warn('LocalStoragePolyfill not initialized yet - operation may be lost', 'data');
       this.init().then(() => {
         this.setItem(key, value);
       });
@@ -78,13 +79,13 @@ class LocalStoragePolyfill {
     }
     this.items[key] = value;
     AsyncStorage.setItem(key, value).catch(error => {
-      console.error('Error in setItemSync:', error);
+      logger.error('Error in setItemSync', error, 'data');
     });
   }
   
   removeItemSync(key: string): void {
     if (!this.initialized) {
-      console.warn('LocalStoragePolyfill not initialized yet - operation may be lost');
+      logger.warn('LocalStoragePolyfill not initialized yet - operation may be lost', 'data');
       this.init().then(() => {
         this.removeItem(key);
       });
@@ -92,13 +93,13 @@ class LocalStoragePolyfill {
     }
     delete this.items[key];
     AsyncStorage.removeItem(key).catch(error => {
-      console.error('Error in removeItemSync:', error);
+      logger.error('Error in removeItemSync', error, 'data');
     });
   }
   
   clearSync(): void {
     if (!this.initialized) {
-      console.warn('LocalStoragePolyfill not initialized yet - operation may be lost');
+      logger.warn('LocalStoragePolyfill not initialized yet - operation may be lost', 'data');
       this.init().then(() => {
         this.clear();
       });
@@ -106,7 +107,7 @@ class LocalStoragePolyfill {
     }
     this.items = {};
     AsyncStorage.clear().catch(error => {
-      console.error('Error in clearSync:', error);
+      logger.error('Error in clearSync', error, 'data');
     });
   }
   
@@ -136,7 +137,7 @@ if (typeof localStorage === 'undefined' || localStorage === null) {
     get length(): number { return localStoragePolyfill.length; }
   };
   
-  console.log('localStorage polyfill installed');
+  logger.debug('localStorage polyfill installed', 'data');
 }
 
 export default localStoragePolyfill; 

@@ -2,6 +2,7 @@
 // NOTE: EventCoordinator removed - TanStack Query handles data reactivity
 import { databaseManager } from './DatabaseManager';
 import { SQLiteDatabase } from 'expo-sqlite';
+import logger from '../utils/logger';
 
 export class UserRepository {
   private static instance: UserRepository;
@@ -93,13 +94,13 @@ export class UserRepository {
               ? JSON.parse(existingDataRaw)
               : existingDataRaw;
           } catch (parseError) {
-            console.warn('[UserRepository] Failed to parse existing KYC data, using new data only');
+            logger.warn("Failed to parse existing KYC data, using new data only", "data");
             existingData = {};
           }
         }
       }
     } catch (error) {
-      console.warn('[UserRepository] Error reading existing KYC data, using new data only:', error);
+      logger.warn("Error reading existing KYC data, using new data only", "data", { error });
       existingData = {};
     }
 
@@ -110,7 +111,7 @@ export class UserRepository {
       id: kyc.id        // Ensure ID is always set
     };
 
-    console.log('🏛️ [UserRepository] PROFESSIONAL: Merging KYC data for local-first experience:', {
+    logger.debug("Merging KYC data for local-first experience", "data", {
       kycId: kyc.id,
       existingKeys: Object.keys(existingData),
       newKeys: Object.keys(kyc),
@@ -124,7 +125,7 @@ export class UserRepository {
       [kyc.id, JSON.stringify(mergedData), entityId]
     );
 
-    console.log('[UserRepository] KYC status saved:', { kycId: kyc.id });
+    logger.debug("KYC status saved", "data", { kycId: kyc.id });
     // Data saved - TanStack Query will fetch fresh data when needed
   }
 

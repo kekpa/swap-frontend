@@ -22,6 +22,7 @@ import { ProfileStackParamList } from '../../../../navigation/profileNavigator';
 import { useTheme } from '../../../../theme/ThemeContext';
 import { useCountries } from '../../../../hooks-data/useCountries';
 import apiClient from '../../../../_api/apiClient';
+import logger from '../../../../utils/logger';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -55,7 +56,7 @@ const BeneficialOwnerForm: React.FC = () => {
   useEffect(() => {
     if (mode === 'edit' && ownerId) {
       // Load owner data from API
-      console.log('[BeneficialOwnerForm] Loading owner data:', ownerId);
+      logger.debug("Loading owner data", "data", { ownerId });
     }
   }, [mode, ownerId]);
 
@@ -84,7 +85,7 @@ const BeneficialOwnerForm: React.FC = () => {
     setIsLoading(true);
     try {
       // Save owner info to API
-      console.log('[BeneficialOwnerForm] Saving owner:', ownerInfo);
+      logger.debug("Saving owner", "data", { ownerInfo });
 
       const ownerData = {
         first_name: ownerInfo.firstName.trim(),
@@ -103,7 +104,7 @@ const BeneficialOwnerForm: React.FC = () => {
       const response = await apiClient.post('/kyc/beneficial-owners', ownerData);
       const savedOwner = response.data;
 
-      console.log('[BeneficialOwnerForm] Owner saved successfully:', savedOwner.id);
+      logger.debug("Owner saved successfully", "data", { ownerId: savedOwner.id });
 
       // Navigate to address screen for this owner
       navigation.navigate('BeneficialOwnerAddress', {
@@ -112,7 +113,7 @@ const BeneficialOwnerForm: React.FC = () => {
         sourceRoute,
       });
     } catch (error: any) {
-      console.error('[BeneficialOwnerForm] Failed to save owner:', error);
+      logger.error("Failed to save owner", error, "data");
       Alert.alert('Error', error.response?.data?.message || 'Unable to save owner information. Please try again.');
     } finally {
       setIsLoading(false);

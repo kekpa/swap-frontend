@@ -84,6 +84,7 @@ export default {
     "expo-secure-store",
     "expo-sqlite",
     "expo-local-authentication",
+    "expo-localization",
   ],
   extra: {
     // EAS Configuration

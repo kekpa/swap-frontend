@@ -1,0 +1,64 @@
+{
+  "common": {
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "cancel": "Annuler",
+    "confirm": "Confirmer",
+    "save": "Enregistrer",
+    "send": "Envoyer",
+    "receive": "Recevoir",
+    "done": "Terminer",
+    "next": "Suivant",
+    "back": "Retour",
+    "close": "Fermer",
+    "search": "Rechercher",
+    "retry": "Reessayer",
+    "success": "Succes"
+  },
+  "rosca": {
+    "frequency": {
+      "daily": "jour",
+      "weekly": "semaine",
+      "biweekly": "quinzaine",
+      "monthly": "mois"
+    },
+    "frequencyFull": {
+      "daily": "Chaque jour",
+      "weekly": "Chaque semaine",
+      "biweekly": "Toutes les 2 semaines",
+      "monthly": "Chaque mois"
+    },
+    "frequencyShort": {
+      "daily": "Quotidien",
+      "weekly": "Hebdomadaire",
+      "biweekly": "Bimensuel",
+      "monthly": "Mensuel"
+    },
+    "paymentDue": "Paiement du",
+    "joinPool": "Rejoindre le sol",
+    "yourPosition": "Votre position",
+    "members": "membres",
+    "calendar": "Calendrier",
+    "lastDayToJoin": "Dernier jour pour rejoindre",
+    "poolStarts": "Le sol commence"
+  },
+  "wallet": {
+    "balance": "Solde",
+    "transactions": "Transactions",
+    "send": "Envoyer",
+    "receive": "Recevoir",
+    "history": "Historique"
+  },
+  "auth": {
+    "login": "Connexion",
+    "logout": "Deconnexion",
+    "welcome": "Bienvenue",
+    "signUp": "Inscription",
+    "forgotPassword": "Mot de passe oublie?"
+  },
+  "errors": {
+    "network": "Impossible de se connecter. Verifiez votre connexion internet.",
+    "sessionExpired": "Votre session a expire. Veuillez vous reconnecter.",
+    "generic": "Une erreur est survenue. Veuillez reessayer."
+  }
+}

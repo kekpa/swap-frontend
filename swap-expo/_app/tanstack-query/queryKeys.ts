@@ -8,6 +8,7 @@
  * All user-sensitive queries now use entityId only (entity-first architecture).
  * Entity ID is the backend's universal identifier (entities.id).
  */
+import logger from '../utils/logger';
 
 export const queryKeys = {
   // Wallet/Balance related queries
@@ -81,6 +82,19 @@ export const queryKeys = {
     ['conversations', 'entity', entityId, 'recent', options] as const,
   conversationDetails: (conversationId: string) => ['conversations', 'details', conversationId] as const,
 
+  // Rosca (Sol) related queries - Pool-based savings system
+  rosca: ['rosca'] as const,
+  roscaPools: () => ['rosca', 'pools'] as const,
+  roscaPoolDetails: (poolId: string) => ['rosca', 'pools', poolId] as const,
+  roscaEnrollmentsByEntity: (entityId: string) =>
+    ['rosca', 'enrollments', 'entity', entityId] as const,
+  roscaEnrollmentDetails: (enrollmentId: string) =>
+    ['rosca', 'enrollments', 'details', enrollmentId] as const,
+  roscaPayments: (enrollmentId: string) =>
+    ['rosca', 'payments', enrollmentId] as const,
+  roscaFriends: (enrollmentId: string) =>
+    ['rosca', 'friends', enrollmentId] as const,
+
   // System/Reference data queries
   currencies: ['currencies'] as const,
   countries: ['countries'] as const,
@@ -114,6 +128,7 @@ export const queryKeyUtils = {
     queryKeys.currentProfile(entityId),
     queryKeys.kycByEntity(entityId),
     queryKeys.kycProgress(entityId),
+    queryKeys.roscaEnrollmentsByEntity(entityId),
   ],
 
   /**
@@ -485,11 +500,15 @@ export function validateEntityQueryKey<T extends readonly unknown[]>(
           assertEntityAware(queryKey, hookName);
         } catch (error: any) {
           // Log warning but don't crash in development
-          console.error(
-            `[QueryKey Validation] ${error.message}\n` +
-            `Hook: ${hookName || 'unknown'}\n` +
-            `Feature: ${feature}\n` +
-            `This query MUST include entityId for data isolation!`
+          logger.error(
+            `QueryKey Validation: ${error.message}`,
+            error,
+            "data",
+            {
+              hookName: hookName || 'unknown',
+              feature,
+              message: 'This query MUST include entityId for data isolation!'
+            }
           );
         }
       }

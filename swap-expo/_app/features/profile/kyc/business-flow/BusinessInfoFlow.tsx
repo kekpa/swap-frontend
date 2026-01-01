@@ -23,6 +23,7 @@ import { useAuthContext } from '../../../auth/context/AuthContext';
 import apiClient from '../../../../_api/apiClient';
 import { BUSINESS_TYPES, EMPLOYEE_COUNT_OPTIONS } from '../../../../constants/businessConstants';
 import { useKycCompletion } from '../../../../hooks-actions/useKycCompletion';
+import logger from '../../../../utils/logger';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -92,12 +93,12 @@ const BusinessInfoFlow: React.FC = () => {
 
   const loadIndustries = async () => {
     try {
-      console.log('[BusinessInfoFlow] Loading industries from database...');
+      logger.debug('Loading industries from database', 'kyc');
       const response = await apiClient.get('/kyc/industries');
       setIndustries(response.data.result || []);
-      console.log('[BusinessInfoFlow] ✅ Loaded', response.data?.result?.length || 0, 'industries');
+      logger.debug('Loaded industries', 'kyc', { count: response.data?.result?.length || 0 });
     } catch (error) {
-      console.error('[BusinessInfoFlow] Failed to load industries:', error);
+      logger.error('Failed to load industries', error, 'kyc');
       // Fallback to empty array
       setIndustries([]);
     } finally {
@@ -107,7 +108,7 @@ const BusinessInfoFlow: React.FC = () => {
 
   const loadExistingBusinessInfo = async () => {
     try {
-      console.log('[BusinessInfoFlow] Loading existing business information...');
+      logger.debug('Loading existing business information', 'kyc');
       const response = await apiClient.get('/kyc/identity');
 
       if (response.data) {
@@ -128,10 +129,10 @@ const BusinessInfoFlow: React.FC = () => {
         if (existingInfo.username) {
           setUsernameStatus('available');
         }
-        console.log('[BusinessInfoFlow] ✅ Loaded existing business information with', existingInfo.industryIds?.length || 0, 'industries');
+        logger.debug('Loaded existing business information', 'kyc', { industryCount: existingInfo.industryIds?.length || 0 });
       }
     } catch (error) {
-      console.log('[BusinessInfoFlow] No existing business information found or error loading:', error);
+      logger.debug('No existing business information found or error loading', 'kyc', { error });
     } finally {
       setIsLoadingData(false);
     }
@@ -149,7 +150,7 @@ const BusinessInfoFlow: React.FC = () => {
       const response = await apiClient.post('/auth/check-username', { username });
       setUsernameStatus(response.data.available ? 'available' : 'taken');
     } catch (error) {
-      console.error('[BusinessInfoFlow] Error checking username:', error);
+      logger.error('Error checking username', error, 'kyc');
       setUsernameStatus('idle');
     }
   };
@@ -168,7 +169,7 @@ const BusinessInfoFlow: React.FC = () => {
         setUsernameStatus('available'); // Generated usernames are guaranteed unique
       }
     } catch (error) {
-      console.error('[BusinessInfoFlow] Error generating username:', error);
+      logger.error('Error generating username', error, 'kyc');
       // Fallback: simple client-side generation
       const sanitized = businessName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20);
       if (sanitized.length >= 3) {
@@ -244,8 +245,8 @@ const BusinessInfoFlow: React.FC = () => {
     setIsLoading(true);
 
     try {
-      console.log('[BusinessInfoFlow] 🎯 Using KYC completion hook for instant cache update');
-      console.log('[BusinessInfoFlow] Saving business information with', businessInfo.industryIds.length, 'industries...');
+      logger.debug('Using KYC completion hook for instant cache update', 'kyc');
+      logger.debug('Saving business information', 'kyc', { industryCount: businessInfo.industryIds.length });
 
       const payload = {
         businessName: businessInfo.businessName.trim(),
@@ -268,7 +269,7 @@ const BusinessInfoFlow: React.FC = () => {
       });
 
       if (result.success) {
-        console.log('[BusinessInfoFlow] ✅ Business information saved with automatic cache invalidation');
+        logger.debug('Business information saved with automatic cache invalidation', 'kyc');
       } else {
         // Error already handled by hook, just show alert
         Alert.alert(
@@ -278,7 +279,7 @@ const BusinessInfoFlow: React.FC = () => {
         );
       }
     } catch (error) {
-      console.error('[BusinessInfoFlow] Error saving business information:', error);
+      logger.error('Error saving business information', error, 'kyc');
       Alert.alert(
         'Save Error',
         'Unable to save business information. Please check your connection and try again.',

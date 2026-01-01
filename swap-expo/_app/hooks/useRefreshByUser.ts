@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import logger from '../utils/logger';
 
 const REFRESH_TIMEOUT_MS = 10000;
 
@@ -44,11 +45,11 @@ export function useRefreshByUser(
   const refetchByUser = useCallback(async () => {
     // Guard against double-refresh
     if (isRefetchingByUser) {
-      console.log('[useRefreshByUser] Already refreshing, skipping');
+      logger.debug('Already refreshing, skipping', 'data');
       return;
     }
 
-    console.log('[useRefreshByUser] Starting refresh');
+    logger.debug('Starting refresh', 'data');
     setIsRefetchingByUser(true);
 
     try {
@@ -58,13 +59,13 @@ export function useRefreshByUser(
       );
 
       await Promise.race([refetchRef.current(), timeoutPromise]);
-      console.log('[useRefreshByUser] Refresh completed');
+      logger.debug('Refresh completed', 'data');
     } catch (error) {
       // Log but don't throw - RefreshControl should still release
-      console.error('[useRefreshByUser] Refresh failed:', error);
+      logger.error('Refresh failed', error, 'data');
     } finally {
       // ALWAYS reset - this is the critical fix for spinner freeze
-      console.log('[useRefreshByUser] Setting refreshing=false');
+      logger.trace('Setting refreshing=false', 'data');
       setIsRefetchingByUser(false);
     }
   }, [isRefetchingByUser, timeoutMs]);
@@ -96,7 +97,7 @@ export function useRefreshByUserMultiple(
 ) {
   const combinedRefetch = useCallback(async () => {
     await Promise.all(refetchFns.map(fn => fn().catch(err => {
-      console.error('[useRefreshByUserMultiple] One refetch failed:', err);
+      logger.error('One refetch failed', err, 'data');
     })));
   }, [refetchFns]);
 

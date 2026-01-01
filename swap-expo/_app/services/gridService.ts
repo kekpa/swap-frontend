@@ -9,9 +9,10 @@
 import { BoundingBox, GridCell } from '../types/map';
 import { GRID, ZOOM_THRESHOLDS } from '../constants/mapConstants';
 import { Platform } from 'react-native';
+import { logger } from '../utils/logger';
 
 // Log platform info
-console.log(`[GridService] Initializing on platform: ${Platform.OS}, version: ${Platform.Version}`);
+logger.debug(`Initializing on platform: ${Platform.OS}, version: ${Platform.Version}`, 'map');
 
 // Standard base-32 geohash encoding/decoding
 const BASE32_CODES = "0123456789bcdefghjkmnpqrstuvwxyz";
@@ -86,7 +87,7 @@ export function encodeGeohash(latitude: number, longitude: number, precision: nu
     
     return geohash;
   } catch (error) {
-    console.error('[gridService] Error encoding geohash:', error);
+    logger.error('Error encoding geohash', error, 'map');
     return '';
   }
 }
@@ -151,7 +152,7 @@ export function decodeGeohash(geohash: string) {
       }
     };
   } catch (error) {
-    console.error('[gridService] Error decoding geohash:', error);
+    logger.error('Error decoding geohash', error, 'map');
     return null;
   }
 }
@@ -254,17 +255,17 @@ export function generateGeohashVectorTile(z: number, bounds: BoundingBox): any {
   const generationThreshold = ZOOM_THRESHOLDS.GRID_FADE_IN;
 
   if (z < generationThreshold) {
-    console.log(`[gridService] Skipping tile generation for z=${z.toFixed(2)}, below generation threshold ${generationThreshold.toFixed(2)}`);
+    logger.debug(`Skipping tile generation for z=${z.toFixed(2)}, below threshold ${generationThreshold.toFixed(2)}`, 'map');
     // Return empty collection, but don't cache this empty result
     return { data: { type: 'FeatureCollection', features: [] }, cached: false }; 
   }
   
-  console.log(`[gridService] Generating grid for z=${z.toFixed(2)}, bounds=${JSON.stringify({
+  logger.debug(`Generating grid for z=${z.toFixed(2)}`, 'map', {
     minLat: bounds.minLat.toFixed(6),
     maxLat: bounds.maxLat.toFixed(6),
     minLng: bounds.minLng.toFixed(6),
     maxLng: bounds.maxLng.toFixed(6)
-  })}`);
+  });
   
   // Always use the same precision (level 9) for consistent cell size
   const precision = GRID.GEOHASH_PRECISION;
@@ -274,7 +275,7 @@ export function generateGeohashVectorTile(z: number, bounds: BoundingBox): any {
   
   // Check if we already have this grid in cache
   if (gridCache.has(cacheKey)) {
-    console.log(`[gridService] Using cached grid for ${cacheKey}`);
+    logger.debug(`Using cached grid for ${cacheKey}`, 'map');
     return { data: gridCache.get(cacheKey), cached: true };
   }
   
@@ -317,7 +318,7 @@ export function generateCompleteGeohashGrid(bounds: BoundingBox, precision: numb
     const centerBounds = getBoundsOfCell(centerHash);
     
     if (!centerBounds) {
-      console.error('[gridService] Failed to get center cell bounds');
+      logger.error('Failed to get center cell bounds', null, 'map');
       return { type: 'FeatureCollection', features: [] };
     }
     
@@ -336,7 +337,7 @@ export function generateCompleteGeohashGrid(bounds: BoundingBox, precision: numb
     const baseBounds = getBoundsOfCell(baseHash);
     
     if (!baseBounds) {
-      console.error('[gridService] Failed to get base cell bounds');
+      logger.error('Failed to get base cell bounds', null, 'map');
       return { type: 'FeatureCollection', features: [] };
     }
     
@@ -350,7 +351,7 @@ export function generateCompleteGeohashGrid(bounds: BoundingBox, precision: numb
     const lngCells = Math.ceil((expandedBounds.maxLng - startLng) / cellWidth) + 2;
     const latCells = Math.ceil((expandedBounds.maxLat - startLat) / cellHeight) + 2;
     
-    console.log(`[gridService] Generating ${lngCells}x${latCells} cells at precision ${precision}`);
+    logger.debug(`Generating ${lngCells}x${latCells} cells at precision ${precision}`, 'map');
     
     // Check if we need to sample for performance
     const totalCells = lngCells * latCells;
@@ -360,15 +361,12 @@ export function generateCompleteGeohashGrid(bounds: BoundingBox, precision: numb
       // Calculate skip factor to bring cell count below the limit
       const samplingRate = Math.sqrt(GRID.MAX_CELLS_TO_RENDER / totalCells);
       skipFactor = Math.max(1, Math.ceil(1 / samplingRate));
-      console.log(
-        `[gridService] Cell count ${totalCells} exceeds limit (${GRID.MAX_CELLS_TO_RENDER}). ` +
-        `Calculated skipFactor: ${skipFactor}` // Log the actual factor
-      );
+      logger.debug(`Cell count ${totalCells} exceeds limit (${GRID.MAX_CELLS_TO_RENDER}), skipFactor: ${skipFactor}`, 'map');
       
       // For web, never sample - always generate complete grid
       // This eliminates the discontinuous grid effect
       if (Platform.OS === 'web') {
-        console.log(`[gridService] Web platform detected. Disabling sampling to prevent discontinuous grid.`);
+        logger.debug('Web platform detected, disabling sampling', 'map');
         skipFactor = 1;
       }
     }
@@ -376,7 +374,7 @@ export function generateCompleteGeohashGrid(bounds: BoundingBox, precision: numb
     // If sampling would have happened (skipFactor > 1), return empty on mobile
     // We rely on MAX_CELLS_TO_RENDER being set appropriately per platform in constants
     if (skipFactor > 1 && Platform.OS !== 'web') {
-        console.log(`[gridService] Mobile limit exceeded & sampling needed (${skipFactor}), returning empty grid.`);
+        logger.debug(`Mobile limit exceeded, sampling needed (${skipFactor}), returning empty grid`, 'map');
         return { type: 'FeatureCollection', features: [] };
     }
     
@@ -424,13 +422,13 @@ export function generateCompleteGeohashGrid(bounds: BoundingBox, precision: numb
       }
     }
     
-    console.log(`[gridService] Generated ${features.length} grid cells`);
+    logger.debug(`Generated ${features.length} grid cells`, 'map');
     return {
       type: 'FeatureCollection',
       features: features
     };
   } catch (error) {
-    console.error('[gridService] Error generating geohash grid:', error);
+    logger.error('Error generating geohash grid', error, 'map');
     return { type: 'FeatureCollection', features: [] };
   }
 }

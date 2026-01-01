@@ -27,6 +27,7 @@ import { useDocumentUpload } from '../../../../hooks-actions/useDocumentUpload';
 import { invalidateQueries } from '../../../../tanstack-query/queryClient';
 import { useKycStatus } from '../../../../hooks-data/useKycQuery';
 import { Image } from 'expo-image';
+import logger from '../../../../utils/logger';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -118,7 +119,7 @@ const BusinessRegistrationDocuments: React.FC = () => {
       const documentType = documentTypes.find(type => type.id === documentTypeId);
       const documentLabel = documentType?.label || 'Document';
 
-      console.log('[BusinessRegistrationDocuments] Uploading:', documentLabel);
+      logger.debug('Uploading document', 'kyc', { documentLabel });
 
       // Use the uploadDocument hook (DRY - handles FormData, API call, and errors)
       const result = await uploadDocument(
@@ -137,14 +138,14 @@ const BusinessRegistrationDocuments: React.FC = () => {
           )
         );
 
-        console.log('[BusinessRegistrationDocuments] Document uploaded successfully:', documentLabel);
+        logger.debug('Document uploaded successfully', 'kyc', { documentLabel });
         Alert.alert('Success', `${documentLabel} uploaded successfully`);
       } else {
         // Upload failed (hook returned error)
         throw new Error(result.error || 'Upload failed');
       }
     } catch (error: any) {
-      console.error('[BusinessRegistrationDocuments] Upload failed:', error);
+      logger.error('Upload failed', error, 'kyc');
       setDocuments(prev =>
         prev.map(doc =>
           doc.documentTypeId === documentTypeId
@@ -168,14 +169,14 @@ const BusinessRegistrationDocuments: React.FC = () => {
   const handleContinue = async () => {
     // Backend already marked step as completed when documents were uploaded
     // Just need to invalidate cache and navigate (same pattern as UploadId.tsx)
-    console.log('[BusinessRegistrationDocuments] 🔄 Triggering cache invalidation for document upload');
+    logger.debug('Triggering cache invalidation for document upload', 'kyc');
 
     // Primary KYC cache invalidation (same as UploadId.tsx lines 383-387)
     invalidateQueries(['kyc']);
     invalidateQueries(['profile']);
     invalidateQueries(['documents', 'verification']);
 
-    console.log('[BusinessRegistrationDocuments] ✅ Cache invalidation completed');
+    logger.debug('Cache invalidation completed', 'kyc');
 
     // Navigate to VerificationComplete - business profiles use personal PIN (no separate passcode)
     navigation.navigate('VerificationComplete', {
@@ -185,7 +186,7 @@ const BusinessRegistrationDocuments: React.FC = () => {
 
   const handleSkip = async () => {
     // Allow skipping document upload entirely for informal economy
-    console.log('[BusinessRegistrationDocuments] ⏭️ Skipping document upload');
+    logger.debug('Skipping document upload', 'kyc');
 
     // Navigate to VerificationComplete - business profiles use personal PIN (no separate passcode)
     navigation.navigate('VerificationComplete', {

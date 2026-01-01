@@ -82,6 +82,7 @@ import Geohash from 'latlon-geohash';
 // Import the unified marker component
 import LocationMarker from './components/LocationMarker';
 import { logMapCrash } from '../../utils/crashLogger';
+import logger from '../../utils/logger';
 
 // Define navigation types for profile navigation
 type RootStackParamList = {
@@ -136,7 +137,7 @@ const FIXED_TEST_POLYGON_COORDS = [
 const calculateLocationImportance = (location: Location): number => {
   try {
     if (!location) {
-      console.warn('calculateLocationImportance called with null/undefined location');
+      logger.warn('calculateLocationImportance called with null/undefined location', 'map');
       return 1;
     }
     
@@ -171,7 +172,7 @@ const calculateLocationImportance = (location: Location): number => {
     
     return Math.min(Math.max(importance, 1), 10); // Cap between 1 and 10
   } catch (error) {
-    console.error('Error in calculateLocationImportance:', error);
+    logger.error('Error in calculateLocationImportance', error, 'map');
     return 1; // Safe default
   }
 };
@@ -180,7 +181,7 @@ const calculateLocationImportance = (location: Location): number => {
 const getMinZoomForImportance = (importance: number): number => {
   try {
     if (typeof importance !== 'number' || isNaN(importance)) {
-      console.warn('getMinZoomForImportance called with invalid importance:', importance);
+      logger.warn('getMinZoomForImportance called with invalid importance', 'map', { importance });
       return 16; // Safe default - only show when zoomed in
     }
     
@@ -190,7 +191,7 @@ const getMinZoomForImportance = (importance: number): number => {
     if (importance >= 3) return 14; // Regular businesses - visible at street level
     return 16; // Low importance - only visible when zoomed in
   } catch (error) {
-    console.error('Error in getMinZoomForImportance:', error);
+    logger.error('Error in getMinZoomForImportance', error, 'map');
     return 16; // Safe default
   }
 };
@@ -199,7 +200,7 @@ const getMinZoomForImportance = (importance: number): number => {
 const getMarkerSizeForZoom = (importance: number, zoom: number): 'small' | 'medium' | 'large' => {
   try {
     if (typeof importance !== 'number' || isNaN(importance) || typeof zoom !== 'number' || isNaN(zoom)) {
-      console.warn('getMarkerSizeForZoom called with invalid parameters:', { importance, zoom });
+      logger.warn('getMarkerSizeForZoom called with invalid parameters', 'map', { importance, zoom });
       return 'small'; // Safe default
     }
     
@@ -219,13 +220,13 @@ const getMarkerSizeForZoom = (importance: number, zoom: number): 'small' | 'medi
     // Low importance locations are always small
     return 'small';
   } catch (error) {
-    console.error('Error in getMarkerSizeForZoom:', error);
+    logger.error('Error in getMarkerSizeForZoom', error, 'map');
     return 'small'; // Safe default
   }
 };
 
 const MapScreen = () => {
-  console.log('[MapScreen] 🗺️ Component initializing');
+  logger.debug('Component initializing', 'map');
   
   // Memoized importance calculation to avoid recalculating for same location
   const memoizedLocationImportance = useMemo(() => {
@@ -274,13 +275,8 @@ const MapScreen = () => {
   
   // Add crash detection and error handling
   const handleMapError = useCallback((error: Error, context: string) => {
-    console.error(`🚨 [MapScreen] Error in ${context}:`, {
-      error: error.message,
-      stack: error.stack,
-      timestamp: new Date().toISOString(),
-      context,
-    });
-    
+    logger.error(`Error in ${context}`, error, 'map');
+
     // Log to crash logger
     logMapCrash(error, { context });
   }, []);
@@ -291,7 +287,7 @@ const MapScreen = () => {
       const importance = memoizedLocationImportance(location);
       // Reduce logging frequency
       if (Math.random() < 0.1) { // Only log 10% of calls
-        console.log(`[MapScreen] Location ${location?.id} importance: ${importance}`);
+        logger.trace(`Location ${location?.id} importance: ${importance}`, 'map');
       }
       return importance;
     } catch (error) {
@@ -396,17 +392,17 @@ const MapScreen = () => {
           if (!location || !location.id) return false;
           if (typeof location?.latitude !== 'number' || typeof location?.longitude !== 'number') return false;
           if (typeof currentZoom !== 'number' || isNaN(currentZoom)) return true;
-          
+
           const importance = memoizedLocationImportance(location);
           const minZoomForLocation = memoizedMinZoomForImportance(importance);
-          
+
           return currentZoom >= minZoomForLocation;
         });
-        
+
         setVisibleMarkers(filtered);
         setLastFilterZoom(currentZoom);
       } catch (error) {
-        console.error('🚨 [MapScreen] Error in updateVisibleMarkers:', error);
+        logger.error('Error in updateVisibleMarkers', error, 'map');
       }
     }, 150), // 150ms debounce
     [memoizedLocationImportance, memoizedMinZoomForImportance]
@@ -478,7 +474,7 @@ const MapScreen = () => {
 
   // Handle profile navigation
   const handleProfilePress = useCallback(() => {
-    console.log('[MapScreen] Profile button pressed, navigating to ProfileModal');
+    logger.debug('Profile button pressed, navigating to ProfileModal', 'map');
     navigation.navigate('ProfileModal', { sourceRoute: 'Map' });
   }, [navigation]);
 
@@ -493,7 +489,7 @@ const MapScreen = () => {
   const getGridTileUrl = useCallback((currentMapType: MapType) => {
     const mapTypeParam = currentMapType === MAP_TYPES.SATELLITE || currentMapType === MAP_TYPES.HYBRID ? 'satellite' : 'standard';
     const url = `${TILE_SERVER_BASE_URL}/{z}/{x}/{y}.png?mapType=${mapTypeParam}`;
-    console.log(`[MapScreen] Using Tile URL Template: ${url}`);
+    logger.debug(`Using Tile URL Template: ${url}`, 'map');
     return url;
   }, []);
 
@@ -512,13 +508,13 @@ const MapScreen = () => {
   
   // Update map state for WebView on region change
   const handleRegionChange = (newRegion: Region) => {
-    console.log('[MapScreen] 📍 Region changing:', {
+    logger.trace('Region changing', 'map', {
       latitude: newRegion.latitude.toFixed(6),
       longitude: newRegion.longitude.toFixed(6),
       latitudeDelta: newRegion.latitudeDelta.toFixed(6),
       longitudeDelta: newRegion.longitudeDelta.toFixed(6),
     });
-    
+
     // We might still want to update the raw region frequently for other potential uses
     // but we won't calculate zoom level here anymore.
     setCurrentRegion(newRegion);
@@ -554,67 +550,67 @@ const MapScreen = () => {
   
   // Calculate zoom and update global state ONLY when region change is complete
   const handleRegionChangeComplete = (newRegion: Region) => {
-    console.log('[MapScreen] ✅ Region change complete:', {
+    logger.debug('Region change complete', 'map', {
       latitude: newRegion.latitude.toFixed(6),
       longitude: newRegion.longitude.toFixed(6),
       latitudeDelta: newRegion.latitudeDelta.toFixed(6),
       longitudeDelta: newRegion.longitudeDelta.toFixed(6),
     });
-    
+
     // Update global region state here
-    setRegion(newRegion); 
+    setRegion(newRegion);
     setCurrentRegion(newRegion); // Also update local currentRegion if needed
 
     // Calculate and update zoom level from region delta
     if (newRegion.longitudeDelta) {
       // Approximate zoom level calculation
       const newZoomLevel = Math.log2(360 / newRegion.longitudeDelta);
-      
-      console.log('[MapScreen] 🔍 Zoom calculation:', {
+
+      logger.trace('Zoom calculation', 'map', {
         previousZoom: zoomLevel.toFixed(2),
         newZoom: newZoomLevel.toFixed(2),
         longitudeDelta: newRegion.longitudeDelta.toFixed(6),
         zoomDifference: Math.abs(newZoomLevel - zoomLevel).toFixed(3),
       });
-      
+
       // Check if this is a significant viewport change
       const isSignificant = isSignificantViewportChange(newRegion, lastLoadedRegion);
-      console.log('[MapScreen] 📊 Viewport change analysis:', {
+      logger.trace('Viewport change analysis', 'map', {
         isSignificant,
         lastLoadedRegion: lastLoadedRegion ? 'exists' : 'null',
       });
-      
+
       // Only update if the zoom level actually changed significantly
-      if (Math.abs(newZoomLevel - zoomLevel) > 0.01) { 
-           console.log(`[MapScreen] 🎯 Significant zoom change: ${zoomLevel.toFixed(2)} → ${newZoomLevel.toFixed(2)}`);
+      if (Math.abs(newZoomLevel - zoomLevel) > 0.01) {
+           logger.debug(`Significant zoom change: ${zoomLevel.toFixed(2)} → ${newZoomLevel.toFixed(2)}`, 'map');
            setZoomLevel(newZoomLevel);
-           
+
            if (isSignificant) {
              // Immediate load for significant changes
-             console.log('[MapScreen] 🚀 Significant viewport change - immediate load');
+             logger.debug('Significant viewport change - immediate load', 'map');
              immediateLoadLocations(newRegion, newZoomLevel);
              setLastLoadedRegion(newRegion);
            } else {
              // Debounced load for minor changes
-             console.log('[MapScreen] ⏱️ Minor change - debounced load');
+             logger.trace('Minor change - debounced load', 'map');
              debouncedLoadLocations(newRegion, newZoomLevel);
            }
       } else {
-           console.log(`[MapScreen] 🔄 Minor zoom change: ${newZoomLevel.toFixed(2)} (< 0.01 threshold)`);
-           
+           logger.trace(`Minor zoom change: ${newZoomLevel.toFixed(2)} (< 0.01 threshold)`, 'map');
+
            if (isSignificant) {
              // Immediate load for significant pan without zoom change
-             console.log('[MapScreen] 🚀 Significant pan without zoom change - immediate load');
+             logger.debug('Significant pan without zoom change - immediate load', 'map');
              immediateLoadLocations(newRegion, zoomLevel);
              setLastLoadedRegion(newRegion);
            } else {
              // Debounced load for minor movements
-             console.log('[MapScreen] ⏱️ Minor movement - debounced load');
+             logger.trace('Minor movement - debounced load', 'map');
              debouncedLoadLocations(newRegion, zoomLevel);
            }
       }
     } else {
-       console.warn('[MapScreen] ⚠️ longitudeDelta is missing, cannot calculate zoom.');
+       logger.warn('longitudeDelta is missing, cannot calculate zoom', 'map');
     }
   };
   
@@ -622,12 +618,12 @@ const MapScreen = () => {
   const handleSearch = useCallback(debounce(async (query: string) => {
     setSearchQuery(query);
     if (query.length > 2) { // Only search if query is long enough
-      console.log(`[MapScreen] Debounced search triggered for: ${query}`);
+      logger.debug(`Debounced search triggered for: ${query}`, 'map');
       setIsLoading(true);
       try {
         // Call the actual API
         const results = await searchLocations(query);
-        console.log('[MapScreen] Search API results:', results);
+        logger.debug('Search API results', 'map', { count: results.length });
         // Map API results to the format expected by SearchResults component
         const formattedResults: SearchResult[] = results.map((item: SearchAPIResult) => ({
           id: item.id,
@@ -639,7 +635,7 @@ const MapScreen = () => {
         }));
         setSearchResults(formattedResults);
       } catch (error) {
-        console.error('[MapScreen] Search API error:', error);
+        logger.error('Search API error', error, 'map');
         setSearchResults([]); // Clear results on error
         // Optionally show an error message to the user
         Alert.alert('Search Error', 'Could not perform search.');
@@ -693,12 +689,12 @@ const MapScreen = () => {
           longitudeDelta: 0.005,
         }, 1000);
       } else {
-        console.warn('[MapScreen] Map ref not available for search result');
+        logger.warn('Map ref not available for search result', 'map');
       }
 
       // Restore actual cell calculation for search results
       const selectedBounds = getBoundsOfCell(resultGeohash);
-      console.log(`[MapScreen | handleSearchResultPress] Calculated bounds: ${JSON.stringify(selectedBounds)}`);
+      logger.trace('handleSearchResultPress calculated bounds', 'map', { bounds: selectedBounds });
 
       // Restore REAL cell state updates (NO DELAY)
       if (selectedBounds && typeof selectedBounds.sw[1] === 'number' && typeof selectedBounds.sw[0] === 'number' && typeof selectedBounds.ne[1] === 'number' && typeof selectedBounds.ne[0] === 'number') {
@@ -707,22 +703,22 @@ const MapScreen = () => {
           { latitude: selectedBounds.ne[1], longitude: selectedBounds.sw[0] },
           { latitude: selectedBounds.ne[1], longitude: selectedBounds.ne[0] },
           { latitude: selectedBounds.sw[1], longitude: selectedBounds.ne[0] },
-          { latitude: selectedBounds.sw[1], longitude: selectedBounds.sw[0] } 
+          { latitude: selectedBounds.sw[1], longitude: selectedBounds.sw[0] }
         ];
-        console.log('[MapScreen | handleSearchResultPress] Setting REAL cell coords:', JSON.stringify(coords));
-        setSelectedCellCoords(coords); 
+        logger.trace('handleSearchResultPress setting cell coords', 'map');
+        setSelectedCellCoords(coords);
       } else {
-        console.warn('[MapScreen | handleSearchResultPress] Could not get bounds for search result geohash:', resultGeohash);
-        setSelectedCellCoords(null); 
+        logger.warn('Could not get bounds for search result geohash', 'map', { geohash: resultGeohash });
+        setSelectedCellCoords(null);
       }
-      
+
       // Show selection pin for search results
       setSelectionCoords(coordinates);
       setSelectionPinVisible(true);
       setPinSetManually(true); // Mark that pin was set by user action
-      console.log(`[MapScreen | handleSearchResultPress] Pin visibility set manually: true, zoom: ${zoomLevel}`);
-    } else { 
-      console.warn(`[MapScreen] Search result ${result.name} (ID: ${result.id}) missing coordinates.`);
+      logger.trace('handleSearchResultPress pin visibility set manually: true', 'map', { zoomLevel });
+    } else {
+      logger.warn('Search result missing coordinates', 'map', { name: result.name, id: result.id });
       Alert.alert('Location Missing', 'Coordinates not available for this search result.');
      }
   };
@@ -730,21 +726,21 @@ const MapScreen = () => {
   // Move to user's current location
   const moveToCurrentLocation = async () => {
     try {
-      console.log('[MapScreen] 📍 Starting location detection...');
+      logger.debug('Starting location detection', 'map');
       setIsLoading(true);
       setStoreLoading(true);
-      
+
       // Get current location
       const location = await getCurrentLocation();
-      console.log('[MapScreen] Location retrieved:', location);
-      
+      logger.debug('Location retrieved', 'map', { lat: location.coordinate.latitude, lng: location.coordinate.longitude });
+
       // Store user location for custom marker
       const { latitude, longitude } = location.coordinate;
       setUserLocation({ latitude, longitude });
-      
+
       // Calculate geohash for the actual current location
       const currentGeohash = encodeGeohash(latitude, longitude, GRID.GEOHASH_PRECISION);
-      console.log(`[MapScreen | moveToCurrent] User location geohash: ${currentGeohash}`);
+      logger.trace('User location geohash', 'map', { geohash: currentGeohash });
 
       // Update selected location state with current location data
       setSelectedLocation({
@@ -755,7 +751,7 @@ const MapScreen = () => {
         alternatives: [] // Reset alternatives
       });
 
-      // --- ADDED: Update map selection state --- 
+      // --- ADDED: Update map selection state ---
       const currentBounds = getBoundsOfCell(currentGeohash);
       if (currentBounds) {
         const coords = [
@@ -765,37 +761,37 @@ const MapScreen = () => {
             { latitude: currentBounds.sw[1], longitude: currentBounds.ne[0] },
             { latitude: currentBounds.sw[1], longitude: currentBounds.sw[0] }
         ];
-        console.log('[MapScreen | moveToCurrent] Setting cell for current location');
+        logger.trace('Setting cell for current location', 'map');
         setSelectedCellCoords(coords);
       } else {
-        console.warn('[MapScreen | moveToCurrent] Could not get bounds for current location geohash');
+        logger.warn('Could not get bounds for current location geohash', 'map');
         setSelectedCellCoords(null);
       }
-      console.log('[MapScreen | moveToCurrent] Hiding selection pin');
+      logger.trace('Hiding selection pin', 'map');
       setSelectionCoords(null); // Hide violet pin
       setSelectionPinVisible(false);
       setPinSetManually(false); // Reset manual flag - allow automatic zoom-based visibility
-      console.log('[MapScreen | moveToCurrent] Reset pin to automatic zoom-based visibility');
+      logger.trace('Reset pin to automatic zoom-based visibility', 'map');
       // if (!firstClickHandled) setFirstClickHandled(true); // Keep firstClickHandled update disabled here, it's handled in map press
-      // --- END ADDED --- 
-      
+      // --- END ADDED ---
+
       if (mapRef.current) {
         // Use the same zoom level as web for consistency
         const zoomDelta = 360 / Math.pow(2, ZOOM_THRESHOLDS.GRID_FADE_IN + 0.2);
-        
+
         mapRef.current.animateToRegion({
           latitude: location.coordinate.latitude,
           longitude: location.coordinate.longitude,
           latitudeDelta: zoomDelta,
           longitudeDelta: zoomDelta,
         }, 1000);
-        
-        console.log('[MapScreen] Map animated to current position with web-matched zoom level');
+
+        logger.debug('Map animated to current position with web-matched zoom level', 'map');
       } else {
-        console.warn('[MapScreen] mapRef is null, cannot animate');
+        logger.warn('mapRef is null, cannot animate', 'map');
       }
     } catch (error) {
-      console.error('[MapScreen] Location error:', error);
+      logger.error('Location error', error, 'map');
       
       // Show more detailed error message
       let errorMsg = 'Unable to get your location.';
@@ -807,11 +803,11 @@ const MapScreen = () => {
         'Location Error',
         errorMsg,
         [
-          { 
-            text: 'Open Settings', 
+          {
+            text: 'Open Settings',
             onPress: () => {
               // This would open device settings on a real implementation
-              console.log('User directed to settings');
+              logger.debug('User directed to settings', 'map');
             }
           },
           { text: 'Cancel', style: 'cancel' }
@@ -828,7 +824,7 @@ const MapScreen = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const newMapType = mapType === MAP_TYPES.STANDARD ? MAP_TYPES.SATELLITE : MAP_TYPES.STANDARD;
     setMapType(newMapType);
-    console.log(`[MapScreen] Toggling map type to ${newMapType}`);
+    logger.debug(`Toggling map type to ${newMapType}`, 'map');
     // No need to explicitly setGridTileUrlTemplate here,
     // the useEffect watching mapType will handle it.
   };
@@ -843,70 +839,67 @@ const MapScreen = () => {
     // Only apply automatic zoom-based visibility if pin wasn't set manually
     if (!pinSetManually) {
       const showPin = zoomLevel < ZOOM_THRESHOLDS.PIN_VISIBILITY;
-      console.log(`[MapScreen | useEffect zoom] Zoom changed to ${zoomLevel}, PIN_VISIBILITY: ${ZOOM_THRESHOLDS.PIN_VISIBILITY}, Show pin: ${showPin} (automatic)`);
+      logger.trace(`Zoom changed to ${zoomLevel}, Show pin: ${showPin} (automatic)`, 'map');
       setSelectionPinVisible(showPin);
     } else {
-      console.log(`[MapScreen | useEffect zoom] Zoom changed to ${zoomLevel}, but pin was set manually - keeping current visibility`);
+      logger.trace(`Zoom changed to ${zoomLevel}, but pin was set manually - keeping current visibility`, 'map');
     }
   }, [zoomLevel, pinSetManually]); // Add pinSetManually as dependency
   
   // Handle map press
   const handleMapPress = (event: MapPressEvent) => {
-    try { 
-      console.log('[MapScreen | handleMapPress] Entering');
+    try {
+      logger.trace('handleMapPress entering', 'map');
       if (!event || !event.nativeEvent || !event.nativeEvent.coordinate) {
-        console.error('[MapScreen | handleMapPress] Invalid map press event received:', event);
+        logger.error('Invalid map press event received', null, 'map');
         return;
       }
       const { coordinate } = event.nativeEvent;
-      console.log('[MapScreen | handleMapPress] Map Press Coordinates:', coordinate);
+      logger.trace('Map Press Coordinates', 'map', { coordinate });
       if (typeof coordinate.latitude !== 'number' || typeof coordinate.longitude !== 'number') {
-        console.error('[MapScreen | handleMapPress] Invalid coordinates in map press event:', coordinate);
+        logger.error('Invalid coordinates in map press event', null, 'map');
         return;
       }
-      
+
       const calculatedGeohash = encodeGeohash(coordinate.latitude, coordinate.longitude, GRID.GEOHASH_PRECISION);
-      console.log(`[MapScreen | handleMapPress] Geohash: ${calculatedGeohash}, Zoom: ${zoomLevel}`);
+      logger.trace('handleMapPress', 'map', { geohash: calculatedGeohash, zoom: zoomLevel });
       setSelectionCoords(coordinate);
-      
+
       // REMOVE the zoom guard - always try to set the cell
       const selectedBounds = getBoundsOfCell(calculatedGeohash);
-      console.log(`[MapScreen | handleMapPress] Bounds: ${JSON.stringify(selectedBounds)}`);
+      logger.trace('handleMapPress bounds', 'map', { bounds: selectedBounds });
       if (selectedBounds && typeof selectedBounds.sw[1] === 'number' && typeof selectedBounds.sw[0] === 'number' && typeof selectedBounds.ne[1] === 'number' && typeof selectedBounds.ne[0] === 'number') {
         const coords = [
           { latitude: selectedBounds.sw[1], longitude: selectedBounds.sw[0] },
           { latitude: selectedBounds.ne[1], longitude: selectedBounds.sw[0] },
           { latitude: selectedBounds.ne[1], longitude: selectedBounds.ne[0] },
           { latitude: selectedBounds.sw[1], longitude: selectedBounds.ne[0] },
-          { latitude: selectedBounds.sw[1], longitude: selectedBounds.sw[0] } 
+          { latitude: selectedBounds.sw[1], longitude: selectedBounds.sw[0] }
         ];
-        console.log('[MapScreen | handleMapPress] Setting REAL cell coords:', JSON.stringify(coords));
+        logger.trace('handleMapPress setting cell coords', 'map');
         setSelectedCellCoords(coords);
       } else {
-        console.warn('[MapScreen | handleMapPress] Invalid bounds, clearing cell coords', calculatedGeohash);
+        logger.warn('handleMapPress invalid bounds, clearing cell coords', 'map', { geohash: calculatedGeohash });
         setSelectedCellCoords(null);
       }
 
       setSelectedLocation({
-        name: undefined, 
-        geohash: calculatedGeohash, 
+        name: undefined,
+        geohash: calculatedGeohash,
         coordinates: coordinate,
-        isNearBorder: true, 
-        alternatives: [] 
+        isNearBorder: true,
+        alternatives: []
       });
       const showPin = zoomLevel < ZOOM_THRESHOLDS.PIN_VISIBILITY;
       setSelectionPinVisible(showPin);
       setPinSetManually(true); // Mark that pin was set by user action
-      console.log(`[MapScreen | handleMapPress] Pin visibility set manually: ${showPin}, zoom: ${zoomLevel}`);
+      logger.trace('handleMapPress pin visibility set manually', 'map', { showPin, zoomLevel });
       if (!firstClickHandled) {
         setFirstClickHandled(true);
       }
-      console.log('[MapScreen | handleMapPress] Exiting successfully (All states updated)');
+      logger.trace('handleMapPress exiting successfully', 'map');
     } catch (error) {
-      console.error('[MapScreen | handleMapPress] CRITICAL ERROR:', error);
-      if (error instanceof Error) {
-          console.error(`[MapScreen | handleMapPress] Error details: ${error.message} ${error.stack}`);
-      }
+      logger.error('handleMapPress CRITICAL ERROR', error, 'map');
     }
   };
   
@@ -914,33 +907,33 @@ const MapScreen = () => {
   /* // Keep this commented out unless needed later for edge cases
   useEffect(() => {
     if (firstClickHandled && selectionCoords && selectedCellCoords) {
-      console.log('[MapScreen] First click already handled, selection state is ready');
+      logger.trace('First click already handled, selection state is ready', 'map');
     }
   }, [firstClickHandled, selectionCoords, selectedCellCoords]);
   */
   
   // Add error state for the map
   const [mapError, setMapError] = useState<string | null>(null);
-  
+
   // Handle map error with callback
   const handleError = useCallback(() => {
-    console.error('[MapScreen] Map failed to load');
+    logger.error('Map failed to load', null, 'map');
     setMapError('Failed to load map provider');
     setIsLoading(false);
     setStoreLoading(false);
   }, []);
-  
+
   // Handle map ready state
   const handleMapReady = () => {
-    console.log('[MapScreen] MapView ready, setting initial state');
+    logger.info('MapView ready, setting initial state', 'map');
     setMapReady(true);
-    
-    if (INITIAL_REGION) { 
-        setCurrentRegion(INITIAL_REGION); 
+
+    if (INITIAL_REGION) {
+        setCurrentRegion(INITIAL_REGION);
     }
-    
+
     // Initialize zoom level when map is ready
-    console.log(`[MapScreen] Setting initial zoom level: ${DEFAULT_ZOOM_LEVEL}`);
+    logger.debug(`Setting initial zoom level: ${DEFAULT_ZOOM_LEVEL}`, 'map');
     setZoomLevel(DEFAULT_ZOOM_LEVEL);
     
     // Force initial state for selection-related props
@@ -948,22 +941,22 @@ const MapScreen = () => {
     
     setIsLoading(false);
     setStoreLoading(false);
-    
+
     // Fetch locations from backend once map is ready
     loadLocations();
   };
 
   const handleWebViewLoad = () => {
-    console.log('[MapScreen] WebView loaded.');
+    logger.debug('WebView loaded', 'map');
     // We now wait for 'webviewReady' message before setting isWebViewReady
   };
-  
+
   // Handle messages FROM WebView
   const handleWebViewMessage = (event: any) => {
        try {
          const messageData = JSON.parse(event.nativeEvent.data);
          if (messageData.type === 'webviewReady') {
-           console.log('[MapScreen] Received webviewReady message.');
+           logger.debug('Received webviewReady message', 'map');
            // setIsWebViewReady(true);
            // Send initial state now that WebView is listening
            if(mapRef.current) {
@@ -978,25 +971,25 @@ const MapScreen = () => {
                     };
                     handleRegionChange(initialRegion); // Trigger initial state calc/send
                 })
-                .catch(err => console.error("Error getting initial map state:", err));
+                .catch(err => logger.error('Error getting initial map state', err, 'map'));
            }
          }
          // Handle other messages...
        } catch (e) {
-         console.warn('[MapScreen] Error parsing message from WebView:', e);
+         logger.warn('Error parsing message from WebView', 'map');
        }
   };
   
   // Function to load locations based on current viewport with smart caching
   const loadLocationsForViewport = async (viewportRegion?: Region, currentZoom?: number) => {
     const startTime = Date.now();
-    console.log('[MapScreen] 🌍 Starting location load for viewport');
-    
+    logger.debug('Starting location load for viewport', 'map');
+
     const regionToUse = viewportRegion || region || currentRegion;
     const zoomToUse = currentZoom || zoomLevel;
-    
+
     if (!regionToUse) {
-      console.warn('[MapScreen] ⚠️ No region available for loading locations');
+      logger.warn('No region available for loading locations', 'map');
       return;
     }
 
@@ -1010,8 +1003,8 @@ const MapScreen = () => {
     
     // Create cache key for this viewport
     const cacheKey = `map-locations-${bounds}-z${Math.round(zoomToUse)}`;
-    
-    console.log('[MapScreen] 📊 Viewport parameters:', {
+
+    logger.trace('Viewport parameters', 'map', {
       region: {
         lat: regionToUse.latitude.toFixed(6),
         lng: regionToUse.longitude.toFixed(6),
@@ -1036,30 +1029,30 @@ const MapScreen = () => {
       };
       
       const intelligentLimit = getIntelligentLimit(zoomToUse);
-      
+
       const params: LocationQueryParams = {
         bounds,
         zoom: zoomToUse,
         limit: intelligentLimit
       };
-      
+
       // Use cache service with smart TTL based on zoom level
-      const cacheTTL = zoomToUse >= 15 
+      const cacheTTL = zoomToUse >= 15
         ? DEFAULT_CACHE_TTL.MAP_LOCATIONS_HIGH_ZOOM  // 2.5 minutes for high zoom (more dynamic)
         : DEFAULT_CACHE_TTL.MAP_LOCATIONS_LOW_ZOOM;  // 10 minutes for low zoom (more stable)
-      
-      console.log('[MapScreen] 🎯 API request parameters:', {
+
+      logger.trace('API request parameters', 'map', {
         params,
         intelligentLimit,
         cacheTTL: `${cacheTTL / 1000}s`,
-        zoomCategory: zoomToUse <= 8 ? 'Country' : 
+        zoomCategory: zoomToUse <= 8 ? 'Country' :
                      zoomToUse <= 10 ? 'State' :
                      zoomToUse <= 13 ? 'City' :
                      zoomToUse <= 16 ? 'Neighborhood' : 'Street'
       });
-      
+
       // Use fetchWithCache for intelligent caching and duplicate request prevention
-      console.log('[MapScreen] 🚀 Making API request...');
+      logger.debug('Making API request', 'map');
       const fetchedLocations = await fetchWithCache<Location[]>(
         cacheKey,
         () => fetchLocations(params),
@@ -1067,23 +1060,14 @@ const MapScreen = () => {
         false, // Don't force refresh unless explicitly needed
         'map' // Feature name for cache management
       );
-      
+
       const duration = Date.now() - startTime;
-      console.log(`[MapScreen] ✅ Successfully fetched ${fetchedLocations.length} locations`, {
-        duration: `${duration}ms`,
-        locationsPerSecond: Math.round((fetchedLocations.length / duration) * 1000),
-        firstLocation: fetchedLocations[0] ? {
-          id: fetchedLocations[0].id,
-          name: fetchedLocations[0].name,
-          lat: fetchedLocations[0].latitude?.toFixed(6),
-          lng: fetchedLocations[0].longitude?.toFixed(6),
-        } : 'none'
-      });
-      
+      logger.info(`Successfully fetched ${fetchedLocations.length} locations in ${duration}ms`, 'map');
+
       setLocations(fetchedLocations);
     } catch (error) {
       const duration = Date.now() - startTime;
-      console.error(`[MapScreen] ❌ Failed to fetch locations after ${duration}ms:`, error);
+      logger.error(`Failed to fetch locations after ${duration}ms`, error, 'map');
       // Don't show alert for viewport updates, just log the error
     } finally {
       setIsLoading(false);
@@ -1092,42 +1076,42 @@ const MapScreen = () => {
 
   // Backward compatibility function for initial load
   const loadLocations = async () => {
-    console.log('[MapScreen] Initial location load...');
+    logger.debug('Initial location load', 'map');
     await loadLocationsForViewport();
   };
 
   // Function to refresh map data (clear cache and reload)
   const refreshMapData = async () => {
-    console.log('[MapScreen] Refreshing map data - clearing cache');
+    logger.debug('Refreshing map data - clearing cache', 'map');
     await clearCacheCategory('map-locations');
     await loadLocationsForViewport();
   };
 
   // Immediate and debounced loading for smooth UX
   const immediateLoadLocations = useCallback((newRegion: Region, newZoomLevel: number) => {
-    console.log('[MapScreen] Immediate viewport load triggered');
+    logger.trace('Immediate viewport load triggered', 'map');
     loadLocationsForViewport(newRegion, newZoomLevel);
   }, [loadLocationsForViewport]);
 
   // Intelligent debounced function with adaptive timing
   const debouncedLoadLocations = useCallback(
     debounce((newRegion: Region, newZoomLevel: number) => {
-      console.log('[MapScreen] Debounced viewport load triggered');
+      logger.trace('Debounced viewport load triggered', 'map');
       loadLocationsForViewport(newRegion, newZoomLevel);
     }, 500), // Increased to 500ms to reduce excessive API calls
     [loadLocationsForViewport]
   );
-  
+
   // Initial setup: focus on user's actual location
   useEffect(() => {
-    console.log('[MapScreen] App started, getting user location and loading initial data');
+    logger.debug('App started, getting user location and loading initial data', 'map');
     moveToCurrentLocation();
     // loadLocations() is called in handleMapReady to ensure map is available
   }, []);
 
-  // Determine mapType and construct URL (Log for verification)
+  // Determine mapType and construct URL
   const tileUrlTemplate = `http://192.168.1.110:8080/tiles/grid/{z}/{x}/{y}.png?mapType=${mapType}`;
-  console.log("[MapScreen] Using Tile URL Template:", tileUrlTemplate); // Log the URL
+  logger.trace('Using Tile URL Template', 'map', { url: tileUrlTemplate });
   
   // Handle cluster press - zoom to expansion level (DISABLED - clustering temporarily disabled)
   // const handleClusterPress = useCallback((cluster: ClusterPoint) => {
@@ -1150,31 +1134,30 @@ const MapScreen = () => {
   
   // Handle location marker press
   const handleLocationMarkerPress = (location: Location) => {
-    try { 
-      console.log('[MapScreen | handleLocationMarkerPress] Entering for:', location?.id);
-      console.log('[MapScreen | handleLocationMarkerPress] Location details:', {
+    try {
+      logger.trace('handleLocationMarkerPress entering', 'map', { id: location?.id });
+      logger.trace('handleLocationMarkerPress location details', 'map', {
         id: location?.id,
         name: location?.name,
         address: location?.address,
         description: location?.description,
         coordinates: { lat: location?.latitude, lng: location?.longitude }
       });
-      
+
       if (!location || typeof location.latitude !== 'number' || typeof location.longitude !== 'number') {
-        console.error('[MapScreen | handleLocationMarkerPress] Invalid location data passed', location);
+        logger.error('handleLocationMarkerPress invalid location data', null, 'map');
         return;
       }
 
       const locationGeohash = location.geohash || encodeGeohash(location.latitude, location.longitude, GRID.GEOHASH_PRECISION);
-      console.log(`[MapScreen | handleLocationMarkerPress] Geohash: ${locationGeohash}, Zoom: ${zoomLevel}`);
+      logger.trace('handleLocationMarkerPress', 'map', { geohash: locationGeohash, zoom: zoomLevel });
       
       // REMOVE the zoom guard - always try to set the cell
       const selectedBounds = getBoundsOfCell(locationGeohash);
-      console.log(`[MapScreen | handleLocationMarkerPress] Calculated bounds: ${JSON.stringify(selectedBounds)}`);
+      logger.trace('handleLocationMarkerPress calculated bounds', 'map', { bounds: selectedBounds });
 
       // Restore ALL state updates, including pin and visibility flags
-      console.log('[MapScreen | handleLocationMarkerPress] --- Restoring ALL state updates ---');
-      console.log('[MapScreen | handleLocationMarkerPress] Setting selectedLocation with name:', location.name);
+      logger.trace('handleLocationMarkerPress setting selectedLocation', 'map', { name: location.name });
       setSelectedLocation({ // <-- Keep This Enabled
         name: location.name, 
         geohash: locationGeohash, 
@@ -1192,38 +1175,34 @@ const MapScreen = () => {
               { latitude: selectedBounds.ne[1], longitude: selectedBounds.sw[0] },
               { latitude: selectedBounds.ne[1], longitude: selectedBounds.ne[0] },
               { latitude: selectedBounds.sw[1], longitude: selectedBounds.ne[0] },
-              { latitude: selectedBounds.sw[1], longitude: selectedBounds.sw[0] } 
+              { latitude: selectedBounds.sw[1], longitude: selectedBounds.sw[0] }
             ];
-            console.log('[MapScreen | handleLocationMarkerPress] Setting REAL cell coords:', JSON.stringify(coords)); // Removed 'Zoom OK' tag
+            logger.trace('handleLocationMarkerPress setting cell coords', 'map');
             setSelectedCellCoords(coords);
             if (!firstClickHandled) {
-              // console.log('[MapScreen | handleLocationMarkerPress] Setting firstClickHandled to true'); // Remove log
               setFirstClickHandled(true); // <-- Restore first click flag
             }
           } else {
-            console.warn('[MapScreen | handleLocationMarkerPress] Invalid bounds, clearing cell coords', locationGeohash); // Removed 'Zoom OK' tag
+            logger.warn('handleLocationMarkerPress invalid bounds, clearing cell coords', 'map', { geohash: locationGeohash });
             setSelectedCellCoords(null);
           }
       /* // Remove the corresponding else block for the zoom guard
       } else {
-            console.log(`[MapScreen | handleLocationMarkerPress] Zoom (${zoomLevel}) too low, NOT setting cell coords.`);
+            logger.trace('Zoom too low, NOT setting cell coords', 'map', { zoomLevel });
             // Optionally clear coords if zoom is too low, although useEffect might handle this
             // setSelectedCellCoords(null);
       }
       */
 
       // Show the selection pin at the marker location when clicking a marker
-      console.log('[MapScreen | handleLocationMarkerPress] Setting selectionCoords and showing pin');
+      logger.trace('handleLocationMarkerPress setting selectionCoords and showing pin', 'map');
       setSelectionCoords({ latitude: location.latitude, longitude: location.longitude }); // Set to marker location
       setSelectionPinVisible(true); // Show the pin when clicking a marker
       setPinSetManually(true); // Mark that pin was set by user action
-      console.log(`[MapScreen | handleLocationMarkerPress] Pin visibility set manually: true, zoom: ${zoomLevel}`);
+      logger.trace('handleLocationMarkerPress pin visibility set manually: true', 'map', { zoomLevel });
 
     } catch (error) {
-      console.error('[MapScreen | handleLocationMarkerPress] CRITICAL ERROR:', error);
-       if (error instanceof Error) {
-           console.error(`[MapScreen | handleLocationMarkerPress] Error details: ${error.message} ${error.stack}`);
-       }
+      logger.error('handleLocationMarkerPress CRITICAL ERROR', error, 'map');
     }
   };
 
@@ -1345,14 +1324,6 @@ const MapScreen = () => {
         
         {/* Selected Cell Highlight */}
         {(() => { // Keep IIFE wrapper for potential future use
-          // Remove log from render path
-          /*
-          if (selectedCellCoords) {
-             console.log('[MapScreen | Render] Attempting to render Polygon with coords:', JSON.stringify(selectedCellCoords));
-          } else {
-             console.log('[MapScreen | Render] selectedCellCoords is null, not rendering Polygon.');
-          }
-          */
           return selectedCellCoords && (
             <Polygon
               coordinates={selectedCellCoords}
@@ -1387,7 +1358,7 @@ const MapScreen = () => {
               baseCategory: 'other', // Not used for user location
               statusModifiers: {} // Not used for user location
             }}
-            onPress={() => console.log('[MapScreen] User location marker pressed')}
+            onPress={() => logger.trace('User location marker pressed', 'map')}
             zoomLevel={zoomLevel}
             isUserLocation={true}
           />
@@ -1545,7 +1516,7 @@ const MapScreen = () => {
                 />
               );
             } catch (error) {
-              console.error(`🚨 [MapScreen] Error rendering marker for location ${location?.id}:`, error);
+              logger.error(`Error rendering marker for location ${location?.id}`, error, 'map');
               return null; // Skip this marker if rendering fails
             }
           })

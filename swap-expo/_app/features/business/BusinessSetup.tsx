@@ -14,6 +14,7 @@ import apiClient from '../../_api/apiClient';
 import { API_PATHS } from '../../_api/apiPaths';
 import { sanitizeName, sanitizeBusinessName } from '../../utils/inputSanitization';
 import { BUSINESS_TYPES, EMPLOYEE_COUNT_OPTIONS } from '../../constants/businessConstants';
+import logger from '../../utils/logger';
 
 type NavigationProp = NativeStackNavigationProp<any>;
 
@@ -87,7 +88,7 @@ export const BusinessSetup = () => {
         );
       }
     } catch (error: any) {
-      console.error('Failed to create business:', error);
+      logger.error('Failed to create business', error, 'business');
       Alert.alert(
         'Error',
         error.response?.data?.message || 'Failed to create business. Please try again.'

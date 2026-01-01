@@ -28,6 +28,7 @@ import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../theme/ThemeContext";
 import { getAvatarColor } from "../../utils/avatarUtils";
+import logger from "../../utils/logger";
 
 interface SearchHeaderProps {
   onSearch?: (text: string) => void;
@@ -249,7 +250,7 @@ const SearchHeader: React.FC<SearchHeaderProps> = ({
   }), [theme, containerStyle, isSearchActive, transparent]);
 
   const handleAddPressInternal = () => {
-    console.log("Add pressed via SearchHeader");
+    logger.debug("Add pressed via SearchHeader", 'app');
     onAddPress && onAddPress();
   };
 

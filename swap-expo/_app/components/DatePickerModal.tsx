@@ -24,6 +24,7 @@ import {
   Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import logger from '../utils/logger';
 
 interface DatePickerModalProps {
   visible: boolean;
@@ -163,12 +164,12 @@ const DatePickerModal: React.FC<DatePickerModalProps> = ({
 
   const handlePrevMonth = () => {
     // In a real app, you would update the month and regenerate the calendar
-    console.log("Previous month");
+    logger.debug("Previous month", "navigation");
   };
 
   const handleNextMonth = () => {
     // In a real app, you would update the month and regenerate the calendar
-    console.log("Next month");
+    logger.debug("Next month", "navigation");
   };
 
   const handleReset = () => {

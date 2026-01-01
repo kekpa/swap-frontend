@@ -342,7 +342,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
           };
         });
         setAppUserContacts(appUsersMapped);
-        logger.debug(`[InteractionsHistory] Mapped ${platformMatches.length} platform contacts to DisplayableContact.`);
+        logger.debug('Mapped platform contacts to DisplayableContact', 'data', { count: platformMatches.length });
 
         // Fetch phone-only contacts (NormalizedContact[])
         const phoneOnlyNormalized = await contactsService.getPhoneOnlyNormalizedContacts(forceRefreshContacts);
@@ -404,14 +404,13 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
       // Debug route params
       logger.debug('[InteractionsHistory] Screen focused', "InteractionsHistory");
       
-      // 🚀 ENHANCED DEBUGGING: Log detailed WebSocket state for recipient device investigation
-      console.log('🔥🔥🔥 [InteractionsHistory] SCREEN FOCUS - WebSocket Status Check:', {
+      // Enhanced debugging: Log detailed WebSocket state for recipient device investigation
+      logger.debug('Screen focus - WebSocket status check', 'data', {
         hasUser: !!user,
         userEntityId: user?.entityId,
         userProfileId: user?.profileId,
         isSocketConnected: websocketService.isSocketConnected(),
         isSocketAuthenticated: websocketService.isSocketAuthenticated(),
-        timestamp: new Date().toISOString(),
         deviceType: 'DEBUGGING_RECIPIENT_ISSUE'
       });
       
@@ -420,42 +419,34 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
       const apiProfileId = apiClient.getProfileId();
       const userProfileId = user?.profileId;
       
-      console.log('🔥🔥🔥 [InteractionsHistory] PROFILE ID COMPARISON:', {
+      logger.debug('Profile ID comparison', 'data', {
         apiProfileId,
         userProfileId,
-        match: apiProfileId === userProfileId,
-        timestamp: new Date().toISOString()
+        match: apiProfileId === userProfileId
       });
       
       // 🔧 DATABASE-FIRST FIX: Use entity_id for messaging rooms (unified personal/business system)
       // Handle async getEntityId call properly within the focus effect
       apiClient.getEntityId().then((apiEntityId) => {
         if (apiEntityId) {
-          logger.debug(`[InteractionsHistory] [WebSocket] Joining entity room: ${apiEntityId}`, "InteractionsHistory");
-          console.log('🔥🔥🔥 [InteractionsHistory] ATTEMPTING ENTITY ROOM JOIN (DATABASE-FIRST):', {
+          logger.debug('Joining entity room', 'data', {
             entityId: apiEntityId,
             userEntityId: user?.entityId,
             isSocketConnected: websocketService.isSocketConnected(),
             isSocketAuthenticated: websocketService.isSocketAuthenticated(),
-            source: 'JWT_TOKEN_ENTITY_ID',
-            timestamp: new Date().toISOString()
+            source: 'JWT_TOKEN_ENTITY_ID'
           });
           websocketService.joinEntityRoom(apiEntityId);
         } else {
-          console.log('🔥🔥🔥 [InteractionsHistory] CANNOT JOIN ENTITY ROOM (DATABASE-FIRST):', {
+          logger.warn('Cannot join entity room', 'data', {
             hasUser: !!user,
             apiEntityId,
             userEntityId: user?.entityId,
-            reason: !apiEntityId ? 'NO_API_ENTITY_ID' : 'UNKNOWN',
-            timestamp: new Date().toISOString()
+            reason: !apiEntityId ? 'NO_API_ENTITY_ID' : 'UNKNOWN'
           });
         }
       }).catch((error) => {
-        logger.error('[InteractionsHistory] Error getting entity ID:', error);
-        console.log('🔥🔥🔥 [InteractionsHistory] ENTITY ID ERROR:', {
-          error: error.message,
-          timestamp: new Date().toISOString()
-        });
+        logger.error('Error getting entity ID', error, 'data');
       });
 
       // 🚀 PHASE 2.1: Clear current chat state when on interactions list
@@ -690,7 +681,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
     searchContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: '#F1F5F9',
+      backgroundColor: theme.colors.grayUltraLight,
       borderRadius: 20,
       margin: 16,
       paddingHorizontal: 12,
@@ -700,7 +691,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
       flex: 1,
       fontSize: 14,
       marginLeft: 8,
-      color: '#1A202C',
+      color: theme.colors.textPrimary,
     },
     notificationIcon: {
       padding: 4,
@@ -856,7 +847,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
       borderRadius: 24,
     },
     newChatButtonText: {
-      color: '#fff',
+      color: theme.colors.white,
       fontWeight: '600',
     },
   }), [theme]);

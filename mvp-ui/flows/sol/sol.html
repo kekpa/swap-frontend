@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="ht">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sòl (ROSCA Groups) - Moto-Taxi + Sòl App</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #f8fafc;
+            min-width: 1800px;
+        }
+        .container-wide {
+            max-width: 2200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        .device-frame {
+            width: 350px;
+            height: 750px;
+            border-radius: 36px;
+            border: 10px solid #111827;
+            overflow: hidden;
+            position: relative;
+            margin: 10px;
+            display: inline-block;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            background-color: #F9FAFB;
+        }
+        .device-content {
+            height: 100%;
+            overflow-y: auto;
+            position: relative;
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        .device-content::-webkit-scrollbar { display: none; }
+
+        .bg-brand-black { background-color: #111827; }
+        .bg-brand-gold { background-color: #F59E0B; }
+        .text-brand-black { color: #111827; }
+        .text-brand-gold { color: #F59E0B; }
+
+        .back-link {
+            display: inline-block;
+            margin: 20px 0;
+            color: #111827;
+            font-weight: 600;
+            text-decoration: none;
+        }
+        .back-link:hover { color: #F59E0B; }
+
+        .navbar-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 70px;
+            background-color: white;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            z-index: 100;
+        }
+        .navbar-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 11px;
+            color: #9ca3af;
+            width: 60px;
+        }
+        .navbar-item svg { width: 22px; height: 22px; margin-bottom: 3px; }
+        .navbar-item.active { color: #F59E0B; }
+
+        .screen-label {
+            text-align: center;
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 8px;
+            font-weight: 500;
+        }
+
+        /* Sol group card */
+        .sol-card {
+            background: white;
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        /* Member avatar stack */
+        .avatar-stack {
+            display: flex;
+        }
+        .avatar-stack .avatar {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid white;
+            margin-left: -8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .avatar-stack .avatar:first-child { margin-left: 0; }
+
+        /* Progress bar */
+        .progress-bar {
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #F59E0B 0%, #FBBF24 100%);
+            border-radius: 3px;
+        }
+
+        /* Member list item */
+        .member-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .member-item:last-child { border-bottom: none; }
+
+        /* Frequency pill */
+        .freq-pill {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .freq-pill.daily { background: #fef3c7; color: #d97706; }
+        .freq-pill.weekly { background: #dbeafe; color: #2563eb; }
+
+        /* Success circle */
+        .success-circle {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container-wide">
+        <a href="../../design.html" class="back-link">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            Retounen nan Design System
+        </a>
+
+        <h1 class="text-3xl font-bold mb-2 text-center text-brand-black">Sòl (ROSCA Groups)</h1>
+        <p class="text-center text-gray-500 mb-6">6 screens: Groups List → Group Detail → Contribute → Success → Create → Join</p>
+
+        <div class="flex flex-wrap justify-center">
+
+            <!-- Screen 1: Sòl Tab (Groups List) -->
+            <div>
+                <div class="device-frame">
+                    <div class="device-content">
+                        <div class="bg-brand-black text-white px-5 py-2 flex justify-between items-center text-xs">
+                            <span>9:41</span>
+                            <span>100%</span>
+                        </div>
+
+                        <div class="px-5 pt-4 pb-24">
+                            <!-- Header -->
+                            <div class="flex justify-between items-center mb-5">
+                                <h1 class="text-xl font-bold text-brand-black">Sòl Mwen yo</h1>
+                                <button class="bg-brand-gold text-white px-4 py-2 rounded-xl text-sm font-medium">
+                                    + Nouvo
+                                </button>
+                            </div>
+
+                            <!-- Active Sòl Summary -->
+                            <div class="bg-brand-black rounded-xl p-4 mb-5">
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <p class="text-gray-400 text-xs">Total nan Sòl</p>
+                                        <p class="text-2xl font-bold text-white">G 8,500</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-gray-400 text-xs">Pwochen tou</p>
+                                        <p class="text-brand-gold font-bold">3 jou</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Active Groups -->
+                            <p class="text-xs text-gray-500 font-medium mb-3">GWOUP AKTIF</p>
+
+                            <!-- Group 1 - Daily -->
+                            <div class="sol-card">
+                                <div class="flex justify-between items-start mb-3">
+                                    <div>
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <h3 class="font-semibold">Sòl Moto Delmas</h3>
+                                            <span class="freq-pill daily">Chak jou</span>
+                                        </div>
+                                        <p class="text-xs text-gray-500">10 manm • G 500/jou</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-brand-gold font-bold">G 5,000</p>
+                                        <p class="text-xs text-gray-500">pòch la</p>
+                                    </div>
+                                </div>
+                                <div class="progress-bar mb-2">
+                                    <div class="progress-fill" style="width: 70%;"></div>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <div class="avatar-stack">
+                                        <div class="avatar bg-blue-500 text-white">JP</div>
+                                        <div class="avatar bg-green-500 text-white">ML</div>
+                                        <div class="avatar bg-purple-500 text-white">RC</div>
+                                        <div class="avatar bg-gray-200 text-gray-600">+7</div>
+                                    </div>
+                                    <span class="text-xs text-green-600 font-medium">Ou peye jodi a</span>
+                                </div>
+                            </div>
+
+                            <!-- Group 2 - Weekly -->
+                            <div class="sol-card">
+                                <div class="flex justify-between items-start mb-3">
+                                    <div>
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <h3 class="font-semibold">Sòl Fanmi</h3>
+                                            <span class="freq-pill weekly">Chak semèn</span>
+                                        </div>
+                                        <p class="text-xs text-gray-500">5 manm • G 1,000/semèn</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-brand-gold font-bold">G 3,500</p>
+                                        <p class="text-xs text-gray-500">pòch la</p>
+                                    </div>
+                                </div>
+                                <div class="progress-bar mb-2">
+                                    <div class="progress-fill" style="width: 40%;"></div>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <div class="avatar-stack">
+                                        <div class="avatar bg-red-500 text-white">MJ</div>
+                                        <div class="avatar bg-yellow-500 text-white">PL</div>
+                                        <div class="avatar bg-gray-200 text-gray-600">+3</div>
+                                    </div>
+                                    <span class="text-xs text-orange-600 font-medium">Dwe peye demen</span>
+                                </div>
+                            </div>
+
+                            <!-- Join Option -->
+                            <div class="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center mt-4">
+                                <p class="text-gray-500 text-sm mb-2">Gen kòd envitasyon?</p>
+                                <button class="text-brand-gold font-medium text-sm">Antre kòd &rarr;</button>
+                            </div>
+                        </div>
+
+                        <!-- Bottom Navigation -->
+                        <div class="navbar-container">
+                            <a href="../home/home.html" class="navbar-item">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                                </svg>
+                                <span>Lakay</span>
+                            </a>
+                            <a href="../send/send.html" class="navbar-item">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                                </svg>
+                                <span>Voye</span>
+                            </a>
+                            <a href="#" class="navbar-item active">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                </svg>
+                                <span>Sòl</span>
+                            </a>
+                            <a href="../profile/profile.html" class="navbar-item">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                                </svg>
+                                <span>Mwen</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">1. Sòl Tab (Groups)</p>
+            </div>
+
+            <!-- Screen 2: Group Detail -->
+            <div>
+                <div class="device-frame">
+                    <div class="device-content">
+                        <div class="bg-brand-black text-white px-5 py-2 flex justify-between items-center text-xs">
+                            <span>9:41</span>
+                            <span>100%</span>
+                        </div>
+
+                        <div class="px-5 pt-4 pb-6">
+                            <!-- Back + Title -->
+                            <div class="flex items-center mb-4">
+                                <button class="mr-3">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                    </svg>
+                                </button>
+                                <div>
+                                    <h1 class="text-lg font-bold">Sòl Moto Delmas</h1>
+                                    <p class="text-xs text-gray-500">10 manm • Chak jou</p>
+                                </div>
+                            </div>
+
+                            <!-- Pot Info Card -->
+                            <div class="bg-brand-black rounded-xl p-4 mb-4">
+                                <div class="text-center mb-3">
+                                    <p class="text-gray-400 text-xs">Pòch Aktyèl</p>
+                                    <p class="text-3xl font-bold text-white">G 5,000</p>
+                                    <p class="text-gray-400 text-xs">sou G 50,000 total</p>
+                                </div>
+                                <div class="progress-bar mb-3" style="background: #374151;">
+                                    <div class="progress-fill" style="width: 10%;"></div>
+                                </div>
+                                <div class="flex justify-between text-xs text-gray-400">
+                                    <span>Jou 1 nan 10</span>
+                                    <span>Pwochen peman: Jodi a</span>
+                                </div>
+                            </div>
+
+                            <!-- Your Status -->
+                            <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <p class="text-amber-800 font-medium text-sm">Kontribisyon Jodi a</p>
+                                        <p class="text-xs text-amber-700">Dat limit: 6:00 PM</p>
+                                    </div>
+                                    <button class="bg-brand-gold text-white px-4 py-2 rounded-lg text-sm font-medium">
+                                        Peye G 500
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Rotation Schedule -->
+                            <div class="mb-4">
+                                <p class="text-xs text-gray-500 font-medium mb-3">PWOGRAM WOTASYON</p>
+
+                                <div class="member-item">
+                                    <div class="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center text-xs font-bold mr-3">1</div>
+                                    <div class="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm mr-3">JP</div>
+                                    <div class="flex-1">
+                                        <p class="font-medium text-sm">Jean-Pierre (Ou)</p>
+                                        <p class="text-xs text-gray-500">Jou 10 - Resevwa G 5,000</p>
+                                    </div>
+                                    <span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">Ou</span>
+                                </div>
+
+                                <div class="member-item">
+                                    <div class="w-8 h-8 rounded-full bg-brand-gold text-white flex items-center justify-center text-xs font-bold mr-3">2</div>
+                                    <div class="w-10 h-10 rounded-full bg-red-500 text-white flex items-center justify-center font-bold text-sm mr-3">ML</div>
+                                    <div class="flex-1">
+                                        <p class="font-medium text-sm">Marie Louis</p>
+                                        <p class="text-xs text-gray-500">Jou 9</p>
+                                    </div>
+                                    <span class="text-xs text-gray-500">Pwochen</span>
+                                </div>
+
+                                <div class="member-item">
+                                    <div class="w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-xs font-bold mr-3">3</div>
+                                    <div class="w-10 h-10 rounded-full bg-purple-500 text-white flex items-center justify-center font-bold text-sm mr-3">RC</div>
+                                    <div class="flex-1">
+                                        <p class="font-medium text-sm">Rose Charles</p>
+                                        <p class="text-xs text-gray-500">Jou 8</p>
+                                    </div>
+                                </div>
+
+                                <div class="member-item">
+                                    <div class="w-8 h-8 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center text-xs font-bold mr-3">4</div>
+                                    <div class="w-10 h-10 rounded-full bg-green-500 text-white flex items-center justify-center font-bold text-sm mr-3">PL</div>
+                                    <div class="flex-1">
+                                        <p class="font-medium text-sm">Pierre Louis</p>
+                                        <p class="text-xs text-gray-500">Jou 7</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Share Code -->
+                            <div class="bg-gray-50 rounded-xl p-4 text-center">
+                                <p class="text-xs text-gray-500 mb-1">Kòd Envitasyon</p>
+                                <p class="font-mono text-lg font-bold text-brand-black">SOL-MOTO-2024</p>
+                                <button class="text-brand-gold text-sm font-medium mt-2">Pataje &rarr;</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">2. Group Detail</p>
+            </div>
+
+            <!-- Screen 3: Contribute Confirmation -->
+            <div>
+                <div class="device-frame">
+                    <div class="device-content">
+                        <div class="bg-brand-black text-white px-5 py-2 flex justify-between items-center text-xs">
+                            <span>9:41</span>
+                            <span>100%</span>
+                        </div>
+
+                        <div class="px-5 pt-4 pb-6">
+                            <div class="flex items-center mb-6">
+                                <button class="mr-3">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                    </svg>
+                                </button>
+                                <h1 class="text-xl font-bold">Peye Kontribisyon</h1>
+                            </div>
+
+                            <!-- Amount Hero -->
+                            <div class="text-center mb-8">
+                                <p class="text-gray-500 text-sm mb-1">Kontribisyon</p>
+                                <p class="text-4xl font-bold text-brand-black">G 500</p>
+                            </div>
+
+                            <!-- Group Info -->
+                            <div class="bg-gray-50 rounded-xl p-4 mb-4">
+                                <p class="text-xs text-gray-500 mb-2">SÒL</p>
+                                <div class="flex items-center">
+                                    <div class="w-12 h-12 rounded-full bg-brand-black flex items-center justify-center text-brand-gold font-bold mr-3">S</div>
+                                    <div>
+                                        <p class="font-medium">Sòl Moto Delmas</p>
+                                        <p class="text-xs text-gray-500">Jou 1 nan 10</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Details -->
+                            <div class="bg-gray-50 rounded-xl p-4 mb-6">
+                                <p class="text-xs text-gray-500 mb-3">DETAY</p>
+                                <div class="flex justify-between py-2 border-b border-gray-200">
+                                    <span class="text-gray-600 text-sm">Kontribisyon</span>
+                                    <span class="font-medium text-sm">G 500</span>
+                                </div>
+                                <div class="flex justify-between py-2 border-b border-gray-200">
+                                    <span class="text-gray-600 text-sm">Frè</span>
+                                    <span class="font-medium text-sm text-green-600">G 0</span>
+                                </div>
+                                <div class="flex justify-between py-2">
+                                    <span class="text-gray-600 text-sm font-medium">Total</span>
+                                    <span class="font-bold">G 500</span>
+                                </div>
+                            </div>
+
+                            <!-- Your payout info -->
+                            <div class="bg-brand-black rounded-xl p-4 mb-6">
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <p class="text-gray-400 text-xs">Ou ap resevwa</p>
+                                        <p class="text-xl font-bold text-white">G 5,000</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <p class="text-gray-400 text-xs">nan</p>
+                                        <p class="text-brand-gold font-bold">9 jou</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Balance -->
+                            <p class="text-center text-xs text-gray-500 mb-4">
+                                Balans apre: <span class="font-medium text-brand-black">G 11,950</span>
+                            </p>
+
+                            <!-- Confirm Button -->
+                            <button class="w-full bg-brand-gold text-white font-semibold py-4 rounded-xl mb-3">
+                                Konfime Peman
+                            </button>
+
+                            <button class="w-full text-gray-500 font-medium py-3">
+                                Anile
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">3. Contribute</p>
+            </div>
+
+            <!-- Screen 4: Contribute Success -->
+            <div>
+                <div class="device-frame">
+                    <div class="device-content bg-white">
+                        <div class="text-brand-black px-5 py-2 flex justify-between items-center text-xs">
+                            <span>9:41</span>
+                            <span>100%</span>
+                        </div>
+
+                        <div class="px-5 pt-12 pb-6 text-center">
+                            <!-- Success Icon -->
+                            <div class="success-circle">
+                                <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+                                </svg>
+                            </div>
+
+                            <h1 class="text-2xl font-bold text-brand-black mb-2">Kontribisyon Peye!</h1>
+                            <p class="text-gray-500 mb-6">Mèsi pou kontribisyon ou</p>
+
+                            <!-- Amount -->
+                            <div class="mb-6">
+                                <p class="text-3xl font-bold text-brand-black">G 500</p>
+                                <p class="text-gray-400 text-sm">nan Sòl Moto Delmas</p>
+                            </div>
+
+                            <!-- Group Status -->
+                            <div class="bg-gray-50 rounded-xl p-4 mb-6 text-left">
+                                <div class="flex justify-between mb-3">
+                                    <span class="text-sm text-gray-600">Pòch total</span>
+                                    <span class="font-bold">G 5,500</span>
+                                </div>
+                                <div class="flex justify-between mb-3">
+                                    <span class="text-sm text-gray-600">Manm ki peye</span>
+                                    <span class="font-bold">7/10</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-sm text-gray-600">Jou ou ap resevwa</span>
+                                    <span class="font-bold text-brand-gold">Jou 10</span>
+                                </div>
+                            </div>
+
+                            <!-- Streak -->
+                            <div class="bg-amber-50 rounded-xl p-4 mb-6">
+                                <div class="flex items-center justify-center">
+                                    <span class="text-2xl mr-2">🔥</span>
+                                    <div>
+                                        <p class="font-bold text-amber-800">5 jou konsekitif!</p>
+                                        <p class="text-xs text-amber-700">Kontinye konsa!</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Actions -->
+                            <button class="w-full bg-brand-gold text-white font-semibold py-4 rounded-xl">
+                                Retounen nan Sòl
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">4. Contribute Success</p>
+            </div>
+
+            <!-- Screen 5: Create Group -->
+            <div>
+                <div class="device-frame">
+                    <div class="device-content">
+                        <div class="bg-brand-black text-white px-5 py-2 flex justify-between items-center text-xs">
+                            <span>9:41</span>
+                            <span>100%</span>
+                        </div>
+
+                        <div class="px-5 pt-4 pb-6">
+                            <div class="flex items-center mb-6">
+                                <button class="mr-3">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                                <h1 class="text-xl font-bold">Kreye Nouvo Sòl</h1>
+                            </div>
+
+                            <!-- Form -->
+                            <div class="space-y-4">
+                                <!-- Group Name -->
+                                <div>
+                                    <label class="text-sm text-gray-600 mb-1 block">Non Sòl la</label>
+                                    <input type="text" placeholder="Ex: Sòl Moto Petyonvil" class="w-full bg-gray-100 rounded-xl px-4 py-3 outline-none text-sm">
+                                </div>
+
+                                <!-- Amount -->
+                                <div>
+                                    <label class="text-sm text-gray-600 mb-1 block">Kontribisyon</label>
+                                    <div class="flex items-center bg-gray-100 rounded-xl px-4 py-3">
+                                        <span class="text-gray-500 mr-2">G</span>
+                                        <input type="number" placeholder="500" class="bg-transparent flex-1 outline-none text-sm">
+                                    </div>
+                                </div>
+
+                                <!-- Frequency -->
+                                <div>
+                                    <label class="text-sm text-gray-600 mb-2 block">Frekans</label>
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <button class="bg-brand-gold text-white py-3 rounded-xl text-sm font-medium">Chak jou</button>
+                                        <button class="bg-gray-100 py-3 rounded-xl text-sm font-medium">Chak semèn</button>
+                                        <button class="bg-gray-100 py-3 rounded-xl text-sm font-medium">Chak 2 semèn</button>
+                                        <button class="bg-gray-100 py-3 rounded-xl text-sm font-medium">Chak mwa</button>
+                                    </div>
+                                </div>
+
+                                <!-- Number of Members -->
+                                <div>
+                                    <label class="text-sm text-gray-600 mb-1 block">Kantite manm</label>
+                                    <div class="flex items-center">
+                                        <button class="w-12 h-12 bg-gray-100 rounded-xl text-xl font-bold">-</button>
+                                        <span class="flex-1 text-center text-2xl font-bold">10</span>
+                                        <button class="w-12 h-12 bg-gray-100 rounded-xl text-xl font-bold">+</button>
+                                    </div>
+                                </div>
+
+                                <!-- Summary -->
+                                <div class="bg-brand-black rounded-xl p-4">
+                                    <p class="text-gray-400 text-xs mb-2">Rezime</p>
+                                    <div class="flex justify-between text-white text-sm mb-1">
+                                        <span>Pòch total</span>
+                                        <span class="font-bold">G 5,000</span>
+                                    </div>
+                                    <div class="flex justify-between text-white text-sm">
+                                        <span>Dire</span>
+                                        <span class="font-bold">10 jou</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Create Button -->
+                            <button class="w-full bg-brand-gold text-white font-semibold py-4 rounded-xl mt-6">
+                                Kreye Sòl
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">5. Create Group</p>
+            </div>
+
+            <!-- Screen 6: Join Group -->
+            <div>
+                <div class="device-frame">
+                    <div class="device-content">
+                        <div class="bg-brand-black text-white px-5 py-2 flex justify-between items-center text-xs">
+                            <span>9:41</span>
+                            <span>100%</span>
+                        </div>
+
+                        <div class="px-5 pt-4 pb-6">
+                            <div class="flex items-center mb-6">
+                                <button class="mr-3">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                                <h1 class="text-xl font-bold">Antre nan yon Sòl</h1>
+                            </div>
+
+                            <p class="text-gray-500 text-sm mb-6">Antre kòd envitasyon an pou jwenn gwoup la</p>
+
+                            <!-- Code Input -->
+                            <div class="flex gap-2 mb-6">
+                                <input type="text" maxlength="4" placeholder="SOL" class="w-1/3 bg-gray-100 rounded-xl px-3 py-4 text-center font-mono font-bold text-lg outline-none">
+                                <span class="text-2xl text-gray-300 self-center">-</span>
+                                <input type="text" maxlength="4" placeholder="MOTO" class="w-1/3 bg-gray-100 rounded-xl px-3 py-4 text-center font-mono font-bold text-lg outline-none">
+                                <span class="text-2xl text-gray-300 self-center">-</span>
+                                <input type="text" maxlength="4" placeholder="2024" class="w-1/3 bg-gray-100 rounded-xl px-3 py-4 text-center font-mono font-bold text-lg outline-none">
+                            </div>
+
+                            <!-- Found Group Preview -->
+                            <div class="bg-gray-50 rounded-xl p-4 mb-6">
+                                <p class="text-xs text-gray-500 mb-3">GWOUP JWENN</p>
+                                <div class="flex items-center mb-3">
+                                    <div class="w-12 h-12 rounded-full bg-brand-black flex items-center justify-center text-brand-gold font-bold mr-3">S</div>
+                                    <div class="flex-1">
+                                        <p class="font-bold">Sòl Moto Delmas</p>
+                                        <p class="text-xs text-gray-500">9/10 manm • Chak jou</p>
+                                    </div>
+                                </div>
+                                <div class="flex justify-between text-sm py-2 border-t border-gray-200">
+                                    <span class="text-gray-600">Kontribisyon</span>
+                                    <span class="font-medium">G 500/jou</span>
+                                </div>
+                                <div class="flex justify-between text-sm py-2">
+                                    <span class="text-gray-600">Pòch total</span>
+                                    <span class="font-medium">G 5,000</span>
+                                </div>
+                            </div>
+
+                            <!-- Members Preview -->
+                            <div class="mb-6">
+                                <p class="text-xs text-gray-500 mb-2">MANM YO</p>
+                                <div class="flex -space-x-2">
+                                    <div class="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm border-2 border-white">JP</div>
+                                    <div class="w-10 h-10 rounded-full bg-red-500 text-white flex items-center justify-center font-bold text-sm border-2 border-white">ML</div>
+                                    <div class="w-10 h-10 rounded-full bg-purple-500 text-white flex items-center justify-center font-bold text-sm border-2 border-white">RC</div>
+                                    <div class="w-10 h-10 rounded-full bg-green-500 text-white flex items-center justify-center font-bold text-sm border-2 border-white">PL</div>
+                                    <div class="w-10 h-10 rounded-full bg-gray-200 text-gray-600 flex items-center justify-center font-bold text-sm border-2 border-white">+5</div>
+                                </div>
+                            </div>
+
+                            <!-- Join Button -->
+                            <button class="w-full bg-brand-gold text-white font-semibold py-4 rounded-xl mb-3">
+                                Antre nan Sòl la
+                            </button>
+
+                            <p class="text-center text-xs text-gray-500">
+                                Lè ou antre, ou aksepte <span class="text-brand-gold">règ yo</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">6. Join Group</p>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>

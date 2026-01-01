@@ -86,11 +86,9 @@ class NetworkService extends EventEmitter {
     // Log network state changes
     if (previousState.isOfflineMode !== this.currentNetworkState.isOfflineMode) {
       if (this.currentNetworkState.isOfflineMode) {
-        logger.warn('[NetworkService] 📱 OFFLINE MODE ACTIVATED - App will use cached data');
-        console.log('🌐 [NetworkService] 📱 OFFLINE MODE: App is now offline, switching to cached data');
+        logger.warn("OFFLINE MODE ACTIVATED - App will use cached data", "data");
       } else {
-        logger.info('[NetworkService] 🌐 ONLINE MODE ACTIVATED - App will sync with server');
-        console.log('🌐 [NetworkService] 🌐 ONLINE MODE: App is back online, resuming sync');
+        logger.info("ONLINE MODE ACTIVATED - App will sync with server", "data");
       }
     }
     

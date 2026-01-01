@@ -9,6 +9,7 @@ import ProfileNavigator from "./profileNavigator";
 import LoadingScreen from "../features/auth/login/LoadingScreen";
 import { CardStyleInterpolators, TransitionPresets } from "@react-navigation/stack";
 import { useTheme } from "../theme/ThemeContext";
+import logger from "../utils/logger";
 
 // Direct imports - clean, simple, no Suspense needed
 import NewInteractionScreen from "../features/interactions/NewInteraction2";
@@ -18,6 +19,10 @@ import SendMoneyScreen from "../features/interactions/sendMoney2/SendMoneyScreen
 import ReviewTransferScreen from "../features/interactions/sendMoney2/ReviewTransferScreen";
 import TransferCompletedScreen from "../features/interactions/sendMoney2/TransferCompletedScreen";
 import TempAddMoneyScreen from "../features/wallet/AddMoney/AddMoney2/TempAddMoney";
+
+// Rosca modal screens (detail/join/calendar screens moved to HomeNavigator)
+import RoscaPaymentConfirmationScreen from "../features/rosca/RoscaPaymentConfirmationScreen";
+import RoscaPayoutCelebrationScreen from "../features/rosca/RoscaPayoutCelebrationScreen";
 
 // Development bypass settings - rely on AuthContext now
 const DEV_ALWAYS_AUTHENTICATED = false;
@@ -96,6 +101,13 @@ export type RootStackParamList = {
     status?: string;
     createdAt?: string;
   };
+  // Rosca modal screens (detail/join/calendar moved to HomeNavigator)
+  RoscaPaymentConfirmationScreen: {
+    enrollment: any; // RoscaEnrollment type
+  };
+  RoscaPayoutCelebrationScreen: {
+    enrollment: any; // RoscaEnrollment type
+  };
 };
 
 export default function RootNavigator() {
@@ -112,7 +124,7 @@ export default function RootNavigator() {
   // PROFESSIONAL: Listen to LoadingOrchestrator state changes for coordinated navigation
   useEffect(() => {
     const unsubscribe = loadingOrchestrator.onStateChange((newState) => {
-      console.log('🏛️ [RootNavigator] LoadingOrchestrator state update:', {
+      logger.trace("LoadingOrchestrator state update", "navigation", {
         isLoading: newState.isLoading,
         canShowUI: newState.canShowUI,
         transitionPhase: newState.transitionPhase
@@ -143,7 +155,7 @@ export default function RootNavigator() {
   const forceAppInDev = isDevelopment && DEV_ALWAYS_AUTHENTICATED;
 
   // Debug logging (detailed for logout investigation)
-  console.log('🧭 [RootNavigator] Navigation decision:', {
+  logger.trace("Navigation decision", "navigation", {
     isInitialized,
     isAuthenticated,
     isInitialLoadComplete,
@@ -236,6 +248,25 @@ export default function RootNavigator() {
           <Stack.Screen
             name="TransferCompleted"
             component={TransferCompletedScreen}
+            options={{
+              presentation: 'modal',
+              ...TransitionPresets.ModalPresentationIOS,
+              gestureEnabled: false,
+            }}
+          />
+          {/* Rosca modal screens (detail/join/calendar moved to HomeNavigator) */}
+          <Stack.Screen
+            name="RoscaPaymentConfirmationScreen"
+            component={RoscaPaymentConfirmationScreen}
+            options={{
+              presentation: 'modal',
+              ...TransitionPresets.ModalPresentationIOS,
+              gestureEnabled: false,
+            }}
+          />
+          <Stack.Screen
+            name="RoscaPayoutCelebrationScreen"
+            component={RoscaPayoutCelebrationScreen}
             options={{
               presentation: 'modal',
               ...TransitionPresets.ModalPresentationIOS,

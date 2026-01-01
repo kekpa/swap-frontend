@@ -14,6 +14,7 @@
 // app/App.tsx
 
 import './utils/localStoragePolyfill';
+import './i18n'; // Initialize i18n before other imports
 import { LogLevel, setLogLevel, setLogCategory } from "./utils/logger";
 import { NavigationContainer } from "@react-navigation/native";
 import RootNavigator from "./navigation/rootNavigator";
@@ -276,51 +277,42 @@ const AppLifecycleHandler: React.FC<{ children: React.ReactNode }> = ({ children
   
   useEffect(() => {
     // Professional debugging - log every single trigger
-    console.log('🔥 [AppLifecycleHandler] useEffect triggered:', {
+    logger.debug('useEffect triggered', 'app', {
       isAuthenticated: authContext.isAuthenticated,
       hasUser: !!authContext.user,
       userId: authContext.user?.entityId,
       isLoading: authContext.isLoading,
-      timestamp: new Date().toISOString(),
     });
 
     if (authContext.isAuthenticated && authContext.user && !authContext.isLoading) {
-      console.log('🔥 [AppLifecycleHandler] ✅ ALL CONDITIONS MET - Calling initialize()');
+      logger.debug('All conditions met - calling initialize()', 'app');
 
-      console.log('🔥🔥🔥 [AppLifecycleHandler] INITIALIZING SERVICES FOR USER:', {
+      logger.debug('Initializing services for user', 'app', {
         userEntityId: authContext.user?.entityId,
         userProfileId: authContext.user?.profileId,
         isAuthenticated: authContext.isAuthenticated,
         isLoading: authContext.isLoading,
-        timestamp: new Date().toISOString(),
-        deviceType: 'DEBUGGING_APP_INIT'
       });
 
       // Initialize services when user is authenticated
       appLifecycleManager.initialize(authContext).catch(error => {
-        logger.error('[AppLifecycleHandler] Failed to initialize services:', error);
-        console.error('🔥 [AppLifecycleHandler] ❌ Initialize failed:', error);
-        console.log('🔥🔥🔥 [AppLifecycleHandler] INITIALIZATION FAILED:', {
-          error: error.message,
+        logger.error('Failed to initialize services', error, 'app', {
           userEntityId: authContext.user?.entityId,
           userProfileId: authContext.user?.profileId,
-          timestamp: new Date().toISOString()
         });
       });
     } else if (!authContext.isAuthenticated && !authContext.isLoading) {
-      console.log('🔥 [AppLifecycleHandler] User logged out - cleaning up services');
+      logger.debug('User logged out - cleaning up services', 'app');
       // Cleanup services when user logs out
       appLifecycleManager.cleanup();
     } else {
-      console.log('🔥 [AppLifecycleHandler] ⏸️ CONDITIONS NOT MET - Skipping initialization:', {
+      logger.debug('Conditions not met - skipping initialization', 'app', {
         reason: !authContext.isAuthenticated ? 'NOT_AUTHENTICATED' :
                 !authContext.user ? 'NO_USER_OBJECT' :
                 authContext.isLoading ? 'STILL_LOADING' : 'UNKNOWN',
-        details: {
-          isAuthenticated: authContext.isAuthenticated,
-          hasUser: !!authContext.user,
-          isLoading: authContext.isLoading,
-        }
+        isAuthenticated: authContext.isAuthenticated,
+        hasUser: !!authContext.user,
+        isLoading: authContext.isLoading,
       });
     }
   }, [authContext.isAuthenticated, authContext.user, authContext.isLoading]);

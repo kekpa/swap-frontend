@@ -28,6 +28,7 @@ import { Theme } from '../../../theme/theme';
 import CameraCapture from '../../../components2/CameraCapture';
 import apiClient from '../../../_api/apiClient';
 import { invalidateQueries } from '../../../tanstack-query/queryClient';
+import logger from '../../../utils/logger';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 type TakeSelfieRouteProp = RouteProp<ProfileStackParamList, 'TakeSelfie'>;
@@ -49,7 +50,7 @@ const TakeSelfieScreen: React.FC = () => {
   const returnToTimeline = route.params?.returnToTimeline;
   const sourceRoute = route.params?.sourceRoute;
 
-  console.log(`[TakeSelfieScreen] Navigation context: returnToTimeline=${returnToTimeline}, sourceRoute=${sourceRoute}`);
+  logger.debug('Navigation context', 'kyc', { returnToTimeline, sourceRoute });
 
   const handleBack = () => {
     if (selfieState === 'camera') {
@@ -62,7 +63,7 @@ const TakeSelfieScreen: React.FC = () => {
     } else {
       // Always return to timeline when in KYC flow
       if (returnToTimeline) {
-        console.log(`[TakeSelfieScreen] Returning to VerifyYourIdentity timeline`);
+        logger.debug('Returning to VerifyYourIdentity timeline', 'kyc');
         navigation.navigate('VerifyYourIdentity', sourceRoute ? { sourceRoute } : undefined);
       } else {
         // Default back behavior for non-KYC usage
@@ -92,7 +93,7 @@ const TakeSelfieScreen: React.FC = () => {
     if (selfieState === 'review' && selfieUri) {
       setSelfieState('processing');
 
-      console.log(`[TakeSelfieScreen] 🚀 Starting selfie upload and completion...`);
+      logger.debug('Starting selfie upload and completion', 'kyc');
 
       try {
         // Convert URI to FormData for upload
@@ -110,15 +111,15 @@ const TakeSelfieScreen: React.FC = () => {
           },
         });
 
-        console.log(`[TakeSelfieScreen] ✅ Selfie upload successful!`);
+        logger.debug('Selfie upload successful', 'kyc');
 
         // PROFESSIONAL: Invalidate KYC cache for instant UI update (same pattern as UploadIdScreen)
-        console.log('[TakeSelfieScreen] 🔄 Triggering cache invalidation for selfie upload');
+        logger.debug('Triggering cache invalidation for selfie upload', 'kyc');
 
         invalidateQueries(['kyc']);       // Primary KYC cache
         invalidateQueries(['profile']);   // Profile cache
 
-        console.log('[TakeSelfieScreen] ✅ Cache invalidation completed');
+        logger.debug('Cache invalidation completed', 'kyc');
 
         // Show success alert
         Alert.alert(
@@ -143,7 +144,7 @@ const TakeSelfieScreen: React.FC = () => {
           ]
         );
       } catch (error) {
-        console.log(`[TakeSelfieScreen] ❌ Selfie upload failed:`, error);
+        logger.error('Selfie upload failed', error, 'kyc');
         Alert.alert(
           'Error',
           'Failed to upload selfie. Please try again.',

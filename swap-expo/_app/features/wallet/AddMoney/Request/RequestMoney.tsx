@@ -24,6 +24,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { WalletStackParamList } from "../../../../navigation/walletNavigator";
+import logger from "../../../../utils/logger";
 
 type NavigationProp = StackNavigationProp<WalletStackParamList>;
 type RequestMoneyRouteProp = RouteProp<WalletStackParamList, "RequestMoney">;
@@ -78,7 +79,7 @@ const RequestMoneyScreen: React.FC<RequestMoneyScreenProps> = (props) => {
       props.onInfo();
     } else {
       // Show info about MoneyBeam
-      console.log("Show info about MoneyBeam");
+      logger.debug("Show info about MoneyBeam", "navigation");
     }
   };
 
@@ -111,15 +112,17 @@ const RequestMoneyScreen: React.FC<RequestMoneyScreenProps> = (props) => {
       props.onContinue(parseFloat(amount), message);
     } else {
       // Handle request submission
-      console.log(
-        `Requesting ${amount} € from ${selectedContact.name} with message: ${message}`
-      );
+      logger.debug("Request submitted", "data", {
+        amount,
+        contact: selectedContact.name,
+        message
+      });
       navigation.goBack();
     }
   };
 
   const handleGifPress = () => {
-    console.log("Opening GIF selector...");
+    logger.debug("Opening GIF selector", "navigation");
   };
 
   return (

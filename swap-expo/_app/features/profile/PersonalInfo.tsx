@@ -13,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { ProfileStackParamList } from '../../navigation/profileNavigator';
 import { useTheme } from '../../theme/ThemeContext';
+import logger from '../../utils/logger';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -25,7 +26,7 @@ const PersonalInfoScreen: React.FC = () => {
   };
 
   const handleEditInfo = () => {
-    console.log('Edit Personal Information');
+    logger.debug('Edit Personal Information', 'profile');
     // Implement edit functionality
   };
 

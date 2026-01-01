@@ -13,6 +13,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { ProfileStackParamList } from '../../../../navigation/profileNavigator';
 import { useTheme } from '../../../../theme/ThemeContext';
 import apiClient from '../../../../_api/apiClient';
+import logger from '../../../../utils/logger';
 
 import TeamMemberRoleSelection from './TeamMemberRoleSelection';
 import BeneficialOwnerBasicInfo from './BeneficialOwnerBasicInfo';
@@ -69,7 +70,7 @@ const BeneficialOwnerFlow: React.FC = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
 
-  console.log(`[BeneficialOwnerFlow] Mode: ${mode}, Step: ${step}`);
+  logger.debug('Flow state', 'kyc', { mode, step });
 
   // Load existing owner data if editing
   useEffect(() => {
@@ -116,9 +117,9 @@ const BeneficialOwnerFlow: React.FC = () => {
       }
 
       setOwnerData(convertedData);
-      console.log('[TeamMemberFlow] Loaded team member data:', convertedData);
+      logger.debug('Loaded team member data', 'kyc', convertedData);
     } catch (error) {
-      console.error('[TeamMemberFlow] Failed to load team member:', error);
+      logger.error('Failed to load team member', error, 'kyc');
       Alert.alert('Error', 'Failed to load team member information.');
     } finally {
       setIsLoading(false);
@@ -138,7 +139,7 @@ const BeneficialOwnerFlow: React.FC = () => {
   );
 
   const handleBack = () => {
-    console.log(`[TeamMemberFlow] handleBack from step: ${step}`);
+    logger.debug('handleBack from step', 'kyc', { step });
     switch (step) {
       case 'basicInfo':
         setStep('roleSelection');
@@ -174,11 +175,11 @@ const BeneficialOwnerFlow: React.FC = () => {
 
   const updateOwnerData = (data: Partial<BeneficialOwnerData>) => {
     setOwnerData(prevData => ({ ...prevData, ...data }));
-    console.log('[BeneficialOwnerFlow] Updated owner data:', { ...ownerData, ...data });
+    logger.debug('Updated owner data', 'kyc', { ...ownerData, ...data });
   };
 
   const moveToNextStep = () => {
-    console.log(`[TeamMemberFlow] Moving from ${step} to next step`);
+    logger.debug('Moving to next step', 'kyc', { currentStep: step });
     switch (step) {
       case 'roleSelection':
         setStep('basicInfo');
@@ -235,7 +236,7 @@ const BeneficialOwnerFlow: React.FC = () => {
         phone: ownerData.phone?.trim() || null,
       };
 
-      console.log('[TeamMemberFlow] Saving team member:', payload);
+      logger.debug('Saving team member', 'kyc', payload);
 
       if (mode === 'edit' && ownerId) {
         await apiClient.put(`/kyc/team-members/${ownerId}`, payload);
@@ -251,7 +252,7 @@ const BeneficialOwnerFlow: React.FC = () => {
         sourceRoute,
       });
     } catch (error: any) {
-      console.error('[TeamMemberFlow] Failed to save team member:', error);
+      logger.error('Failed to save team member', error, 'kyc');
       Alert.alert('Error', error.response?.data?.message || 'Failed to save team member. Please try again.');
     } finally {
       setIsLoading(false);

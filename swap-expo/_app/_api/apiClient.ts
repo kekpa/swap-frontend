@@ -163,7 +163,6 @@ apiClient.interceptors.request.use(
     );
     
     if (recentCalls.length > 2) {
-      console.log(`⚠️ Potential refresh loop detected! ${recentCalls.length} calls to ${config.url} in the last 5 seconds`);
       logger.warn(`Potential refresh loop: ${recentCalls.length} calls to ${config.url} in 5 seconds`, "api");
     }
     
@@ -207,7 +206,7 @@ apiClient.interceptors.request.use(
         delete data.currency;
       }
       config.data = data;
-      console.log("Fixed transaction request data:", data);
+      logger.debug("Fixed transaction request data", "api", { data });
     }
     return config;
   },
@@ -768,13 +767,13 @@ const clearProfileCache = async () => {
 
 // Function to set profile ID in request headers
 const setProfileId = (profileId: string | null) => {
-  console.log('🌐 [apiClient] setProfileId called:', profileId);
+  logger.debug("setProfileId called", "api", { profileId });
   if (profileId) {
     apiClient.defaults.headers.common["X-Profile-ID"] = profileId;
-    console.log('🌐 [apiClient] ✅ Set X-Profile-ID header to:', profileId);
+    logger.debug("Set X-Profile-ID header", "api", { profileId });
   } else {
     delete apiClient.defaults.headers.common["X-Profile-ID"];
-    console.log('🌐 [apiClient] ❌ Removed X-Profile-ID header');
+    logger.debug("Removed X-Profile-ID header", "api");
   }
 };
 

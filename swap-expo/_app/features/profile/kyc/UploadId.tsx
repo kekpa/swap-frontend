@@ -51,7 +51,7 @@ const UploadIdScreen: React.FC = () => {
   const sourceRoute = route.params?.sourceRoute;
   const returnToTimeline = route.params?.returnToTimeline;
 
-  console.log(`[UploadIdScreen] Mounted/Focused. sourceRoute: ${sourceRoute}, returnToTimeline: ${returnToTimeline}`);
+  logger.debug('Mounted/Focused', 'kyc', { sourceRoute, returnToTimeline });
 
   const [uploadState, setUploadState] = useState<UploadIdState>('select_type');
   const [selectedDocType, setSelectedDocType] = useState<DocumentType | null>(null);
@@ -117,23 +117,23 @@ const UploadIdScreen: React.FC = () => {
         const documentStatus = getDocumentStatus(activeDocType);
 
         setSelectedDocType(activeDocType as DocumentType);
-        console.log(`[UploadIdScreen] Pre-selected active document: ${activeDocType}`);
+        logger.debug('Pre-selected active document', 'kyc', { activeDocType });
 
         // Enterprise UX: Auto-navigate to preview if document already uploaded
         // This provides instant preview like Google/Stripe/Banking apps
         if (documentStatus.isUploaded) {
           setUploadState('upload_front');
-          console.log(`[UploadIdScreen] Auto-navigating to preview (document already uploaded)`);
+          logger.debug('Auto-navigating to preview (document already uploaded)', 'kyc');
         }
       } else {
         // If no active document, don't pre-select anything (let user choose)
-        console.log('[UploadIdScreen] No active document found, user can choose any document type');
+        logger.debug('No active document found, user can choose any document type', 'kyc');
       }
     }
   }, [kycLoading, kycStatus, uploadState, selectedDocType]);
 
   const handleBack = () => {
-    console.log(`[UploadIdScreen] handleBack called. Current uploadState: ${uploadState}, returnToTimeline: ${returnToTimeline}, sourceRoute: ${sourceRoute}`);
+    logger.debug('handleBack called', 'kyc', { uploadState, returnToTimeline, sourceRoute });
     if (uploadState === 'camera') {
       handleCameraCancel();
     } else if (uploadState === 'upload_front') {
@@ -157,7 +157,7 @@ const UploadIdScreen: React.FC = () => {
     } else {
       // Always return to timeline when in KYC flow
       if (returnToTimeline) {
-        console.log(`[UploadIdScreen] Returning to VerifyYourIdentity timeline`);
+        logger.debug('Returning to VerifyYourIdentity timeline', 'kyc');
         navigation.navigate('VerifyYourIdentity', sourceRoute ? { sourceRoute } : undefined);
       } else {
         // Default back behavior for non-KYC usage
@@ -966,7 +966,7 @@ const UploadIdScreen: React.FC = () => {
       if (!kycStatus?.documents || !selectedDocType) return { front: null, back: null };
       
       const docs = kycStatus.documents.filter(d => d.document_type === selectedDocType);
-      console.log(`[UploadIdScreen] Looking for document type: ${selectedDocType}, found docs:`, docs);
+      logger.trace('Looking for document type', 'kyc', { selectedDocType, docsFound: docs.length });
       
       if (needsBothSides(selectedDocType)) {
         // For dual-sided documents, find front and back
@@ -989,8 +989,8 @@ const UploadIdScreen: React.FC = () => {
     
     const documentUrls = getDocumentUrls();
     const canShowPreview = hasUploadedDocument && documentUrls.front && documentUrls.front.trim() !== '' && !forceReupload && !frontImageUri && !backImageUri;
-    
-    console.log(`[UploadIdScreen] Document preview check - hasUploaded: ${hasUploadedDocument}, frontUrl: ${documentUrls.front}, backUrl: ${documentUrls.back}, canShow: ${canShowPreview}`);
+
+    logger.trace('Document preview check', 'kyc', { hasUploadedDocument, frontUrl: documentUrls.front, backUrl: documentUrls.back, canShowPreview });
     
     return (
       <View style={styles.container}>
@@ -1096,11 +1096,11 @@ const UploadIdScreen: React.FC = () => {
               )}
 
               <View style={styles.previewActions}>
-                <TouchableOpacity 
-                  style={[styles.previewRetake, { flex: 1 }]} 
+                <TouchableOpacity
+                  style={[styles.previewRetake, { flex: 1 }]}
                   onPress={() => {
                     // Continue with current document
-                    console.log(`[UploadIdScreen] Continuing with existing ${selectedDocType} document`);
+                    logger.debug('Continuing with existing document', 'kyc', { selectedDocType });
                     navigation.navigate('TakeSelfie', { sourceRoute });
                   }}
                   disabled={uploading}

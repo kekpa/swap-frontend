@@ -14,6 +14,7 @@ import { Theme } from '../../theme/theme';
 import { useAuthContext } from '../auth/context/AuthContext';
 import { useHeaderOffset } from '../../hooks/useHeaderOffset';
 import { useRefreshByUser } from '../../hooks/useRefreshByUser';
+import logger from '../../utils/logger';
 
 interface Bundle {
   name: string;
@@ -864,7 +865,7 @@ const OffersDiscoveryRedesignedScreen: React.FC = () => {
         initials={getHeaderInitials()}
         onProfilePress={() => {
           const source = 'Offers';
-          console.log(`[OffersDiscoveryRedesigned] Navigating to ProfileModal, sourceRoute: ${source}`);
+          logger.debug("Navigating to ProfileModal", "navigation", { sourceRoute: source });
           navigation.navigate("ProfileModal" as any, { sourceRoute: source });
         }}
         transparent={true}
@@ -887,7 +888,7 @@ const OffersDiscoveryRedesignedScreen: React.FC = () => {
           <>
             <View style={[styles.sectionHeader, { marginTop: 12 }]}>
               <Text style={styles.sectionTitle}>Featured Offers</Text>
-              <TouchableOpacity onPress={() => console.log('See all featured')}>
+              <TouchableOpacity onPress={() => logger.debug("See all featured pressed", "navigation")}>
                 <Text style={styles.seeAllText}>See all</Text>
               </TouchableOpacity>
             </View>

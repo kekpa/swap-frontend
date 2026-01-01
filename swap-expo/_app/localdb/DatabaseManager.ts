@@ -13,7 +13,8 @@ import {
   initializeCurrencyWalletsSchema,
   initializeCurrencySchema,
   initializeNotificationsSchema,
-  initializeUserContactsSchema
+  initializeUserContactsSchema,
+  initializeRoscaSchema
 } from './schema';
 import {
   runMigration as runEntityIdMigration,
@@ -76,7 +77,6 @@ class DatabaseManager {
 
     // Return immediately if already completed successfully
     if (this.initializationState === InitializationState.COMPLETED) {
-      logger.debug('[DatabaseManager] Database already initialized successfully');
       return true;
     }
 
@@ -225,6 +225,9 @@ class DatabaseManager {
 
       // Unified local timeline (WhatsApp-grade local-first) - replaces Messages + Timeline
       { name: 'LocalTimeline', init: () => this.initializeLocalTimelineSchema() },
+
+      // Rosca (Sol) - Pool-based savings system
+      { name: 'Rosca', init: () => this.initializeRoscaSchema() },
     ];
 
     // Initialize each schema sequentially
@@ -323,7 +326,7 @@ class DatabaseManager {
       await initializeCurrencyWalletsSchema(this.database!);
       return { success: true };
     } catch (error) {
-      console.error('Failed to initialize currency wallets schema:', error);
+      logger.error("Failed to initialize currency wallets schema", error, "data");
       return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   }
@@ -395,6 +398,18 @@ class DatabaseManager {
   private async initializeUserContactsSchema(): Promise<SchemaResult> {
     try {
       await initializeUserContactsSchema(this.database!);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  /**
+   * Initialize rosca (sol) schema - Pool-based savings system
+   */
+  private async initializeRoscaSchema(): Promise<SchemaResult> {
+    try {
+      await initializeRoscaSchema(this.database!);
       return { success: true };
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) };

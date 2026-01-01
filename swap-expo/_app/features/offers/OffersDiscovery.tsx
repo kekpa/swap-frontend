@@ -14,6 +14,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { Theme } from '../../theme/theme';
 import { useAuthContext } from '../auth/context/AuthContext';
 import { useRefreshByUser } from '../../hooks/useRefreshByUser';
+import logger from '../../utils/logger';
 
 interface Merchant {
   id: string; name: string; logo: string; points: number; backgroundColor?: string; 
@@ -46,7 +47,7 @@ const OffersDiscoveryScreen: React.FC = () => {
   ];
   
   const handleSearch = (text: string) => setSearchQuery(text);
-  const handleInfoPress = () => console.log('Info pressed');
+  const handleInfoPress = () => logger.debug("Info pressed", "navigation");
   const handleMerchantPress = (merchant: Merchant) => navigation.navigate('OfferDetails', { merchantId: merchant.id, merchantName: merchant.name });
   const handleTabChange = (tab: OffersTab) => setActiveTab(tab);
   const handleEarnPress = () => navigation.navigate('Challenges');
@@ -128,7 +129,7 @@ const OffersDiscoveryScreen: React.FC = () => {
         initials={getHeaderInitials()}
         onProfilePress={() => {
           const source = 'Offers';
-          console.log(`[OffersDiscovery] Navigating to ProfileModal, sourceRoute: ${source}`);
+          logger.debug("Navigating to ProfileModal", "navigation", { sourceRoute: source });
           navigation.navigate("ProfileModal" as any, { sourceRoute: source });
         }}
       />

@@ -1,6 +1,7 @@
 // Created: SQLite schema for interaction data - 2025-05-22
 
 import { SQLiteDatabase } from 'expo-sqlite';
+import logger from '../../utils/logger';
 
 /**
  * Initialize interaction-related tables in SQLite database
@@ -79,9 +80,9 @@ export async function initializeInteractionSchema(db: SQLiteDatabase): Promise<v
       ON interaction_members(interaction_id, entity_id);
     `);
     
-    console.log('[Database] Interaction schema initialized successfully - matches Supabase structure');
+    logger.debug("Interaction schema initialized successfully - matches Supabase structure", "data");
   } catch (error) {
-    console.error('[Database] Failed to initialize interaction schema:', error);
+    logger.error("Failed to initialize interaction schema", error, "data");
     throw error;
   }
 } 

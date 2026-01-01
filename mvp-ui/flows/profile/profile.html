@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ht">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mwen (Profile) - Moto-Taxi + Sòl App</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #f8fafc;
+            min-width: 1600px;
+        }
+        .container-wide { max-width: 1800px; margin: 0 auto; padding: 0 20px; }
+        .device-frame {
+            width: 350px; height: 750px; border-radius: 36px;
+            border: 10px solid #111827; overflow: hidden; position: relative;
+            margin: 10px; display: inline-block;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2); background-color: #F9FAFB;
+        }
+        .device-content {
+            height: 100%; overflow-y: auto; position: relative;
+            -ms-overflow-style: none; scrollbar-width: none;
+        }
+        .device-content::-webkit-scrollbar { display: none; }
+        .bg-brand-black { background-color: #111827; }
+        .bg-brand-gold { background-color: #F59E0B; }
+        .text-brand-black { color: #111827; }
+        .text-brand-gold { color: #F59E0B; }
+        .back-link {
+            display: inline-block; margin: 20px 0; color: #111827;
+            font-weight: 600; text-decoration: none;
+        }
+        .back-link:hover { color: #F59E0B; }
+        .screen-label {
+            text-align: center; font-size: 12px; color: #6b7280;
+            margin-top: 8px; font-weight: 500;
+        }
+        .navbar-container {
+            position: absolute; bottom: 0; left: 0; right: 0; height: 70px;
+            background-color: white; border-top: 1px solid #e5e7eb;
+            display: flex; justify-content: space-around; align-items: center; z-index: 100;
+        }
+        .navbar-item {
+            display: flex; flex-direction: column; align-items: center;
+            font-size: 11px; color: #9ca3af; width: 60px;
+        }
+        .navbar-item svg { width: 22px; height: 22px; margin-bottom: 3px; }
+        .navbar-item.active { color: #F59E0B; }
+        /* Menu item */
+        .menu-item {
+            display: flex; align-items: center; padding: 16px;
+            background: white; border-radius: 12px; margin-bottom: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .menu-icon {
+            width: 40px; height: 40px; border-radius: 10px;
+            display: flex; align-items: center; justify-content: center; margin-right: 12px;
+        }
+        /* Transaction item */
+        .tx-item {
+            display: flex; align-items: center; padding: 14px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .tx-item:last-child { border-bottom: none; }
+        /* Settings toggle */
+        .toggle {
+            width: 48px; height: 28px; border-radius: 14px;
+            background: #e5e7eb; position: relative; cursor: pointer;
+        }
+        .toggle.on { background: #F59E0B; }
+        .toggle-dot {
+            width: 24px; height: 24px; border-radius: 50%;
+            background: white; position: absolute; top: 2px; left: 2px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: left 0.2s;
+        }
+        .toggle.on .toggle-dot { left: 22px; }
+    </style>
+</head>
+<body>
+    <div class="container-wide">
+        <a href="../../design.html" class="back-link">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            Retounen nan Design System
+        </a>
+
+        <h1 class="text-3xl font-bold mb-2 text-center text-brand-black">Mwen (Profile)</h1>
+        <p class="text-center text-gray-500 mb-6">4 screens: Profile Tab → Transaction History → Transaction Detail → Settings</p>
+
+        <div class="flex flex-wrap justify-center">
+
+            <!-- Screen 1: Profile Tab -->
+            <div>
+                <div class="device-frame">
+                    <div class="device-content">
+                        <div class="bg-brand-black text-white px-5 py-2 flex justify-between items-center text-xs">
+                            <span>9:41</span>
+                            <span>100%</span>
+                        </div>
+
+                        <div class="px-5 pt-4 pb-24">
+                            <!-- Profile Header -->
+                            <div class="flex items-center mb-6">
+                                <div class="w-16 h-16 rounded-full bg-brand-gold flex items-center justify-center text-white font-bold text-xl mr-4">JP</div>
+                                <div class="flex-1">
+                                    <h1 class="text-xl font-bold text-brand-black">Jean-Pierre</h1>
+                                    <p class="text-gray-500 text-sm">+509 3456 7890</p>
+                                </div>
+                                <button class="text-brand-gold text-sm font-medium">Modifye</button>
+                            </div>
+
+                            <!-- Balance Card -->
+                            <div class="bg-brand-black rounded-xl p-4 mb-6">
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <p class="text-gray-400 text-xs">Balans Total</p>
+                                        <p class="text-2xl font-bold text-white">G 12,450</p>
+                                    </div>
+                                    <button class="bg-brand-gold text-brand-black px-4 py-2 rounded-lg text-sm font-medium">
+                                        Istwa
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Quick Actions -->
+                            <div class="grid grid-cols-2 gap-3 mb-6">
+                                <div class="menu-item">
+                                    <div class="menu-icon bg-green-100">
+                                        <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <p class="font-medium text-sm">Cash In</p>
+                                        <p class="text-xs text-gray-500">Depoze</p>
+                                    </div>
+                                </div>
+                                <div class="menu-item">
+                                    <div class="menu-icon bg-orange-100">
+                                        <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <p class="font-medium text-sm">Cash Out</p>
+                                        <p class="text-xs text-gray-500">Retire</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Menu Items -->
+                            <p class="text-xs text-gray-500 font-medium mb-3">KONT</p>
+
+                            <div class="menu-item">
+                                <div class="menu-icon bg-blue-100">
+                                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                                    </svg>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-medium text-sm">Enfòmasyon Pèsonèl</p>
+                                </div>
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </div>
+
+                            <div class="menu-item">
+                                <div class="menu-icon bg-purple-100">
+                                    <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                                    </svg>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-medium text-sm">Sekirite</p>
+                                </div>
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </div>
+
+                            <div class="menu-item">
+                                <div class="menu-icon bg-gray-100">
+                                    <svg class="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    </svg>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-medium text-sm">Paramèt</p>
+                                </div>
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                </svg>
+                            </div>
+
+                            <div class="menu-item">
+                                <div class="menu-icon bg-red-100">
+                                    <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                                    </svg>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-medium text-sm text-red-600">Dekonekte</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bottom Navigation -->
+                        <div class="navbar-container">
+                            <a href="../home/home.html" class="navbar-item">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                                </svg>
+                                <span>Lakay</span>
+                            </a>
+                            <a href="../send/send.html" class="navbar-item">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
+                                </svg>
+                                <span>Voye</span>
+                            </a>
+                            <a href="../sol/sol.html" class="navbar-item">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                </svg>
+                                <span>Sòl</span>
+                            </a>
+                            <a href="#" class="navbar-item active">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                                </svg>
+                                <span>Mwen</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">1. Profile Tab</p>
+            </div>
+
+            <!-- Screen 2: Transaction History -->
+            <div>
+                <div class="device-frame">
+                    <div class="device-content">
+                        <div class="bg-brand-black text-white px-5 py-2 flex justify-between items-center text-xs">
+                            <span>9:41</span>
+                            <span>100%</span>
+                        </div>
+
+                        <div class="px-5 pt-4 pb-6">
+                            <!-- Header -->
+                            <div class="flex items-center mb-4">
+                                <button class="mr-3">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                    </svg>
+                                </button>
+                                <h1 class="text-xl font-bold">Istwa Tranzaksyon</h1>
+                            </div>
+
+                            <!-- Filters -->
+                            <div class="flex gap-2 mb-4 overflow-x-auto pb-2">
+                                <button class="px-4 py-2 bg-brand-black text-white rounded-full text-sm font-medium whitespace-nowrap">Tout</button>
+                                <button class="px-4 py-2 bg-gray-100 rounded-full text-sm font-medium whitespace-nowrap">Voye</button>
+                                <button class="px-4 py-2 bg-gray-100 rounded-full text-sm font-medium whitespace-nowrap">Resevwa</button>
+                                <button class="px-4 py-2 bg-gray-100 rounded-full text-sm font-medium whitespace-nowrap">Sòl</button>
+                                <button class="px-4 py-2 bg-gray-100 rounded-full text-sm font-medium whitespace-nowrap">Cash</button>
+                            </div>
+
+                            <!-- Today -->
+                            <p class="text-xs text-gray-500 font-medium mb-2">JODI A</p>
+
+                            <div class="tx-item">
+                                <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mr-3">
+                                    <span class="text-green-600 font-bold text-sm">+</span>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-medium text-sm">Pierre Louis</p>
+                                    <p class="text-xs text-gray-500">Kous resevwa • 10:35</p>
+                                </div>
+                                <p class="font-medium text-green-600 text-sm">+G 250</p>
+                            </div>
+
+                            <div class="tx-item">
+                                <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center mr-3">
+                                    <span class="text-orange-600 font-bold text-sm">-</span>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-medium text-sm">Marie Jean</p>
+                                    <p class="text-xs text-gray-500">Voye • 09:12</p>
+                                </div>
+                                <p class="font-medium text-gray-700 text-sm">-G 500</p>
+                            </div>
+
+                            <!-- Yesterday -->
+                            <p class="text-xs text-gray-500 font-medium mb-2 mt-4">YÈ</p>
+
+                            <div class="tx-item">
+                                <div class="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center mr-3">
+                                    <span class="text-amber-600 font-bold text-sm">S</span>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-medium text-sm">Sòl Moto Delmas</p>
+                                    <p class="text-xs text-gray-500">Kontribisyon • 18:00</p>
+                                </div>
+                                <p class="font-medium text-gray-700 text-sm">-G 500</p>
+                            </div>
+
+                            <div class="tx-item">
+                                <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mr-3">
+                                    <span class="text-green-600 font-bold text-sm">+</span>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-medium text-sm">Cash In</p>
+                                    <p class="text-xs text-gray-500">Ajan Delmas • 16:45</p>
+                                </div>
+                                <p class="font-medium text-green-600 text-sm">+G 5,000</p>
+                            </div>
+
+                            <div class="tx-item">
+                                <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mr-3">
+                                    <span class="text-green-600 font-bold text-sm">+</span>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-medium text-sm">Rose Charles</p>
+                                    <p class="text-xs text-gray-500">Kous resevwa • 14:22</p>
+                                </div>
+                                <p class="font-medium text-green-600 text-sm">+G 150</p>
+                            </div>
+
+                            <!-- This Week -->
+                            <p class="text-xs text-gray-500 font-medium mb-2 mt-4">SEMÈN SA A</p>
+
+                            <div class="tx-item">
+                                <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center mr-3">
+                                    <span class="text-orange-600 font-bold text-sm">-</span>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-medium text-sm">Cash Out</p>
+                                    <p class="text-xs text-gray-500">Ajan Petyonvil • Mèkredi</p>
+                                </div>
+                                <p class="font-medium text-gray-700 text-sm">-G 2,000</p>
+                            </div>
+
+                            <div class="tx-item">
+                                <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mr-3">
+                                    <span class="text-green-600 font-bold text-sm">S</span>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-medium text-sm">Sòl Fanmi</p>
+                                    <p class="text-xs text-gray-500">Ou resevwa pòch • Madi</p>
+                                </div>
+                                <p class="font-medium text-green-600 text-sm">+G 5,000</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">2. Transaction History</p>
+            </div>
+
+            <!-- Screen 3: Transaction Detail -->
+            <div>
+                <div class="device-frame">
+                    <div class="device-content">
+                        <div class="bg-brand-black text-white px-5 py-2 flex justify-between items-center text-xs">
+                            <span>9:41</span>
+                            <span>100%</span>
+                        </div>
+
+                        <div class="px-5 pt-4 pb-6">
+                            <!-- Header -->
+                            <div class="flex items-center mb-6">
+                                <button class="mr-3">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                    </svg>
+                                </button>
+                                <h1 class="text-xl font-bold">Detay Tranzaksyon</h1>
+                            </div>
+
+                            <!-- Status -->
+                            <div class="text-center mb-6">
+                                <div class="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
+                                    <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                    </svg>
+                                </div>
+                                <p class="text-green-600 font-medium">Reyisi</p>
+                            </div>
+
+                            <!-- Amount -->
+                            <div class="text-center mb-6">
+                                <p class="text-3xl font-bold text-brand-black">+G 250</p>
+                                <p class="text-gray-500 text-sm">= $1.87 USD</p>
+                            </div>
+
+                            <!-- Details Card -->
+                            <div class="bg-gray-50 rounded-xl p-4 mb-4">
+                                <div class="flex justify-between py-3 border-b border-gray-200">
+                                    <span class="text-gray-600 text-sm">Tip</span>
+                                    <span class="font-medium text-sm">Lajan Resevwa</span>
+                                </div>
+                                <div class="flex justify-between py-3 border-b border-gray-200">
+                                    <span class="text-gray-600 text-sm">De</span>
+                                    <span class="font-medium text-sm">Pierre Louis</span>
+                                </div>
+                                <div class="flex justify-between py-3 border-b border-gray-200">
+                                    <span class="text-gray-600 text-sm">Dat</span>
+                                    <span class="font-medium text-sm">29 Des 2024, 10:35</span>
+                                </div>
+                                <div class="flex justify-between py-3 border-b border-gray-200">
+                                    <span class="text-gray-600 text-sm">Frè</span>
+                                    <span class="font-medium text-sm text-green-600">G 0</span>
+                                </div>
+                                <div class="flex justify-between py-3">
+                                    <span class="text-gray-600 text-sm">ID Tranzaksyon</span>
+                                    <span class="font-mono text-sm">TXN-001234</span>
+                                </div>
+                            </div>
+
+                            <!-- Note -->
+                            <div class="bg-gray-50 rounded-xl p-4 mb-6">
+                                <p class="text-xs text-gray-500 mb-1">NÒT</p>
+                                <p class="text-sm text-brand-black">Kous Petyonvil</p>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="space-y-3">
+                                <button class="w-full bg-gray-100 text-brand-black font-semibold py-4 rounded-xl flex items-center justify-center">
+                                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+                                    </svg>
+                                    Pataje Resi
+                                </button>
+                                <button class="w-full bg-brand-gold text-white font-semibold py-4 rounded-xl">
+                                    Voye ba Pierre ankò
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">3. Transaction Detail</p>
+            </div>
+
+            <!-- Screen 4: Settings -->
+            <div>
+                <div class="device-frame">
+                    <div class="device-content">
+                        <div class="bg-brand-black text-white px-5 py-2 flex justify-between items-center text-xs">
+                            <span>9:41</span>
+                            <span>100%</span>
+                        </div>
+
+                        <div class="px-5 pt-4 pb-6">
+                            <!-- Header -->
+                            <div class="flex items-center mb-6">
+                                <button class="mr-3">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                    </svg>
+                                </button>
+                                <h1 class="text-xl font-bold">Paramèt</h1>
+                            </div>
+
+                            <!-- Notifications -->
+                            <p class="text-xs text-gray-500 font-medium mb-3">NOTIFIKASYON</p>
+
+                            <div class="bg-white rounded-xl p-4 mb-4">
+                                <div class="flex justify-between items-center py-2">
+                                    <div>
+                                        <p class="font-medium text-sm">Notifikasyon Push</p>
+                                        <p class="text-xs text-gray-500">Resevwa alèt sou telefòn ou</p>
+                                    </div>
+                                    <div class="toggle on">
+                                        <div class="toggle-dot"></div>
+                                    </div>
+                                </div>
+                                <div class="flex justify-between items-center py-2 border-t border-gray-100">
+                                    <div>
+                                        <p class="font-medium text-sm">Tranzaksyon</p>
+                                        <p class="text-xs text-gray-500">Lè ou voye oswa resevwa lajan</p>
+                                    </div>
+                                    <div class="toggle on">
+                                        <div class="toggle-dot"></div>
+                                    </div>
+                                </div>
+                                <div class="flex justify-between items-center py-2 border-t border-gray-100">
+                                    <div>
+                                        <p class="font-medium text-sm">Sòl Raple</p>
+                                        <p class="text-xs text-gray-500">Raple pou kontribisyon</p>
+                                    </div>
+                                    <div class="toggle on">
+                                        <div class="toggle-dot"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Language -->
+                            <p class="text-xs text-gray-500 font-medium mb-3">LANG</p>
+
+                            <div class="bg-white rounded-xl p-4 mb-4">
+                                <div class="flex justify-between items-center">
+                                    <div class="flex items-center">
+                                        <span class="text-2xl mr-3">🇭🇹</span>
+                                        <p class="font-medium text-sm">Kreyòl Ayisyen</p>
+                                    </div>
+                                    <svg class="w-5 h-5 text-brand-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                    </svg>
+                                </div>
+                            </div>
+
+                            <!-- Security -->
+                            <p class="text-xs text-gray-500 font-medium mb-3">SEKIRITE</p>
+
+                            <div class="bg-white rounded-xl p-4 mb-4">
+                                <div class="flex justify-between items-center py-2">
+                                    <div>
+                                        <p class="font-medium text-sm">Chanje PIN</p>
+                                    </div>
+                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                    </svg>
+                                </div>
+                                <div class="flex justify-between items-center py-2 border-t border-gray-100">
+                                    <div>
+                                        <p class="font-medium text-sm">Otantifikasyon Byometrik</p>
+                                        <p class="text-xs text-gray-500">Itilize anprent oswa figi</p>
+                                    </div>
+                                    <div class="toggle">
+                                        <div class="toggle-dot"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- About -->
+                            <p class="text-xs text-gray-500 font-medium mb-3">KONSÈNAN</p>
+
+                            <div class="bg-white rounded-xl p-4 mb-4">
+                                <div class="flex justify-between items-center py-2">
+                                    <p class="font-medium text-sm">Kondisyon Sèvis</p>
+                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                    </svg>
+                                </div>
+                                <div class="flex justify-between items-center py-2 border-t border-gray-100">
+                                    <p class="font-medium text-sm">Politik Konfidansyalite</p>
+                                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                    </svg>
+                                </div>
+                                <div class="flex justify-between items-center py-2 border-t border-gray-100">
+                                    <p class="font-medium text-sm">Vèsyon App</p>
+                                    <span class="text-gray-500 text-sm">1.0.0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">4. Settings</p>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>

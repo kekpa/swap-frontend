@@ -266,21 +266,21 @@ export const useErrorNotification = () => {
     // This would integrate with your notification system
     // For now, just log in development
     if (__DEV__) {
-      console.error('🚨 Error Notification:', message);
+      logger.error("Error Notification", null, "app", { message });
     }
 
     // TODO: Integrate with actual notification system
     // _duration parameter reserved for future Toast integration
 
-    logger.info(`[useErrorNotification] Showing error notification: ${message}`);
+    logger.info(`Showing error notification: ${message}`, "app");
   }, []);
 
   const showWarningNotification = useCallback((message: string, _duration: number = 3000) => {
     if (__DEV__) {
-      console.warn('⚠️ Warning Notification:', message);
+      logger.warn("Warning Notification", "app", { message });
     }
 
-    logger.info(`[useErrorNotification] Showing warning notification: ${message}`);
+    logger.info(`Showing warning notification: ${message}`, "app");
   }, []);
 
   const showInfoNotification = useCallback((message: string, _duration: number = 3000) => {

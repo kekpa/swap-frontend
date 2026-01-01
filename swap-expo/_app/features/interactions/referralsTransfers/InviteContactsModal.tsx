@@ -25,6 +25,7 @@ import {
 } from "react-native";
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from "@expo/vector-icons";
+import logger from '../../../utils/logger';
 
 interface Contact {
   id: string;
@@ -90,7 +91,7 @@ const InviteContactsModal: React.FC<InviteContactsModalProps> = ({
         title: "Invite Contacts and earn rewards",
       });
     } catch (error) {
-      console.error("Error sharing:", error);
+      logger.error("Error sharing", error, 'app');
     }
   };
 

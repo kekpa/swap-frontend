@@ -20,6 +20,7 @@ import { useAuthContext } from '../../auth/context/AuthContext';
 // Note: useBiometricAvailability removed - biometric is local-only, not tracked in backend
 import * as LocalAuthentication from 'expo-local-authentication';
 import { getTimelineForEntityType } from '../../../config/kycTimelines';
+import logger from '../../../utils/logger';
 
 // Updated: Enhanced component to work with new KYC process structure and improved error handling - 2025-01-26
 // Updated: Refactored to use configuration-driven timeline system for scalability - 2025-11-10
@@ -227,40 +228,28 @@ const VerifyYourIdentityScreen: React.FC = () => {
   // OPTIMISTIC UI: Always show timeline instantly - no loading states, true local-first
   // Data is always "ready" - we show defaults for missing data, update in background
 
-  console.log('🔥 [VerifyYourIdentity] 📊 Component state (OPTIMISTIC UI - Professional KYC):', {
+  logger.debug('Component state (OPTIMISTIC UI)', 'kyc', {
     hasKycStatus: !!kycStatus,
-    hasVerificationStatus: !!verificationStatus,
     isLoading,
-    error,
     isStale,
-    lastUpdated: lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'Never',
-    cacheStatus: isStale ? '🔴 Stale' : '🟢 Fresh',
-    optimisticUI: 'Always showing timeline instantly',
-    verificationStatus
+    cacheStatus: isStale ? 'Stale' : 'Fresh',
   });
 
   const sourceRoute = route.params?.sourceRoute;
   
   // PROFESSIONAL: Enhanced focus/mount handling with intelligent refresh
   useEffect(() => {
-    console.log(`[VerifyYourIdentityScreen] 🚀 FOCUS/MOUNT (Professional KYC). sourceRoute: ${sourceRoute}, route.key: ${route.key}`);
-
-    if (route.params) {
-      console.log(`[VerifyYourIdentityScreen] 📋 Route params:`, route.params);
-    }
+    logger.debug('FOCUS/MOUNT (Professional KYC)', 'kyc', { sourceRoute, routeKey: route.key });
 
     // Professional logging of KYC status with cache info
     if (kycStatus) {
-      console.log(`[VerifyYourIdentityScreen] 📊 KYC Status (${isStale ? 'STALE' : 'FRESH'}):`, {
+      logger.debug(`KYC Status (${isStale ? 'STALE' : 'FRESH'})`, 'kyc', {
         currentLevel: kycStatus.currentLevel,
         isVerificationInProgress: kycStatus.isVerificationInProgress,
         steps: kycStatus.steps ? Object.keys(kycStatus.steps).length : 0,
-        completedAt: kycStatus.completedAt,
-        lastUpdate: lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : 'Never',
-        cacheAge: lastUpdated ? `${Math.round((Date.now() - lastUpdated) / 1000)}s ago` : 'N/A'
       });
     } else if (!isLoading) {
-      console.log('[VerifyYourIdentityScreen] ⚠️ No KYC status available (not loading)');
+      logger.warn('No KYC status available (not loading)', 'kyc');
     }
   }, [route.params, sourceRoute, route.key, kycStatus, isStale, lastUpdated, isLoading]);
 
@@ -274,37 +263,37 @@ const VerifyYourIdentityScreen: React.FC = () => {
     const needsCompletion = kycStatus?.process?.overall_status === 'in_progress';
 
     if (allCompleted && needsCompletion && !isLoading) {
-      console.log('[VerifyYourIdentity] 🎯 All KYC steps completed - completing KYC...');
+      logger.info('All KYC steps completed - completing KYC', 'kyc');
 
       // Call backend to complete KYC
       import('../../../_api/apiClient').then(({ default: apiClient }) => {
         apiClient.post('/kyc/complete-without-biometric', {})
           .then(() => {
-            console.log('[VerifyYourIdentity] ✅ KYC completed');
+            logger.info('KYC completed', 'kyc');
             // Refresh status to show updated "Under Review" state
             refreshStatus();
           })
           .catch(error => {
-            console.error('[VerifyYourIdentity] ❌ Error completing KYC:', error);
+            logger.error('Error completing KYC', error, 'kyc');
           });
       });
     }
   }, [verificationStatus, kycStatus?.process?.overall_status, isLoading]);
 
   const handleBack = () => {
-    console.log(`[VerifyYourIdentityScreen] handleBack called. Navigating to Profile.`);
+    logger.debug('handleBack called, navigating to Profile', 'kyc');
     navigation.navigate('Profile');
   };
 
   // PROFESSIONAL: Simplified step press handler using timeline configuration
   const handleStepPress = (stepData: typeof verificationStatus[number]) => {
-    console.log(`[VerifyYourIdentityScreen] handleStepPress for ${stepData.id}. Has navigation: ${!!stepData.navigationRoute}`);
+    logger.debug('handleStepPress', 'kyc', { stepId: stepData.id, hasNavigation: !!stepData.navigationRoute });
 
     if (stepData.navigationRoute) {
       const navParams = stepData.navigationParams || { returnToTimeline: true, sourceRoute };
       navigation.navigate(stepData.navigationRoute as any, navParams);
     } else {
-      console.log(`[VerifyYourIdentityScreen] No navigation route configured for step: ${stepData.id}`);
+      logger.debug('No navigation route configured for step', 'kyc', { stepId: stepData.id });
     }
   };
 
@@ -314,21 +303,21 @@ const VerifyYourIdentityScreen: React.FC = () => {
     const nextIncompleteStep = verificationStatus.find(step => !step.isCompleted);
 
     if (nextIncompleteStep) {
-      console.log(`[VerifyYourIdentityScreen] handleContinue to next incomplete step: ${nextIncompleteStep.id}`);
+      logger.debug('handleContinue to next incomplete step', 'kyc', { stepId: nextIncompleteStep.id });
       handleStepPress(nextIncompleteStep);
     } else {
-      console.log('[VerifyYourIdentityScreen] All steps completed, navigating back to Profile');
+      logger.debug('All steps completed, navigating back to Profile', 'kyc');
       navigation.navigate('Profile');
     }
   };
 
   const handleHelp = () => {
-    console.log('Help pressed');
+    logger.debug('Help pressed', 'kyc');
     // Implement help action
   };
 
   const handleRetry = () => {
-    console.log('Retrying KYC status fetch...');
+    logger.debug('Retrying KYC status fetch', 'kyc');
     refreshStatus();
   };
 

@@ -75,7 +75,7 @@ export const QueryProvider: React.FC<QueryProviderProps> = ({ children }) => {
   if (!isInitialized && !initError) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
-        <ActivityIndicator size="large" color="#6366F1" />
+        <ActivityIndicator size="large" color="#888888" />
         <Text style={{ color: '#FFF', marginTop: 16, fontSize: 14 }}>Initializing Query Cache...</Text>
       </View>
     );

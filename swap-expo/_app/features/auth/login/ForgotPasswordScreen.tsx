@@ -20,6 +20,7 @@ import { useTheme } from "../../../theme/ThemeContext";
 import { Theme } from "../../../theme/theme";
 import apiClient from "../../../_api/apiClient";
 import { API_PATHS } from "../../../_api/apiPaths";
+import logger from "../../../utils/logger";
 
 // Define type for navigation
 type AuthStackParamList = {
@@ -70,13 +71,13 @@ const ForgotPasswordScreen = () => {
         email: email.trim().toLowerCase()
       });
       
-      console.log("Forgot password request successful:", response.data);
-      
+      logger.debug("Forgot password request successful", 'auth', { email: email.trim().toLowerCase() });
+
       // Request was successful, show the confirmation screen
       setRequestSent(true);
-      
+
     } catch (error: any) {
-      console.error("Forgot password request failed:", error);
+      logger.error("Forgot password request failed", error, 'auth');
       // Even on failure, for security we can show the same message.
       // Or handle specific errors like rate limiting.
       if (error.response?.status === 429) {

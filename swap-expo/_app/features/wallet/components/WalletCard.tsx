@@ -5,6 +5,7 @@ import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeContext';
 import { WalletBalance } from '../../../types/wallet.types';
+import logger from '../../../utils/logger';
 
 // Explicit card width for consistent sizing (Apple Wallet pattern)
 const { width: screenWidth } = Dimensions.get('window');
@@ -80,7 +81,7 @@ const WalletCard: React.FC<WalletCardProps> = React.memo(({
 
   // Validate essential wallet properties before rendering
   if (!wallet || !wallet.wallet_id || !wallet.currency_code) {
-    console.warn('[WalletCard] Invalid wallet data - missing required fields:', {
+    logger.warn('Invalid wallet data - missing required fields', 'wallet', {
       hasWallet: !!wallet,
       hasWalletId: wallet?.wallet_id,
       hasCurrencyCode: wallet?.currency_code,

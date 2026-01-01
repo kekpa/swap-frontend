@@ -14,6 +14,7 @@ import * as SecureStore from "expo-secure-store";
 import { MMKV } from 'react-native-mmkv';
 import Constants from "expo-constants";
 import { handleStorageError } from '../../utils/errorHandler';
+import logger from '../../utils/logger';
 
 // High-performance MMKV storage for tokens when SecureStore is unavailable
 const tokenStorage = new MMKV({
@@ -146,16 +147,13 @@ export const clearTokens = async (): Promise<void> => {
  */
 export const refreshAccessToken = async (): Promise<string | null> => {
   try {
-    const isDevelopment = process.env.NODE_ENV === "development" || process.env.EXPO_PUBLIC_ENV === "development";
     const refreshToken = await getRefreshToken();
     if (!refreshToken) {
-      console.debug('[refreshAccessToken] No refresh token found');
+      // No token available - this is normal on first launch
       return null;
     }
 
     const explicitRefreshUrl = `${RAW_API_BASE_URL}/api/v1/auth/refresh`;
-    console.debug(`[refreshAccessToken] Attempting to refresh token. Explicit URL: ${explicitRefreshUrl}`);
-    console.debug(`[refreshAccessToken] Sending refresh_token: ${refreshToken.substring(0,10)}...`);
 
     try {
       const response = await fetch(explicitRefreshUrl, {
@@ -167,15 +165,11 @@ export const refreshAccessToken = async (): Promise<string | null> => {
         body: JSON.stringify({ refresh_token: refreshToken }),
       });
 
-      console.debug(`[refreshAccessToken] Response status: ${response.status}`);
       const responseText = await response.text();
-      console.debug(`[refreshAccessToken] Raw response text: ${responseText}`);
 
       if (!response.ok) {
-        console.warn(`[refreshAccessToken] Token refresh failed. Status: ${response.status}, URL: ${explicitRefreshUrl}, Response: ${responseText}`);
-        if (isDevelopment) {
-          console.debug('[refreshAccessToken] Development mode, continuing despite refresh failure');
-        }
+        // Log status only, not response body (may contain sensitive data)
+        logger.warn(`Token refresh failed with status: ${response.status}`, "auth");
         return null;
       }
 
@@ -183,25 +177,21 @@ export const refreshAccessToken = async (): Promise<string | null> => {
       const tokenData = data;
 
       if (tokenData.access_token) {
-        console.debug('[refreshAccessToken] Token refreshed successfully.');
         await saveAccessToken(tokenData.access_token);
         if (tokenData.refresh_token) {
           await saveRefreshToken(tokenData.refresh_token);
         }
         return tokenData.access_token;
       } else {
-        console.warn('[refreshAccessToken] Refresh successful but no access_token in response data:', data);
+        logger.warn("Refresh response missing access_token", "auth");
         return null;
       }
     } catch (fetchError) {
-      console.error('[refreshAccessToken] Fetch refresh attempt FAILED:', fetchError);
-      if (isDevelopment) {
-        console.debug('[refreshAccessToken] Development mode, continuing despite refresh error');
-      }
+      logger.error("Network error during refresh", fetchError, "auth");
       return null;
     }
   } catch (error) {
-    console.error('[refreshAccessToken] Outer error refreshing token:', error);
+    logger.error("Unexpected error during refresh", error, "auth");
     return null;
   }
 };

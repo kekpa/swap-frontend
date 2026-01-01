@@ -25,6 +25,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import InviteContactsModal from "./InviteContactsModal";
+import logger from "../../../utils/logger";
 
 interface ReferralProgramScreenProps {
   onBack?: () => void;
@@ -191,7 +192,7 @@ const ReferralProgramScreen: React.FC<ReferralProgramScreenProps> = ({
 
             <TouchableOpacity
               style={styles.infoButton}
-              onPress={() => console.log("More info pressed")}
+              onPress={() => logger.debug("More info pressed", "navigation")}
             >
               <Text style={styles.infoButtonText}>More info</Text>
             </TouchableOpacity>
@@ -220,7 +221,7 @@ const ReferralProgramScreen: React.FC<ReferralProgramScreenProps> = ({
               agree to the above disclaimers and our{" "}
               <Text
                 style={styles.termsLink}
-                onPress={() => console.log("Terms & Conditions pressed")}
+                onPress={() => logger.debug("Terms & Conditions pressed", "navigation")}
               >
                 Terms & Conditions
               </Text>

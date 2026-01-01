@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import apiClient from '../_api/apiClient';
+import logger from '../utils/logger';
 
 export interface BeneficialOwner {
   id: string;
@@ -71,7 +72,7 @@ export const useBeneficialOwners = () => {
       // TODO: Update endpoint when backend is ready
       const response = await apiClient.get('/kyc/beneficial-owners');
 
-      console.log('[useBeneficialOwners] Fetched owners:', response.data);
+      logger.debug('Fetched beneficial owners', 'kyc', { count: response.data?.length || 0 });
       setOwners(response.data || []);
     } catch (err: any) {
       // 404 is expected when no owners exist yet
@@ -79,7 +80,7 @@ export const useBeneficialOwners = () => {
         setOwners([]);
         setError(null);
       } else {
-        console.error('[useBeneficialOwners] Error fetching owners:', err);
+        logger.error('Error fetching beneficial owners', err, 'kyc');
         setError(err.response?.data?.message || 'Failed to fetch beneficial owners');
         setOwners([]);
       }
@@ -116,15 +117,15 @@ export const useAddBeneficialOwner = () => {
       setLoading(true);
       setError(null);
 
-      console.log('[useAddBeneficialOwner] Adding owner:', ownerData);
+      logger.debug('Adding beneficial owner', 'kyc');
 
       // TODO: Update endpoint when backend is ready
       const response = await apiClient.post('/kyc/beneficial-owners', ownerData);
 
-      console.log('[useAddBeneficialOwner] Owner added:', response.data);
+      logger.info('Beneficial owner added', 'kyc');
       return response.data;
     } catch (err: any) {
-      console.error('[useAddBeneficialOwner] Error adding owner:', err);
+      logger.error('Error adding beneficial owner', err, 'kyc');
       setError(err.response?.data?.message || 'Failed to add beneficial owner');
       return null;
     } finally {
@@ -152,15 +153,15 @@ export const useUpdateBeneficialOwner = () => {
       setError(null);
 
       const { id, ...updateData } = ownerData;
-      console.log('[useUpdateBeneficialOwner] Updating owner:', id, updateData);
+      logger.debug('Updating beneficial owner', 'kyc', { id });
 
       // TODO: Update endpoint when backend is ready
       const response = await apiClient.put(`/kyc/beneficial-owners/${id}`, updateData);
 
-      console.log('[useUpdateBeneficialOwner] Owner updated:', response.data);
+      logger.info('Beneficial owner updated', 'kyc');
       return response.data;
     } catch (err: any) {
-      console.error('[useUpdateBeneficialOwner] Error updating owner:', err);
+      logger.error('Error updating beneficial owner', err, 'kyc');
       setError(err.response?.data?.message || 'Failed to update beneficial owner');
       return null;
     } finally {
@@ -187,15 +188,15 @@ export const useDeleteBeneficialOwner = () => {
       setLoading(true);
       setError(null);
 
-      console.log('[useDeleteBeneficialOwner] Deleting owner:', ownerId);
+      logger.debug('Deleting beneficial owner', 'kyc', { ownerId });
 
       // TODO: Update endpoint when backend is ready
       await apiClient.delete(`/kyc/beneficial-owners/${ownerId}`);
 
-      console.log('[useDeleteBeneficialOwner] Owner deleted successfully');
+      logger.info('Beneficial owner deleted successfully', 'kyc');
       return true;
     } catch (err: any) {
-      console.error('[useDeleteBeneficialOwner] Error deleting owner:', err);
+      logger.error('Error deleting beneficial owner', err, 'kyc');
       setError(err.response?.data?.message || 'Failed to delete beneficial owner');
       return false;
     } finally {
@@ -229,15 +230,15 @@ export const useBeneficialOwner = (ownerId: string | null) => {
       setLoading(true);
       setError(null);
 
-      console.log('[useBeneficialOwner] Fetching owner:', ownerId);
+      logger.debug('Fetching beneficial owner', 'kyc', { ownerId });
 
       // TODO: Update endpoint when backend is ready
       const response = await apiClient.get(`/kyc/beneficial-owners/${ownerId}`);
 
-      console.log('[useBeneficialOwner] Fetched owner:', response.data);
+      logger.debug('Fetched beneficial owner', 'kyc');
       setOwner(response.data);
     } catch (err: any) {
-      console.error('[useBeneficialOwner] Error fetching owner:', err);
+      logger.error('Error fetching beneficial owner', err, 'kyc');
       setError(err.response?.data?.message || 'Failed to fetch beneficial owner');
       setOwner(null);
     } finally {

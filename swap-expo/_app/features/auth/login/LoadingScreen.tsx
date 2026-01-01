@@ -22,7 +22,7 @@ import { loadingOrchestrator, LoadingState, TransitionPhase } from '../../../uti
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'LoadingScreen'>;
 
 const LoadingScreen: React.FC = () => {
-  console.log("🏛️ [LoadingScreen] PROFESSIONAL: Component mounted with LoadingOrchestrator integration");
+  logger.debug('Component mounted with LoadingOrchestrator integration', 'app');
 
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
@@ -43,14 +43,12 @@ const LoadingScreen: React.FC = () => {
     hasEssentialLocalData
   } = useLoadingState();
   
-  console.log("🔥 [LoadingScreen] Current state:", {
+  logger.debug('Current loading state', 'app', {
     isInitialLoadComplete,
     isLoadingInteractions,
     isLoadingBalances,
     isLoadingUserData,
     progress: loadingState.progress,
-    completedTasks: Array.from(loadingState.completedTasks),
-    errors: loadingState.errors
   });
 
   const [currentMessage, setCurrentMessage] = useState('Initializing your account...');
@@ -78,13 +76,11 @@ const LoadingScreen: React.FC = () => {
   // PROFESSIONAL: Listen to LoadingOrchestrator state changes
   useEffect(() => {
     const unsubscribe = loadingOrchestrator.onStateChange((newState) => {
-      console.log('🏛️ [LoadingScreen] PROFESSIONAL: LoadingOrchestrator state update:', {
+      logger.debug('LoadingOrchestrator state update', 'app', {
         isLoading: newState.isLoading,
         canShowUI: newState.canShowUI,
-        shouldShowSplash: newState.shouldShowSplash,
         transitionPhase: newState.transitionPhase,
         activeOperations: newState.activeOperations.length,
-        primaryOperation: newState.primaryOperation?.description
       });
 
       setOrchestratorState(newState);
@@ -109,14 +105,11 @@ const LoadingScreen: React.FC = () => {
       Math.min(95, orchestratorState.activeOperations.filter(op => op.type.includes('USER') || op.type.includes('PROFILE')).length * 25) :
       orchestratorState.canShowUI ? 100 : 50;
 
-    console.log("🏛️ [LoadingScreen] PROFESSIONAL: Orchestrator-based update:", {
+    logger.debug('Orchestrator-based update', 'app', {
       canShowUI: orchestratorState.canShowUI,
-      shouldShowSplash: orchestratorState.shouldShowSplash,
       transitionPhase: orchestratorState.transitionPhase,
       isLoading: orchestratorState.isLoading,
-      activeOperations: orchestratorState.activeOperations.length,
       professionalProgress,
-      professionalMessage
     });
 
     // Update UI based on LoadingOrchestrator state
@@ -135,7 +128,7 @@ const LoadingScreen: React.FC = () => {
     if (orchestratorState.canShowUI && !orchestratorState.isLoading) {
       const isStillAuthenticated = authContext?.isAuthenticated || false;
 
-      console.log("🏛️ [LoadingScreen] PROFESSIONAL: Transition coordination check:", {
+      logger.debug('Transition coordination check', 'app', {
         canShowUI: orchestratorState.canShowUI,
         isLoading: orchestratorState.isLoading,
         isStillAuthenticated,
@@ -143,11 +136,11 @@ const LoadingScreen: React.FC = () => {
       });
 
       if (isStillAuthenticated) {
-        console.log("🏛️ [LoadingScreen] ✅ PROFESSIONAL: LoadingOrchestrator allows UI - smooth transition to app");
+        logger.info('LoadingOrchestrator allows UI - smooth transition to app', 'app');
         // The coordinated transition prevents white flash
         // RootNavigator will handle the actual navigation
       } else {
-        console.log("🏛️ [LoadingScreen] ❌ PROFESSIONAL: User no longer authenticated");
+        logger.warn('User no longer authenticated', 'app');
       }
     }
 

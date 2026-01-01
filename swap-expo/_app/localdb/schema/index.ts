@@ -33,6 +33,9 @@ export { initializeNotificationsSchema } from './notifications-schema';
 export { initializeSearchHistorySchema } from './search-history-schema';
 export { initializeLocationSchema } from './location-schema';
 
+// 6. Rosca (Sol) - Pool-based savings system
+export { initializeRoscaSchema } from './rosca-schema';
+
 // Note: Removed schemas for banking compliance & performance:
 // - P2P requests (must be online)
 // - Accounts (must be online) 

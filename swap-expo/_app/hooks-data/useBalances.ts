@@ -97,25 +97,25 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
   // WhatsApp-style fetchBalances function
   const fetchBalances = async (): Promise<WalletBalance[]> => {
     // DEBUG: Log entityId at query execution time
-    console.log('💰 [useBalances FETCH 1/6] queryFn executing with:', { entityId, currentEntityId, isValidEntityId, shouldExecute, isProfileSwitching });
+    logger.debug('queryFn executing', 'wallet', { entityId, currentEntityId, isValidEntityId, shouldExecute, isProfileSwitching });
 
     // CRITICAL: Double-check entityId before making API calls
     if (!isValidEntityId) {
-      console.log('💰 [useBalances FETCH] ❌ ABORT: Invalid entityId:', entityId);
+      logger.debug('ABORT: Invalid entityId', 'wallet', { entityId });
       return [];
     }
 
     if (!currentEntityId) {
-      console.log('💰 [useBalances FETCH] ❌ ABORT: No currentEntityId available');
+      logger.debug('ABORT: No currentEntityId available', 'wallet');
       return [];
     }
 
-    console.log('💰 [useBalances FETCH 2/6] 🚀 Starting balance fetch for entity:', entityId, 'currentEntityId:', currentEntityId);
+    logger.debug('Starting balance fetch', 'wallet', { entityId, currentEntityId });
 
     // STEP 1: ALWAYS load from local cache first (INSTANT display like WhatsApp)
-    console.log('💰 [useBalances FETCH 3/6] Calling getAllCurrencyWallets with entityId:', currentEntityId);
+    logger.debug('Calling getAllCurrencyWallets', 'wallet', { entityId: currentEntityId });
     const cachedBalances = await currencyWalletsRepository.getAllCurrencyWallets(currentEntityId);
-    console.log('💰 [useBalances FETCH 4/6] SQLite returned', cachedBalances.length, 'wallets');
+    logger.debug(`SQLite returned ${cachedBalances.length} wallets`, 'wallet');
     logger.debug(`[useBalances] ✅ INSTANT: Loaded ${cachedBalances.length} balances from SQLite cache`);
     
     // Convert cached data to WalletBalance format
@@ -265,24 +265,21 @@ export const useBalances = (entityId: string, options: UseBalancesOptions = {}) 
     networkMode: 'always',
     // Return cached data immediately if available
     initialData: () => {
-      console.log('💰 [useBalances INITIAL] Running initialData(), shouldExecute:', shouldExecute, 'entityId:', entityId);
+      logger.debug('Running initialData()', 'wallet', { shouldExecute, entityId });
 
       if (!shouldExecute || !currentEntityId) {
-        console.log('💰 [useBalances INITIAL] ❌ Returning empty array - shouldExecute:', shouldExecute, 'entityId:', currentEntityId);
+        logger.debug('Returning empty array - not ready', 'wallet', { shouldExecute, currentEntityId });
         return []; // Return empty array for unauthenticated or invalid entityId
       }
 
       const queryKey = queryKeys.balancesByEntity(entityId);
-      console.log('💰 [useBalances INITIAL] Checking TanStack cache with queryKey:', JSON.stringify(queryKey));
       const cached = queryClient.getQueryData<WalletBalance[]>(queryKey);
-      console.log('💰 [useBalances INITIAL] TanStack cache result:', cached ? `${cached.length} wallets` : 'null/undefined');
 
       if (cached && cached.length > 0) {
-        console.log('💰 [useBalances INITIAL] ✅ Returning', cached.length, 'cached wallets');
-        logger.debug(`[useBalances] ⚡ INITIAL: Using ${cached.length} cached balances (entityId: ${entityId})`);
+        logger.debug(`INITIAL: Using ${cached.length} cached balances`, 'wallet', { entityId });
         return cached;
       }
-      console.log('💰 [useBalances INITIAL] ⚠️ No cache found, returning undefined (will trigger queryFn)');
+      logger.debug('No cache found, will trigger queryFn', 'wallet');
       return undefined;
     },
   });

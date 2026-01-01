@@ -59,7 +59,7 @@ export function useAuth() {
       }
 
       // For safer debugging
-      console.log(`🔑 SIGNUP ATTEMPT - URL: ${apiClient.defaults.baseURL}/auth/signup`);
+      logger.debug(`SIGNUP ATTEMPT - URL: ${apiClient.defaults.baseURL}/auth/signup`, 'auth');
 
       const payload: any = {
         email: userData.email,
@@ -112,27 +112,23 @@ export function useAuth() {
       if (!identifier || !password) {
         const errorMessage = "Identifier and password are required";
         setError(errorMessage);
-        
+
         if (isDevelopment) {
-          console.error("Login error: Identifier or password missing", { 
-            identifierProvided: !!identifier, 
-            passwordProvided: !!password 
+          logger.error('Login error: Identifier or password missing', 'auth', {
+            identifierProvided: !!identifier,
+            passwordProvided: !!password
           });
         }
-        
+
         throw new Error(errorMessage);
       }
 
       if (isDevelopment) {
-        logger.debug(`Attempting login with identifier: ${identifier}`, "auth");
-        console.log("SENDING LOGIN REQUEST WITH:", { 
-          identifier, 
-          passwordProvided: !!password 
-        });
+        logger.debug(`Attempting login with identifier: ${identifier}`, 'auth');
       }
 
       // Try personal login first
-      console.log(`🔑 LOGIN ATTEMPT (Personal) - URL: ${apiClient.defaults.baseURL}${AUTH_PATHS.LOGIN}`);
+      logger.debug(`LOGIN ATTEMPT (Personal) - URL: ${apiClient.defaults.baseURL}${AUTH_PATHS.LOGIN}`, 'auth');
       
       let response;
       try {
@@ -148,80 +144,66 @@ export function useAuth() {
         });
         
         if (isDevelopment) {
-          console.log("✅ Personal login successful!");
+          logger.info('Personal login successful', 'auth');
         }
       } catch (personalLoginError: any) {
         // Don't log personal login errors immediately - wait to see if business login works
         const errorDetails = {
           status: personalLoginError.response?.status,
           message: personalLoginError.response?.data?.message,
-          errors: personalLoginError.response?.data?.errors
         };
-        
+
         // Check for "no personal profile" or "try business login" messages
         const errorMessage = personalLoginError.response?.data?.message || '';
         const errors = personalLoginError.response?.data?.errors || [];
         const allMessages = [errorMessage, ...errors.map((e: any) => e.message || '')].join(' ').toLowerCase();
-        
-        const shouldTryBusinessLogin = 
-          allMessages.includes('no personal profile found') || 
+
+        const shouldTryBusinessLogin =
+          allMessages.includes('no personal profile found') ||
           allMessages.includes('try business login') ||
           allMessages.includes('personal profile found for this account');
-        
+
         if (shouldTryBusinessLogin) {
           if (isDevelopment) {
-            console.log("🏢 Personal login failed - trying business login automatically...");
+            logger.debug('Personal login failed - trying business login automatically', 'auth');
           }
-          
+
           try {
             // Try business login (suppress console errors during auto-detection)
             response = await apiClient.post(AUTH_PATHS.BUSINESS_LOGIN, {
               identifier,
               password,
-            }, { 
+            }, {
               timeout: 30000,
               headers: {
                 'Content-Type': 'application/json',
               }
             });
-            
+
             if (isDevelopment) {
-              console.log("✅ Business login successful! Auto-detection worked.");
+              logger.info('Business login successful! Auto-detection worked', 'auth');
             }
           } catch (businessLoginError: any) {
             // Both login attempts failed - now we can show the errors
             if (isDevelopment) {
-              console.error("❌ Personal login failed:", errorDetails);
-              console.error("❌ Business login also failed:", {
+              logger.error('Personal login failed', 'auth', errorDetails);
+              logger.error('Business login also failed', 'auth', {
                 status: businessLoginError.response?.status,
                 message: businessLoginError.response?.data?.message
               });
-              console.error("❌ Both personal and business login failed");
             }
             throw personalLoginError; // Throw the original error
           }
         } else {
           // Personal login failed for other reasons (wrong password, etc.)
           if (isDevelopment) {
-            console.error("❌ Personal login failed:", errorDetails);
-            console.log("❌ Not trying business login (error doesn't suggest business account)");
+            logger.error('Personal login failed', 'auth', errorDetails);
           }
           throw personalLoginError;
         }
       }
 
-      // ---- START DETAILED LOGGING ----
-      logger.debug(`[useAuth] Raw response from apiClient.post: ${JSON.stringify(response)}`, 'auth');
-      if (response && response.data) {
-        logger.debug(`[useAuth] response.data from apiClient.post: ${JSON.stringify(response.data)}`, 'auth');
-        logger.debug(`[useAuth] typeof response.data: ${typeof response.data}`, 'auth');
-        if (response.data.access_token) {
-          logger.debug(`[useAuth] typeof response.data.access_token: ${typeof response.data.access_token}`, 'auth');
-        }
-      } else {
-        logger.warn('[useAuth] apiClient.post did not return response or response.data', 'auth');
-      }
-      // ---- END DETAILED LOGGING ----
+      // Response received - don't log full response (contains tokens)
 
       let actualData;
       // Handle response - clean format from interceptor
@@ -231,7 +213,7 @@ export function useAuth() {
         try {
           actualData = JSON.parse(response.data);
         } catch (parseError) {
-          logger.error('Failed to parse backend login response data string:', { error: parseError, dataString: response.data }, 'auth');
+          logger.error('Failed to parse backend login response', 'auth');
           throw new Error('Invalid response format from server (JSON parse failed).');
         }
       } else if (response.data && typeof response.data === 'object' && typeof response.data.access_token !== 'undefined') {
@@ -272,26 +254,15 @@ export function useAuth() {
       setError(errorMessage);
       
       if (isDevelopment) {
-        console.error("🔴 LOGIN ERROR DETAILS:", {
+        logger.error('LOGIN ERROR', 'auth', {
           status: statusCode,
-          data: responseData,
           message: err.message,
-          config: {
-            url: err.config?.url,
-            baseURL: err.config?.baseURL,
-            method: err.config?.method,
-          }
+          url: err.config?.url,
         });
-        
-        logger.error("Login error:", {
-          error: errorMessage,
-          response: responseData,
-          status: statusCode
-        });
-        
+
         // If it's a 500 error, could be a backend issue
         if (statusCode === 500) {
-          console.error("Backend server error during login. Check server logs for details.");
+          logger.error('Backend server error during login. Check server logs for details.', 'auth');
         }
       }
       
@@ -392,33 +363,24 @@ export function useAuth() {
           headers: options?.skipCache ? { 'Cache-Control': 'no-cache' } : {}
         }); 
         
-        logger.debug(`[useAuth] Raw response: ${JSON.stringify(response.data)}`, 'auth');
-
         let profileData;
         if (response.data && typeof response.data === 'object') {
           profileData = response.data;
         } else {
-          logger.error(`[useAuth] Unexpected response structure: ${JSON.stringify(response.data)}`, 'auth');
+          logger.error('[useAuth] Unexpected response structure for profile', 'auth');
           return null;
         }
 
-        // ✅ NEW: Clean discriminated union approach
+        // Validate profile structure
         if (profileData && profileData.type && profileData.id) {
-          if (profileData.type === 'business') {
-            logger.debug(`[useAuth] ✅ Business profile: ${profileData.business_name}`, 'auth');
-          } else if (profileData.type === 'personal') {
-            logger.debug(`[useAuth] ✅ Personal profile: ${profileData.username}`, 'auth');
-          }
-          return profileData; 
-        } 
-        // ERROR: Invalid structure
-        else {
-          logger.error(`[useAuth] ❌ Invalid profile structure. Expected 'type' and 'id' fields: ${JSON.stringify(profileData)}`, 'auth');
+          return profileData;
+        } else {
+          logger.error('[useAuth] Invalid profile structure - missing type or id', 'auth');
           return null;
         }
       } catch (error: any) {
         const errorMessage = error.response?.data?.error || error.message;
-        logger.error(`Profile fetch error: ${JSON.stringify({ error: errorMessage, requestedUrl: profileUrl })}`, 'auth');
+        logger.error(`Profile fetch error: ${errorMessage}`, 'auth');
         throw error;
       }
     } catch (error: any) {

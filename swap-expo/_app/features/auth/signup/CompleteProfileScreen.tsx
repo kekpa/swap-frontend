@@ -26,6 +26,7 @@ import { usePasswordStrength } from "../../../hooks/usePasswordStrength";
 import { PasswordStrengthMeter } from "../../../components/PasswordStrengthMeter";
 import { sanitizeName, sanitizeUsername, sanitizeBusinessName, sanitizeRegistrationNumber } from "../../../utils/inputSanitization";
 import { BUSINESS_TYPES, EMPLOYEE_COUNT_OPTIONS } from "../../../constants/businessConstants";
+import logger from "../../../utils/logger";
 
 // Define type for navigation
 type AuthStackParamList = {
@@ -308,7 +309,7 @@ const CompleteProfileScreen = () => {
         Alert.alert("Error", "Invalid signup flow detected");
       }
     } catch (error: any) {
-      console.error("Profile completion error:", error);
+      logger.error("Profile completion error", error, 'auth');
       
       // More specific error handling
       let errorMessage = "Failed to complete your profile. Please try again.";
@@ -338,7 +339,7 @@ const CompleteProfileScreen = () => {
   if (!theme || !theme.colors) {
     return (
       <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff' }}>
-        <ActivityIndicator size="large" color="#8b14fd" />
+        <ActivityIndicator size="large" color="#888888" />
       </SafeAreaView>
     );
   }

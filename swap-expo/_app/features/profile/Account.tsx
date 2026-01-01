@@ -18,6 +18,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useAuthContext } from '../auth/context/AuthContext';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '../../_api/apiClient';
+import logger from '../../utils/logger';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -47,17 +48,17 @@ const AccountScreen: React.FC = () => {
   };
 
   const handleDocuments = () => {
-    console.log('Navigate to Documents & Statements');
+    logger.debug("Navigate to Documents & Statements", "navigation");
     // Add navigation when the screen is available
   };
 
   const handleUpgradeAccount = () => {
-    console.log('Upgrade Account Tier');
+    logger.debug("Upgrade Account Tier", "navigation");
     // Implement upgrade account action
   };
 
   const handleCloseAccount = () => {
-    console.log('Close Account');
+    logger.debug("Close Account", "navigation");
     // Implement close account action with confirmation
   };
 
@@ -76,7 +77,7 @@ const AccountScreen: React.FC = () => {
               await queryClient.invalidateQueries({ queryKey: ['profile'] });
               Alert.alert('Success', 'Your personal profile is now active!');
             } catch (error: any) {
-              console.error('Failed to activate profile:', error);
+              logger.error("Failed to activate profile", error, "data");
               Alert.alert('Error', error.response?.data?.message || 'Failed to activate profile');
             } finally {
               setActivating(false);

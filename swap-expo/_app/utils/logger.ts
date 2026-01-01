@@ -23,10 +23,16 @@ let currentLogLevel = DEFAULT_LEVEL;
 // Optional category filtering
 const enabledCategories: Record<string, boolean> = {
   api: true, // API requests/responses
+  app: true, // General app operations
   auth: true, // Authentication operations
+  business: true, // Business profile operations
   data: true, // Data loading/caching
+  kyc: true, // KYC verification operations
   navigation: true, // Navigation events
   performance: true, // Performance measurements
+  profile: true, // Profile operations
+  rosca: true, // Rosca operations
+  wallet: true, // Wallet operations
 };
 
 /**

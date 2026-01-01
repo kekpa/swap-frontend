@@ -13,6 +13,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { ProfileStackParamList } from '../../../../navigation/profileNavigator';
 import { useTheme } from '../../../../theme/ThemeContext';
+import logger from '../../../../utils/logger';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -66,7 +67,7 @@ const BusinessKycFlowStart: React.FC = () => {
         sourceRoute,
       });
     } catch (error) {
-      console.error('[BusinessKycFlowStart] Error checking flow progress:', error);
+      logger.error('Error checking flow progress', error, 'kyc');
 
       // On error, start from beginning
       navigation.replace('BeneficialOwnersList', {

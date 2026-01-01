@@ -1,6 +1,7 @@
 // Created: Added hook to fetch saved personal information for KYC pre-population - 2025-06-07
 import { useState, useEffect } from 'react';
 import apiClient from '../_api/apiClient';
+import logger from '../utils/logger';
 
 export interface PersonalInfo {
   firstName: string;
@@ -30,14 +31,13 @@ export const usePersonalInfoLoad = () => {
       setError(null);
       
       const response = await apiClient.get('/kyc/identity');
-      
-      console.log('[usePersonalInfoLoad] Full API Response:', response);
-      console.log('[usePersonalInfoLoad] Parsed data:', response.data);
+
+      logger.debug("API Response", "data", { data: response.data });
 
       // Extract the actual personal info data (API returns directly in response.data)
       const personalInfoData = response.data;
-      console.log('[usePersonalInfoLoad] Final personal info data:', personalInfoData);
-      
+      logger.debug("Final personal info data", "data", { personalInfoData });
+
       setPersonalInfo(personalInfoData || null);
     } catch (err: any) {
       // 404 is expected when no personal info is saved yet
@@ -45,7 +45,7 @@ export const usePersonalInfoLoad = () => {
         setPersonalInfo(null);
         setError(null);
       } else {
-        console.error('[usePersonalInfoLoad] Error fetching personal info:', err);
+        logger.error("Error fetching personal info", err, "data");
         setError(err.response?.data?.message || 'Failed to fetch personal information');
         setPersonalInfo(null);
       }

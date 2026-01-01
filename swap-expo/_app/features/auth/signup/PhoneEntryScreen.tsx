@@ -24,6 +24,7 @@ import { Theme } from "../../../theme/theme";
 import CountryCodePicker, { CountryCodePickerRef } from "../../../components/CountryCodePicker";
 import { CountryCode } from "../../../constants/countryCodes";
 import { normalizePhoneNumber, parseInternationalPhoneNumber, combinePhoneNumber } from "../../../utils/phoneUtils";
+import logger from "../../../utils/logger";
 
 // Define type for navigation
 type AuthStackParamList = {
@@ -132,36 +133,36 @@ const PhoneEntryScreen: React.FC = () => {
       const response = await apiClient.post(API_PATHS.AUTH.CHECK_PHONE, {
         phone: formattedPhone
       });
-      
-      console.log("Phone check response:", response.data);
-      
+
+      logger.debug('Phone check response received', 'auth');
+
       let result = response.data;
-      
+
       if (result.data) {
         result = result.data;
-        
+
         if (typeof result === 'string') {
           try {
             result = JSON.parse(result);
           } catch (parseError) {
-            console.error("Error parsing stringified response:", parseError);
+            logger.error('Error parsing stringified response', parseError, 'auth');
             return { exists: false };
           }
         }
       }
-      
+
       if (result.profile && typeof result.profile === 'string') {
         try {
           result.profile = JSON.parse(result.profile);
         } catch (parseError) {
-          console.error("Error parsing stringified profile:", parseError);
+          logger.error('Error parsing stringified profile', parseError, 'auth');
         }
       }
-      
-      console.log("Parsed phone check result:", result);
+
+      logger.debug('Parsed phone check result', 'auth', { exists: result.exists });
       return result;
     } catch (error) {
-      console.error("Error checking phone:", error);
+      logger.error('Error checking phone', error, 'auth');
       return { exists: false };
     }
   };
@@ -227,7 +228,7 @@ const PhoneEntryScreen: React.FC = () => {
       await proceedWithOTP(formattedPhone);
       
     } catch (error) {
-      console.error("Error in handleContinue:", error);
+      logger.error('Error in handleContinue', error, 'auth');
       Alert.alert(
         "Error", 
         "Something went wrong. Please try again."
@@ -239,20 +240,20 @@ const PhoneEntryScreen: React.FC = () => {
   const proceedWithOTP = async (formattedPhone: string) => {
     try {
       setIsLoading(true);
-      
+
       // In KYC flow, we call a different endpoint to associate the phone with the current user
       if (isKycFlow) {
         await apiClient.post(API_PATHS.KYC.REQUEST_PHONE_CHANGE, {
           phone: formattedPhone,
         });
-        console.log("KYC phone change requested successfully");
+        logger.info('KYC phone change requested successfully', 'kyc');
       } else {
         // Original signup flow - same for both personal and business at this stage
         await apiClient.post(API_PATHS.AUTH.PHONE_SIGNIN, {
         phone: formattedPhone,
           channel: otpChannel
       });
-        console.log(`${isBusinessSignup ? 'Business' : 'Personal'} signup OTP requested successfully`);
+        logger.info(`${isBusinessSignup ? 'Business' : 'Personal'} signup OTP requested successfully`, 'auth');
       }
       
       // Navigate to verification screen with account type and isAddingAccount flag
@@ -266,7 +267,7 @@ const PhoneEntryScreen: React.FC = () => {
         isAddingAccount,
       });
     } catch (error: any) {
-      console.error("Error requesting OTP:", error);
+      logger.error('Error requesting OTP', error, 'auth');
 
       // Check for rate limit error (HTTP 429)
       if (error?.response?.status === 429) {

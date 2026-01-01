@@ -17,7 +17,10 @@
  * - Loading state conflicts during navigation
  * - Uncoordinated auth-to-app transitions
  * - Multiple loading indicators showing simultaneously
- *
+ */
+import logger from './logger';
+
+/**
  * Used by:
  * - AuthContext for login/logout transitions
  * - LoadingScreen for unified loading display
@@ -29,7 +32,6 @@
  * @since 2025-09-21
  */
 
-import logger from './logger';
 import { navigationStateManager } from './NavigationStateManager';
 import { authStateMachine, AuthState } from './AuthStateMachine';
 
@@ -287,7 +289,7 @@ class LoadingOrchestrator {
                     authState !== AuthState.INITIALIZING &&
                     this.transitionPhase === TransitionPhase.NONE;
 
-    console.log('📊 [LoadingOrchestrator] canShowUI() check:', {
+    logger.trace("canShowUI() check", "navigation", {
       hasBlockingOperations,
       isTransitioning: navigationState.isTransitioning,
       authState,

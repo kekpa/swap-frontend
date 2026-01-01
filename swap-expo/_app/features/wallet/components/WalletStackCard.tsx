@@ -96,11 +96,13 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
     if (wallets && wallets.length > 0) {
       const primaryWallet = wallets.find(w => w?.isPrimary);
       const otherWallets = wallets.filter(w => w && !w.isPrimary);
-      
-      logger.debug('[WalletStackCard] 🔍 DEBUG WALLETS:', wallets.map(w => w ? `${w.currency_code}(${w.currency_symbol}${w.balance}) isPrimary: ${w.isPrimary}` : 'undefined').join(', '));
-      logger.debug('[WalletStackCard] 🔍 DEBUG PRIMARY WALLET:', primaryWallet ? `${primaryWallet.currency_code}(${primaryWallet.currency_symbol}${primaryWallet.balance})` : 'NONE FOUND');
-      logger.debug('[WalletStackCard] 🔍 DEBUG OTHER WALLETS:', otherWallets.map(w => w ? `${w.currency_code}(${w.currency_symbol}${w.balance})` : 'undefined').join(', '));
-      logger.debug('[WalletStackCard] 🔍 DEBUG SORTED ORDER:', [primaryWallet, ...otherWallets].filter(Boolean).map(w => w ? `${w.currency_code}(${w.currency_symbol}${w.balance})` : 'undefined').join(', '));
+
+      logger.trace('Debug wallets state', 'wallet', {
+        wallets: wallets.map(w => w ? `${w.currency_code}(${w.currency_symbol}${w.balance}) isPrimary: ${w.isPrimary}` : 'undefined'),
+        primary: primaryWallet ? `${primaryWallet.currency_code}(${primaryWallet.currency_symbol}${primaryWallet.balance})` : 'NONE FOUND',
+        others: otherWallets.map(w => w ? `${w.currency_code}(${w.currency_symbol}${w.balance})` : 'undefined'),
+        sortedOrder: [primaryWallet, ...otherWallets].filter(Boolean).map(w => w ? `${w.currency_code}(${w.currency_symbol}${w.balance})` : 'undefined'),
+      });
     }
   }, [wallets]);
   
@@ -126,13 +128,13 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
 
     // Listen for network state changes
     const unsubscribe = networkService.onNetworkStateChange((state) => {
-      logger.debug('[WalletStackCard] 🌐 Network state changed:', JSON.stringify(state));
+      logger.debug('Network state changed', 'wallet', { state });
       setIsOfflineMode(state.isOfflineMode);
-      
+
       if (state.isOfflineMode) {
-        logger.info('[WalletStackCard] 📱 OFFLINE MODE: Primary wallet switching will be local-only');
+        logger.info('OFFLINE MODE: Primary wallet switching will be local-only', 'wallet');
       } else {
-        logger.info('[WalletStackCard] 🌐 ONLINE MODE: Primary wallet switching will sync with server');
+        logger.info('ONLINE MODE: Primary wallet switching will sync with server', 'wallet');
       }
     });
 
@@ -146,23 +148,23 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
   const sortedWallets = useMemo(() => {
     // Use the wallets prop directly - it's now optimistically updated by TanStack Query
     const walletsToSort = wallets;
-    
+
     // DEBUG: Log wallet primary status
-    console.log('[WalletStackCard] 🔍 DEBUG WALLETS:', walletsToSort.map(w => 
+    logger.trace('DEBUG WALLETS', 'data', { wallets: walletsToSort.map(w =>
       `${w.currency_code}(${w.currency_symbol}${w.balance}) isPrimary: ${w.isPrimary}`
-    ).join(', '));
-    
+    ).join(', ') });
+
     // Find the wallet marked as primary
     const primary = walletsToSort.find(wallet => wallet.isPrimary);
     const others = walletsToSort.filter(wallet => !wallet.isPrimary);
-    
-    console.log('[WalletStackCard] 🔍 DEBUG PRIMARY WALLET:', primary ? `${primary.currency_code}(${primary.currency_symbol}${primary.balance})` : 'NONE FOUND');
-    console.log('[WalletStackCard] 🔍 DEBUG OTHER WALLETS:', others.map(w => `${w.currency_code}(${w.currency_symbol}${w.balance})`).join(', '));
-    
+
+    logger.trace('DEBUG PRIMARY WALLET', 'data', { primary: primary ? `${primary.currency_code}(${primary.currency_symbol}${primary.balance})` : 'NONE FOUND' });
+    logger.trace('DEBUG OTHER WALLETS', 'data', { others: others.map(w => `${w.currency_code}(${w.currency_symbol}${w.balance})`).join(', ') });
+
     // Primary wallet should be first (top when collapsed, bottom when expanded)
     const sorted = primary ? [primary, ...others] : walletsToSort;
-    console.log('[WalletStackCard] 🔍 DEBUG SORTED ORDER:', sorted.map(w => `${w.currency_code}(${w.currency_symbol}${w.balance})`).join(', '));
-    
+    logger.trace('DEBUG SORTED ORDER', 'data', { sorted: sorted.map(w => `${w.currency_code}(${w.currency_symbol}${w.balance})`).join(', ') });
+
     return sorted;
   }, [wallets]);
 
@@ -171,7 +173,7 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
 
   // Initialize animated values for new cards and animate position changes
   useEffect(() => {
-    console.log('[WalletStackCard] 🔄 useEffect ANIMATION START', {
+    logger.trace('useEffect ANIMATION START', 'data', {
       sortedWalletsCount: sortedWallets.length,
       sortedWalletIds: sortedWallets.map(w => w.wallet_id),
       existingAnimationsCount: cardAnimations.current.size,
@@ -182,10 +184,10 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
 
     sortedWallets.forEach((wallet, index) => {
       if (!cardAnimations.current.has(wallet.wallet_id)) {
-        console.log('[WalletStackCard] ➕ CREATING animation for:', wallet.wallet_id, 'at index', index);
+        logger.trace('CREATING animation', 'data', { walletId: wallet.wallet_id, index });
         cardAnimations.current.set(wallet.wallet_id, new Animated.Value(index));
       } else {
-        console.log('[WalletStackCard] 🔄 ANIMATING existing card:', wallet.wallet_id, 'to index', index);
+        logger.trace('ANIMATING existing card', 'data', { walletId: wallet.wallet_id, index });
         const currentAnimation = cardAnimations.current.get(wallet.wallet_id)!;
         const staggerDelay = index * 50; // 50ms stagger between cards
 
@@ -202,7 +204,7 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
 
     // Start all animations
     if (animations.length > 0) {
-      console.log('[WalletStackCard] ▶️ STARTING', animations.length, 'animations');
+      logger.trace('STARTING animations', 'data', { count: animations.length });
       Animated.parallel(animations).start();
     }
 
@@ -210,12 +212,12 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
     const currentWalletIds = new Set(sortedWallets.map(wallet => wallet.wallet_id));
     for (const [walletId] of cardAnimations.current.entries()) {
       if (!currentWalletIds.has(walletId)) {
-        console.log('[WalletStackCard] 🗑️ REMOVING animation for deleted wallet:', walletId);
+        logger.trace('REMOVING animation for deleted wallet', 'data', { walletId });
         cardAnimations.current.delete(walletId);
       }
     }
 
-    console.log('[WalletStackCard] 🔄 useEffect ANIMATION END', {
+    logger.trace('useEffect ANIMATION END', 'data', {
       finalAnimationsCount: cardAnimations.current.size,
       finalAnimationKeys: Array.from(cardAnimations.current.keys()),
     });
@@ -224,7 +226,7 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
   // Define all callback functions AFTER all other hooks
   const toggleExpansion = useCallback(() => {
     const newExpanded = !isExpanded;
-    console.log('[WalletStackCard] 🔄 TOGGLE EXPANSION', {
+    logger.trace('TOGGLE EXPANSION', 'data', {
       currentState: isExpanded,
       newState: newExpanded,
       cardAnimationsSize: cardAnimations.current.size,
@@ -293,12 +295,12 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
       try {
         if (isOfflineMode) {
           // OFFLINE MODE: Only do local optimistic update
-          logger.info(`[WalletStackCard] 📱 OFFLINE MODE: Primary wallet set to ${wallet.currency_code} (local only)`);
+          logger.info(`OFFLINE MODE: Primary wallet set to ${wallet.currency_code} (local only)`, 'wallet');
           // Keep optimistic state - will sync when online
           // TODO: Queue for background sync when network returns
         } else {
           // ONLINE MODE: Call backend API
-          logger.info(`[WalletStackCard] 🌐 ONLINE MODE: Syncing primary wallet ${wallet.currency_code} with server`);
+          logger.info(`ONLINE MODE: Syncing primary wallet ${wallet.currency_code} with server`, 'wallet');
         await onWalletSelect(wallet);
         // Backend succeeded - keep optimistic state until backend data arrives
         // The useEffect will clear it when backend confirms
@@ -306,14 +308,14 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
       } catch (error: any) {
         // Handle different types of errors gracefully
         if (error?.response?.status === 404) {
-          logger.info(`[WalletStackCard] Wallet API not implemented yet, using local-only update for ${wallet.currency_code}`);
+          logger.info(`Wallet API not implemented yet, using local-only update for ${wallet.currency_code}`, 'wallet');
           // For 404, keep the optimistic state since it's just a missing endpoint
         } else if (isOfflineMode) {
           // In offline mode, errors are expected - keep optimistic state
-          logger.info(`[WalletStackCard] 📱 OFFLINE MODE: API call failed as expected, keeping local update for ${wallet.currency_code}`);
+          logger.info(`OFFLINE MODE: API call failed as expected, keeping local update for ${wallet.currency_code}`, 'wallet');
         } else {
           // For other errors in online mode, revert optimistic state
-          logger.warn('[WalletStackCard] Failed to update primary wallet:', error);
+          logger.warn('Failed to update primary wallet', 'wallet', { error });
         // REMOVED: Rollback is handled by the mutation's onError
         // setOptimisticPrimaryId(null);
         }
@@ -372,14 +374,14 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
   // Handler for currency selection - creates new wallet
   const handleCurrencySelect = useCallback(async (currency: AvailableCurrency) => {
     if (!authContext?.user?.entityId) {
-      logger.error('[WalletStackCard] Cannot create wallet: no entityId');
+      logger.error('Cannot create wallet: no entityId', null, 'wallet');
       return;
     }
 
     // Get account_id from the first wallet (all wallets share the same account)
     const accountId = wallets[0]?.account_id;
     if (!accountId) {
-      logger.error('[WalletStackCard] Cannot create wallet: no accountId');
+      logger.error('Cannot create wallet: no accountId', null, 'wallet');
       return;
     }
 
@@ -387,7 +389,7 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
     setPendingWallet({ currency, isLoading: true });
     setShowCurrencySheet(false); // Close modal - placeholder shows loading state
 
-    logger.info(`[WalletStackCard] 🆕 Creating ${currency.code} wallet...`);
+    logger.info(`Creating ${currency.code} wallet...`, 'wallet');
 
     try {
       await createWalletMutation.mutateAsync({
@@ -396,11 +398,11 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
         entityId: authContext.user.entityId,
       });
 
-      logger.info(`[WalletStackCard] ✅ ${currency.code} wallet created successfully`);
+      logger.info(`${currency.code} wallet created successfully`, 'wallet');
       // Clear placeholder - real wallet now in list via TanStack Query cache update
       setPendingWallet(null);
     } catch (error) {
-      logger.error(`[WalletStackCard] ❌ Failed to create ${currency.code} wallet:`, error);
+      logger.error(`Failed to create ${currency.code} wallet`, error, 'wallet');
       // Clear placeholder on error
       setPendingWallet(null);
       // Re-open sheet so user can try again
@@ -414,7 +416,7 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
    */
   const handleDeleteWallet = useCallback(async (wallet: WalletBalance) => {
     if (!authContext?.user?.entityId) {
-      logger.error('[WalletStackCard] Cannot delete wallet: no entityId');
+      logger.error('Cannot delete wallet: no entityId', null, 'wallet');
       return;
     }
 
@@ -434,16 +436,16 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
           text: 'Remove',
           style: 'destructive',
           onPress: async () => {
-            logger.info(`[WalletStackCard] 🗑️ Removing ${wallet.currency_code} wallet...`);
+            logger.info(`Removing ${wallet.currency_code} wallet...`, 'wallet');
 
             try {
               await deactivateWalletMutation.mutateAsync({
                 walletId: wallet.wallet_id,
                 entityId: authContext.user!.entityId,
               });
-              logger.info(`[WalletStackCard] ✅ ${wallet.currency_code} wallet removed successfully`);
+              logger.info(`${wallet.currency_code} wallet removed successfully`, 'wallet');
             } catch (error: any) {
-              logger.error(`[WalletStackCard] ❌ Failed to remove ${wallet.currency_code} wallet:`, error);
+              logger.error(`Failed to remove ${wallet.currency_code} wallet`, error, 'wallet');
 
               // Show user-friendly error message
               const errorMessage = error?.response?.data?.message || error?.message || 'Please try again.';
@@ -610,7 +612,7 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
   );
 
   if (safeWallets.length === 0) {
-    logger.warn('[WalletStackCard] No valid wallets found after safety filtering');
+    logger.warn('No valid wallets found after safety filtering', 'wallet');
     return <WalletCardSkeleton />;
   }
 
@@ -657,26 +659,15 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
         }
       ]}>
         {/* Render all wallet cards with smooth position transitions */}
-        {(() => {
-          console.log('[WalletStackCard] 🎬 RENDER WALLET CARDS', {
-            safeWalletsCount: safeWallets.length,
-            isExpanded,
-            cardAnimationsSize: cardAnimations.current.size,
-            cardAnimationsKeys: Array.from(cardAnimations.current.keys()),
-          });
-          return null;
-        })()}
         {safeWallets.map((wallet, targetIndex) => {
             // FIX: Initialize animation synchronously if not exists (fixes timing issue)
             if (!cardAnimations.current.has(wallet.wallet_id)) {
-              console.log('[WalletStackCard] ⚡ SYNC INIT animation for:', wallet.wallet_id, 'at index', targetIndex);
+              logger.trace(`Sync init animation at index ${targetIndex}`, 'wallet', { walletId: wallet.wallet_id });
               cardAnimations.current.set(wallet.wallet_id, new Animated.Value(targetIndex));
             }
 
             const isPrimaryCard = targetIndex === 0; // Primary is always first (index 0)
             const positionAnimation = cardAnimations.current.get(wallet.wallet_id)!;
-
-            console.log('[WalletStackCard] 🎴 RENDERING CARD:', wallet.wallet_id, 'at index', targetIndex, 'isPrimary:', isPrimaryCard);
 
             // CARDS-BEHIND Animation:
             // - Primary (index 0): Stays at base, slides DOWN when expanded

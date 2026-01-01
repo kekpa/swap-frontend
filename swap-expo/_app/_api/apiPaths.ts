@@ -226,6 +226,26 @@ export const SEARCH_PATHS = {
 };
 
 /**
+ * Rosca (Sol) endpoints - Pool-based savings system
+ */
+export const ROSCA_PATHS = {
+  // Pools
+  POOLS: '/rosca/pools',
+  POOL_DETAILS: (poolId: string) => `/rosca/pools/${poolId}`,
+
+  // Enrollments
+  ENROLLMENTS: '/rosca/enrollments',
+  ENROLLMENT_DETAILS: (enrollmentId: string) => `/rosca/enrollments/${enrollmentId}`,
+
+  // Payments
+  PAYMENTS: '/rosca/payments',
+  ENROLLMENT_PAYMENTS: (enrollmentId: string) => `/rosca/enrollments/${enrollmentId}/payments`,
+
+  // Friends in pool
+  ENROLLMENT_FRIENDS: (enrollmentId: string) => `/rosca/enrollments/${enrollmentId}/friends`,
+};
+
+/**
  * Combined export of all API paths
  */
 export const API_PATHS = {
@@ -234,7 +254,7 @@ export const API_PATHS = {
   KYC: KYC_PATHS,
   REFERENCE_DATA: REFERENCE_DATA_PATHS,
   ACCOUNT: ACCOUNT_PATHS,
-  WALLET: WALLET_PATHS, // NEW: Wallet endpoints
+  WALLET: WALLET_PATHS,
   TRANSACTION: TRANSACTION_PATHS,
   INTERACTION: INTERACTION_PATHS,
   MESSAGE: MESSAGE_PATHS,
@@ -242,6 +262,7 @@ export const API_PATHS = {
   NOTIFICATION: NOTIFICATION_PATHS,
   ENTITIES: ENTITY_PATHS,
   SEARCH: SEARCH_PATHS,
+  ROSCA: ROSCA_PATHS,
 };
 
 export default API_PATHS; 

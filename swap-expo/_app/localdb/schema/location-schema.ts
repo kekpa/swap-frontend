@@ -1,6 +1,7 @@
 // Created: SQLite schema for location data - 2025-01-09
 
 import { SQLiteDatabase } from 'expo-sqlite';
+import logger from '../../utils/logger';
 
 /**
  * Initialize location related tables in SQLite database
@@ -36,9 +37,9 @@ export async function initializeLocationSchema(db: SQLiteDatabase): Promise<void
       ON locations(name);
     `);
     
-    console.log('[Database] Location schema initialized successfully');
+    logger.debug("Location schema initialized successfully", "data");
   } catch (error) {
-    console.error('[Database] Failed to initialize location schema:', error);
+    logger.error("Failed to initialize location schema", error, "data");
     throw error;
   }
 } 

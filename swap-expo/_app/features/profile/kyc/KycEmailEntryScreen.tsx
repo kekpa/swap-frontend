@@ -21,6 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import apiClient from '../../../_api/apiClient';
 import { API_PATHS } from '../../../_api/apiPaths';
 import { useAuthContext } from '../../../features/auth/context/AuthContext';
+import logger from '../../../utils/logger';
 
 type KycEmailEntryRouteProp = RouteProp<ProfileStackParamList, 'KycEmailEntry'>;
 type KycEmailEntryNavigationProp = StackNavigationProp<ProfileStackParamList, 'KycEmailEntry'>;
@@ -60,9 +61,9 @@ const KycEmailEntryScreen = () => {
     try {
       // Here you might call an endpoint to check if the email is already in use
       // or to pre-register it in the KYC flow. For now, we'll just navigate.
-      console.log(`[KycEmailEntryScreen] Email entered: ${email}. Navigating to verification.`);
+      logger.debug("Email entered, navigating to verification", "navigation", { email });
 
-      // We don't need to explicitly update the email here. 
+      // We don't need to explicitly update the email here.
       // The verification process itself should handle updating the user's email on the backend.
 
       navigation.navigate('VerificationCode', {
@@ -73,7 +74,7 @@ const KycEmailEntryScreen = () => {
       });
 
     } catch (err: any) {
-      console.error("[KycEmailEntryScreen] Error:", err);
+      logger.error("Error during email entry", err, "app");
       Alert.alert("Error", "An unexpected error occurred. Please try again.");
     } finally {
       setIsLoading(false);

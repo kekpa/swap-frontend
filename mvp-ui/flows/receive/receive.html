@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ht">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resevwa (Receive) - Moto-Taxi + Sòl App</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #f8fafc;
+            min-width: 900px;
+        }
+        .container-wide { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+        .device-frame {
+            width: 350px; height: 750px; border-radius: 36px;
+            border: 10px solid #111827; overflow: hidden; position: relative;
+            margin: 10px; display: inline-block;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2); background-color: #F9FAFB;
+        }
+        .device-content {
+            height: 100%; overflow-y: auto; position: relative;
+            -ms-overflow-style: none; scrollbar-width: none;
+        }
+        .device-content::-webkit-scrollbar { display: none; }
+        .bg-brand-black { background-color: #111827; }
+        .bg-brand-gold { background-color: #F59E0B; }
+        .text-brand-black { color: #111827; }
+        .text-brand-gold { color: #F59E0B; }
+        .back-link {
+            display: inline-block; margin: 20px 0; color: #111827;
+            font-weight: 600; text-decoration: none;
+        }
+        .back-link:hover { color: #F59E0B; }
+        .screen-label {
+            text-align: center; font-size: 12px; color: #6b7280;
+            margin-top: 8px; font-weight: 500;
+        }
+        /* QR Code placeholder */
+        .qr-code {
+            width: 200px; height: 200px; background: white;
+            border-radius: 16px; padding: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto;
+        }
+        .qr-pattern {
+            width: 100%; height: 100%;
+            background:
+                linear-gradient(90deg, #111827 25%, transparent 25%, transparent 75%, #111827 75%),
+                linear-gradient(#111827 25%, transparent 25%, transparent 75%, #111827 75%),
+                linear-gradient(90deg, transparent 33%, #111827 33%, #111827 67%, transparent 67%),
+                linear-gradient(transparent 33%, #111827 33%, #111827 67%, transparent 67%);
+            background-size: 20px 20px;
+            border-radius: 8px;
+        }
+        /* Keypad */
+        .keypad-btn {
+            width: 70px; height: 56px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; font-weight: 500;
+            background: white; border: 1px solid #e5e7eb; margin: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-wide">
+        <a href="../../design.html" class="back-link">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+            Retounen nan Design System
+        </a>
+
+        <h1 class="text-3xl font-bold mb-2 text-center text-brand-black">Resevwa (Receive Money)</h1>
+        <p class="text-center text-gray-500 mb-6">2 screens: QR Code → Request Amount</p>
+
+        <div class="flex flex-wrap justify-center">
+
+            <!-- Screen 1: Receive QR -->
+            <div>
+                <div class="device-frame">
+                    <div class="device-content">
+                        <div class="bg-brand-black text-white px-5 py-2 flex justify-between items-center text-xs">
+                            <span>9:41</span>
+                            <span>100%</span>
+                        </div>
+
+                        <div class="px-5 pt-4 pb-6">
+                            <!-- Header -->
+                            <div class="flex items-center mb-6">
+                                <button class="mr-3">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                    </svg>
+                                </button>
+                                <h1 class="text-xl font-bold">Resevwa Lajan</h1>
+                            </div>
+
+                            <!-- User Info -->
+                            <div class="text-center mb-6">
+                                <div class="w-16 h-16 rounded-full bg-brand-gold flex items-center justify-center text-white font-bold text-xl mx-auto mb-2">JP</div>
+                                <p class="font-bold text-brand-black">Jean-Pierre</p>
+                                <p class="text-gray-500 text-sm">+509 3456 7890</p>
+                            </div>
+
+                            <!-- QR Code -->
+                            <div class="qr-code mb-4">
+                                <div class="qr-pattern"></div>
+                            </div>
+
+                            <p class="text-center text-gray-500 text-sm mb-6">
+                                Moun nan ka eskane kòd la pou voye lajan ba ou
+                            </p>
+
+                            <!-- Actions -->
+                            <div class="space-y-3">
+                                <button class="w-full bg-gray-100 text-brand-black font-semibold py-4 rounded-xl flex items-center justify-center">
+                                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+                                    </svg>
+                                    Pataje Kòd QR
+                                </button>
+
+                                <button class="w-full bg-brand-gold text-white font-semibold py-4 rounded-xl">
+                                    Mande yon Montan Espesifik
+                                </button>
+                            </div>
+
+                            <!-- Copy Link -->
+                            <div class="mt-6 bg-gray-50 rounded-xl p-4">
+                                <p class="text-xs text-gray-500 mb-2">Lyen peman</p>
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm font-mono text-gray-700 truncate">pay.swap.ht/jp-2024</span>
+                                    <button class="text-brand-gold text-sm font-medium ml-2">Kopye</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">1. Receive QR</p>
+            </div>
+
+            <!-- Screen 2: Request Specific Amount -->
+            <div>
+                <div class="device-frame">
+                    <div class="device-content">
+                        <div class="bg-brand-black text-white px-5 py-2 flex justify-between items-center text-xs">
+                            <span>9:41</span>
+                            <span>100%</span>
+                        </div>
+
+                        <div class="px-5 pt-4 pb-6">
+                            <!-- Header -->
+                            <div class="flex items-center mb-6">
+                                <button class="mr-3">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                                    </svg>
+                                </button>
+                                <h1 class="text-xl font-bold">Mande Lajan</h1>
+                            </div>
+
+                            <!-- Amount Display -->
+                            <div class="text-center mb-4">
+                                <p class="text-gray-500 text-sm mb-2">Montan</p>
+                                <div class="flex items-center justify-center">
+                                    <span class="text-4xl font-bold text-brand-black">G 250</span>
+                                </div>
+                                <p class="text-gray-400 text-sm mt-1">= $1.87 USD</p>
+                            </div>
+
+                            <!-- Quick Amounts -->
+                            <div class="flex justify-center gap-2 mb-4">
+                                <button class="px-4 py-2 bg-gray-100 rounded-full text-sm font-medium">G 100</button>
+                                <button class="px-4 py-2 bg-brand-gold text-white rounded-full text-sm font-medium">G 250</button>
+                                <button class="px-4 py-2 bg-gray-100 rounded-full text-sm font-medium">G 500</button>
+                                <button class="px-4 py-2 bg-gray-100 rounded-full text-sm font-medium">G 1000</button>
+                            </div>
+
+                            <!-- Note input -->
+                            <div class="mb-4">
+                                <input type="text" placeholder="Ajoute yon nòt (opsyonèl)" class="w-full bg-gray-100 rounded-xl px-4 py-3 text-sm outline-none text-center">
+                            </div>
+
+                            <!-- Keypad -->
+                            <div class="flex flex-col items-center mb-4">
+                                <div class="flex">
+                                    <button class="keypad-btn">1</button>
+                                    <button class="keypad-btn">2</button>
+                                    <button class="keypad-btn">3</button>
+                                </div>
+                                <div class="flex">
+                                    <button class="keypad-btn">4</button>
+                                    <button class="keypad-btn">5</button>
+                                    <button class="keypad-btn">6</button>
+                                </div>
+                                <div class="flex">
+                                    <button class="keypad-btn">7</button>
+                                    <button class="keypad-btn">8</button>
+                                    <button class="keypad-btn">9</button>
+                                </div>
+                                <div class="flex">
+                                    <button class="keypad-btn text-gray-400">.</button>
+                                    <button class="keypad-btn">0</button>
+                                    <button class="keypad-btn">
+                                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 001.414.586H19a2 2 0 002-2V7a2 2 0 00-2-2h-8.172a2 2 0 00-1.414.586L3 12z"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Generate Request Button -->
+                            <button class="w-full bg-brand-gold text-white font-semibold py-4 rounded-xl">
+                                Kreye Demann
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <p class="screen-label">2. Request Amount</p>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>

@@ -20,6 +20,7 @@ import { useTransactionLimits, formatLimit } from '../../hooks-data/useTransacti
 import QuickActionsRow from './components/QuickActionsRow';
 import DiscoveryCard from './components/DiscoveryCard';
 import DiscoveryCardsSlider, { DiscoveryCardData } from './components/DiscoveryCardsSlider';
+import logger from '../../utils/logger';
 
 // Header content height: profile pic (40) + padding (6 bottom + 4 top) + spacing buffer (8)
 const HEADER_CONTENT_HEIGHT = 58;
@@ -52,7 +53,7 @@ export default function HomeScreen() {
   const primaryCurrency = primaryWallet?.currency_code || 'USD';
 
   const handleSearch = (query: string) => {
-    console.log('Search:', query);
+    logger.debug("Search", "navigation", { query });
   };
 
   // Search handlers
@@ -86,7 +87,7 @@ export default function HomeScreen() {
   // Get header initials for avatar
   const getHeaderInitials = () => {
     // DEBUG: Log user data when getting initials
-    console.log('🏠 [HomeScreen] getHeaderInitials called, user:', {
+    logger.trace("getHeaderInitials called", "data", {
       entityId: user?.entityId,
       profileId: user?.profileId,
       firstName: user?.firstName,
@@ -120,7 +121,7 @@ export default function HomeScreen() {
 
   const handleProfilePress = () => {
     const source = 'Home';
-    console.log(`[HomeScreen] Navigating to ProfileModal, sourceRoute: ${source}`);
+    logger.debug("Navigating to ProfileModal", "navigation", { sourceRoute: source });
     (navigation as any).navigate("ProfileModal", { sourceRoute: source });
   };
 

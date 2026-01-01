@@ -69,7 +69,7 @@ export const storeProfilePinData = async (
   data: ProfilePinData
 ): Promise<void> => {
   try {
-    console.log('💾 [PIN Storage] storeProfilePinData called:', {
+    logger.debug('storeProfilePinData called', 'auth', {
       profileId,
       displayName: data.displayName,
       profileType: data.profileType,
@@ -96,15 +96,12 @@ export const storeProfilePinData = async (
       await SecureStore.setItemAsync(PROFILE_PIN_DATA_KEY, JSON.stringify(existingData));
     }
 
-    console.log('✅ [PIN Storage] Profile PIN data stored successfully:', {
+    logger.info('Profile PIN data stored successfully', 'auth', {
       profileId,
       totalProfiles: Object.keys(existingData).length,
     });
-
-    logger.debug('[PIN Storage] Stored profile PIN data', { profileId, profileType: data.profileType });
   } catch (error) {
-    console.error('❌ [PIN Storage] Failed to store profile PIN data:', error);
-    logger.error('[PIN Storage] Failed to store profile PIN data:', error);
+    logger.error('Failed to store profile PIN data', error, 'auth');
     throw error;
   }
 };
@@ -123,42 +120,29 @@ export const getProfilePinData = async (
     const lastActiveId = await getLastActiveProfileId();
     const targetProfileId = profileId || lastActiveId;
 
-    console.log('🔍 [PIN Storage] getProfilePinData called:', {
+    logger.debug('getProfilePinData called', 'auth', {
       requestedProfileId: profileId,
       lastActiveProfileId: lastActiveId,
       usingProfileId: targetProfileId,
     });
 
     if (!targetProfileId) {
-      console.log('❌ [PIN Storage] No profile ID or last active profile found');
-      logger.debug('[PIN Storage] No profile ID or last active profile found');
+      logger.debug('No profile ID or last active profile found', 'auth');
       return null;
     }
 
     const allData = await getAllProfilePinData();
     const data = allData[targetProfileId] || null;
 
-    console.log('🔍 [PIN Storage] Retrieved profile PIN data:', {
+    logger.debug('Retrieved profile PIN data', 'auth', {
       profileId: targetProfileId,
       found: !!data,
       allStoredProfiles: Object.keys(allData),
-      dataPreview: data ? {
-        displayName: data.displayName,
-        profileType: data.profileType,
-        identifier: data.identifier,
-        hasIdentifier: !!data.identifier,
-      } : null,
-    });
-
-    logger.debug('[PIN Storage] Retrieved profile PIN data', {
-      profileId: targetProfileId,
-      found: !!data
     });
 
     return data;
   } catch (error) {
-    console.error('❌ [PIN Storage] Failed to get profile PIN data:', error);
-    logger.error('[PIN Storage] Failed to get profile PIN data:', error);
+    logger.error('Failed to get profile PIN data', error, 'auth');
     return null;
   }
 };
@@ -207,16 +191,13 @@ export const setLastActiveProfile = async (profileId: string): Promise<void> => 
   try {
     if (profileId) {
       await SecureStore.setItemAsync(LAST_ACTIVE_PROFILE_KEY, profileId);
-      console.log('✅ [PIN Storage] Set last active profile:', { profileId });
-      logger.debug('[PIN Storage] Set last active profile', { profileId });
+      logger.debug('Set last active profile', 'auth', { profileId });
     } else {
       await SecureStore.deleteItemAsync(LAST_ACTIVE_PROFILE_KEY);
-      console.log('🗑️ [PIN Storage] Cleared last active profile');
-      logger.debug('[PIN Storage] Cleared last active profile');
+      logger.debug('Cleared last active profile', 'auth');
     }
   } catch (error) {
-    console.error('❌ [PIN Storage] Failed to set last active profile:', error);
-    logger.error('[PIN Storage] Failed to set last active profile:', error);
+    logger.error('Failed to set last active profile', error, 'auth');
     throw error;
   }
 };
@@ -403,12 +384,10 @@ export const storePinForBiometric = async (
       requireAuthentication: false, // Store without auth, retrieve WITH auth
     });
 
-    logger.info('[PIN Storage] Stored PIN for biometric access', { profileId });
-    console.log('🔐 [PIN Storage] PIN stored for biometric access:', { profileId });
+    logger.info('Stored PIN for biometric access', 'auth', { profileId });
     return true;
   } catch (error) {
-    logger.error('[PIN Storage] Failed to store PIN for biometric:', error);
-    console.error('❌ [PIN Storage] Failed to store PIN for biometric:', error);
+    logger.error('Failed to store PIN for biometric', error, 'auth');
     return false;
   }
 };
@@ -439,22 +418,18 @@ export const getPinWithBiometric = async (
     });
 
     if (pin) {
-      logger.info('[PIN Storage] Retrieved PIN via biometric', { profileId });
-      console.log('✅ [PIN Storage] PIN retrieved via biometric:', { profileId });
+      logger.info('Retrieved PIN via biometric', 'auth', { profileId });
     } else {
-      logger.debug('[PIN Storage] No PIN stored for biometric', { profileId });
-      console.log('ℹ️ [PIN Storage] No PIN stored for biometric:', { profileId });
+      logger.debug('No PIN stored for biometric', 'auth', { profileId });
     }
 
     return pin;
   } catch (error: any) {
     // User cancelled biometric or biometric failed
     if (error.message?.includes('cancel') || error.message?.includes('authentication')) {
-      logger.debug('[PIN Storage] Biometric cancelled or failed', { profileId });
-      console.log('🚫 [PIN Storage] Biometric cancelled or failed:', { profileId });
+      logger.debug('Biometric cancelled or failed', 'auth', { profileId });
     } else {
-      logger.error('[PIN Storage] Failed to retrieve PIN with biometric:', error);
-      console.error('❌ [PIN Storage] Failed to retrieve PIN with biometric:', error);
+      logger.error('Failed to retrieve PIN with biometric', error, 'auth');
     }
     return null;
   }
@@ -496,8 +471,7 @@ export const clearPinForBiometric = async (profileId: string): Promise<void> => 
     await SecureStore.deleteItemAsync(key, {
       keychainService: 'swap-pin-biometric',
     });
-    logger.debug('[PIN Storage] Cleared PIN for biometric', { profileId });
-    console.log('🗑️ [PIN Storage] Cleared PIN for biometric:', { profileId });
+    logger.debug('Cleared PIN for biometric', 'auth', { profileId });
   } catch (error) {
     logger.error('[PIN Storage] Failed to clear biometric PIN:', error);
   }

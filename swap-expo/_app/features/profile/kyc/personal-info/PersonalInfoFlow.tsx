@@ -3,8 +3,8 @@
 // Updated: Added context-aware navigation for better UX when updating vs first-time KYC - 2025-01-26
 import React, { useState, useEffect } from 'react';
 import {
-  SafeAreaView, 
-  StatusBar, 
+  SafeAreaView,
+  StatusBar,
   StyleSheet,
   Platform, // Import Platform
   Alert, // Import Alert for error handling
@@ -15,6 +15,7 @@ import { ProfileStackParamList } from '../../../../navigation/profileNavigator';
 import { useTheme } from '../../../../theme/ThemeContext'; // Import useTheme
 import { usePersonalInfoLoad } from '../../../../hooks-actions/usePersonalInfoLoad'; // Import the new hook
 import { useKycCompletion } from '../../../../hooks-actions/useKycCompletion'; // Professional KYC completion system
+import logger from '../../../../utils/logger';
 
 import CountryOfResidence from './CountryOfResidence';
 import NameAsInId from './NameAsInId';
@@ -58,17 +59,17 @@ const PersonalInfoFlow: React.FC = () => {
   const sourceRoute = route.params?.sourceRoute;
   const returnToTimeline = route.params?.returnToTimeline;
 
-  console.log(`[PersonalInfoFlow] Mounted/Focused. sourceRoute: ${sourceRoute}, returnToTimeline: ${returnToTimeline}`);
+  logger.debug('Mounted/Focused', 'kyc', { sourceRoute, returnToTimeline });
 
   const [step, setStep] = useState<PersonalInfoStep>('country');
   const [personalInfo, setPersonalInfo] = useState<PersonalInfoData>({});
 
   // Initialize personalInfo with saved data when it loads
   useEffect(() => {
-    console.log('[PersonalInfoFlow] useEffect triggered - loading:', loading, 'savedPersonalInfo:', !!savedPersonalInfo);
+    logger.debug('useEffect triggered', 'kyc', { loading, hasSavedInfo: !!savedPersonalInfo });
     
     if (savedPersonalInfo && !loading) {
-      console.log('[PersonalInfoFlow] Raw saved personal info:', savedPersonalInfo);
+      logger.trace('Raw saved personal info', 'kyc', { savedPersonalInfo });
       
       // Convert saved format to PersonalInfoData format
       const convertedData: PersonalInfoData = {
@@ -95,14 +96,14 @@ const PersonalInfoFlow: React.FC = () => {
           // If address is a JSON string, parse it
           try {
             addressData = JSON.parse(savedPersonalInfo.address);
-            console.log('[PersonalInfoFlow] Parsed address JSON string:', addressData);
+            logger.trace('Parsed address JSON string', 'kyc', { addressData });
           } catch (error) {
-            console.error('[PersonalInfoFlow] Failed to parse address JSON:', error);
+            logger.error('Failed to parse address JSON', error, 'kyc');
           }
         } else {
           // If address is already an object, use it directly
           addressData = savedPersonalInfo.address;
-          console.log('[PersonalInfoFlow] Address is already an object:', addressData);
+          logger.trace('Address is already an object', 'kyc', { addressData });
         }
         
         if (addressData) {
@@ -118,13 +119,13 @@ const PersonalInfoFlow: React.FC = () => {
                      convertedData.birthDay || convertedData.addressLine1;
       
       if (hasData) {
-        console.log('[PersonalInfoFlow] Final converted data:', convertedData);
+        logger.debug('Final converted data', 'kyc', { convertedData });
         setPersonalInfo(convertedData);
       } else {
-        console.log('[PersonalInfoFlow] No meaningful data found, keeping current state');
+        logger.debug('No meaningful data found, keeping current state', 'kyc');
       }
     } else if (!loading && !savedPersonalInfo) {
-      console.log('[PersonalInfoFlow] No saved personal info found (new user)');
+      logger.debug('No saved personal info found (new user)', 'kyc');
     }
   }, [savedPersonalInfo, loading]);
 
@@ -148,7 +149,7 @@ const PersonalInfoFlow: React.FC = () => {
   );
 
   const handleBack = () => {
-    console.log(`[PersonalInfoFlow] handleBack from step: ${step}, returnToTimeline: ${returnToTimeline}`);
+    logger.debug('handleBack', 'kyc', { step, returnToTimeline });
     switch (step) {
       case 'name':
         setStep('country');
@@ -165,7 +166,7 @@ const PersonalInfoFlow: React.FC = () => {
       default: // 'country' or any other initial step
         // Always return to timeline when in KYC flow
         if (returnToTimeline) {
-          console.log(`[PersonalInfoFlow] Returning to VerifyYourIdentity timeline`);
+          logger.debug('Returning to VerifyYourIdentity timeline', 'kyc');
           navigation.navigate('VerifyYourIdentity', sourceRoute ? { sourceRoute } : undefined);
         } else {
           // Default back behavior for non-KYC usage
@@ -200,14 +201,14 @@ const PersonalInfoFlow: React.FC = () => {
       case 'review':
         // This should not be called directly for review step
         // handleReviewConfirm should be used instead
-        console.log(`[PersonalInfoFlow] Unexpected call to moveToNextStep from review`);
+        logger.warn('Unexpected call to moveToNextStep from review', 'kyc');
         break;
     }
   };
 
   const handleReviewConfirm = async () => {
     try {
-      console.log('[PersonalInfoFlow] 🎯 Using KYC completion hook for instant cache update');
+      logger.debug('Using KYC completion hook for instant cache update', 'kyc');
 
       // Prepare data for API
       const apiData = {
@@ -235,13 +236,13 @@ const PersonalInfoFlow: React.FC = () => {
       });
 
       if (result.success) {
-        console.log('[PersonalInfoFlow] ✅ Personal information saved with automatic cache invalidation');
+        logger.info('Personal information saved with automatic cache invalidation', 'kyc');
       } else {
         const errorMessage = result.error?.message || 'Failed to save personal information. Please try again.';
         Alert.alert('Error', errorMessage);
       }
     } catch (error) {
-      console.error('[PersonalInfoFlow] Error in handleReviewConfirm:', error);
+      logger.error('Error in handleReviewConfirm', error, 'kyc');
       Alert.alert('Error', 'An error occurred while saving personal information. Please try again.');
     }
   };

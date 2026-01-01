@@ -167,6 +167,24 @@ export interface ThemeColors {
     inProgress: string;     // Light blue background
     error: string;          // Light red background
   };
+
+  // Chat bubble colors
+  chatBubbleReceived: string;       // Background for received messages
+  chatBubbleSent: string;           // Background for sent messages
+  chatBubbleReceivedText: string;   // Text color for received messages
+  chatBubbleSentText: string;       // Text color for sent messages
+
+  // Surface colors
+  surfaceElevated: string;          // Slightly darker surface for elevated sections (e.g., quick actions bar)
+
+  // Chat-specific colors (status, business, time)
+  chatStatusDefault: string;        // #999 - pending/sent status icon
+  chatStatusDelivered: string;      // #4169e1 - delivered status (royal blue)
+  chatStatusFailed: string;         // #e74c3c - failed status (red)
+  chatBusinessAccent: string;       // #4CAF50 - business/verified green
+  chatBubbleBusiness: string;       // #0d3b66 - business bubble background
+  chatTimeText: string;             // Time text with opacity
+  chatDateLabel: string;            // #999 - date separator label
 }
 
 // Rest of the interfaces remain the same
@@ -357,6 +375,24 @@ const lightBaseColors: Partial<ThemeColors> = {
     inProgress: '#E3F2FD',  // Light blue background
     error: '#FFEBEE',       // Light red background
   },
+
+  // Chat bubble colors - Light mode: white received bubbles for contrast on gray bg
+  chatBubbleReceived: PALETTE.neutral.white,
+  chatBubbleSent: '', // Will be set to primary color per theme
+  chatBubbleReceivedText: PALETTE.neutral.gray900, // Dark text on white bubble
+  chatBubbleSentText: PALETTE.neutral.white, // White text on colored bubble
+
+  // Chat-specific colors (EXACT values from original hardcoded)
+  chatStatusDefault: '#999999',
+  chatStatusDelivered: '#4169e1',
+  chatStatusFailed: '#e74c3c',
+  chatBusinessAccent: '#4CAF50',
+  chatBubbleBusiness: '#0d3b66',
+  chatTimeText: 'rgba(0,0,0,0.5)',
+  chatDateLabel: '#999999',
+
+  // Surface colors
+  surfaceElevated: '#ECEEF1',       // Slightly darker than background for elevated sections
 };
 
 // Dark mode base colors (shared by all dark themes)
@@ -418,6 +454,24 @@ const darkBaseColors: Partial<ThemeColors> = {
     inProgress: '#1a2332',  // Dark blue background for dark theme
     error: '#331a1a',       // Dark red background for dark theme
   },
+
+  // Chat bubble colors - Dark mode: gray received bubbles on dark bg
+  chatBubbleReceived: PALETTE.neutral.gray700,
+  chatBubbleSent: '', // Will be set to primary color per theme
+  chatBubbleReceivedText: PALETTE.neutral.white, // White text on gray bubble
+  chatBubbleSentText: PALETTE.neutral.white, // White text on colored bubble
+
+  // Chat-specific colors (same as light, adjusted business bubble for dark mode)
+  chatStatusDefault: '#999999',
+  chatStatusDelivered: '#4169e1',
+  chatStatusFailed: '#e74c3c',
+  chatBusinessAccent: '#4CAF50',
+  chatBubbleBusiness: '#1a4a6e', // Slightly lighter for dark mode visibility
+  chatTimeText: 'rgba(255,255,255,0.6)',
+  chatDateLabel: '#999999',
+
+  // Surface colors
+  surfaceElevated: '#0D1117',       // Slightly darker than background for elevated sections
 };
 
 //=============================================================================
@@ -640,6 +694,7 @@ const violetThemeColors: ThemeColors = {
   secondary: PALETTE.secondary.indigo,
   secondaryDark: PALETTE.secondary.indigoDark,
   secondaryLight: PALETTE.secondary.indigoLight,
+  chatBubbleSent: PALETTE.primary.violet,
 };
 
 export const violetTheme: Theme = {
@@ -665,6 +720,7 @@ const darkVioletThemeColors: ThemeColors = {
   secondary: PALETTE.secondary.indigo,
   secondaryDark: PALETTE.secondary.indigoDark,
   secondaryLight: PALETTE.secondary.indigoLight,
+  chatBubbleSent: PALETTE.primary.violet,
 };
 
 export const darkVioletTheme: Theme = {
@@ -693,6 +749,7 @@ const oceanBlueThemeColors: ThemeColors = {
   secondary: PALETTE.secondary.indigo,
   secondaryDark: PALETTE.secondary.indigoDark,
   secondaryLight: PALETTE.secondary.indigoLight,
+  chatBubbleSent: PALETTE.primary.oceanBlue,
 };
 
 export const oceanBlueTheme: Theme = {
@@ -718,6 +775,7 @@ const darkOceanBlueThemeColors: ThemeColors = {
   secondary: PALETTE.secondary.indigo,
   secondaryDark: PALETTE.secondary.indigoDark,
   secondaryLight: PALETTE.secondary.indigoLight,
+  chatBubbleSent: PALETTE.primary.oceanBlue,
 };
 
 export const darkOceanBlueTheme: Theme = {
@@ -746,6 +804,7 @@ const greenThemeColors: ThemeColors = {
   secondary: PALETTE.secondary.indigo,
   secondaryDark: PALETTE.secondary.indigoDark,
   secondaryLight: PALETTE.secondary.indigoLight,
+  chatBubbleSent: PALETTE.primary.green,
 };
 
 export const greenTheme: Theme = {
@@ -771,6 +830,7 @@ const darkGreenThemeColors: ThemeColors = {
   secondary: PALETTE.secondary.indigo,
   secondaryDark: PALETTE.secondary.indigoDark,
   secondaryLight: PALETTE.secondary.indigoLight,
+  chatBubbleSent: PALETTE.primary.green,
 };
 
 export const darkGreenTheme: Theme = {
@@ -799,6 +859,7 @@ const amberThemeColors: ThemeColors = {
   secondary: PALETTE.secondary.indigo,
   secondaryDark: PALETTE.secondary.indigoDark,
   secondaryLight: PALETTE.secondary.indigoLight,
+  chatBubbleSent: PALETTE.primary.amber,
 };
 
 export const amberTheme: Theme = {
@@ -824,6 +885,7 @@ const darkAmberThemeColors: ThemeColors = {
   secondary: PALETTE.secondary.indigo,
   secondaryDark: PALETTE.secondary.indigoDark,
   secondaryLight: PALETTE.secondary.indigoLight,
+  chatBubbleSent: PALETTE.primary.amber,
 };
 
 export const darkAmberTheme: Theme = {

@@ -16,6 +16,7 @@ import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { useTheme } from '../theme/ThemeContext';
+import logger from '../utils/logger';
 
 interface UploadOptionsSheetProps {
   visible: boolean;
@@ -88,7 +89,7 @@ const UploadOptionsSheet: React.FC<UploadOptionsSheetProps> = ({
 
       bottomSheetRef.current?.close(); // Triggers smooth close animation
     } catch (error) {
-      console.error('[UploadOptionsSheet] Camera capture failed:', error);
+      logger.error("Camera capture failed", error, "app");
       Alert.alert('Error', 'Unable to access camera. Please try again.');
     }
   };
@@ -116,7 +117,7 @@ const UploadOptionsSheet: React.FC<UploadOptionsSheetProps> = ({
 
       bottomSheetRef.current?.close(); // Triggers smooth close animation
     } catch (error) {
-      console.error('[UploadOptionsSheet] Gallery pick failed:', error);
+      logger.error("Gallery pick failed", error, "app");
       Alert.alert('Error', 'Unable to access photo library. Please try again.');
     }
   };
@@ -137,7 +138,7 @@ const UploadOptionsSheet: React.FC<UploadOptionsSheetProps> = ({
 
       bottomSheetRef.current?.close(); // Triggers smooth close animation
     } catch (error) {
-      console.error('[UploadOptionsSheet] File pick failed:', error);
+      logger.error("File pick failed", error, "app");
       Alert.alert('Error', 'Unable to select file. Please try again.');
     }
   };

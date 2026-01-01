@@ -21,6 +21,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { ProfileStackParamList } from '../../../../navigation/profileNavigator';
 import { useTheme } from '../../../../theme/ThemeContext';
 import { useCountries } from '../../../../hooks-data/useCountries';
+import logger from '../../../../utils/logger';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -65,7 +66,7 @@ const BeneficialOwnerAddress: React.FC = () => {
         ...address,
         country,
       };
-      console.log('[BeneficialOwnerAddress] Saving address for owner:', ownerId, fullAddress);
+      logger.debug('Saving address for owner', 'kyc', { ownerId, fullAddress });
 
       // Return to owners list
       navigation.navigate('BeneficialOwnersList', {

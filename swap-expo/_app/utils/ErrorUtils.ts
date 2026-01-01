@@ -1,4 +1,5 @@
 // ErrorUtils.ts - Utility for handling errors in React Native
+import logger from './logger';
 
 /**
  * A simple wrapper around the React Native global ErrorUtils
@@ -13,16 +14,16 @@ interface RNErrorUtils {
 
 // Default handler just logs to console
 const defaultHandler = (error: Error, isFatal?: boolean) => {
-  console.error('[ErrorUtils] Unhandled error:', error);
-  
+  logger.error("Unhandled error", error, "app");
+
   // Log additional details for debugging
   if (isFatal) {
-    console.error('[ErrorUtils] This is a fatal error that could crash the app');
+    logger.error("This is a fatal error that could crash the app", null, "app");
   }
-  
+
   // In development, we want to see the full stack trace
   if (__DEV__) {
-    console.error('[ErrorUtils] Error stack:', error.stack);
+    logger.error("Error stack", error, "app", { stack: error.stack });
   }
 };
 

@@ -41,22 +41,14 @@ import { SendMessageRequest, MessageType, Message as ApiMessage, MessageStatus }
 import { TimelineItem, TimelineItemType as ImportedTimelineItemType, MessageTimelineItem, TransactionTimelineItem, DateSeparatorTimelineItem } from '../../types/timeline.types';
 import TransferCompletedScreen from './sendMoney2/TransferCompletedScreen';
 import { networkService } from '../../services/NetworkService';
-import { getTransactionStatusDisplay } from '../../utils/transactionStatusDisplay';
+import {
+  TransactionBubble as ThemedTransaction,
+  MessageBubble as ThemedMessageBubble,
+  DateSeparator as ThemedDateHeader,
+} from './components/TimelineActivity';
 
 // --- Type definitions ---
 type TimelineItemType = 'transaction' | 'message' | 'date';
-interface TransactionProps {
-  amount: string;
-  date: string;
-  time: string;
-  source: string;
-  type: 'sent' | 'received';
-  transactionId: string;
-  status?: string;
-  theme: Theme;
-  isFromCurrentUser: boolean;
-}
-interface MessageBubbleProps { content: string; time: string; isFromContact: boolean; theme: Theme; }
 
 interface TransferDetails {
   amount: number;
@@ -72,75 +64,8 @@ interface TransferDetails {
 type ContactTransactionHistoryRouteProp = RouteProp<{ ContactInteractionHistory2: { contactId: string; contactName: string; contactInitials: string; contactAvatarColor: string; silentErrorMode?: boolean; interactionId?: string; forceRefresh?: boolean; timestamp?: number; isGroup?: boolean; showTransferCompletedModal?: boolean; transferDetails?: TransferDetails; }; }, 'ContactInteractionHistory2'>;
 type NavigationProp = StackNavigationProp<InteractionsStackParamList, 'ContactInteractionHistory2'>;
 
-// --- Stylesheet functions defined globally ---
-const transactionStyles = (theme: Theme) => StyleSheet.create({
-  transactionContainer: {
-    marginBottom: theme.spacing.sm,
-    flexDirection: 'row',
-    paddingHorizontal: theme.spacing.sm, // 8px from screen edge
-  },
-  // Sent transaction: rounded corners except bottom-right (tail pointing to sender)
-  transactionBubble: {
-    borderTopLeftRadius: theme.borderRadius.lg,
-    borderTopRightRadius: theme.borderRadius.lg,
-    borderBottomLeftRadius: theme.borderRadius.lg,
-    borderBottomRightRadius: theme.borderRadius.xs, // 4px tail corner
-    padding: theme.spacing.sm,
-    minWidth: 160,  // Minimum width for readability
-    maxWidth: '65%',  // Max width relative to screen
-    borderWidth: 1,
-    backgroundColor: theme.colors.primaryUltraLight,
-    borderColor: theme.colors.primaryLight,
-    alignSelf: 'flex-end',
-  },
-  // Received transaction: rounded corners except bottom-left (tail pointing to contact)
-  receivedTransactionBubble: {
-    backgroundColor: theme.colors.grayUltraLight,
-    borderColor: theme.colors.border,
-    alignSelf: 'flex-start',
-    borderBottomRightRadius: theme.borderRadius.lg, // Restore rounded
-    borderBottomLeftRadius: theme.borderRadius.xs, // 4px tail corner
-  },
-  transactionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.xs },
-  transactionBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.primaryUltraLight, paddingVertical: 2, paddingHorizontal: theme.spacing.xs, borderRadius: theme.borderRadius.lg }, 
-  transactionBadgeText: { color: theme.colors.success, fontSize: theme.typography.fontSize.xs, fontWeight: '600', marginLeft: 2 },
-  transactionAmount: { fontSize: theme.typography.fontSize.xl, fontWeight: '700', color: theme.colors.primary, marginBottom: theme.spacing.xs },
-  receivedTransactionAmount: { color: theme.colors.textPrimary },
-  transactionDetails: { fontSize: theme.typography.fontSize.sm, color: theme.colors.textSecondary, marginBottom: theme.spacing.xs },
-  transactionStatus: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: theme.spacing.xs, gap: 12 },
-  transactionId: { fontSize: theme.typography.fontSize.xs, color: theme.colors.textTertiary, flex: 1 },
-  transactionTime: { fontSize: theme.typography.fontSize.xs, color: theme.colors.textTertiary, flexShrink: 0 },
-});
-const messageBubbleStyles = (theme: Theme) => StyleSheet.create({
-  messageContainer: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: theme.spacing.xs, paddingHorizontal: theme.spacing.sm }, // 8px from screen edge
-  receivedContainer: { justifyContent: 'flex-start' },
-  // Sent message: rounded corners except bottom-right (tail pointing to sender)
-  messageBubble: {
-    backgroundColor: theme.colors.primary,
-    borderTopLeftRadius: theme.borderRadius.lg,
-    borderTopRightRadius: theme.borderRadius.lg,
-    borderBottomLeftRadius: theme.borderRadius.lg,
-    borderBottomRightRadius: theme.borderRadius.xs, // 4px tail corner
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    maxWidth: '70%',
-  },
-  // Received message: rounded corners except bottom-left (tail pointing to contact)
-  receivedBubble: {
-    backgroundColor: theme.colors.grayUltraLight,
-    borderBottomRightRadius: theme.borderRadius.lg, // Restore rounded
-    borderBottomLeftRadius: theme.borderRadius.xs, // 4px tail corner
-  },
-  messageText: { color: theme.colors.white, fontSize: theme.typography.fontSize.md },
-  receivedMessageText: { color: theme.colors.textPrimary },
-  messageTime: { fontSize: theme.typography.fontSize.xs, color: theme.colors.primaryUltraLight, alignSelf: 'flex-end', marginTop: 2, opacity: 0.8 },
-  receivedMessageTime: { color: theme.colors.textTertiary, opacity: 0.8 },
-});
-const dateHeaderStyles = (theme: Theme) => StyleSheet.create({
-  dateHeaderContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: theme.spacing.sm },
-  dateHeaderLine: { flex: 1, height: 1, backgroundColor: theme.colors.divider },
-  dateHeaderText: { fontSize: theme.typography.fontSize.xs, color: theme.colors.textSecondary, marginHorizontal: theme.spacing.sm, fontWeight: '500' },
-});
+// Timeline activity components (TransactionBubble, MessageBubble, DateSeparator)
+// are now imported from ./components/TimelineActivity.tsx
 
 // Global styles function for the main screen
 const createGlobalStyles = (theme: Theme) => StyleSheet.create({
@@ -206,77 +131,6 @@ const createGlobalStyles = (theme: Theme) => StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.1)',
   },
 });
-
-// --- Sub-Components (Ensure these are defined before the main component or correctly imported) ---
-
-const ThemedTransaction: React.FC<TransactionProps & { onPress?: () => void }> = ({ amount, time, source, type, transactionId, status = 'Completed', theme, isFromCurrentUser, onPress }) => {
-  const componentStyles = useMemo(() => transactionStyles(theme), [theme]);
-
-  // Get status display properties from Saga-aware utility
-  const statusDisplay = useMemo(() => getTransactionStatusDisplay(status), [status]);
-
-  // Map color type to theme color
-  const statusColor = useMemo(() => {
-    switch (statusDisplay.color) {
-      case 'success': return theme.colors.success;
-      case 'error': return theme.colors.error;
-      case 'warning': return theme.colors.warning;
-      case 'info': return theme.colors.info;
-      default: return theme.colors.success;
-    }
-  }, [statusDisplay.color, theme]);
-
-  // Determine alignment based on isFromCurrentUser
-  const justifyContentStyle: { justifyContent: 'flex-start' | 'flex-end' } = isFromCurrentUser ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' };
-  const bubbleStyle = isFromCurrentUser ? componentStyles.transactionBubble : [componentStyles.transactionBubble, componentStyles.receivedTransactionBubble];
-  const amountStyle = isFromCurrentUser ? componentStyles.transactionAmount : [componentStyles.transactionAmount, componentStyles.receivedTransactionAmount];
-
-  return (
-    <View style={[componentStyles.transactionContainer, justifyContentStyle]}>
-      <TouchableOpacity style={bubbleStyle} onPress={onPress}>
-        <View style={componentStyles.transactionHeader}>
-          <View style={componentStyles.transactionBadge}>
-            {statusDisplay.isProcessing ? (
-              <ActivityIndicator size={12} color={statusColor} />
-            ) : (
-              <Ionicons name={statusDisplay.icon} size={14} color={statusColor} />
-            )}
-            <Text style={[componentStyles.transactionBadgeText, { color: statusColor }]}>{statusDisplay.label}</Text>
-          </View>
-        </View>
-        <Text style={amountStyle}>{isFromCurrentUser ? '-' : '+'}{amount}</Text>
-        {source && <Text style={componentStyles.transactionDetails}>"{source}"</Text>}
-        <View style={componentStyles.transactionStatus}>
-          <Text style={componentStyles.transactionId}>#{transactionId?.slice(0,8)}</Text>
-          <Text style={componentStyles.transactionTime}>{time}</Text>
-        </View>
-      </TouchableOpacity>
-    </View>
-  );
-};
-
-const ThemedMessageBubble: React.FC<MessageBubbleProps> = ({ content, time, isFromContact, theme }) => {
-  const componentStyles = useMemo(() => messageBubbleStyles(theme), [theme]);
-  return (
-    <View style={[componentStyles.messageContainer, isFromContact && componentStyles.receivedContainer]}>
-      <View style={[componentStyles.messageBubble, isFromContact && componentStyles.receivedBubble]}>
-        <Text style={[componentStyles.messageText, isFromContact && componentStyles.receivedMessageText]}>{content}</Text>
-        <Text style={[componentStyles.messageTime, isFromContact && componentStyles.receivedMessageTime]}>{time}</Text>
-      </View>
-    </View>
-  );
-};
-
-const ThemedDateHeader: React.FC<{ date: string, theme: Theme; }> = ({ date, theme }) => {
-  const componentStyles = useMemo(() => dateHeaderStyles(theme), [theme]);
-  return (
-    <View style={componentStyles.dateHeaderContainer}>
-      <View style={componentStyles.dateHeaderLine} />
-      <Text style={componentStyles.dateHeaderText}>{date}</Text>
-      <View style={componentStyles.dateHeaderLine} />
-    </View>
-  );
-};
 
 // --- Main Component ---
 const ContactTransactionHistoryScreen2: React.FC = () => {

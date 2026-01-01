@@ -23,6 +23,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { ProfileStackParamList } from '../../../../navigation/profileNavigator';
 import { useTheme } from '../../../../theme/ThemeContext';
 import apiClient from '../../../../_api/apiClient';
+import logger from '../../../../utils/logger';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -111,7 +112,7 @@ const TeamMemberForm: React.FC = () => {
         }));
       }
     } catch (error) {
-      console.log('[TeamMemberForm] Could not prefill from profile:', error);
+      logger.debug("Could not prefill from profile", "data", { error });
       // Not critical - user can fill manually
     }
   };
@@ -133,7 +134,7 @@ const TeamMemberForm: React.FC = () => {
         ownershipPercentage: member.ownershipPercentage?.toString() || '',
       });
     } catch (error) {
-      console.error('[TeamMemberForm] Failed to load member:', error);
+      logger.error("Failed to load member", error, "data");
       Alert.alert('Error', 'Failed to load team member information.');
     } finally {
       setIsLoading(false);
@@ -195,7 +196,7 @@ const TeamMemberForm: React.FC = () => {
         sourceRoute,
       });
     } catch (error: any) {
-      console.error('[TeamMemberForm] Save failed:', error);
+      logger.error("Save failed", error, "data");
       Alert.alert('Error', error.response?.data?.message || 'Failed to save. Please try again.');
     } finally {
       setIsSaving(false);

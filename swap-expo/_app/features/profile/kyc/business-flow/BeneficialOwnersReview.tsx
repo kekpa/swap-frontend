@@ -19,6 +19,7 @@ import { ProfileStackParamList } from '../../../../navigation/profileNavigator';
 import { useTheme } from '../../../../theme/ThemeContext';
 import apiClient from '../../../../_api/apiClient';
 import { useKycCompletion } from '../../../../hooks-actions/useKycCompletion';
+import logger from '../../../../utils/logger';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -65,7 +66,7 @@ const BeneficialOwnersReview: React.FC = () => {
     setIsLoading(true);
     try {
       const response = await apiClient.get('/kyc/beneficial-owners');
-      console.log('[BeneficialOwnersReview] API Response:', response);
+      logger.debug('API Response', 'kyc', { response: response.data });
 
       // Ensure ownersData is an array
       const ownersData = Array.isArray(response.data) ? response.data : [];
@@ -87,9 +88,9 @@ const BeneficialOwnersReview: React.FC = () => {
       }));
 
       setOwners(mappedOwners);
-      console.log('[BeneficialOwnersReview] Fetched owners:', mappedOwners.length);
+      logger.debug('Fetched owners', 'kyc', { count: mappedOwners.length });
     } catch (error) {
-      console.error('[BeneficialOwnersReview] Failed to fetch owners:', error);
+      logger.error('Failed to fetch owners', error, 'kyc');
       Alert.alert('Error', 'Failed to load beneficial owners. Please try again.');
     } finally {
       setIsLoading(false);
@@ -116,7 +117,7 @@ const BeneficialOwnersReview: React.FC = () => {
         showSuccessAlert: false,
       });
 
-      console.log('[BeneficialOwnersReview] KYC step completed: beneficial_owners');
+      logger.debug('KYC step completed: beneficial_owners', 'kyc');
 
       // Navigate back to business info flow
       navigation.navigate('BusinessInfoFlow', {
@@ -124,7 +125,7 @@ const BeneficialOwnersReview: React.FC = () => {
         sourceRoute,
       });
     } catch (error) {
-      console.error('[BeneficialOwnersReview] Failed to complete KYC step:', error);
+      logger.error('Failed to complete KYC step', error, 'kyc');
       Alert.alert('Error', 'Failed to save progress. Please try again.');
     } finally {
       setIsLoading(false);

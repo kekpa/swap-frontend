@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/ThemeContext';
 import { Theme } from '../../theme/theme';
+import logger from '../../utils/logger';
 
 // Activity Item Component - Props updated to accept theme
 interface ActivityItemProps {
@@ -108,7 +109,7 @@ const MyOffersScreen: React.FC = () => {
   
   const handleViewAllPress = () => {
     // Navigate to all activity history
-    console.log('View all activity pressed');
+    logger.debug("View all activity pressed", "navigation");
   };
   
   const handleSearch = (text: string) => {

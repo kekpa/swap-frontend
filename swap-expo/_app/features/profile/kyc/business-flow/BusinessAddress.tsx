@@ -23,6 +23,7 @@ import { ProfileStackParamList } from '../../../../navigation/profileNavigator';
 import { useTheme } from '../../../../theme/ThemeContext';
 import apiClient from '../../../../_api/apiClient';
 import { useKycCompletion } from '../../../../hooks-actions/useKycCompletion';
+import logger from '../../../../utils/logger';
 
 type NavigationProp = StackNavigationProp<ProfileStackParamList>;
 
@@ -54,7 +55,7 @@ const BusinessAddress: React.FC = () => {
 
   const loadExistingAddress = async () => {
     try {
-      console.log('[BusinessAddress] Loading existing address...');
+      logger.debug('Loading existing address', 'kyc');
       const response = await apiClient.get('/kyc/address');
 
       if (response.data && response.data.address) {
@@ -66,10 +67,10 @@ const BusinessAddress: React.FC = () => {
           postalCode: existingAddress.postalCode || '',
           countryCode: existingAddress.countryCode || '',
         });
-        console.log('[BusinessAddress] ✅ Loaded existing address');
+        logger.debug('Loaded existing address', 'kyc');
       }
     } catch (error) {
-      console.log('[BusinessAddress] No existing address found or error loading:', error);
+      logger.debug('No existing address found or error loading', 'kyc', { error });
     } finally {
       setIsLoadingData(false);
     }
@@ -83,7 +84,7 @@ const BusinessAddress: React.FC = () => {
 
     setIsLoading(true);
     try {
-      console.log('[BusinessAddress] 🎯 Using KYC completion hook for instant cache update');
+      logger.debug('Using KYC completion hook for instant cache update', 'kyc');
 
       // ✅ FIXED: Use completeStep with correct step type 'business_address'
       // Previously called completeBusinessInfo which completed wrong step (business_info instead of business_address)
@@ -94,7 +95,7 @@ const BusinessAddress: React.FC = () => {
       });
 
       if (result.success) {
-        console.log('[BusinessAddress] ✅ Business address saved with automatic cache invalidation');
+        logger.debug('Business address saved with automatic cache invalidation', 'kyc');
       } else {
         Alert.alert('Save Error', 'Unable to save address information.');
       }

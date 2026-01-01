@@ -1,6 +1,7 @@
 // Created: SQLite schema for search history data - 2025-01-09
 
 import { SQLiteDatabase } from 'expo-sqlite';
+import logger from '../../utils/logger';
 
 /**
  * Initialize search history related tables in SQLite database
@@ -50,9 +51,9 @@ export async function initializeSearchHistorySchema(db: SQLiteDatabase): Promise
       ON favorites(timestamp DESC);
     `);
     
-    console.log('[Database] Search history schema initialized successfully');
+    logger.debug("Search history schema initialized successfully", "data");
   } catch (error) {
-    console.error('[Database] Failed to initialize search history schema:', error);
+    logger.error("Failed to initialize search history schema", error, "data");
     throw error;
   }
 } 

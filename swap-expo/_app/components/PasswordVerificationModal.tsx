@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeContext';
 import apiClient from '../_api/apiClient';
+import logger from '../utils/logger';
 
 interface PasswordVerificationModalProps {
   visible: boolean;
@@ -53,8 +54,6 @@ const PasswordVerificationModal: React.FC<PasswordVerificationModalProps> = ({
     setPasswordError('');
 
     try {
-      console.log('[PasswordVerificationModal] Verifying password for user:', userEmail);
-
       // Create a temporary API client without auth headers for credential verification
       const tempApiClient = { ...apiClient };
       const currentAuth = tempApiClient.defaults.headers.common['Authorization'];
@@ -71,12 +70,9 @@ const PasswordVerificationModal: React.FC<PasswordVerificationModalProps> = ({
           password: password
         });
 
-        console.log('[PasswordVerificationModal] Verification response status:', verifyResponse.status);
-        console.log('[PasswordVerificationModal] Verification response data:', verifyResponse.data);
-
         // Check for success - either by status code or response data
-        const isSuccess = verifyResponse.status === 201 || 
-                         verifyResponse.data?.success || 
+        const isSuccess = verifyResponse.status === 201 ||
+                         verifyResponse.data?.success ||
                          verifyResponse.data?.data?.success;
 
         if (!isSuccess) {
@@ -89,7 +85,7 @@ const PasswordVerificationModal: React.FC<PasswordVerificationModalProps> = ({
         handleClose();
 
       } catch (credentialError: any) {
-        console.error('[PasswordVerificationModal] Credential verification failed:', credentialError);
+        logger.error("Credential verification failed", credentialError, "auth");
         if (credentialError.response?.status === 401) {
           setPasswordError('Incorrect password. Please try again.');
         } else {
@@ -107,7 +103,7 @@ const PasswordVerificationModal: React.FC<PasswordVerificationModalProps> = ({
       }
 
     } catch (error) {
-      console.error('[PasswordVerificationModal] Error during password verification:', error);
+      logger.error("Error during password verification", error, "auth");
       setPasswordError('An error occurred. Please try again.');
     } finally {
       setIsLoading(false);

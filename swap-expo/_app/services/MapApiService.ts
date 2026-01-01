@@ -2,12 +2,13 @@
 import axios from 'axios';
 import Constants from 'expo-constants';
 import { ENV } from '../config/env';
+import logger from '../utils/logger';
 
 // Use the dedicated Map API URL from environment configuration
 const API_BASE_URL = ENV.MAP_API_URL;
 
 // Debug logging for Map API configuration
-console.log("[DEBUG] Map API Configuration:", {
+logger.debug('Map API Configuration', 'map', {
   MAP_API_URL: API_BASE_URL,
   envVars: {
     EXPO_PUBLIC_MAP_API_URL: process.env.EXPO_PUBLIC_MAP_API_URL,
@@ -58,17 +59,17 @@ export interface LocationQueryParams {
 export const fetchLocations = async (params?: LocationQueryParams): Promise<Location[]> => {
   try {
     // Update path to use the /api/public prefix
-    const apiUrl = `${API_BASE_URL}/api/public/locations`; 
-    console.log(`Fetching locations from ${apiUrl} with params:`, params);
+    const apiUrl = `${API_BASE_URL}/api/public/locations`;
+    logger.debug('Fetching locations', 'map', { apiUrl, params });
     const response = await apiClient.get('/api/public/locations', { params }); // Use public path
-    console.log('Received locations:', response.data);
+    logger.debug('Received locations', 'map', { count: response.data?.length });
     return response.data;
   } catch (error) {
-    console.error('Error fetching locations:', error);
+    logger.error('Error fetching locations', error, 'map');
     // Handle specific errors (e.g., network error, 404)
     if (axios.isAxiosError(error)) {
-      console.error('Axios error details:', error.response?.data, error.response?.status);
-    } 
+      logger.error('Axios error details', error.response?.data, 'map');
+    }
     throw error; // Re-throw the error to be handled by the caller
   }
 };
@@ -79,7 +80,7 @@ export const fetchLocationById = async (id: string): Promise<Location> => {
     const response = await apiClient.get(`/api/public/locations/${id}`); // Use public path
     return response.data;
   } catch (error) {
-    console.error(`Error fetching location ${id}:`, error);
+    logger.error(`Error fetching location ${id}`, error, 'map');
     throw error;
   }
 };
@@ -105,16 +106,16 @@ export interface SearchResult {
 export const searchLocations = async (query: string, language: string = 'en'): Promise<SearchAPIResult[]> => {
   try {
     // Keep path as /api/v1 for search
-    console.log(`Searching locations with query: ${query}, language: ${language}`);
-    const response = await apiClient.get('/api/v1/search/location', { 
-      params: { query, language }, 
+    logger.debug('Searching locations', 'map', { query, language });
+    const response = await apiClient.get('/api/v1/search/location', {
+      params: { query, language },
     });
-    console.log('Search results:', response.data);
+    logger.debug('Search results', 'map', { count: response.data?.length });
     return response.data;
   } catch (error) {
-    console.error('Error searching locations:', error);
+    logger.error('Error searching locations', error, 'map');
     if (axios.isAxiosError(error)) {
-      console.error('Search Axios error details:', error.response?.data, error.response?.status);
+      logger.error('Search Axios error details', error.response?.data, 'map');
     }
     throw error;
   }
@@ -123,12 +124,12 @@ export const searchLocations = async (query: string, language: string = 'en'): P
 export const searchDecodeWords = async (words: string, language: string = 'en'): Promise<SearchResult> => {
   try {
     // Keep path as /api/v1 for search
-    const response = await apiClient.get('/api/v1/search/decode', { 
+    const response = await apiClient.get('/api/v1/search/decode', {
       params: { words, language },
     });
     return response.data;
   } catch (error) {
-    console.error('Error decoding words:', error);
+    logger.error('Error decoding words', error, 'map');
     throw error;
   }
 };
@@ -138,12 +139,12 @@ export const searchDecodeWords = async (words: string, language: string = 'en'):
 export const geohashEncode = async (lat: number, lng: number, precision: number = 9): Promise<any> => {
    try {
     // Keep path as /api/v1 for geohash
-    const response = await apiClient.get('/api/v1/geohash/encode', { 
+    const response = await apiClient.get('/api/v1/geohash/encode', {
       params: { lat: lat.toString(), lng: lng.toString(), precision: precision.toString() },
     });
     return response.data;
   } catch (error) {
-    console.error('Error encoding geohash:', error);
+    logger.error('Error encoding geohash', error, 'map');
     throw error;
   }
 }
@@ -156,7 +157,7 @@ export const geohashEncode = async (lat: number, lng: number, precision: number 
 //     const response = await apiClient.get('/categories');
 //     return response.data;
 //   } catch (error) {
-//     console.error('Error fetching categories:', error);
+//     logger.error('Error fetching categories', error, 'map');
 //     throw error;
 //   }
 // };

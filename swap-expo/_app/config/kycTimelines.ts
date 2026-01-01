@@ -13,6 +13,7 @@
  *
  * Pattern: Configuration over Code (used by Stripe, Revolut, Square)
  */
+import logger from '../utils/logger';
 
 /**
  * Timeline step configuration
@@ -186,9 +187,7 @@ export function getTimelineForEntityType(
   const timeline = timelines[entityType];
 
   if (!timeline) {
-    console.warn(
-      `[kycTimelines] Unknown entity type: ${entityType}, falling back to personal timeline`
-    );
+    logger.warn(`Unknown entity type: ${entityType}, falling back to personal timeline`, "data");
     return PERSONAL_TIMELINE;
   }
 

@@ -6,6 +6,7 @@
 import * as Location from 'expo-location';
 import { LocationData, Coordinate } from '../types/map';
 import { Platform } from 'react-native';
+import logger from '../utils/logger';
 
 // Haiti coordinates (Petion-Ville area)
 const HAITI_LOCATION = {
@@ -28,17 +29,17 @@ const isSimulatorLocation = (coords: {latitude: number, longitude: number}): boo
 
 // Request location permissions from the user with better explanation
 export const requestLocationPermissions = async (): Promise<boolean> => {
-  console.log('[LocationService] Requesting precise location permissions...');
-  
+  logger.debug('Requesting precise location permissions...', 'map');
+
   // First request foreground permissions
   const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
-  
+
   if (foregroundStatus !== 'granted') {
-    console.error('[LocationService] Foreground location permission denied');
+    logger.error('Foreground location permission denied', null, 'map');
     return false;
   }
-  
-  console.log('[LocationService] Foreground location permission granted');
+
+  logger.debug('Foreground location permission granted', 'map');
   return true;
 };
 
@@ -46,29 +47,32 @@ export const requestLocationPermissions = async (): Promise<boolean> => {
 export const getCurrentLocation = async (): Promise<LocationData> => {
   try {
     const hasPermission = await requestLocationPermissions();
-    
+
     if (!hasPermission) {
-      console.error('[LocationService] Location permission not granted');
+      logger.error('Location permission not granted', null, 'map');
       throw new Error('Location permission not granted');
     }
-    
-    console.log('[LocationService] Getting current position with high accuracy...');
-    
+
+    logger.debug('Getting current position with high accuracy...', 'map');
+
     // Use better settings for more accurate location
     const location = await Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.BestForNavigation, // Highest possible accuracy
       mayShowUserSettingsDialog: true,
       timeInterval: 2000, // More frequent updates
     });
-    
-    console.log(`[LocationService] Raw position acquired: ${location.coords.latitude}, ${location.coords.longitude}`);
-    
+
+    logger.debug('Raw position acquired', 'map', {
+      latitude: location.coords.latitude,
+      longitude: location.coords.longitude
+    });
+
     // Verify that this looks like a valid location
     if (location.coords.latitude === 0 && location.coords.longitude === 0) {
-      console.error('[LocationService] Invalid coordinates (0,0) received from location API');
+      logger.error('Invalid coordinates (0,0) received from location API', null, 'map');
       throw new Error('Invalid location data received');
     }
-    
+
     // Return the actual coordinates
     return {
       coordinate: {
@@ -79,7 +83,7 @@ export const getCurrentLocation = async (): Promise<LocationData> => {
       accuracy: location.coords.accuracy || undefined,
     };
   } catch (error) {
-    console.error('[LocationService] Error getting location:', error);
+    logger.error('Error getting location', error, 'map');
     if (error instanceof Error) {
       throw new Error(`Location error: ${error.message}`);
     }
