@@ -378,10 +378,8 @@ export default function RoscaCalendarScreen() {
             const isToday = isSameDay(day, new Date());
             const isSelected = selectedDate && isSameDay(day, selectedDate);
 
-            // Group events by type for colored dots
+            // Group events by type for colored dots (only Payment Due + Payout)
             const hasPaymentDue = events.some(e => e.type === 'payment_due');
-            const hasDeadline = events.some(e => e.type === 'registration_deadline');
-            const hasPoolStart = events.some(e => e.type === 'pool_starts');
             const hasPayout = events.some(e => e.type === 'payout');
 
             return (
@@ -404,17 +402,11 @@ export default function RoscaCalendarScreen() {
                   {format(day, 'd')}
                 </Text>
 
-                {/* Event Dots - show different colors for different event types */}
-                {(hasPaymentDue || hasDeadline || hasPoolStart || hasPayout) && (
+                {/* Event Dots - Payment Due (blue) + Payout (yellow) only */}
+                {(hasPaymentDue || hasPayout) && (
                   <View style={styles.dotsContainer}>
                     {hasPaymentDue && (
                       <View style={[styles.eventDot, { backgroundColor: theme.colors.primary }]} />
-                    )}
-                    {hasDeadline && (
-                      <View style={[styles.eventDot, { backgroundColor: theme.colors.warning }]} />
-                    )}
-                    {hasPoolStart && (
-                      <View style={[styles.eventDot, { backgroundColor: theme.colors.success }]} />
                     )}
                     {hasPayout && (
                       <View style={[styles.eventDot, { backgroundColor: '#F1C40F' }]} />
@@ -451,12 +443,9 @@ export default function RoscaCalendarScreen() {
             {/* Available pools section - show count + full list */}
             {availablePoolsForDate.length > 0 && (
               <>
-                <View style={[styles.availablePoolsHeader, { backgroundColor: theme.colors.primaryLight || 'rgba(74, 144, 217, 0.1)' }]}>
-                  <Ionicons name="add-circle" size={20} color={theme.colors.primary} />
-                  <Text style={[styles.availablePoolsCount, { color: theme.colors.primary }]}>
-                    {availablePoolsForDate.length} pools available to join
-                  </Text>
-                </View>
+                <Text style={[styles.poolCountText, { color: theme.colors.textSecondary }]}>
+                  ({availablePoolsForDate.length} pools available)
+                </Text>
                 {availablePoolsForDate.map(pool => (
                   <TouchableOpacity
                     key={pool.id}
@@ -547,12 +536,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerLeft: {
-    width: 44,
+    width: 52,
     alignItems: 'flex-start',
     justifyContent: 'center',
   },
   headerRight: {
-    width: 60,
+    width: 52,
     alignItems: 'flex-end',
     justifyContent: 'center',
   },
@@ -586,7 +575,7 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   headerTodayText: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '600',
   },
   weekdayRow: {
@@ -671,18 +660,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderTopWidth: 1,
   },
-  availablePoolsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 6,
+  poolCountText: {
+    fontSize: 12,
     marginBottom: 4,
-    gap: 8,
-  },
-  availablePoolsCount: {
-    fontSize: 14,
-    fontWeight: '600',
   },
   eventColor: {
     width: 3,
