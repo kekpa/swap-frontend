@@ -198,7 +198,15 @@ export default function RoscaCalendarScreen() {
   // Navigation handlers
   const handlePrevMonth = () => setCurrentMonth(prev => subMonths(prev, 1));
   const handleNextMonth = () => setCurrentMonth(prev => addMonths(prev, 1));
+  const handleToday = () => {
+    const today = new Date();
+    setCurrentMonth(today);
+    setSelectedDate(today);
+  };
   const handleBack = () => navigation.goBack();
+
+  // Check if we're viewing the current month
+  const isCurrentMonth = format(currentMonth, 'yyyy-MM') === format(new Date(), 'yyyy-MM');
 
   const handleDatePress = (date: Date) => {
     setSelectedDate(date);
@@ -228,7 +236,13 @@ export default function RoscaCalendarScreen() {
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
           Calendar
         </Text>
-        <View style={styles.headerSpacer} />
+        {!isCurrentMonth ? (
+          <TouchableOpacity onPress={handleToday} style={styles.headerTodayButton}>
+            <Text style={[styles.headerTodayText, { color: theme.colors.primary }]}>Today</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.headerSpacer} />
+        )}
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
@@ -424,6 +438,13 @@ const styles = StyleSheet.create({
   },
   monthText: {
     fontSize: 18,
+    fontWeight: '600',
+  },
+  headerTodayButton: {
+    padding: 4,
+  },
+  headerTodayText: {
+    fontSize: 15,
     fontWeight: '600',
   },
   weekdayRow: {
