@@ -29,6 +29,7 @@ import {
   addWeeks,
 } from 'date-fns';
 import type { RoscaEnrollment, RoscaPool } from '../../types/rosca.types';
+import { cleanPoolName } from '../../utils/roscaUtils';
 
 // Types for calendar events
 interface CalendarEvent {
@@ -90,8 +91,8 @@ export default function RoscaCalendarScreen() {
   const navigation = useNavigation();
   const entityId = useCurrentEntityId();
 
-  // Data hooks
-  const { data: pools = [] } = useRoscaPools();
+  // Data hooks - use 'upcoming' scope for calendar to show all future pools
+  const { data: pools = [] } = useRoscaPools({ scope: 'upcoming', months: 6, sort: 'recommended' });
   const { data: enrollments = [] } = useRoscaEnrollments(entityId ?? '', {
     enabled: !!entityId,
   });
@@ -124,7 +125,7 @@ export default function RoscaCalendarScreen() {
                 id: `payment-${enrollment.id}-${date.getTime()}`,
                 date,
                 type: 'payment_due',
-                name: enrollment.poolName || 'Your Rosca',
+                name: cleanPoolName(enrollment.poolName || 'Your Rosca'),
                 amount: enrollment.contributionAmount,
                 frequency: freq,
                 color: theme.colors.primary,
@@ -146,7 +147,7 @@ export default function RoscaCalendarScreen() {
               id: `deadline-${pool.id}`,
               date: deadlineDate,
               type: 'registration_deadline',
-              name: pool.name,
+              name: cleanPoolName(pool.name),
               amount: pool.contributionAmount,
               frequency: pool.frequency,
               color: theme.colors.warning,
@@ -163,7 +164,7 @@ export default function RoscaCalendarScreen() {
               id: `start-${pool.id}`,
               date: startDate,
               type: 'pool_starts',
-              name: pool.name,
+              name: cleanPoolName(pool.name),
               amount: pool.contributionAmount,
               frequency: pool.frequency,
               color: theme.colors.success,
@@ -200,12 +201,7 @@ export default function RoscaCalendarScreen() {
   const handleBack = () => navigation.goBack();
 
   const handleDatePress = (date: Date) => {
-    const events = getEventsForDate(date);
-    if (events.length > 0) {
-      setSelectedDate(date);
-    } else {
-      setSelectedDate(null);
-    }
+    setSelectedDate(date);
   };
 
   const handleEventPress = (event: CalendarEvent) => {
@@ -368,11 +364,20 @@ export default function RoscaCalendarScreen() {
           </View>
         )}
 
-        {/* Empty state when no date selected */}
+        {/* Empty state when no events on selected date */}
+        {selectedDate && selectedDateEvents.length === 0 && (
+          <View style={styles.hintContainer}>
+            <Text style={[styles.hintText, { color: theme.colors.textSecondary }]}>
+              No pool events on this day
+            </Text>
+          </View>
+        )}
+
+        {/* Hint when no date selected */}
         {!selectedDate && (
           <View style={styles.hintContainer}>
             <Text style={[styles.hintText, { color: theme.colors.textSecondary }]}>
-              Tap a date with dots to see details
+              Tap a date to see details
             </Text>
           </View>
         )}

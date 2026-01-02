@@ -47,6 +47,14 @@ export function formatAmount(amount: number, symbol: string = 'G'): string {
 }
 
 /**
+ * Clean pool name by removing cohort suffix (e.g., "-c1", "-c2")
+ * Used for backward compatibility with stale cached data that has old naming format
+ */
+export function cleanPoolName(name: string): string {
+  return name.replace(/-c\d+$/, '');
+}
+
+/**
  * Format a rosca pool display name from structured data
  * e.g., "Sol G500/semen - 10 semen"
  */

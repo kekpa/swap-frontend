@@ -16,6 +16,9 @@ import type { RoscaPool, RoscaPoolDetails } from '../types/rosca.types';
 
 interface UseRoscaPoolsOptions {
   enabled?: boolean;
+  scope?: 'joinable' | 'upcoming' | 'all';
+  months?: number;
+  sort?: 'recommended' | 'payout' | 'contribution' | 'duration' | 'popular';
 }
 
 /**
@@ -23,47 +26,60 @@ interface UseRoscaPoolsOptions {
  *
  * Fetches available public pools with local-first caching.
  * Pools don't change often, so we use longer cache times.
+ *
+ * @param options.scope - 'joinable' (default), 'upcoming', or 'all'
+ * @param options.months - Months to look ahead for upcoming scope (default: 3)
+ * @param options.sort - 'recommended' (default), 'payout', 'contribution', 'duration' (shortest first), 'popular'
  */
 export const useRoscaPools = (options: UseRoscaPoolsOptions = {}) => {
-  const { enabled = true } = options;
+  const { enabled = true, scope, months, sort } = options;
   const queryClient = useQueryClient();
 
   const fetchPools = async (): Promise<RoscaPool[]> => {
-    logger.debug(`[useRoscaPools] Fetching available pools`);
+    logger.debug(`[useRoscaPools] Fetching pools with scope: ${scope || 'joinable'}`);
 
-    // STEP 1: Load from local cache first
-    const cachedPools = await roscaRepository.getPools();
-    logger.debug(`[useRoscaPools] Loaded ${cachedPools.length} pools from SQLite cache`);
+    // For non-default scopes, skip local cache (calendar needs fresh data)
+    const useLocalCache = !scope || scope === 'joinable';
 
-    // STEP 2: Return cached data if available
-    if (cachedPools.length > 0) {
-      // Background sync
-      setTimeout(async () => {
-        try {
-          logger.debug(`[useRoscaPools] 🔄 BACKGROUND SYNC: Fetching fresh pools from API`);
-          const response = await apiClient.get(ROSCA_PATHS.POOLS);
-          const apiPools: RoscaPool[] = parseApiResponse(response.data, 'rosca-pools');
+    if (useLocalCache) {
+      // STEP 1: Load from local cache first
+      const cachedPools = await roscaRepository.getPools();
+      logger.debug(`[useRoscaPools] Loaded ${cachedPools.length} pools from SQLite cache`);
 
-          if (apiPools.length > 0) {
-            await roscaRepository.savePools(apiPools);
-            queryClient.setQueryData(queryKeys.roscaPools(), apiPools);
-            logger.debug(`[useRoscaPools] ✅ BACKGROUND SYNC: Updated ${apiPools.length} pools`);
+      // STEP 2: Return cached data if available
+      if (cachedPools.length > 0) {
+        // Background sync
+        setTimeout(async () => {
+          try {
+            logger.debug(`[useRoscaPools] 🔄 BACKGROUND SYNC: Fetching fresh pools from API`);
+            const response = await apiClient.get(ROSCA_PATHS.POOLS, {
+              params: { scope, months, sort },
+            });
+            const apiPools: RoscaPool[] = parseApiResponse(response.data, 'rosca-pools');
+
+            if (apiPools.length > 0) {
+              await roscaRepository.savePools(apiPools);
+              queryClient.setQueryData(queryKeys.roscaPools(scope, months, sort), apiPools);
+              logger.debug(`[useRoscaPools] ✅ BACKGROUND SYNC: Updated ${apiPools.length} pools`);
+            }
+          } catch (error) {
+            logger.debug(`[useRoscaPools] ⚠️ Background sync failed: ${error instanceof Error ? error.message : String(error)}`);
           }
-        } catch (error) {
-          logger.debug(`[useRoscaPools] ⚠️ Background sync failed: ${error instanceof Error ? error.message : String(error)}`);
-        }
-      }, 3000);
+        }, 3000);
 
-      return cachedPools;
+        return cachedPools;
+      }
     }
 
-    // STEP 3: No cache - fetch from API
-    logger.debug(`[useRoscaPools] 📡 FIRST TIME: Fetching pools from API`);
-    const response = await apiClient.get(ROSCA_PATHS.POOLS);
+    // STEP 3: Fetch from API (either no cache or non-default scope)
+    logger.debug(`[useRoscaPools] 📡 Fetching pools from API`);
+    const response = await apiClient.get(ROSCA_PATHS.POOLS, {
+      params: { scope, months, sort },
+    });
     const apiPools: RoscaPool[] = parseApiResponse(response.data, 'rosca-pools');
 
-    // Save to cache
-    if (apiPools.length > 0) {
+    // Save to cache only for joinable pools
+    if (apiPools.length > 0 && useLocalCache) {
       await roscaRepository.savePools(apiPools);
     }
 
@@ -71,19 +87,12 @@ export const useRoscaPools = (options: UseRoscaPoolsOptions = {}) => {
   };
 
   return useQuery({
-    queryKey: queryKeys.roscaPools(),
+    queryKey: queryKeys.roscaPools(scope, months, sort),
     queryFn: fetchPools,
     enabled: Boolean(enabled),
     staleTime: 1000 * 60 * 10, // 10 minutes - pools don't change often
     gcTime: 1000 * 60 * 60, // 1 hour
     networkMode: 'always',
-    initialData: () => {
-      const cached = queryClient.getQueryData<RoscaPool[]>(queryKeys.roscaPools());
-      if (cached && cached.length > 0) {
-        return cached;
-      }
-      return undefined;
-    },
   });
 };
 

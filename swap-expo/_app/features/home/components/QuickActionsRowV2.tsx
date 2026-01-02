@@ -60,12 +60,11 @@ export default function QuickActionsRowV2({
         },
       ]}
     >
-      <QuickActionButton iconName="add" label="Add" onPress={onAddPress} />
-      <QuickActionButton iconName="arrow-up" label="Send" onPress={onSendPress} />
-      <QuickActionButton iconName="qr-code-outline" label="QR" onPress={onQRPress} />
-      <QuickActionButton iconName="calendar-outline" label="Calendar" onPress={onCalendarPress} />
-      {/* TODO: Update to Settings icon and label when Settings page is ready */}
       <QuickActionButton iconName="person-outline" label="Profile" onPress={onProfilePress} />
+      <QuickActionButton iconName="calendar-outline" label="Calendar" onPress={onCalendarPress} />
+      <QuickActionButton iconName="qr-code-outline" label="QR" onPress={onQRPress} />
+      <QuickActionButton iconName="arrow-up" label="Send" onPress={onSendPress} />
+      <QuickActionButton iconName="add" label="Add" onPress={onAddPress} />
     </View>
   );
 }

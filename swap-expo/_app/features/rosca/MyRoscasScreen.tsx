@@ -15,7 +15,7 @@ import { useRefreshByUser } from '../../hooks/useRefreshByUser';
 import { useRoscaEnrollments } from '../../hooks-data/useRoscaEnrollments';
 import { useCurrentEntityId } from '../../hooks/useCurrentEntityId';
 import logger from '../../utils/logger';
-import { formatAmount } from '../../utils/roscaUtils';
+import { formatAmount, cleanPoolName } from '../../utils/roscaUtils';
 import type { RoscaEnrollment } from '../../types/rosca.types';
 
 // UI format for active roscas
@@ -56,7 +56,7 @@ function transformFrequency(freq: string): string {
 function transformActiveEnrollment(enrollment: RoscaEnrollment): ActiveRoscaUI {
   return {
     id: enrollment.id,
-    name: enrollment.poolName,
+    name: cleanPoolName(enrollment.poolName),
     isPayoutTurn: enrollment.isYourTurn,
     payoutAmount: enrollment.expectedPayout,
     contributionAmount: enrollment.contributionAmount,
@@ -76,7 +76,7 @@ function transformActiveEnrollment(enrollment: RoscaEnrollment): ActiveRoscaUI {
 function transformCompletedEnrollment(enrollment: RoscaEnrollment): CompletedRoscaUI {
   return {
     id: enrollment.id,
-    name: enrollment.poolName,
+    name: cleanPoolName(enrollment.poolName),
     payoutReceived: enrollment.expectedPayout,
     totalContributed: enrollment.totalContributed,
     completedDate: enrollment.joinedAt, // Using joinedAt as fallback, ideally we'd have completedAt

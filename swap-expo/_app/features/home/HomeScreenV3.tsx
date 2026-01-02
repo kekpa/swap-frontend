@@ -665,11 +665,11 @@ export default function HomeScreenV3() {
           )}
         </View>
 
-        {/* Horizontal Rosca Row (remaining roscas + available roscas + join button) */}
+        {/* Horizontal Rosca Row - hide scroll content when no enrollments, but keep Plus button */}
         <RoscaHorizontalRow
-          roscas={sortedRoscas}
+          roscas={userRoscas.length > 0 ? sortedRoscas : []}
           displayedRoscaIds={displayedRoscas.map(r => r.id)}
-          availableRoscas={availableRoscas}
+          availableRoscas={userRoscas.length > 0 ? availableRoscas : []}
           onRoscaPress={handleRoscaPress}
           onAvailablePress={handleAvailableRoscaPress}
           onAddPress={handleJoinRosca}
