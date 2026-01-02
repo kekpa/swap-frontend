@@ -279,6 +279,22 @@ export default function RoscaCalendarScreen() {
   // Get selected date events
   const selectedDateEvents = selectedDate ? getEventsForDate(selectedDate) : [];
 
+  // Get available pools for selected date (for full list display)
+  const availablePoolsForDate = useMemo(() => {
+    if (!selectedDate) return [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Only show for today or future dates
+    if (selectedDate < today) return [];
+
+    return pools.filter(pool => {
+      if (pool.status !== 'active' || !pool.registrationDeadline) return false;
+      const deadline = parseISO(pool.registrationDeadline);
+      return isValid(deadline) && selectedDate <= deadline;
+    });
+  }, [selectedDate, pools]);
+
   // Navigation handlers
   const handlePrevMonth = () => setCurrentMonth(prev => subMonths(prev, 1));
   const handleNextMonth = () => setCurrentMonth(prev => addMonths(prev, 1));
@@ -424,82 +440,81 @@ export default function RoscaCalendarScreen() {
               Payout
             </Text>
           </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: theme.colors.warning }]} />
-            <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
-              Last Day to Join
-            </Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: theme.colors.success }]} />
-            <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
-              Pool Starts
-            </Text>
-          </View>
         </View>
 
         {/* Selected Date Events */}
-        {selectedDate && selectedDateEvents.length > 0 && (
+        {selectedDate && (selectedDateEvents.length > 0 || availablePoolsForDate.length > 0) && (
           <View style={[styles.eventsList, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
             <Text style={[styles.eventsTitle, { color: theme.colors.textPrimary }]}>
               {format(selectedDate, 'EEEE, MMMM d')}
             </Text>
-            {selectedDateEvents.map(event => {
-              // Special handling for pools_available
-              if (event.type === 'pools_available') {
+            {/* Available pools section - show count + full list */}
+            {availablePoolsForDate.length > 0 && (
+              <>
+                <View style={[styles.availablePoolsHeader, { backgroundColor: theme.colors.primaryLight || 'rgba(74, 144, 217, 0.1)' }]}>
+                  <Ionicons name="add-circle" size={20} color={theme.colors.primary} />
+                  <Text style={[styles.availablePoolsCount, { color: theme.colors.primary }]}>
+                    {availablePoolsForDate.length} pools available to join
+                  </Text>
+                </View>
+                {availablePoolsForDate.map(pool => (
+                  <TouchableOpacity
+                    key={pool.id}
+                    style={[styles.eventItem, { borderColor: theme.colors.border }]}
+                    onPress={() => (navigation as any).navigate('JoinRoscaScreen')}
+                  >
+                    <View style={[styles.eventColor, { backgroundColor: getFrequencyColor(pool.frequency) }]} />
+                    <View style={styles.eventInfo}>
+                      <Text style={[styles.eventName, { color: theme.colors.textPrimary }]}>
+                        {cleanPoolName(pool.name)}
+                      </Text>
+                      <Text style={[styles.eventDetails, { color: theme.colors.textSecondary }]}>
+                        G{pool.contributionAmount.toLocaleString()}/{pool.frequency}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={theme.colors.textTertiary} />
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
+
+            {/* Other events (payment due, payout, etc.) */}
+            {selectedDateEvents
+              .filter(event => event.type !== 'pools_available')
+              .map(event => {
+                // Get event type label
+                const typeLabel = event.type === 'payment_due'
+                  ? 'Payment Due'
+                  : event.type === 'payout'
+                    ? 'Payout'
+                    : event.type === 'registration_deadline'
+                      ? 'Last Day!'
+                      : 'Pool Starts';
+
                 return (
                   <TouchableOpacity
                     key={event.id}
-                    style={[styles.availablePoolsItem, { backgroundColor: theme.colors.primaryLight || 'rgba(74, 144, 217, 0.1)' }]}
-                    onPress={() => (navigation as any).navigate('JoinRoscaScreen')}
+                    style={[styles.eventItem, { borderColor: theme.colors.border }]}
+                    onPress={() => handleEventPress(event)}
                   >
-                    <Ionicons name="add-circle" size={24} color={theme.colors.primary} />
+                    <View style={[styles.eventColor, { backgroundColor: getFrequencyColor(event.frequency) }]} />
                     <View style={styles.eventInfo}>
-                      <Text style={[styles.eventName, { color: theme.colors.primary }]}>
-                        {event.count} pools available to join
+                      <Text style={[styles.eventName, { color: theme.colors.textPrimary }]}>
+                        {event.name}
                       </Text>
                       <Text style={[styles.eventDetails, { color: theme.colors.textSecondary }]}>
-                        Tap to view and join
+                        {typeLabel} • G{event.amount.toLocaleString()}/{event.frequency}
                       </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={20} color={theme.colors.primary} />
+                    <Ionicons name="chevron-forward" size={20} color={theme.colors.textTertiary} />
                   </TouchableOpacity>
                 );
-              }
-
-              // Get event type label
-              const typeLabel = event.type === 'payment_due'
-                ? 'Payment Due'
-                : event.type === 'registration_deadline'
-                  ? 'Last Day to Join!'
-                  : event.type === 'payout'
-                    ? 'Payout'
-                    : 'Pool Starts';
-
-              return (
-                <TouchableOpacity
-                  key={event.id}
-                  style={[styles.eventItem, { borderColor: theme.colors.border }]}
-                  onPress={() => handleEventPress(event)}
-                >
-                  <View style={[styles.eventColor, { backgroundColor: getFrequencyColor(event.frequency) }]} />
-                  <View style={styles.eventInfo}>
-                    <Text style={[styles.eventName, { color: theme.colors.textPrimary }]}>
-                      {event.name}
-                    </Text>
-                    <Text style={[styles.eventDetails, { color: theme.colors.textSecondary }]}>
-                      {typeLabel} • G{event.amount.toLocaleString()}/{event.frequency}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color={theme.colors.textTertiary} />
-                </TouchableOpacity>
-              );
-            })}
+              })}
           </View>
         )}
 
         {/* Empty state when no events on selected date */}
-        {selectedDate && selectedDateEvents.length === 0 && (
+        {selectedDate && selectedDateEvents.length === 0 && availablePoolsForDate.length === 0 && (
           <View style={styles.hintContainer}>
             <Text style={[styles.hintText, { color: theme.colors.textSecondary }]}>
               No pool events on this day
@@ -532,12 +547,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerLeft: {
-    width: 50,
+    width: 44,
     alignItems: 'flex-start',
     justifyContent: 'center',
   },
   headerRight: {
-    width: 50,
+    width: 60,
     alignItems: 'flex-end',
     justifyContent: 'center',
   },
@@ -656,14 +671,18 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderTopWidth: 1,
   },
-  availablePoolsItem: {
+  availablePoolsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginTop: 8,
-    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    marginBottom: 4,
+    gap: 8,
+  },
+  availablePoolsCount: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   eventColor: {
     width: 3,
