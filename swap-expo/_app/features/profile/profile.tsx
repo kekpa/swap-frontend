@@ -547,12 +547,14 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       return;
     }
 
-    // Default goBack if no sourceRoute and no onClose
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      logger.warn('No sourceRoute and cannot goBack', 'profile');
-    }
+    // Default: navigate to App to exit ProfileModal entirely
+    // Don't use goBack() as it stays within ProfileNavigator stack (causes loops with KYC)
+    logger.debug('No sourceRoute, navigating to App', 'profile');
+    navigation.dispatch(
+      CommonActions.navigate({
+        name: 'App',
+      })
+    );
   };
 
   const handleCopyUsername = () => {
