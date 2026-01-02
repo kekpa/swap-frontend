@@ -251,62 +251,20 @@ const VerificationCodeScreen = () => {
       // Navigate back to the timeline, which will refetch the status
       navigation.navigate('VerifyYourIdentity', { sourceRoute });
     } else {
-      // Phone registration - create new user account with phone + OTP + password
-      // TODO: Add password input field to collect user password during registration
-      const tempPassword = "TempPass123!"; // TEMPORARY - should be collected from user
+      // Phone registration - store phone + OTP code and navigate to CompleteProfile
+      // Account will be created in CompleteProfile with all user data including password
+      logger.debug('Phone verified, navigating to CompleteProfile', 'auth');
 
-      // Choose registration endpoint based on account type
-      let response;
-      if (accountType === 'business') {
-        logger.debug('Creating business profile via phone registration', 'auth');
-        // TODO: Backend needs to support phone-based business registration
-        // For now, pass accountType to help backend identify business registration intent
-        response = await apiClient.post(API_PATHS.AUTH.REGISTER_PHONE, {
-          phone: contact,
-          code: verificationCode,
-          password: tempPassword,
-          accountType: 'business'
-        });
-        logger.info('Business phone registration successful', 'auth');
-      } else {
-        // Personal registration (existing flow)
-        response = await apiClient.post(API_PATHS.AUTH.REGISTER_PHONE, {
-          phone: contact,
-          code: verificationCode,
-          password: tempPassword
-        });
-        logger.info('Personal phone registration successful', 'auth');
-      }
-
-      const authData = response.data;
-
-      if (authData.access_token && authContext) {
-        tokenManager.setAccessToken(authData.access_token);
-        tokenManager.setRefreshToken(authData.refresh_token);
-        
+      if (authContext) {
+        // Store phone and OTP code for use in CompleteProfile
         authContext.setPhoneVerified({
           phoneNumber: contact,
-          accessToken: authData.access_token,
-          profileId: authData.profile_id || null
+          code: verificationCode,
         });
-        
-        if (authData.profile_id) {
-          apiClient.setProfileId(authData.profile_id);
-        }
-        
-        if (authData.is_new_user) {
-          navigation.navigate("CompleteProfile", { accountType, isAddingAccount });
-        } else {
-          const hasRequiredFields = authData.has_required_fields || false;
-
-          if (hasRequiredFields) {
-            authContext.setIsAuthenticated(true);
-            await authContext.checkSession();
-          } else {
-            navigation.navigate("CompleteProfile", { accountType, isAddingAccount });
-          }
-        }
       }
+
+      // Navigate to CompleteProfile where account will be created
+      navigation.navigate("CompleteProfile", { accountType, isAddingAccount });
     }
   };
 

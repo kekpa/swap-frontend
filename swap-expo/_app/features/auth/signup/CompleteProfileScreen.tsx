@@ -216,57 +216,45 @@ const CompleteProfileScreen = () => {
 
     try {
       if (isFromPhoneVerification && authContext.phoneVerification) {
-        // Phone-based signup flow - complete profile after phone verification
-        const { accessToken, profileId } = authContext.phoneVerification;
+        // Phone-based signup flow - create account with all data
+        const { phoneNumber, code } = authContext.phoneVerification;
 
-        let response;
-        if (isBusinessAccount && businessStage === 2) {
-          // Two-stage business creation
-          // Business accounts don't create personal profiles
-          // They create auth.users -> business_admin_team -> business_profiles
+        // Build registration data with all fields
+        const registrationData = {
+          phone: phoneNumber,
+          code: code,
+          password: password,
+          first_name: firstName.trim(),
+          middle_name: middleName.trim() || undefined,
+          last_name: lastName.trim(),
+          username: username.trim(),
+        };
 
-          // Combine admin user data and business data
-          const completeBusinessData = {
-            // Admin user data (for auth.users metadata)
-            first_name: firstName.trim(),
-            middle_name: middleName.trim() || undefined,
-            last_name: lastName.trim(),
-            username: username.trim(),
-            password: password,
-            // Business profile data
-            business_name: businessName.trim(),
-            business_type: businessType,
-            legal_name: registrationNumber.trim() || businessName.trim(),
-            registration_number: registrationNumber.trim() || undefined,
-            employee_count: employeeCount,
-          };
+        logger.debug('Creating account with register-phone', 'auth');
 
+        // Create account with all data in one call
+        const response = await apiClient.post(API_PATHS.AUTH.REGISTER_PHONE, registrationData);
 
-          // Single API call to complete business registration
-          // This will: update auth.users, create business_profiles, create business_admin_team
-          // Note: Backend /auth/complete-profile supports both personal and business profiles
-          response = await apiClient.put(`${API_PATHS.AUTH.COMPLETE_PROFILE}/${profileId}`, completeBusinessData, {
-            headers: {
-              Authorization: `Bearer ${accessToken}`
-            }
-          });
-        } else {
-          // Personal profile completion
-          const profileData = {
-            first_name: firstName.trim(),
-            middle_name: middleName.trim() || undefined,
-            last_name: lastName.trim(),
-            username: username.trim(),
-            password: password,
-          };
+        const authData = response.data;
 
-
-          response = await apiClient.put(`${API_PATHS.AUTH.COMPLETE_PROFILE}/${profileId}`, profileData, {
-            headers: {
-              Authorization: `Bearer ${accessToken}`
-            }
-          });
+        if (!authData.access_token) {
+          throw new Error('Registration failed - no access token received');
         }
+
+        // Set tokens
+        const { tokenManager } = await import('../../../_api/tokenManager');
+        tokenManager.setAccessToken(authData.access_token);
+        tokenManager.setRefreshToken(authData.refresh_token);
+
+        // Update phoneVerification with tokens for consistency
+        authContext.setPhoneVerified({
+          phoneNumber,
+          code,
+          accessToken: authData.access_token,
+          profileId: authData.profile_id || null,
+        });
+
+        const profileId = authData.profile_id;
         
         if (response.data) {
 

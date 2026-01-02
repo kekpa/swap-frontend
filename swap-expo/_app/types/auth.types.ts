@@ -54,8 +54,9 @@ export interface TokenResponse {
 // Phone verification data
 export interface PhoneVerification {
   phoneNumber: string;
-  accessToken: string;
-  profileId: string | null;
+  code: string; // OTP code for registration
+  accessToken?: string; // Only set after account creation
+  profileId?: string | null; // Only set after account creation
 }
 
 // User data for registration
