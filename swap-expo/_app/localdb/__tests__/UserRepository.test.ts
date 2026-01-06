@@ -155,8 +155,6 @@ describe('UserRepository', () => {
       );
     });
 
-    });
-
     it('should use INSERT OR REPLACE for upsert behavior', async () => {
       mockDb.runAsync.mockResolvedValue(undefined);
 

@@ -251,19 +251,31 @@ const VerificationCodeScreen = () => {
       // Navigate back to the timeline, which will refetch the status
       navigation.navigate('VerifyYourIdentity', { sourceRoute });
     } else {
-      // Phone registration - store phone + OTP code and navigate to CompleteProfile
-      // Account will be created in CompleteProfile with all user data including password
-      logger.debug('Phone verified, navigating to CompleteProfile', 'auth');
+      // Phone registration - verify OTP immediately with backend
+      // This provides instant feedback if OTP is wrong/expired
+      logger.debug('Verifying OTP with backend...', 'auth');
+
+      // Call verify-otp endpoint to validate OTP immediately
+      const response = await apiClient.post<{
+        userId: string;
+        setupToken: string;
+        phone: string;
+      }>(API_PATHS.AUTH.VERIFY_OTP, {
+        phone: contact,
+        code: verificationCode,
+      });
+
+      logger.info('OTP verified successfully', 'auth');
 
       if (authContext) {
-        // Store phone and OTP code for use in CompleteProfile
+        // Store setupToken for use in CompleteProfile
         authContext.setPhoneVerified({
           phoneNumber: contact,
-          code: verificationCode,
+          setupToken: response.data.setupToken,
         });
       }
 
-      // Navigate to CompleteProfile where account will be created
+      // Navigate to CompleteProfile where account will be completed
       navigation.navigate("CompleteProfile", { accountType, isAddingAccount });
     }
   };

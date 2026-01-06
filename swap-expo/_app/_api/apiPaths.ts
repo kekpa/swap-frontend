@@ -35,6 +35,9 @@ export const AUTH_PATHS = {
   COMPLETE_PROFILE: '/auth/complete-profile',
   COMPLETE_BUSINESS_PROFILE: '/auth/complete-business-profile',
   STORE_PASSCODE: '/auth/store-passcode',
+  // New registration flow (verify OTP immediately)
+  VERIFY_OTP: '/auth/verify-otp',
+  COMPLETE_REGISTRATION: '/auth/complete-registration',
   // Email verification disabled for Haiti market - keeping for future use
   // VERIFY_EMAIL: '/auth/verify-email',
   // RESEND_EMAIL_CODE: '/auth/resend-email-code',

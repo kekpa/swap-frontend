@@ -51,10 +51,10 @@ export interface TokenResponse {
   profileId?: string;
 }
 
-// Phone verification data
+// Phone verification data (after OTP is verified)
 export interface PhoneVerification {
   phoneNumber: string;
-  code: string; // OTP code for registration
+  setupToken: string; // Setup token from verify-otp endpoint, required for complete-registration
   accessToken?: string; // Only set after account creation
   profileId?: string | null; // Only set after account creation
 }

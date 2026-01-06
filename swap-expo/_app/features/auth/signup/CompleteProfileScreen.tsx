@@ -216,24 +216,20 @@ const CompleteProfileScreen = () => {
 
     try {
       if (isFromPhoneVerification && authContext.phoneVerification) {
-        // Phone-based signup flow - create account with all data
-        const { phoneNumber, code } = authContext.phoneVerification;
+        // Phone-based signup flow - complete registration with verified setupToken
+        const { phoneNumber, setupToken } = authContext.phoneVerification;
 
-        // Build registration data with all fields
-        const registrationData = {
-          phone: phoneNumber,
-          code: code,
+        logger.debug('Completing registration with setupToken', 'auth');
+
+        const response = await apiClient.post(API_PATHS.AUTH.COMPLETE_REGISTRATION, {
+          setupToken,
           password: password,
           first_name: firstName.trim(),
           middle_name: middleName.trim() || undefined,
           last_name: lastName.trim(),
           username: username.trim(),
-        };
-
-        logger.debug('Creating account with register-phone', 'auth');
-
-        // Create account with all data in one call
-        const response = await apiClient.post(API_PATHS.AUTH.REGISTER_PHONE, registrationData);
+          accountType: accountType || 'personal',
+        });
 
         const authData = response.data;
 
@@ -249,7 +245,7 @@ const CompleteProfileScreen = () => {
         // Update phoneVerification with tokens for consistency
         authContext.setPhoneVerified({
           phoneNumber,
-          code,
+          setupToken,
           accessToken: authData.access_token,
           profileId: authData.profile_id || null,
         });
