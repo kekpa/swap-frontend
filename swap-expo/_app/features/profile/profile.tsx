@@ -28,6 +28,7 @@ import useAvailableProfiles from '../auth/hooks/useAvailableProfiles';
 import ProfileSwitcherModal from '../../components/ProfileSwitcherModal';
 import { profileSwitchOrchestrator } from '../../services/ProfileSwitchOrchestrator';
 import apiClient from '../../_api/apiClient';
+import { API_PATHS } from '../../_api/apiPaths';
 import { useQueryClient } from '@tanstack/react-query';
 
 // Define a type for the route params ProfileScreen might receive when opened as ProfileModal
@@ -722,7 +723,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const handleDeleteAccount = () => {
     Alert.alert(
       "Delete Account",
-      "Are you sure you want to delete your account? This action cannot be undone.",
+      "Are you sure you want to delete your account? Your data will be marked for deletion and you have 30 days to cancel by logging in again.",
       [
         {
           text: "Cancel",
@@ -731,7 +732,37 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
         {
           text: "Delete",
           style: "destructive",
-          onPress: () => logger.debug('Delete account confirmed', 'profile')
+          onPress: async () => {
+            try {
+              logger.debug('Delete account requested', 'profile');
+
+              // Call the delete account API
+              await apiClient.delete(API_PATHS.AUTH.DELETE_ACCOUNT);
+
+              logger.info('Account marked for deletion', 'profile');
+
+              // Show success message
+              Alert.alert(
+                "Account Scheduled for Deletion",
+                "Your account has been marked for deletion. You have 30 days to cancel by logging in again.",
+                [
+                  {
+                    text: "OK",
+                    onPress: async () => {
+                      // Log out the user
+                      await authContext.logout();
+                    }
+                  }
+                ]
+              );
+            } catch (error: any) {
+              logger.error('Failed to delete account', error, 'profile');
+              Alert.alert(
+                "Error",
+                error.response?.data?.message || "Failed to delete account. Please try again."
+              );
+            }
+          }
         }
       ]
     );

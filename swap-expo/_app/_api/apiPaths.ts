@@ -57,6 +57,8 @@ export const AUTH_PATHS = {
   BIOMETRIC_DISABLE: '/auth/biometric',
   BIOMETRIC_STATUS: '/auth/biometric/status',
   BIOMETRIC_DEVICES: '/auth/biometric/devices',
+  // Account deletion (Apple 5.1.1 compliance)
+  DELETE_ACCOUNT: '/auth/account',
 };
 
 /**
