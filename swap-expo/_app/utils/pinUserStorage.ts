@@ -203,6 +203,53 @@ export const setLastActiveProfile = async (profileId: string): Promise<void> => 
 };
 
 /**
+ * Check if profile restoration is needed after PIN/biometric unlock.
+ *
+ * When user closes app on business profile and reopens with PIN/biometric,
+ * the auth returns personal profile token. This function determines if we
+ * need to auto-switch back to the business profile they were using.
+ *
+ * @param currentProfileId - The profile from the current session (usually personal after PIN login)
+ * @returns Profile ID to switch to, or null if no switch needed
+ */
+export const getProfileToRestore = async (
+  currentProfileId: string | null | undefined
+): Promise<string | null> => {
+  try {
+    const lastActiveId = await getLastActiveProfileId();
+
+    // No last active = stay on current
+    if (!lastActiveId) {
+      logger.debug('No last active profile, no restoration needed', 'auth');
+      return null;
+    }
+
+    // No current profile = can't compare, skip
+    if (!currentProfileId) {
+      logger.debug('No current profile ID, skipping restoration check', 'auth');
+      return null;
+    }
+
+    // Same profile = no switch needed
+    if (lastActiveId === currentProfileId) {
+      logger.debug('Current profile matches last active, no restoration needed', 'auth');
+      return null;
+    }
+
+    // Different profile = should restore
+    logger.info('Profile restoration needed after unlock', 'auth', {
+      lastActive: lastActiveId,
+      current: currentProfileId,
+    });
+
+    return lastActiveId;
+  } catch (error) {
+    logger.error('Failed to check profile restoration', error, 'auth');
+    return null;
+  }
+};
+
+/**
  * Clear specific profile's PIN data
  *
  * @param profileId - Profile ID to clear

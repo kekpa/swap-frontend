@@ -39,6 +39,8 @@ import appLockService from './services/AppLockService';
 import LockScreen from './features/auth/components/LockScreen';
 import { AppLockSetupContent } from './features/auth/components/AppLockSetupScreen';
 import { authEvents, APP_LOCK_EVENTS } from './_api/apiClient';
+import { getProfileToRestore, setLastActiveProfile } from './utils/pinUserStorage';
+import { useProfileSwitch } from './features/auth/hooks/useProfileSwitch';
 
 // PROFESSIONAL FIX: Suppress technical warnings that don't represent bugs
 // - TanStack Query: queries are intentionally cancelled during navigation
@@ -74,10 +76,12 @@ if (__DEV__) {
 // PROFILE-AWARE: Personal profile uses personal PIN, business profile uses business PIN
 const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const authContext = useAuthContext();
+  const profileSwitchMutation = useProfileSwitch();
   const [isAppLocked, setIsAppLocked] = useState(true);
   const [isLockConfigured, setIsLockConfigured] = useState<boolean | null>(null);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [isBusinessSetup, setIsBusinessSetup] = useState(false); // Track if we need business PIN setup
+  const [isRestoringProfile, setIsRestoringProfile] = useState(false); // Track profile restoration in progress
 
   // Determine if current profile is a business profile
   const isBusinessProfile = authContext.user?.profileType === 'business';
@@ -192,10 +196,46 @@ const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) =
     };
   }, [isLockConfigured, authContext.isAuthenticated, authContext]);
 
-  const handleUnlock = useCallback(() => {
+  const handleUnlock = useCallback(async () => {
     logger.info('[AppLockHandler] App unlocked');
     setIsAppLocked(false);
-  }, []);
+
+    // PROFILE RESTORATION: After PIN/biometric unlock, check if we need to restore business profile
+    // This fixes the loop bug where PIN/biometric returns personal token but user was on business
+    try {
+      const profileToRestore = await getProfileToRestore(authContext.user?.profileId);
+
+      if (profileToRestore) {
+        logger.info('Restoring profile after unlock', 'auth', {
+          currentProfile: authContext.user?.profileId,
+          targetProfile: profileToRestore,
+        });
+
+        setIsRestoringProfile(true);
+
+        // Use profile switch mutation (biometric already verified via PIN/FaceID)
+        await profileSwitchMutation.mutateAsync({
+          targetProfileId: profileToRestore,
+          biometricVerified: true, // Skip second biometric - user just authenticated
+        });
+
+        logger.info('Profile restoration successful', 'auth');
+
+        // Update auth context with new profile
+        await authContext.completeProfileSwitch(profileToRestore);
+      }
+    } catch (error: any) {
+      logger.error('Profile restoration failed, staying on current profile', error, 'auth');
+
+      // Clear lastActiveProfile to prevent infinite loop attempts
+      // User will stay on personal profile and can manually switch
+      if (authContext.user?.profileId) {
+        await setLastActiveProfile(authContext.user.profileId);
+      }
+    } finally {
+      setIsRestoringProfile(false);
+    }
+  }, [authContext.user?.profileId, authContext, profileSwitchMutation]);
 
   const handleLogout = useCallback(async () => {
     logger.info('[AppLockHandler] Logout from lock screen');
@@ -258,6 +298,17 @@ const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) =
         isBusinessProfile={isBusinessProfile}
         businessProfileId={isBusinessProfile ? currentProfileId : undefined}
       />
+    );
+  }
+
+  // Show loading while restoring profile after unlock
+  // This prevents flash of personal profile UI when switching back to business
+  if (isRestoringProfile) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
+        <ActivityIndicator size="large" color="#8b14fd" />
+        <Text style={{ color: '#FFF', marginTop: 16, fontSize: 14 }}>Restoring your session...</Text>
+      </View>
     );
   }
 
