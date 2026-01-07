@@ -1,11 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   SafeAreaView,
   TouchableOpacity,
-  ScrollView,
+  SectionList,
+  SectionListData,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,7 +36,7 @@ import { cleanPoolName } from '../../utils/roscaUtils';
 interface CalendarEvent {
   id: string;
   date: Date;
-  type: 'payment_due' | 'registration_deadline' | 'pool_starts' | 'pools_available' | 'payout';
+  type: 'payment_due' | 'registration_deadline' | 'pool_starts' | 'pools_available' | 'pools_expired' | 'payout' | 'joined';
   name: string;
   amount: number;
   frequency: string;
@@ -43,6 +44,15 @@ interface CalendarEvent {
   poolId?: string;
   count?: number; // For pools_available type
 }
+
+// Pool with expiry flag for display
+type PoolWithExpiry = RoscaPool & { isExpired: boolean };
+
+// Section types for SectionList
+type CalendarSection = {
+  key: 'calendar' | 'events';
+  data: PoolWithExpiry[];
+};
 
 // Generate recurrence dates for a frequency
 function generateRecurrenceDates(
@@ -103,15 +113,22 @@ export default function RoscaCalendarScreen() {
   const navigation = useNavigation();
   const entityId = useCurrentEntityId();
 
-  // Data hooks - use 'upcoming' scope for calendar to show all future pools
-  const { data: pools = [] } = useRoscaPools({ scope: 'upcoming', months: 6, sort: 'recommended' });
+  // State (must be before hooks that depend on them)
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+
+  // Data hooks - use month-based pagination for calendar (~420 pools/month vs 4452 total)
+  const monthStartStr = format(startOfMonth(currentMonth), 'yyyy-MM-dd');
+  const monthEndStr = format(endOfMonth(currentMonth), 'yyyy-MM-dd');
+  const { data: pools = [] } = useRoscaPools({
+    scope: 'upcoming',
+    monthStart: monthStartStr,
+    monthEnd: monthEndStr,
+    sort: 'recommended',
+  });
   const { data: enrollments = [] } = useRoscaEnrollments(entityId ?? '', {
     enabled: !!entityId,
   });
-
-  // State
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   // Calculate calendar events from rosca data
   const calendarEvents = useMemo(() => {
@@ -121,28 +138,48 @@ export default function RoscaCalendarScreen() {
     const extendedStart = addDays(monthStart, -7);
     const extendedEnd = addDays(monthEnd, 7);
 
-    // Add enrolled rosca events (payment due dates)
+    // Add enrolled rosca events (joined date + payment due dates)
     enrollments
       .filter(e => e.status === 'active')
       .forEach((enrollment) => {
+        const joinedDate = enrollment.joinedAt ? parseISO(enrollment.joinedAt) : null;
+        const freq = enrollment.frequency || 'monthly';
+
+        // Add "Joined" event on the join date (yellow)
+        if (joinedDate && isValid(joinedDate) && joinedDate >= extendedStart && joinedDate <= extendedEnd) {
+          events.push({
+            id: `joined-${enrollment.id}`,
+            date: joinedDate,
+            type: 'joined',
+            name: cleanPoolName(enrollment.poolName || 'Your Rosca'),
+            amount: enrollment.contributionAmount,
+            frequency: freq,
+            color: '#F1C40F',
+          });
+        }
+
+        // Add "Payment Due" events on the fixed schedule
         if (enrollment.nextPaymentDue) {
           const baseDate = parseISO(enrollment.nextPaymentDue);
           if (isValid(baseDate)) {
-            // Generate recurring dates based on frequency
-            const freq = enrollment.frequency || 'monthly';
             const dates = generateRecurrenceDates(baseDate, freq, monthStart, monthEnd);
 
-            dates.forEach(date => {
-              events.push({
-                id: `payment-${enrollment.id}-${date.getTime()}`,
-                date,
-                type: 'payment_due',
-                name: cleanPoolName(enrollment.poolName || 'Your Rosca'),
-                amount: enrollment.contributionAmount,
-                frequency: freq,
-                color: theme.colors.primary,
+            dates
+              .filter(date => !joinedDate || !isValid(joinedDate) || date >= joinedDate)
+              .forEach(date => {
+                // Don't show payment_due on the same day as joined (avoid duplicate)
+                if (joinedDate && isSameDay(date, joinedDate)) return;
+
+                events.push({
+                  id: `payment-${enrollment.id}-${date.getTime()}`,
+                  date,
+                  type: 'payment_due',
+                  name: cleanPoolName(enrollment.poolName || 'Your Rosca'),
+                  amount: enrollment.contributionAmount,
+                  frequency: freq,
+                  color: theme.colors.primary,
+                });
               });
-            });
           }
         }
       });
@@ -186,43 +223,24 @@ export default function RoscaCalendarScreen() {
         }
       });
 
-    // Add payout events for active enrollments
+    // Add payout events for active enrollments (using backend payout_date)
     enrollments
-      .filter(e => e.status === 'active' && !e.payoutReceived)
+      .filter(e => e.status === 'active' && !e.payoutReceived && e.payoutDate)
       .forEach((enrollment) => {
-        // Find the pool to get startDate
-        const pool = pools.find(p => p.id === enrollment.poolId);
-        if (pool?.startDate && enrollment.queuePosition) {
-          const poolStart = parseISO(pool.startDate);
-          if (isValid(poolStart)) {
-            // Calculate payout date: startDate + (position - 1) * frequency interval
-            let payoutDate: Date;
-            const position = enrollment.queuePosition;
-            const freq = enrollment.frequency || 'monthly';
+        const payoutDate = parseISO(enrollment.payoutDate!);
+        if (!isValid(payoutDate)) return;
 
-            if (freq === 'daily') {
-              payoutDate = addDays(poolStart, position - 1);
-            } else if (freq === 'weekly') {
-              payoutDate = addWeeks(poolStart, position - 1);
-            } else if (freq === 'biweekly') {
-              payoutDate = addWeeks(poolStart, (position - 1) * 2);
-            } else {
-              payoutDate = addMonths(poolStart, position - 1);
-            }
-
-            if (payoutDate >= extendedStart && payoutDate <= extendedEnd) {
-              events.push({
-                id: `payout-${enrollment.id}`,
-                date: payoutDate,
-                type: 'payout',
-                name: cleanPoolName(enrollment.poolName || 'Your Payout'),
-                amount: enrollment.expectedPayout,
-                frequency: freq,
-                color: '#27AE60', // Gold/green for money coming in
-                poolId: enrollment.poolId,
-              });
-            }
-          }
+        // Only add if within the calendar view range
+        if (payoutDate >= extendedStart && payoutDate <= extendedEnd) {
+          events.push({
+            id: `payout-${enrollment.id}`,
+            date: payoutDate,
+            type: 'payout',
+            name: cleanPoolName(enrollment.poolName || 'Your Rosca'),
+            amount: enrollment.expectedPayout,
+            frequency: enrollment.frequency || 'weekly',
+            color: '#2ECC71', // Green for payout
+          });
         }
       });
 
@@ -235,26 +253,26 @@ export default function RoscaCalendarScreen() {
     // Generate for each day in the month view
     const daysInView = eachDayOfInterval({ start: monthStart, end: monthEnd });
     daysInView.forEach(day => {
-      // Only show for today or future dates
-      if (day >= today) {
-        // Count pools where registration deadline hasn't passed
-        const availablePools = activePools.filter(pool => {
-          const deadline = parseISO(pool.registrationDeadline!);
-          return isValid(deadline) && day <= deadline;
-        });
+      // Count pools where registration window includes this day
+      const availablePools = activePools.filter(pool => {
+        const deadline = parseISO(pool.registrationDeadline!);
+        const opens = pool.registrationOpens ? parseISO(pool.registrationOpens) : null;
+        // Pool appears on day X if: opens <= X <= deadline
+        return isValid(deadline) && day <= deadline && (!opens || !isValid(opens) || day >= opens);
+      });
 
-        if (availablePools.length > 0) {
-          events.push({
-            id: `available-${day.getTime()}`,
-            date: day,
-            type: 'pools_available',
-            name: `${availablePools.length} pools available`,
-            amount: 0,
-            frequency: '',
-            color: theme.colors.info || '#4A90D9',
-            count: availablePools.length,
-          });
-        }
+      if (availablePools.length > 0) {
+        const isExpired = day < today;
+        events.push({
+          id: `available-${day.getTime()}`,
+          date: day,
+          type: isExpired ? 'pools_expired' : 'pools_available',
+          name: `${availablePools.length} pools ${isExpired ? 'expired' : 'available'}`,
+          amount: 0,
+          frequency: '',
+          color: isExpired ? '#999999' : (theme.colors.info || '#4A90D9'),
+          count: availablePools.length,
+        });
       }
     });
 
@@ -280,20 +298,60 @@ export default function RoscaCalendarScreen() {
   const selectedDateEvents = selectedDate ? getEventsForDate(selectedDate) : [];
 
   // Get available pools for selected date (for full list display)
+  // Uses API's recommended sort order (fill rate 30%, affordability 25%, etc.)
   const availablePoolsForDate = useMemo(() => {
     if (!selectedDate) return [];
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Only show for today or future dates
-    if (selectedDate < today) return [];
+    // Filter but keep API's recommended sort order (no custom .sort())
+    // Now includes past dates with isExpired flag
+    return pools
+      .filter(pool => {
+        if (pool.status !== 'active' || !pool.registrationDeadline) return false;
+        const deadline = parseISO(pool.registrationDeadline);
+        if (!isValid(deadline) || selectedDate > deadline) return false;
 
-    return pools.filter(pool => {
-      if (pool.status !== 'active' || !pool.registrationDeadline) return false;
-      const deadline = parseISO(pool.registrationDeadline);
-      return isValid(deadline) && selectedDate <= deadline;
-    });
+        // Check registrationOpens - pool must have started registration
+        if (pool.registrationOpens) {
+          const opens = parseISO(pool.registrationOpens);
+          if (isValid(opens) && selectedDate < opens) return false;
+        }
+        return true;
+      })
+      .map(pool => ({
+        ...pool,
+        isExpired: selectedDate < today,
+      }));
   }, [selectedDate, pools]);
+
+  // Get Your Roscas events (payment_due and payout)
+  const yourRoscaEvents = useMemo(() => {
+    return selectedDateEvents.filter(
+      event => event.type === 'payment_due' || event.type === 'payout' || event.type === 'joined'
+    );
+  }, [selectedDateEvents]);
+
+  // Build sections for SectionList
+  const sections: CalendarSection[] = useMemo(() => {
+    const result: CalendarSection[] = [];
+
+    // Section 0: Calendar (no data items, just header)
+    result.push({
+      key: 'calendar',
+      data: [],
+    });
+
+    // Section 1: Events (sticky header with Date + Your Roscas, data = Available Pools)
+    if (selectedDate && (yourRoscaEvents.length > 0 || availablePoolsForDate.length > 0)) {
+      result.push({
+        key: 'events',
+        data: availablePoolsForDate,
+      });
+    }
+
+    return result;
+  }, [selectedDate, yourRoscaEvents, availablePoolsForDate]);
 
   // Navigation handlers
   const handlePrevMonth = () => setCurrentMonth(prev => subMonths(prev, 1));
@@ -326,160 +384,170 @@ export default function RoscaCalendarScreen() {
     }
   };
 
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-        <View style={styles.headerLeft}>
-          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
-        </View>
-        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
-          Calendar
-        </Text>
-        <View style={styles.headerRight}>
-          {!isCurrentMonth && (
-            <TouchableOpacity onPress={handleToday} style={styles.headerTodayButton}>
-              <Text style={[styles.headerTodayText, { color: theme.colors.primary }]}>Today</Text>
+  // Render section header (calendar or sticky events header)
+  const renderSectionHeader = useCallback(({ section }: { section: SectionListData<PoolWithExpiry, CalendarSection> }) => {
+    if (section.key === 'calendar') {
+      // Calendar section: Month nav + weekday headers + calendar grid + legend
+      return (
+        <View style={{ backgroundColor: theme.colors.background }}>
+          {/* Month Navigation with Back + Today */}
+          <View style={styles.monthNav}>
+            <TouchableOpacity onPress={handleBack} style={styles.navButton}>
+              <Ionicons name="home-outline" size={22} color={theme.colors.textPrimary} />
             </TouchableOpacity>
+            <View style={styles.monthNavCenter}>
+              <TouchableOpacity onPress={handlePrevMonth} style={styles.chevronButton}>
+                <Ionicons name="chevron-back" size={22} color={theme.colors.textPrimary} />
+              </TouchableOpacity>
+              <Text style={[styles.monthText, { color: theme.colors.textPrimary }]}>
+                {format(currentMonth, 'MMMM yyyy')}
+              </Text>
+              <TouchableOpacity onPress={handleNextMonth} style={styles.chevronButton}>
+                <Ionicons name="chevron-forward" size={22} color={theme.colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              onPress={isCurrentMonth ? undefined : handleToday}
+              style={styles.navButton}
+              disabled={isCurrentMonth}
+            >
+              <Ionicons
+                name="today-outline"
+                size={22}
+                color={isCurrentMonth ? theme.colors.textTertiary : theme.colors.primary}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {/* Weekday Headers */}
+          <View style={styles.weekdayRow}>
+            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+              <Text key={day} style={[styles.weekdayText, { color: theme.colors.textSecondary }]}>
+                {day}
+              </Text>
+            ))}
+          </View>
+
+          {/* Calendar Grid */}
+          <View style={styles.calendarGrid}>
+            {calendarDays.map((day, index) => {
+              const events = getEventsForDate(day);
+              const isCurrentMonthDay = day.getMonth() === currentMonth.getMonth();
+              const isToday = isSameDay(day, new Date());
+              const isSelected = selectedDate && isSameDay(day, selectedDate);
+
+              const hasPaymentDue = events.some(e => e.type === 'payment_due');
+              const hasPayout = events.some(e => e.type === 'payout');
+              const hasJoined = events.some(e => e.type === 'joined');
+
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const dayNormalized = new Date(day);
+              dayNormalized.setHours(0, 0, 0, 0);
+              const isPastDate = dayNormalized < today;
+
+              return (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.dayCell,
+                    isToday && [styles.todayCell, { borderColor: theme.colors.primary }],
+                    isSelected && [styles.selectedCell, { backgroundColor: theme.colors.primaryLight }],
+                  ]}
+                  onPress={() => handleDatePress(day)}
+                >
+                  <Text
+                    style={[
+                      styles.dayText,
+                      { color: isCurrentMonthDay ? theme.colors.textPrimary : theme.colors.textTertiary },
+                      isToday && { fontWeight: '700' },
+                    ]}
+                  >
+                    {format(day, 'd')}
+                  </Text>
+
+                  {(hasPaymentDue || hasPayout || hasJoined) && (
+                    <View style={styles.dotsContainer}>
+                      {hasJoined && (
+                        <View style={[styles.eventDot, { backgroundColor: isPastDate ? '#F1C40F50' : '#F1C40F' }]} />
+                      )}
+                      {hasPaymentDue && (
+                        <View style={[styles.eventDot, { backgroundColor: isPastDate ? `${theme.colors.primary}50` : theme.colors.primary }]} />
+                      )}
+                      {hasPayout && (
+                        <View style={[styles.eventDot, { backgroundColor: isPastDate ? '#27AE6050' : '#27AE60' }]} />
+                      )}
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Legend */}
+          <View style={styles.legend}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#F1C40F' }]} />
+              <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
+                Date Joined
+              </Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: theme.colors.primary }]} />
+              <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
+                Payment Due
+              </Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#27AE60' }]} />
+              <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
+                Payout
+              </Text>
+            </View>
+          </View>
+
+          {/* Hint when no date selected */}
+          {!selectedDate && (
+            <View style={styles.hintContainer}>
+              <Text style={[styles.hintText, { color: theme.colors.textSecondary }]}>
+                Tap a date to see details
+              </Text>
+            </View>
+          )}
+
+          {/* Empty state when no events on selected date */}
+          {selectedDate && selectedDateEvents.length === 0 && availablePoolsForDate.length === 0 && (
+            <View style={styles.hintContainer}>
+              <Text style={[styles.hintText, { color: theme.colors.textSecondary }]}>
+                No pool events on this day
+              </Text>
+            </View>
           )}
         </View>
-      </View>
+      );
+    }
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Month Navigation */}
-        <View style={styles.monthNav}>
-          <TouchableOpacity onPress={handlePrevMonth} style={styles.navButton}>
-            <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
-          <Text style={[styles.monthText, { color: theme.colors.textPrimary }]}>
-            {format(currentMonth, 'MMMM yyyy')}
+    // Events section header (STICKY): Date + Your Roscas
+    if (section.key === 'events' && selectedDate) {
+      return (
+        <View style={[styles.stickyEventsHeader, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+          {/* Date Title */}
+          <Text style={[styles.eventsTitle, { color: theme.colors.textPrimary }]}>
+            {format(selectedDate, 'EEEE, MMMM d')}
           </Text>
-          <TouchableOpacity onPress={handleNextMonth} style={styles.navButton}>
-            <Ionicons name="chevron-forward" size={24} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
-        </View>
 
-        {/* Weekday Headers */}
-        <View style={styles.weekdayRow}>
-          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-            <Text key={day} style={[styles.weekdayText, { color: theme.colors.textSecondary }]}>
-              {day}
-            </Text>
-          ))}
-        </View>
-
-        {/* Calendar Grid */}
-        <View style={styles.calendarGrid}>
-          {calendarDays.map((day, index) => {
-            const events = getEventsForDate(day);
-            const isCurrentMonth = day.getMonth() === currentMonth.getMonth();
-            const isToday = isSameDay(day, new Date());
-            const isSelected = selectedDate && isSameDay(day, selectedDate);
-
-            // Group events by type for colored dots (only Payment Due + Payout)
-            const hasPaymentDue = events.some(e => e.type === 'payment_due');
-            const hasPayout = events.some(e => e.type === 'payout');
-
-            return (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.dayCell,
-                  isToday && [styles.todayCell, { borderColor: theme.colors.primary }],
-                  isSelected && [styles.selectedCell, { backgroundColor: theme.colors.primaryLight }],
-                ]}
-                onPress={() => handleDatePress(day)}
-              >
-                <Text
-                  style={[
-                    styles.dayText,
-                    { color: isCurrentMonth ? theme.colors.textPrimary : theme.colors.textTertiary },
-                    isToday && { fontWeight: '700' },
-                  ]}
-                >
-                  {format(day, 'd')}
-                </Text>
-
-                {/* Event Dots - Payment Due (blue) + Payout (yellow) only */}
-                {(hasPaymentDue || hasPayout) && (
-                  <View style={styles.dotsContainer}>
-                    {hasPaymentDue && (
-                      <View style={[styles.eventDot, { backgroundColor: theme.colors.primary }]} />
-                    )}
-                    {hasPayout && (
-                      <View style={[styles.eventDot, { backgroundColor: '#F1C40F' }]} />
-                    )}
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Legend */}
-        <View style={styles.legend}>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: theme.colors.primary }]} />
-            <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
-              Payment Due
-            </Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: '#F1C40F' }]} />
-            <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
-              Payout
-            </Text>
-          </View>
-        </View>
-
-        {/* Selected Date Events */}
-        {selectedDate && (selectedDateEvents.length > 0 || availablePoolsForDate.length > 0) && (
-          <View style={[styles.eventsList, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-            <Text style={[styles.eventsTitle, { color: theme.colors.textPrimary }]}>
-              {format(selectedDate, 'EEEE, MMMM d')}
-            </Text>
-            {/* Available pools section - show count + full list */}
-            {availablePoolsForDate.length > 0 && (
-              <>
-                <Text style={[styles.poolCountText, { color: theme.colors.textSecondary }]}>
-                  ({availablePoolsForDate.length} pools available)
-                </Text>
-                {availablePoolsForDate.map(pool => (
-                  <TouchableOpacity
-                    key={pool.id}
-                    style={[styles.eventItem, { borderColor: theme.colors.border }]}
-                    onPress={() => (navigation as any).navigate('JoinRoscaScreen')}
-                  >
-                    <View style={[styles.eventColor, { backgroundColor: getFrequencyColor(pool.frequency) }]} />
-                    <View style={styles.eventInfo}>
-                      <Text style={[styles.eventName, { color: theme.colors.textPrimary }]}>
-                        {cleanPoolName(pool.name)}
-                      </Text>
-                      <Text style={[styles.eventDetails, { color: theme.colors.textSecondary }]}>
-                        G{pool.contributionAmount.toLocaleString()}/{pool.frequency}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={20} color={theme.colors.textTertiary} />
-                  </TouchableOpacity>
-                ))}
-              </>
-            )}
-
-            {/* Other events (payment due, payout, etc.) */}
-            {selectedDateEvents
-              .filter(event => event.type !== 'pools_available')
-              .map(event => {
-                // Get event type label
-                const typeLabel = event.type === 'payment_due'
-                  ? 'Payment Due'
-                  : event.type === 'payout'
-                    ? 'Payout'
-                    : event.type === 'registration_deadline'
-                      ? 'Last Day!'
-                      : 'Pool Starts';
-
+          {/* Your Roscas Section */}
+          {yourRoscaEvents.length > 0 && (
+            <>
+              <Text style={[styles.sectionHeader, { color: theme.colors.textSecondary }]}>
+                Your Active Roscas
+              </Text>
+              {yourRoscaEvents.map(event => {
+                const typeLabel = event.type === 'payment_due' ? 'Payment Due' : event.type === 'joined' ? 'Date Joined' : 'Payout';
+                // Payout shows total amount, payment/joined shows amount per frequency
+                const amountDisplay = event.type === 'payout'
+                  ? `G${event.amount.toLocaleString()}`
+                  : `G${event.amount.toLocaleString()}/${event.frequency}`;
                 return (
                   <TouchableOpacity
                     key={event.id}
@@ -492,34 +560,90 @@ export default function RoscaCalendarScreen() {
                         {event.name}
                       </Text>
                       <Text style={[styles.eventDetails, { color: theme.colors.textSecondary }]}>
-                        {typeLabel} • G{event.amount.toLocaleString()}/{event.frequency}
+                        {typeLabel} • {amountDisplay}
                       </Text>
                     </View>
                     <Ionicons name="chevron-forward" size={20} color={theme.colors.textTertiary} />
                   </TouchableOpacity>
                 );
               })}
-          </View>
-        )}
+            </>
+          )}
 
-        {/* Empty state when no events on selected date */}
-        {selectedDate && selectedDateEvents.length === 0 && availablePoolsForDate.length === 0 && (
-          <View style={styles.hintContainer}>
-            <Text style={[styles.hintText, { color: theme.colors.textSecondary }]}>
-              No pool events on this day
+          {/* Available Pools Header */}
+          {availablePoolsForDate.length > 0 && (
+            <Text style={[styles.sectionHeader, { color: theme.colors.textSecondary, marginTop: yourRoscaEvents.length > 0 ? 8 : 2 }]}>
+              {availablePoolsForDate.length} Pools {availablePoolsForDate[0]?.isExpired ? 'Expired' : 'Available'}
+            </Text>
+          )}
+        </View>
+      );
+    }
+
+    return null;
+  }, [theme.colors, currentMonth, calendarDays, selectedDate, selectedDateEvents, availablePoolsForDate, yourRoscaEvents, getEventsForDate, handlePrevMonth, handleNextMonth, handleDatePress, handleEventPress, handleBack, handleToday, isCurrentMonth]);
+
+  // Render pool item
+  const renderPoolItem = useCallback(({ item: pool }: { item: PoolWithExpiry }) => {
+    return (
+      <View style={[styles.poolItemContainer, { backgroundColor: theme.colors.card }]}>
+        <TouchableOpacity
+          style={[
+            styles.eventItem,
+            { borderColor: theme.colors.border },
+            pool.isExpired && styles.expiredPoolItem,
+          ]}
+          onPress={() => {
+            if (!pool.isExpired) {
+              (navigation as any).navigate('RoscaJoinAgreementScreen', { pool });
+            }
+          }}
+        >
+          <View style={[
+            styles.eventColor,
+            { backgroundColor: getFrequencyColor(pool.frequency) },
+            pool.isExpired && { opacity: 0.4 },
+          ]} />
+          <View style={styles.eventInfo}>
+            <View style={styles.poolNameRow}>
+              <Text style={[
+                styles.eventName,
+                { color: pool.isExpired ? theme.colors.textTertiary : theme.colors.textPrimary },
+              ]}>
+                {cleanPoolName(pool.name)}
+              </Text>
+              {pool.isExpired && (
+                <View style={[styles.expiredBadge, { backgroundColor: theme.colors.border }]}>
+                  <Text style={[styles.expiredBadgeText, { color: theme.colors.textTertiary }]}>
+                    Closed
+                  </Text>
+                </View>
+              )}
+            </View>
+            <Text style={[styles.eventDetails, { color: theme.colors.textSecondary }]}>
+              G{pool.contributionAmount.toLocaleString()}/{pool.frequency}
             </Text>
           </View>
-        )}
+          <Ionicons name="chevron-forward" size={20} color={theme.colors.textTertiary} />
+        </TouchableOpacity>
+      </View>
+    );
+  }, [theme.colors, navigation]);
 
-        {/* Hint when no date selected */}
-        {!selectedDate && (
-          <View style={styles.hintContainer}>
-            <Text style={[styles.hintText, { color: theme.colors.textSecondary }]}>
-              Tap a date to see details
-            </Text>
-          </View>
-        )}
-      </ScrollView>
+  // Key extractor for pool items
+  const keyExtractor = useCallback((item: PoolWithExpiry) => item.id, []);
+
+  return (
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <SectionList
+        sections={sections}
+        stickySectionHeadersEnabled={true}
+        renderSectionHeader={renderSectionHeader}
+        renderItem={renderPoolItem}
+        keyExtractor={keyExtractor}
+        showsVerticalScrollIndicator={false}
+        style={styles.scrollView}
+      />
     </SafeAreaView>
   );
 }
@@ -528,55 +652,32 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-  },
-  headerLeft: {
-    width: 52,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-  },
-  headerRight: {
-    width: 52,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
   scrollView: {
     flex: 1,
   },
   monthNav: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  monthNavCenter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
   },
   navButton: {
+    padding: 8,
+  },
+  chevronButton: {
     padding: 4,
   },
   monthText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-  },
-  headerTodayButton: {
-    padding: 4,
-  },
-  headerTodayText: {
-    fontSize: 13,
-    fontWeight: '600',
+    textAlign: 'center',
+    minWidth: 140,
   },
   weekdayRow: {
     flexDirection: 'row',
@@ -613,7 +714,8 @@ const styles = StyleSheet.create({
   },
   dotsContainer: {
     flexDirection: 'row',
-    marginTop: 2,
+    position: 'absolute',
+    top: 18,
     gap: 2,
   },
   eventDot: {
@@ -649,19 +751,34 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
   },
+  stickyEventsHeader: {
+    padding: 10,
+    paddingBottom: 0,
+    marginHorizontal: 10,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+  },
+  poolItemContainer: {
+    marginHorizontal: 10,
+    paddingHorizontal: 10,
+  },
   eventsTitle: {
     fontSize: 15,
     fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   eventItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderTopWidth: 1,
   },
-  poolCountText: {
+  sectionHeader: {
     fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 2,
     marginBottom: 4,
   },
   eventColor: {
@@ -688,5 +805,22 @@ const styles = StyleSheet.create({
   hintText: {
     fontSize: 14,
     textAlign: 'center',
+  },
+  expiredPoolItem: {
+    opacity: 0.6,
+  },
+  poolNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  expiredBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  expiredBadgeText: {
+    fontSize: 10,
+    fontWeight: '500',
   },
 });

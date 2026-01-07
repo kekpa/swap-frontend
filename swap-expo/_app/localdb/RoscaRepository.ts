@@ -2,11 +2,16 @@
 // Pool-based savings system local cache with entity isolation
 
 import * as SQLite from 'expo-sqlite';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import logger from '../utils/logger';
 import { databaseManager } from './DatabaseManager';
 import { eventEmitter } from '../utils/eventEmitter';
 import { Platform } from 'react-native';
 import type { RoscaPool, RoscaEnrollment, RoscaPayment } from '../types/rosca.types';
+
+// Cache timestamp keys
+const POOLS_CACHE_TIMESTAMP_KEY = 'rosca_pools_last_sync';
+const ENROLLMENTS_CACHE_TIMESTAMP_PREFIX = 'rosca_enrollments_last_sync_'; // per-entity
 
 export class RoscaRepository {
   private static instance: RoscaRepository;
@@ -91,10 +96,88 @@ export class RoscaRepository {
   }
 
   /**
-   * Save pools to local cache
+   * Get the timestamp when pools cache was last updated
+   */
+  public async getPoolsCacheTimestamp(): Promise<number | null> {
+    try {
+      const result = await AsyncStorage.getItem(POOLS_CACHE_TIMESTAMP_KEY);
+      return result ? parseInt(result, 10) : null;
+    } catch (error) {
+      logger.debug('[RoscaRepository] Error getting pools cache timestamp:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Set the pools cache timestamp to now
+   */
+  private async setPoolsCacheTimestamp(): Promise<void> {
+    try {
+      await AsyncStorage.setItem(POOLS_CACHE_TIMESTAMP_KEY, Date.now().toString());
+    } catch (error) {
+      logger.debug('[RoscaRepository] Error setting pools cache timestamp:', error);
+    }
+  }
+
+  /**
+   * Clear the pools cache timestamp (forces fresh fetch)
+   */
+  public async clearPoolsCacheTimestamp(): Promise<void> {
+    try {
+      await AsyncStorage.removeItem(POOLS_CACHE_TIMESTAMP_KEY);
+      logger.debug('[RoscaRepository] Cleared pools cache timestamp');
+    } catch (error) {
+      logger.debug('[RoscaRepository] Error clearing pools cache timestamp:', error);
+    }
+  }
+
+  // ==================== Enrollment Cache Timestamps (Entity-Specific) ====================
+
+  /**
+   * Get the timestamp when enrollments cache was last updated for an entity
+   */
+  public async getEnrollmentsCacheTimestamp(entityId: string): Promise<number | null> {
+    try {
+      const key = `${ENROLLMENTS_CACHE_TIMESTAMP_PREFIX}${entityId}`;
+      const result = await AsyncStorage.getItem(key);
+      return result ? parseInt(result, 10) : null;
+    } catch (error) {
+      logger.debug('[RoscaRepository] Error getting enrollments cache timestamp:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Set the enrollments cache timestamp to now for an entity
+   */
+  private async setEnrollmentsCacheTimestamp(entityId: string): Promise<void> {
+    try {
+      const key = `${ENROLLMENTS_CACHE_TIMESTAMP_PREFIX}${entityId}`;
+      await AsyncStorage.setItem(key, Date.now().toString());
+    } catch (error) {
+      logger.debug('[RoscaRepository] Error setting enrollments cache timestamp:', error);
+    }
+  }
+
+  /**
+   * Clear the enrollments cache timestamp for an entity (forces fresh fetch)
+   */
+  public async clearEnrollmentsCacheTimestamp(entityId: string): Promise<void> {
+    try {
+      const key = `${ENROLLMENTS_CACHE_TIMESTAMP_PREFIX}${entityId}`;
+      await AsyncStorage.removeItem(key);
+      logger.debug(`[RoscaRepository] Cleared enrollments cache timestamp for entity: ${entityId}`);
+    } catch (error) {
+      logger.debug('[RoscaRepository] Error clearing enrollments cache timestamp:', error);
+    }
+  }
+
+  /**
+   * Save pools to local cache (REPLACES all existing pools)
+   * Uses DELETE + INSERT to ensure deleted pools are removed from cache
    */
   public async savePools(pools: RoscaPool[]): Promise<void> {
-    logger.debug(`[RoscaRepository] Saving ${pools?.length || 0} pools`);
+    logger.debug(`[RoscaRepository] Replacing cache with ${pools?.length || 0} fresh pools`);
 
     if (!(await this.isSQLiteAvailable())) {
       logger.warn('[RoscaRepository] SQLite not available, aborting save');
@@ -102,16 +185,28 @@ export class RoscaRepository {
     }
 
     if (!pools || pools.length === 0) {
-      logger.debug('[RoscaRepository] No pools to save');
+      logger.debug('[RoscaRepository] No pools to save, clearing cache');
+      // If API returns empty, clear the cache too
+      try {
+        const db = await this.getDatabase();
+        await db.runAsync('DELETE FROM rosca_pools');
+        await this.setPoolsCacheTimestamp();
+      } catch (error) {
+        logger.error('[RoscaRepository] Error clearing pools:', error);
+      }
       return;
     }
 
     try {
       const db = await this.getDatabase();
 
+      // STEP 1: Delete ALL existing pools (removes stale/deleted pools)
+      await db.runAsync('DELETE FROM rosca_pools');
+
+      // STEP 2: Insert fresh pools from API
       for (const pool of pools) {
         const statement = await db.prepareAsync(`
-          INSERT OR REPLACE INTO rosca_pools (
+          INSERT INTO rosca_pools (
             id, name, description, contribution_amount, currency_code, currency_symbol,
             frequency, payout_multiplier, expected_payout, total_members, available_slots,
             min_members, max_members, grace_period_days, status, visibility, created_at, updated_at
@@ -130,9 +225,9 @@ export class RoscaRepository {
           pool.expectedPayout,
           pool.totalMembers ?? (pool as any).memberCount ?? 0,
           pool.availableSlots ?? null,
-          pool.minMembers,      // Now provided by backend
+          pool.minMembers,
           pool.maxMembers ?? null,
-          pool.gracePeriodDays, // Now provided by backend
+          pool.gracePeriodDays,
           pool.status,
           (pool as any).visibility || 'public',
           (pool as any).createdAt || new Date().toISOString(),
@@ -142,7 +237,10 @@ export class RoscaRepository {
         await statement.finalizeAsync();
       }
 
-      logger.info(`[RoscaRepository] Successfully saved ${pools.length} pools`);
+      // STEP 3: Update cache timestamp
+      await this.setPoolsCacheTimestamp();
+
+      logger.info(`[RoscaRepository] ✅ Replaced cache with ${pools.length} fresh pools`);
       eventEmitter.emit('data_updated', { type: 'rosca_pools', data: pools });
     } catch (error) {
       logger.error('[RoscaRepository] Error saving pools:', error instanceof Error ? error.message : String(error));
@@ -229,8 +327,8 @@ export class RoscaRepository {
             id, entity_id, pool_id, pool_name, contribution_amount, currency_code, currency_symbol,
             frequency, queue_position, total_members, total_contributed, expected_payout,
             contributions_count, prepaid_periods, next_payment_due, days_until_next_payment,
-            status, is_your_turn, payout_received, pending_late_fees, joined_at, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            status, is_your_turn, payout_received, pending_late_fees, payout_date, joined_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         await statement.executeAsync(
@@ -254,12 +352,16 @@ export class RoscaRepository {
           enrollment.isYourTurn ? 1 : 0,
           enrollment.payoutReceived ? 1 : 0,
           enrollment.pendingLateFees,
+          enrollment.payoutDate || null,
           enrollment.joinedAt,
           new Date().toISOString()
         );
 
         await statement.finalizeAsync();
       }
+
+      // Update cache timestamp
+      await this.setEnrollmentsCacheTimestamp(entityId);
 
       logger.info(`[RoscaRepository] Successfully saved ${enrollments.length} enrollments for entity: ${entityId}`);
       eventEmitter.emit('data_updated', { type: 'rosca_enrollments', data: enrollments, entityId });
@@ -440,6 +542,7 @@ export class RoscaRepository {
       isYourTurn: Boolean(row.is_your_turn),
       payoutReceived: Boolean(row.payout_received),
       pendingLateFees: Number(row.pending_late_fees),
+      payoutDate: row.payout_date || null,
       joinedAt: row.joined_at,
     };
   }

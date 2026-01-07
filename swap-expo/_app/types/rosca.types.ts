@@ -72,6 +72,7 @@ export interface RoscaEnrollment {
   isYourTurn: boolean;
   payoutReceived: boolean;
   pendingLateFees: number;
+  payoutDate: string | null;
   joinedAt: string;
 }
 

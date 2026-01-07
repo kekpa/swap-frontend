@@ -59,6 +59,7 @@ export async function initializeRoscaSchema(db: SQLiteDatabase): Promise<void> {
         is_your_turn INTEGER NOT NULL DEFAULT 0,
         payout_received INTEGER NOT NULL DEFAULT 0,
         pending_late_fees REAL NOT NULL DEFAULT 0,
+        payout_date TEXT,
         joined_at TEXT NOT NULL,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
@@ -141,6 +142,14 @@ export async function initializeRoscaSchema(db: SQLiteDatabase): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_rosca_payments_due_date
       ON rosca_payments(due_date);
     `);
+
+    // Migration: Add payout_date column if it doesn't exist (for existing databases)
+    try {
+      await db.runAsync(`ALTER TABLE rosca_enrollments ADD COLUMN payout_date TEXT`);
+      logger.debug('[RoscaSchema] Added payout_date column to rosca_enrollments');
+    } catch {
+      // Column already exists, ignore error
+    }
 
     logger.info('[RoscaSchema] Rosca schema initialized successfully');
   } catch (error) {
