@@ -32,6 +32,9 @@ export interface LoginResult {
   message?: string;
   userType?: 'personal' | 'business';
   user?: SessionData;
+  errorCode?: string;
+  scheduledDeletionDate?: string;
+  canCancel?: boolean;
 }
 
 export interface LoginCredentials {
@@ -182,6 +185,28 @@ class LoginService {
 
     } catch (error: any) {
       logger.error('[LoginService] Login error:', error);
+
+      // Check for specific error codes from backend
+      const errorCode = error.response?.data?.code;
+      if (errorCode === 'ACCOUNT_PENDING_DELETION') {
+        return {
+          success: false,
+          message: error.response.data.message,
+          errorCode: 'ACCOUNT_PENDING_DELETION',
+          scheduledDeletionDate: error.response.data.scheduledDeletionDate,
+          canCancel: error.response.data.canCancel,
+        };
+      }
+
+      if (errorCode === 'ACCOUNT_DELETED') {
+        return {
+          success: false,
+          message: error.response.data.message,
+          errorCode: 'ACCOUNT_DELETED',
+          canCancel: false,
+        };
+      }
+
       return {
         success: false,
         message: error.response?.data?.message || error.message || 'Login failed'

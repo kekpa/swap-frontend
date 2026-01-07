@@ -334,7 +334,63 @@ const SignInScreen = ({ route }: any) => {
             }
           }
         } else {
-          // Unified login failed
+          // Unified login failed - check for specific error codes
+
+          // Handle ACCOUNT_PENDING_DELETION - show cancel option
+          if (response?.errorCode === 'ACCOUNT_PENDING_DELETION') {
+            Alert.alert(
+              "Account Pending Deletion",
+              response.message || "Your account is scheduled for deletion.",
+              [
+                {
+                  text: "Keep Deleted",
+                  style: "cancel"
+                },
+                {
+                  text: "Cancel Deletion",
+                  onPress: async () => {
+                    try {
+                      setIsLoading(true);
+                      const cancelResponse = await apiClient.post('/auth/cancel-deletion-public', {
+                        identifier: identifierToLogin,
+                        password,
+                      });
+                      if (cancelResponse.data?.success) {
+                        Alert.alert(
+                          "Account Restored",
+                          "Your account has been restored. Please sign in again.",
+                          [{ text: "OK" }]
+                        );
+                      }
+                    } catch (cancelError: any) {
+                      logger.error('Cancel deletion failed', cancelError, 'auth');
+                      Alert.alert(
+                        "Error",
+                        cancelError.response?.data?.message || "Failed to cancel deletion. Please contact support."
+                      );
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  },
+                },
+              ]
+            );
+            setIsLoading(false);
+            return;
+          }
+
+          // Handle ACCOUNT_DELETED - permanent deletion, no recovery
+          if (response?.errorCode === 'ACCOUNT_DELETED') {
+            Alert.alert(
+              "Account Deleted",
+              response.message || "This account has been permanently deleted.",
+              [{ text: "OK" }]
+            );
+            setIsLoading(false);
+            return;
+          }
+
+          // Generic error handling
           let errorMessage = "Invalid credentials. Please check your email/phone and password.";
 
           // Check if it's a "no profile found" error vs actual credential error
