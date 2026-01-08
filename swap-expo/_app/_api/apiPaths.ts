@@ -59,6 +59,8 @@ export const AUTH_PATHS = {
   BIOMETRIC_DEVICES: '/auth/biometric/devices',
   // Account deletion (Apple 5.1.1 compliance)
   DELETE_ACCOUNT: '/auth/account',
+  // Cancel deletion (within 30-day grace period)
+  CANCEL_DELETION: '/auth/cancel-deletion',
 };
 
 /**
@@ -191,6 +193,10 @@ export const BUSINESS_PATHS = {
   CHECK_PIN: (businessId: string) => `/businesses/${businessId}/check-pin`,
   SET_PIN: (businessId: string) => `/businesses/${businessId}/set-pin`,
   REMOVE_PIN: (businessId: string) => `/businesses/${businessId}/pin`,
+  // Business deletion (30-day grace period, requires primary owner)
+  DELETE: (businessId: string) => `/businesses/${businessId}`,
+  // Cancel business deletion (within 30-day grace period)
+  CANCEL_DELETION: (businessId: string) => `/businesses/${businessId}/cancel-deletion`,
 };
 
 /**

@@ -92,8 +92,8 @@ export default function HomeScreenV2() {
   };
 
   const handleRoscaPayPress = (enrollment: RoscaEnrollment) => {
-    // Go directly to payment confirmation (no alert)
-    (navigation as any).navigate('RoscaPaymentConfirmationScreen', { enrollment });
+    // Navigate to payment screen
+    (navigation as any).navigate('RoscaPaymentScreen', { enrollment });
   };
 
   const handleJoinRosca = () => {

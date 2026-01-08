@@ -25,6 +25,7 @@ import { staleTimeManager } from './config/staleTimeConfig';
 import { validateQueryKeyForEntityIsolation } from './entityIsolationGuards';
 import { queryKeys } from './queryKeys';
 import { TIMELINE_UPDATED_EVENT, TimelineUpdateEvent } from '../localdb/UnifiedTimelineRepository';
+import { authStateMachine, AuthState, AuthEvent, AuthTransitionContext } from '../utils/AuthStateMachine';
 
 /**
  * Create AsyncStorage persister for cache persistence
@@ -128,6 +129,9 @@ let dataUpdatedUnsubscribe: (() => void) | null = null;
 
 // Store the TIMELINE_UPDATED_EVENT listener cleanup function (centralized)
 let timelineEventUnsubscribe: (() => void) | null = null;
+
+// Store the auth state listener cleanup function
+let authStateUnsubscribe: (() => void) | null = null;
 
 /**
  * Handle SQLite data_updated events to invalidate relevant queries.
@@ -256,6 +260,32 @@ const setupTimelineEventListener = (): void => {
 };
 
 /**
+ * Auth State Listener for Profile Cache Invalidation
+ *
+ * When user logs in (PIN, biometric, or password), backend may have changed
+ * profile data (e.g., auto-cancelled deletion for pending_deletion profiles).
+ * Invalidate availableProfiles to ensure fresh data.
+ *
+ * Pattern: Centralized query invalidation on auth state change
+ * (matches WhatsApp/Revolut pattern)
+ */
+const setupAuthStateListener = (): void => {
+  const handleAuthStateChange = (_newState: AuthState, context: AuthTransitionContext) => {
+    if (context.event === AuthEvent.LOGIN_SUCCESS) {
+      logger.debug('[QueryClient] LOGIN_SUCCESS - invalidating availableProfiles', 'query_invalidation');
+
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.availableProfiles,
+        refetchType: 'active',
+      });
+    }
+  };
+
+  authStateUnsubscribe = authStateMachine.onStateChange(handleAuthStateChange);
+  logger.info('[QueryClient] Auth state listener established for profile cache invalidation');
+};
+
+/**
  * Initialize QueryClient with persistence and network monitoring
  */
 export const initializeQueryClient = async (): Promise<void> => {
@@ -319,6 +349,10 @@ export const initializeQueryClient = async (): Promise<void> => {
     // This replaces scattered listeners in useInteractions, useRecentTransactions, useLocalTimeline
     setupTimelineEventListener();
 
+    // Auth state listener for profile cache invalidation after login
+    // Ensures "Closing on [date]" badge disappears when deletion is auto-cancelled
+    setupAuthStateListener();
+
     logger.info('[QueryClient] ✅ TanStack Query initialization complete');
     
   } catch (error) {
@@ -348,6 +382,12 @@ export const cleanupQueryClient = (): void => {
     if (timelineEventUnsubscribe) {
       timelineEventUnsubscribe();
       timelineEventUnsubscribe = null;
+    }
+
+    // Remove auth state listener
+    if (authStateUnsubscribe) {
+      authStateUnsubscribe();
+      authStateUnsubscribe = null;
     }
 
     // Clear all queries

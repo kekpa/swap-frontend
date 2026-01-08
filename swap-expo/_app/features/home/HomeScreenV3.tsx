@@ -73,8 +73,10 @@ function transformEnrollment(enrollment: RoscaEnrollment): RoscaUI {
     frequency: transformFrequency(enrollment.frequency),
     daysLeft: enrollment.daysUntilNextPayment,
     totalContributed: enrollment.totalContributed,
-    progress: enrollment.totalMembers > 0
-      ? enrollment.queuePosition / enrollment.totalMembers
+    // Progress = payments made / total payments required
+    // totalContributed / (contributionAmount * durationPeriods)
+    progress: enrollment.contributionAmount > 0 && enrollment.durationPeriods > 0
+      ? Math.min(enrollment.totalContributed / (enrollment.contributionAmount * enrollment.durationPeriods), 1)
       : 0,
     queuePosition: enrollment.queuePosition,
     totalMembers: enrollment.totalMembers,
@@ -92,14 +94,23 @@ function transformPool(pool: RoscaPool): AvailableRoscaUI {
 }
 
 // Responsive scaling based on screen height
-// iPhone SE: ~667, iPhone 16 Pro Max: ~932
+// iPhone SE: ~667, iPhone 14: ~844, iPhone 16 Pro Max: ~932
 const SMALL_SCREEN_HEIGHT = 700;
+const MIN_SCALE = 0.88; // Don't go below 88% on smallest screens
+
 const useResponsiveScale = () => {
   const { height } = useWindowDimensions();
-  const isLargeScreen = height > SMALL_SCREEN_HEIGHT;
-  // Scale factor: 1.0 for small screens, up to 1.15 for large screens
-  const scale = isLargeScreen ? Math.min(1 + (height - SMALL_SCREEN_HEIGHT) / 1500, 1.15) : 1;
-  return { scale, isLargeScreen };
+
+  let scale: number;
+  if (height < SMALL_SCREEN_HEIGHT) {
+    // Small screens: scale DOWN proportionally (0.88 - 1.0)
+    scale = Math.max(MIN_SCALE, height / SMALL_SCREEN_HEIGHT);
+  } else {
+    // Large screens: scale UP (1.0 - 1.15)
+    scale = Math.min(1 + (height - SMALL_SCREEN_HEIGHT) / 1500, 1.15);
+  }
+
+  return { scale, isLargeScreen: height > SMALL_SCREEN_HEIGHT };
 };
 
 // Sort roscas: payout first, then by urgency (days left)
@@ -216,33 +227,34 @@ function PayoutCard({
     <TouchableOpacity
       style={[
         styles.actionCard,
-        { backgroundColor: '#10B981', padding: 16 * scale },
+        { backgroundColor: '#10B981', padding: 12 * scale },
       ]}
       onPress={onPress}
       activeOpacity={0.9}
     >
       <View style={styles.cardTopRow}>
         <View style={styles.cardInfo}>
-          <Text style={[styles.cardEmoji, { fontSize: 20 * scale }]}>🎉</Text>
-          <Text style={[styles.cardName, { fontSize: 17 * scale }]}>{name}</Text>
+          <Text style={[styles.cardEmoji, { fontSize: 18 * scale }]}>🎉</Text>
+          <Text style={[styles.cardName, { fontSize: 15 * scale }]}>{name}</Text>
         </View>
         <View style={styles.daysBadge}>
           <Text style={styles.daysBadgeText}>{daysLeft}d</Text>
         </View>
       </View>
 
-      <Text style={[styles.cardSubtext, { fontSize: 13 * scale }]}>Your turn!</Text>
-      <Text style={[styles.cardAmount, { fontSize: 32 * scale }]}>G{payoutAmount.toLocaleString()}</Text>
+      <Text style={[styles.cardSubtext, { fontSize: 12 * scale }]}>Your turn!</Text>
+      <Text style={[styles.cardAmount, { fontSize: 26 * scale }]}>G{payoutAmount.toLocaleString()}</Text>
 
       <View style={styles.walletNotice}>
-        <Ionicons name="checkmark-circle" size={16 * scale} color="rgba(255, 255, 255, 0.9)" />
-        <Text style={[styles.walletNoticeText, { fontSize: 13 * scale }]}>Sent to your wallet</Text>
+        <Ionicons name="checkmark-circle" size={14 * scale} color="rgba(255, 255, 255, 0.9)" />
+        <Text style={[styles.walletNoticeText, { fontSize: 12 * scale }]}>Sent to your wallet</Text>
       </View>
     </TouchableOpacity>
   );
 }
 
 // --- Payment Card (Purple - Payment Due) ---
+// isPrimary: true = bold purple, false = lighter purple (for visual hierarchy)
 function PaymentCard({
   name,
   contributionAmount,
@@ -251,7 +263,9 @@ function PaymentCard({
   totalContributed,
   progress,
   onPay,
+  onPress,
   scale = 1,
+  isPrimary = true,
 }: {
   name: string;
   contributionAmount: number;
@@ -260,41 +274,60 @@ function PaymentCard({
   totalContributed: number;
   progress: number;
   onPay: () => void;
+  onPress?: () => void;
   scale?: number;
+  isPrimary?: boolean;
 }) {
   const { theme } = useTheme();
 
+  // Primary = solid purple, Secondary = light purple with border
+  const cardStyle = isPrimary
+    ? { backgroundColor: theme.colors.primary }
+    : { backgroundColor: theme.colors.primary + '15', borderWidth: 1, borderColor: theme.colors.primary + '40' };
+
+  const textColor = isPrimary ? '#FFFFFF' : theme.colors.primary;
+  const subtextColor = isPrimary ? 'rgba(255, 255, 255, 0.8)' : theme.colors.primary + '99';
+  const badgeBg = isPrimary ? 'rgba(255, 255, 255, 0.2)' : theme.colors.primary + '20';
+  const badgeText = isPrimary ? '#FFFFFF' : theme.colors.primary;
+  const progressBg = isPrimary ? 'rgba(255, 255, 255, 0.3)' : theme.colors.primary + '30';
+  const progressFill = isPrimary ? 'rgba(255, 255, 255, 0.9)' : theme.colors.primary;
+  const buttonBg = isPrimary ? 'rgba(255, 255, 255, 0.2)' : theme.colors.primary;
+  const buttonText = '#FFFFFF';
+
+  const CardWrapper = onPress ? TouchableOpacity : View;
+  const wrapperProps = onPress ? { onPress, activeOpacity: 0.9 } : {};
+
   return (
-    <View style={[styles.actionCard, { backgroundColor: theme.colors.primary, padding: 16 * scale }]}>
+    <CardWrapper style={[styles.actionCard, cardStyle, { padding: 16 * scale }]} {...wrapperProps}>
       <View style={styles.cardTopRow}>
         <View style={styles.cardInfo}>
           <Text style={[styles.cardEmoji, { fontSize: 20 * scale }]}>💰</Text>
-          <Text style={[styles.cardName, { fontSize: 17 * scale }]}>{name}</Text>
+          <Text style={[styles.cardName, { fontSize: 17 * scale, color: textColor }]}>{name}</Text>
         </View>
-        <View style={styles.daysBadge}>
-          <Text style={styles.daysBadgeText}>{daysLeft}d</Text>
+        <View style={[styles.daysBadge, { backgroundColor: badgeBg }]}>
+          <Text style={[styles.daysBadgeText, { color: badgeText }]}>{daysLeft}d</Text>
         </View>
       </View>
 
-      <Text style={[styles.cardSubtext, { fontSize: 13 * scale }]}>Pay to continue</Text>
+      <Text style={[styles.cardSubtext, { fontSize: 13 * scale, color: subtextColor }]}>Pay to continue</Text>
 
       <View style={styles.amountRow}>
-        <Text style={[styles.cardAmount, { fontSize: 32 * scale }]}>G{contributionAmount.toLocaleString()}</Text>
+        <Text style={[styles.cardAmount, { fontSize: 32 * scale, color: textColor }]}>G{contributionAmount.toLocaleString()}</Text>
         <View style={styles.progressContainer}>
-          <View style={[styles.progressBar, { height: 5 * scale }]}>
-            <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+          <View style={[styles.progressBar, { height: 5 * scale, backgroundColor: progressBg }]}>
+            <View style={[styles.progressFill, { width: `${progress * 100}%`, backgroundColor: progressFill }]} />
           </View>
         </View>
       </View>
 
       <TouchableOpacity
-        style={[styles.actionButton, { paddingVertical: 12 * scale, marginTop: 10 * scale }]}
+        style={[styles.actionButton, { backgroundColor: buttonBg, paddingVertical: 12 * scale, marginTop: 10 * scale }]}
         onPress={onPay}
         activeOpacity={0.8}
       >
-        <Text style={[styles.actionButtonText, { fontSize: 15 * scale }]}>Pay G{contributionAmount.toLocaleString()}</Text>
+        <Text style={[styles.actionButtonText, { fontSize: 15 * scale, color: buttonText }]}>Pay G{contributionAmount.toLocaleString()}</Text>
       </TouchableOpacity>
-    </View>
+    </CardWrapper>
   );
 }
 
@@ -525,28 +558,48 @@ export default function HomeScreenV3() {
   // Sort roscas by priority
   const sortedRoscas = sortRoscas(userRoscas);
 
-  // Card display logic: max 1 payout + 1 payment
-  // If multiple payouts exist, only show the most urgent one
+  // Card display logic: show up to 2 big cards with type diversity
+  // - Prefer 1 payout + 1 payment (so user sees both "reward" and "action needed")
+  // - Fallback: if only one type exists, show 2 of that type
   const payoutRoscas = sortedRoscas.filter(r => r.isPayoutTurn);
   const paymentRoscas = sortedRoscas.filter(r => !r.isPayoutTurn);
 
   const displayedRoscas: RoscaUI[] = [];
+
+  // First slot: most urgent payout, or most urgent payment if no payouts
   if (payoutRoscas.length > 0) {
-    displayedRoscas.push(payoutRoscas[0]); // Only 1 payout (most urgent)
+    displayedRoscas.push(payoutRoscas[0]);
+  } else if (paymentRoscas.length > 0) {
+    displayedRoscas.push(paymentRoscas[0]);
   }
-  if (paymentRoscas.length > 0) {
-    displayedRoscas.push(paymentRoscas[0]); // Only 1 payment (most urgent)
+
+  // Second slot: prefer type diversity, fallback to same type
+  if (displayedRoscas.length === 1) {
+    const firstIsPayout = displayedRoscas[0].isPayoutTurn;
+
+    if (firstIsPayout && paymentRoscas.length > 0) {
+      // First was payout, add most urgent payment for diversity
+      displayedRoscas.push(paymentRoscas[0]);
+    } else if (!firstIsPayout && payoutRoscas.length > 0) {
+      // First was payment, add most urgent payout for diversity
+      displayedRoscas.push(payoutRoscas[0]);
+    } else if (firstIsPayout && payoutRoscas.length > 1) {
+      // Only payouts exist, show 2nd payout
+      displayedRoscas.push(payoutRoscas[1]);
+    } else if (!firstIsPayout && paymentRoscas.length > 1) {
+      // Only payments exist, show 2nd payment (FIXES BUG)
+      displayedRoscas.push(paymentRoscas[1]);
+    }
   }
 
   const handlePayPress = (rosca: RoscaUI) => {
-    Alert.alert(
-      'Pay',
-      `Pay G${rosca.contributionAmount} for ${rosca.name}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Pay Now', onPress: () => logger.debug('Payment initiated', 'rosca') },
-      ]
-    );
+    // Find the full enrollment object to pass to payment screen
+    const enrollment = enrollments.find(e => e.id === rosca.id);
+    if (enrollment) {
+      (navigation as any).navigate('RoscaPaymentScreen', { enrollment });
+    } else {
+      logger.warn('[HomeScreenV3] Could not find enrollment for rosca', 'rosca', { roscaId: rosca.id });
+    }
   };
 
   const handlePayoutCardPress = (rosca: RoscaUI) => {
@@ -582,9 +635,12 @@ export default function HomeScreenV3() {
   };
 
   const handleAvailableRoscaPress = (rosca: AvailableRoscaUI) => {
-    // Navigate to JoinRoscaScreen with pre-selected rosca
     logger.debug('Available rosca pressed', 'rosca', { roscaId: rosca.id });
-    (navigation as any).navigate('JoinRoscaScreen', { rosca });
+    // Find full pool to pass to agreement screen
+    const fullPool = pools.find(p => p.id === rosca.id);
+    if (fullPool) {
+      (navigation as any).navigate('RoscaJoinAgreementScreen', { pool: fullPool });
+    }
   };
 
   const handleAnnouncementAction = () => {
@@ -628,17 +684,17 @@ export default function HomeScreenV3() {
 
         {/* Greeting Header */}
         <GreetingHeader
-          firstName={user?.firstName || 'User'}
+          firstName={user?.displayName || user?.firstName || user?.businessName}
           activeCount={userRoscas.length}
           onSeeAll={handleSeeAll}
         />
 
         {/* Priority Cards (max 2) OR Empty State */}
-        <View style={[styles.cardsContainer, { gap: 12 * scale }]}>
+        <View style={[styles.cardsContainer, { gap: 10 * scale }]}>
           {userRoscas.length === 0 ? (
             <EmptyStateCard onBrowse={handleJoinRosca} scale={scale} />
           ) : (
-            displayedRoscas.map((rosca) =>
+            displayedRoscas.map((rosca, index) =>
               rosca.isPayoutTurn ? (
                 <PayoutCard
                   key={rosca.id}
@@ -658,7 +714,9 @@ export default function HomeScreenV3() {
                   totalContributed={rosca.totalContributed}
                   progress={rosca.progress}
                   onPay={() => handlePayPress(rosca)}
+                  onPress={() => handleRoscaPress(rosca)}
                   scale={scale}
+                  isPrimary={index === 0}
                 />
               )
             )
@@ -867,6 +925,14 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderRadius: 3,
+  },
+  progressBarBottom: {
+    gap: 4,
+  },
+  progressText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 11,
+    textAlign: 'center',
   },
   actionButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',

@@ -266,9 +266,7 @@ const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) =
   if (authContext.isAuthenticated && needsSetup && !authContext.isLoading) {
     return (
       <AppLockSetupContent
-        userName={isBusinessSetup
-          ? (authContext.user?.businessName || 'Your Business')
-          : (authContext.user?.firstName || 'there')}
+        userName={authContext.user?.displayName || authContext.user?.businessName || authContext.user?.firstName}
         onComplete={handleSetupComplete}
         onLogout={handleLogout}
         isBusinessSetup={isBusinessSetup}
@@ -288,9 +286,7 @@ const AppLockHandler: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
     return (
       <LockScreen
-        userName={isBusinessProfile
-          ? (authContext.user?.businessName || 'Your Business')
-          : (authContext.user?.firstName || 'there')}
+        userName={authContext.user?.displayName || authContext.user?.businessName || authContext.user?.firstName}
         userIdentifier={userIdentifier}
         onUnlock={handleUnlock}
         onLogout={handleLogout}

@@ -6,15 +6,12 @@ import {
   SafeAreaView,
   ScrollView,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { useRoscaPools } from '../../hooks-data/useRoscaPools';
-import { useJoinPool } from '../../hooks-data/useRoscaEnrollments';
-import logger from '../../utils/logger';
 import { formatAmount, getFrequencyLabelFull, cleanPoolName } from '../../utils/roscaUtils';
 import { format, parseISO, differenceInDays, isValid } from 'date-fns';
 import type { RoscaPool } from '../../types/rosca.types';
@@ -38,13 +35,19 @@ function getFrequencyUnit(freq: string): string {
   }
 }
 
+// Route params type
+type JoinRoscaScreenParams = {
+  isExpired?: boolean;
+};
+
 interface PoolCardProps {
   pool: RoscaPool;
   onJoin: () => void;
   isJoining?: boolean;
+  isViewOnly?: boolean;
 }
 
-function PoolCard({ pool, onJoin, isJoining }: PoolCardProps) {
+function PoolCard({ pool, onJoin, isJoining, isViewOnly }: PoolCardProps) {
   const { theme } = useTheme();
   // Use expectedPayout from backend, fallback to multiplier calculation
   const expectedPayout = pool.expectedPayout || pool.contributionAmount * pool.payoutMultiplier;
@@ -128,18 +131,24 @@ function PoolCard({ pool, onJoin, isJoining }: PoolCardProps) {
           )}
         </View>
 
-        <TouchableOpacity
-          style={[styles.joinButton, { backgroundColor: theme.colors.primary, opacity: isJoining ? 0.6 : 1 }]}
-          onPress={onJoin}
-          activeOpacity={0.8}
-          disabled={isJoining}
-        >
-          {isJoining ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
-          ) : (
-            <Text style={styles.joinButtonText}>Join</Text>
-          )}
-        </TouchableOpacity>
+        {isViewOnly ? (
+          <View style={[styles.joinButton, { backgroundColor: theme.colors.border }]}>
+            <Text style={[styles.joinButtonText, { color: theme.colors.textTertiary }]}>Closed</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[styles.joinButton, { backgroundColor: theme.colors.primary, opacity: isJoining ? 0.6 : 1 }]}
+            onPress={onJoin}
+            activeOpacity={0.8}
+            disabled={isJoining}
+          >
+            {isJoining ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Text style={styles.joinButtonText}>Join</Text>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -169,6 +178,8 @@ type SortOption = typeof SORT_OPTIONS[number]['key'];
 export default function JoinRoscaScreen() {
   const { theme } = useTheme();
   const navigation = useNavigation();
+  const route = useRoute<RouteProp<{ JoinRoscaScreen: JoinRoscaScreenParams }, 'JoinRoscaScreen'>>();
+  const isViewOnly = route.params?.isExpired ?? false;
 
   // Filter and sort state
   const [frequencyFilter, setFrequencyFilter] = useState<FrequencyFilter>('all');
@@ -177,7 +188,6 @@ export default function JoinRoscaScreen() {
 
   // Real data hooks - pass sort to API
   const { data: pools = [], isLoading } = useRoscaPools({ sort: sortBy });
-  const joinPoolMutation = useJoinPool();
 
   // Filter pools by frequency and availability
   const availablePools = useMemo(() => {
@@ -203,28 +213,8 @@ export default function JoinRoscaScreen() {
   };
 
   const handleJoinPool = (pool: RoscaPool) => {
-    const poolDisplayName = cleanPoolName(pool.name);
-    Alert.alert(
-      'Join Rosca',
-      `Join ${poolDisplayName} for ${formatAmount(pool.contributionAmount, pool.currencySymbol)}/${getFrequencyLabelFull(pool.frequency)}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Join',
-          onPress: async () => {
-            try {
-              logger.debug('Joining pool', 'rosca', { poolId: pool.id, poolName: poolDisplayName });
-              await joinPoolMutation.mutateAsync({ poolId: pool.id });
-              Alert.alert('Success', `You've joined ${poolDisplayName}!`);
-              navigation.goBack();
-            } catch (error) {
-              logger.error('Failed to join pool', error, 'rosca');
-              Alert.alert('Error', 'Failed to join the pool. Please try again.');
-            }
-          },
-        },
-      ]
-    );
+    // Navigate to agreement screen instead of showing Alert
+    (navigation as any).navigate('RoscaJoinAgreementScreen', { pool });
   };
 
   return (
@@ -235,7 +225,7 @@ export default function JoinRoscaScreen() {
           <Ionicons name="arrow-back" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
-          Available Roscas
+          {isViewOnly ? 'Historical Roscas' : 'Available Roscas'}
         </Text>
         <TouchableOpacity onPress={handleCalendarPress} style={styles.calendarButton}>
           <Ionicons name="calendar-outline" size={24} color={theme.colors.textPrimary} />
@@ -343,7 +333,7 @@ export default function JoinRoscaScreen() {
               key={pool.id}
               pool={pool}
               onJoin={() => handleJoinPool(pool)}
-              isJoining={joinPoolMutation.isPending}
+              isViewOnly={isViewOnly}
             />
           ))}
 

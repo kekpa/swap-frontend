@@ -224,8 +224,9 @@ class TimelineSyncService {
       logger.debug(`[TimelineSyncService] Fetching timeline for ${interactionId} since ${lastKnownTime}`);
 
       // Fetch timeline from backend API
+      // Backend accepts: startDate (not 'since'), limit, cursor, types, endDate
       const response = await apiClient.get(INTERACTION_PATHS.TIMELINE(interactionId), {
-        params: { since: lastKnownTime, limit: 100 }
+        params: { startDate: lastKnownTime, limit: 100 }
       });
 
       // Handle response - could be { items: [...] } or direct array

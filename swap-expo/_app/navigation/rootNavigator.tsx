@@ -21,8 +21,10 @@ import TransferCompletedScreen from "../features/interactions/sendMoney2/Transfe
 import TempAddMoneyScreen from "../features/wallet/AddMoney/AddMoney2/TempAddMoney";
 
 // Rosca modal screens (detail/join/calendar screens moved to HomeNavigator)
-import RoscaPaymentConfirmationScreen from "../features/rosca/RoscaPaymentConfirmationScreen";
+import RoscaPaymentScreen from "../features/rosca/RoscaPaymentScreen";
 import RoscaPayoutCelebrationScreen from "../features/rosca/RoscaPayoutCelebrationScreen";
+import RoscaJoinAgreementScreen from "../features/rosca/RoscaJoinAgreementScreen";
+import type { RoscaPool } from "../types/rosca.types";
 
 // Development bypass settings - rely on AuthContext now
 const DEV_ALWAYS_AUTHENTICATED = false;
@@ -102,11 +104,14 @@ export type RootStackParamList = {
     createdAt?: string;
   };
   // Rosca modal screens (detail/join/calendar moved to HomeNavigator)
-  RoscaPaymentConfirmationScreen: {
+  RoscaPaymentScreen: {
     enrollment: any; // RoscaEnrollment type
   };
   RoscaPayoutCelebrationScreen: {
     enrollment: any; // RoscaEnrollment type
+  };
+  RoscaJoinAgreementScreen: {
+    pool: RoscaPool;
   };
 };
 
@@ -256,12 +261,12 @@ export default function RootNavigator() {
           />
           {/* Rosca modal screens (detail/join/calendar moved to HomeNavigator) */}
           <Stack.Screen
-            name="RoscaPaymentConfirmationScreen"
-            component={RoscaPaymentConfirmationScreen}
+            name="RoscaPaymentScreen"
+            component={RoscaPaymentScreen}
             options={{
               presentation: 'modal',
               ...TransitionPresets.ModalPresentationIOS,
-              gestureEnabled: false,
+              gestureEnabled: true,
             }}
           />
           <Stack.Screen
@@ -271,6 +276,15 @@ export default function RootNavigator() {
               presentation: 'modal',
               ...TransitionPresets.ModalPresentationIOS,
               gestureEnabled: false,
+            }}
+          />
+          <Stack.Screen
+            name="RoscaJoinAgreementScreen"
+            component={RoscaJoinAgreementScreen}
+            options={{
+              presentation: 'modal',
+              ...TransitionPresets.ModalPresentationIOS,
+              gestureEnabled: true,
             }}
           />
           {/* Auth screen available for profile switching even when authenticated */}

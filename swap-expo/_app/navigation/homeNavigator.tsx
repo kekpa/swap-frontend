@@ -14,7 +14,7 @@ export type HomeStackParamList = {
   HomeScreen: undefined;
   MyRoscasScreen: { tab?: 'active' | 'completed' } | undefined;
   RoscaDetailScreen: { enrollment: RoscaEnrollment };
-  JoinRoscaScreen: { rosca?: any } | undefined;
+  JoinRoscaScreen: { rosca?: any; isExpired?: boolean } | undefined;
   RoscaCalendarScreen: undefined;
 };
 

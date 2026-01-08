@@ -432,15 +432,24 @@ const SignInScreen = ({ route }: any) => {
       }
       
       // Call the PIN login API with stored identifier
-      // For now, PIN login is only for personal accounts
+      // Get the target profile ID to log into the correct profile (personal or business)
+      // This fixes the bug where logging out from business profile and logging back in
+      // would incorrectly land on personal profile
+      const storedProfileId = targetProfileId || await getLastActiveProfileId();
+      logger.debug('PIN login with target profile', 'auth', {
+        pinUserIdentifier,
+        storedProfileId,
+        isProfileSwitchMode,
+      });
+
       try {
-        const response = await authContext.loginWithPin(pinUserIdentifier, currentPin);
+        const response = await authContext.loginWithPin(pinUserIdentifier, currentPin, storedProfileId || undefined);
         if (response && response.success) {
           logger.info('PIN sign in successful', 'auth');
 
           // Store PIN for future biometric access (non-blocking)
           // Get the profile ID to associate the PIN with
-          const profileId = targetProfileId || await getLastActiveProfileId();
+          const profileId = storedProfileId;
           if (profileId) {
             storePinForBiometric(profileId, currentPin).catch((err) => {
               logger.warn('Failed to store PIN for biometric (non-fatal)', 'auth');

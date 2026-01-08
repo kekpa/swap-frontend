@@ -371,17 +371,18 @@ export default function RoscaCalendarScreen() {
   };
 
   const handleEventPress = (event: CalendarEvent) => {
-    if (event.type === 'payment_due') {
-      // Find the enrollment and navigate to detail
-      const enrollmentId = event.id.replace('payment-', '').split('-')[0];
+    // Enrollment events (user's active roscas) should go to detail screen
+    if (['payment_due', 'payout', 'joined'].includes(event.type)) {
+      // Extract enrollment ID from event ID (format: payment-{id}, payout-{id}, joined-{id})
+      const enrollmentId = event.id.replace(/^(payment|payout|joined)-/, '');
       const enrollment = enrollments.find(e => e.id === enrollmentId);
       if (enrollment) {
         (navigation as any).navigate('RoscaDetailScreen', { enrollment });
+        return;
       }
-    } else {
-      // Navigate to join rosca screen for registration deadlines and pool starts
-      (navigation as any).navigate('JoinRoscaScreen');
     }
+    // Pool events (registration deadlines, pool starts) go to join screen
+    (navigation as any).navigate('JoinRoscaScreen');
   };
 
   // Render section header (calendar or sticky events header)

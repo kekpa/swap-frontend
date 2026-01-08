@@ -238,7 +238,7 @@ const CompleteProfileScreen = () => {
         }
 
         // Set tokens
-        const { tokenManager } = await import('../../../_api/tokenManager');
+        const { tokenManager } = await import('../../../services/token');
         tokenManager.setAccessToken(authData.access_token);
         tokenManager.setRefreshToken(authData.refresh_token);
 

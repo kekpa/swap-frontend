@@ -216,17 +216,29 @@ class LoginService {
 
   /**
    * Login with PIN
+   * @param identifier - User identifier (phone, email, or username)
+   * @param pin - 6-digit PIN
+   * @param targetProfileId - Optional specific profile ID to log into (personal or business UUID)
    */
-  async loginWithPin(identifier: string, pin: string): Promise<LoginResult> {
-    logger.debug('[LoginService] Attempting PIN login for:', identifier);
+  async loginWithPin(identifier: string, pin: string, targetProfileId?: string): Promise<LoginResult> {
+    logger.debug('[LoginService] Attempting PIN login for:', identifier, targetProfileId ? `(target: ${targetProfileId})` : '');
 
     try {
       // Get device info for session tracking
       const deviceInfo = await getFullDeviceInfo();
 
+      // Build request body - only include targetProfileId if provided
+      const requestBody: { identifier: string; pin: string; targetProfileId?: string } = {
+        identifier,
+        pin,
+      };
+      if (targetProfileId) {
+        requestBody.targetProfileId = targetProfileId;
+      }
+
       const response = await apiClient.post(
         AUTH_PATHS.PIN_LOGIN,
-        { identifier, pin },
+        requestBody,
         {
           headers: {
             'X-Device-Name': deviceInfo.device_name,
@@ -480,6 +492,14 @@ class LoginService {
   async isBiometricEnabled(): Promise<boolean> {
     const token = await SecureStore.getItemAsync(BIOMETRIC_TOKEN_KEY);
     return !!token;
+  }
+
+  /**
+   * Get stored biometric credentials (for checking if biometric is set up)
+   * Returns the token if stored, null otherwise
+   */
+  async getBiometricCredentials(): Promise<string | null> {
+    return SecureStore.getItemAsync(BIOMETRIC_TOKEN_KEY);
   }
 
   /**

@@ -456,7 +456,7 @@ export default function MyRoscasScreen() {
         onPress={handleJoinRosca}
         activeOpacity={0.8}
       >
-        <Ionicons name="add" size={20} color="#FFFFFF" />
+        <Ionicons name="add" size={19} color="#FFFFFF" />
         <Text style={styles.fabText}>Join Rosca</Text>
       </TouchableOpacity>
     </SafeAreaView>
@@ -624,14 +624,14 @@ const styles = StyleSheet.create({
   // Floating Action Button
   fab: {
     position: 'absolute',
-    bottom: 24,
-    right: 20,
+    bottom: 12,
+    right: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 28,
+    gap: 5,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 24,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
@@ -640,7 +640,7 @@ const styles = StyleSheet.create({
   },
   fabText: {
     color: '#FFFFFF',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
   },
 });

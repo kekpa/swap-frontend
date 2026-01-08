@@ -7,6 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
   TextStyle,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,10 +16,9 @@ import { getAvatarColor } from '../../utils/avatarUtils';
 import logger from '../../utils/logger';
 import type { RoscaEnrollment, RoscaPayment, RoscaFriend } from '../../types/rosca.types';
 import { formatAmount } from '../../utils/roscaUtils';
-
-// TODO: Replace with real data hooks when available
-const MOCK_PAYMENTS: RoscaPayment[] = [];
-const MOCK_FRIENDS: RoscaFriend[] = [];
+import { useRoscaPaymentHistory } from '../../hooks-data/useRoscaEnrollments';
+import { useRoscaFriends } from '../../hooks-data/useRoscaPools';
+import { useCurrentEntityId } from '../../hooks/useCurrentEntityId';
 
 type RoscaDetailRouteParams = {
   RoscaDetailScreen: {
@@ -31,14 +31,26 @@ export default function RoscaDetailScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RoscaDetailRouteParams, 'RoscaDetailScreen'>>();
   const { enrollment } = route.params;
+  const entityId = useCurrentEntityId();
+
+  // Fetch payment history and friends using real hooks
+  const {
+    data: payments = [],
+    isLoading: isLoadingPayments,
+  } = useRoscaPaymentHistory(enrollment.id);
+
+  const {
+    data: friends = [],
+    isLoading: isLoadingFriends,
+  } = useRoscaFriends(enrollment.id, entityId || '');
 
   const handleBack = () => {
     navigation.goBack();
   };
 
   const handlePay = () => {
-    // Go directly to payment (no alert)
-    (navigation as any).navigate('RoscaPaymentConfirmationScreen', { enrollment });
+    // Navigate to payment screen with enrollment
+    (navigation as any).navigate('RoscaPaymentScreen', { enrollment });
   };
 
   const handleInvite = () => {
@@ -135,54 +147,76 @@ export default function RoscaDetailScreen() {
           <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
             Payment History
           </Text>
-          {MOCK_PAYMENTS.map((payment) => (
-            <View
-              key={payment.id}
-              style={[styles.historyItem, { borderColor: theme.colors.divider }]}
-            >
-              <Text style={[styles.historyDate, { color: theme.colors.textPrimary }]}>
-                {new Date(payment.paidAt).toLocaleDateString('en-US', {
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                })}
-              </Text>
-              <Text style={[styles.historyAmount, { color: theme.colors.success }]}>
-                {formatAmount(payment.amount, payment.currencySymbol)} ✓
-              </Text>
+          {isLoadingPayments ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color={theme.colors.primary} />
             </View>
-          ))}
+          ) : payments.length === 0 ? (
+            <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
+              No payments yet
+            </Text>
+          ) : (
+            payments.map((payment: RoscaPayment) => (
+              <View
+                key={payment.id}
+                style={[styles.historyItem, { borderColor: theme.colors.divider }]}
+              >
+                <Text style={[styles.historyDate, { color: theme.colors.textPrimary }]}>
+                  {payment.paidAt
+                    ? new Date(payment.paidAt).toLocaleDateString('en-US', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric',
+                      })
+                    : 'Pending'}
+                </Text>
+                <Text style={[styles.historyAmount, { color: theme.colors.success }]}>
+                  {formatAmount(payment.amount, payment.currencySymbol || enrollment.currencySymbol)} ✓
+                </Text>
+              </View>
+            ))
+          )}
 
           {/* Friends in Rosca */}
           <View style={styles.friendsSection}>
             <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
-              Friends in this Rosca ({MOCK_FRIENDS.length})
+              Friends in this Rosca ({friends.length})
             </Text>
-            {MOCK_FRIENDS.map((friend) => (
-              <View
-                key={friend.id}
-                style={[styles.friendItem, { borderColor: theme.colors.divider }]}
-              >
-                <View style={[styles.friendAvatar, { backgroundColor: getAvatarColor(friend.id) }]}>
-                  <Text style={[styles.friendInitials, { color: '#FFFFFF' }]}>
-                    {friend.initials}
-                  </Text>
-                </View>
-                <View style={styles.friendInfo}>
-                  <Text style={[styles.friendName, { color: theme.colors.textPrimary }]}>
-                    {friend.name}
-                  </Text>
-                  <Text style={[styles.friendPosition, { color: theme.colors.textSecondary }]}>
-                    #{friend.queuePosition} / {friend.totalMembers}
-                  </Text>
-                </View>
-                {friend.hasPaid && (
-                  <Text style={[styles.friendStatus, { color: theme.colors.success }]}>
-                    ✓ paid
-                  </Text>
-                )}
+            {isLoadingFriends ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color={theme.colors.primary} />
               </View>
-            ))}
+            ) : friends.length === 0 ? (
+              <Text style={[styles.emptyText, { color: theme.colors.textSecondary }]}>
+                No friends in this pool yet
+              </Text>
+            ) : (
+              friends.map((friend: RoscaFriend) => (
+                <View
+                  key={friend.entityId}
+                  style={[styles.friendItem, { borderColor: theme.colors.divider }]}
+                >
+                  <View style={[styles.friendAvatar, { backgroundColor: getAvatarColor(friend.entityId) }]}>
+                    <Text style={[styles.friendInitials, { color: '#FFFFFF' }]}>
+                      {friend.initials}
+                    </Text>
+                  </View>
+                  <View style={styles.friendInfo}>
+                    <Text style={[styles.friendName, { color: theme.colors.textPrimary }]}>
+                      {friend.displayName}
+                    </Text>
+                    <Text style={[styles.friendPosition, { color: theme.colors.textSecondary }]}>
+                      #{friend.queuePosition} / {friend.totalMembers}
+                    </Text>
+                  </View>
+                  {friend.hasPaid && (
+                    <Text style={[styles.friendStatus, { color: theme.colors.success }]}>
+                      ✓ paid
+                    </Text>
+                  )}
+                </View>
+              ))
+            )}
           </View>
 
           {/* Invite Button - uses theme.commonStyles.secondaryButton */}
@@ -341,5 +375,14 @@ const styles = StyleSheet.create({
   },
   inviteButton: {
     marginTop: 16,
+  },
+  loadingContainer: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 13,
+    paddingVertical: 12,
+    textAlign: 'center',
   },
 });

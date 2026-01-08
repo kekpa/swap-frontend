@@ -19,6 +19,8 @@ export interface AvailableProfile {
   type: 'personal' | 'business';
   displayName: string;
   avatarUrl?: string;
+  status?: string; // 'active' | 'pending_deletion' | 'deleted'
+  scheduledDeletionDate?: string; // ISO date string
 }
 
 // API response type

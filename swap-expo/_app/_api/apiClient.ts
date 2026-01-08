@@ -28,10 +28,106 @@ interface ApiCallInfo {
   timestamp: string;
 }
 
-// Extend the global namespace to include our apiCallHistory
-declare global {
-  var apiCallHistory: ApiCallInfo[];
+/**
+ * PERFORMANCE FIX (2025-01-06): Ring buffer for O(1) API call history tracking
+ * Before: Array with push/shift - O(n) for each shift operation
+ * After: Fixed-size ring buffer - O(1) for all operations
+ */
+class ApiCallHistoryBuffer {
+  private buffer: (ApiCallInfo | null)[];
+  private head: number = 0;
+  private size: number = 0;
+  private readonly capacity: number;
+
+  constructor(capacity: number = 20) {
+    this.capacity = capacity;
+    this.buffer = new Array(capacity).fill(null);
+  }
+
+  push(item: ApiCallInfo): void {
+    this.buffer[this.head] = item;
+    this.head = (this.head + 1) % this.capacity;
+    if (this.size < this.capacity) {
+      this.size++;
+    }
+  }
+
+  // Get recent items matching a filter (for duplicate detection)
+  filter(filterFn: (item: ApiCallInfo) => boolean): ApiCallInfo[] {
+    const result: ApiCallInfo[] = [];
+    // Start from oldest item
+    let index = (this.head - this.size + this.capacity) % this.capacity;
+
+    for (let i = 0; i < this.size; i++) {
+      const item = this.buffer[index];
+      if (item && filterFn(item)) {
+        result.push(item);
+      }
+      index = (index + 1) % this.capacity;
+    }
+
+    return result;
+  }
+
+  get length(): number {
+    return this.size;
+  }
 }
+
+// Singleton instance for API call history
+const apiCallHistoryBuffer = new ApiCallHistoryBuffer(20);
+
+/**
+ * PERFORMANCE FIX (2025-01-06): Request deduplication
+ * Prevents duplicate API calls by returning pending promise for in-flight requests
+ * Pattern: If request A is in-flight and request B (same key) comes in, B waits for A
+ */
+class RequestDeduplicator {
+  private inflightRequests = new Map<string, Promise<any>>();
+  private readonly MAX_TRACKED = 50; // Limit memory usage
+
+  /**
+   * Get deduplication key from request config
+   */
+  getKey(method: string, url: string, params?: any): string {
+    return `${method}:${url}:${JSON.stringify(params || {})}`;
+  }
+
+  /**
+   * Check if request is already in-flight
+   */
+  get(key: string): Promise<any> | undefined {
+    return this.inflightRequests.get(key);
+  }
+
+  /**
+   * Track in-flight request
+   */
+  set(key: string, promise: Promise<any>): void {
+    // Limit size to prevent memory leak
+    if (this.inflightRequests.size >= this.MAX_TRACKED) {
+      // Remove oldest entry (first key)
+      const firstKey = this.inflightRequests.keys().next().value;
+      if (firstKey) this.inflightRequests.delete(firstKey);
+    }
+
+    this.inflightRequests.set(key, promise);
+
+    // Auto-cleanup when promise resolves/rejects
+    promise.finally(() => {
+      this.inflightRequests.delete(key);
+    });
+  }
+
+  /**
+   * Check size for debugging
+   */
+  get size(): number {
+    return this.inflightRequests.size;
+  }
+}
+
+const requestDeduplicator = new RequestDeduplicator();
 
 // Create a global event emitter for auth events (using battle-tested eventemitter3)
 export const authEvents = new EventEmitter();
@@ -144,22 +240,15 @@ apiClient.interceptors.request.use(
     // Track API call frequency for debugging refresh cycles
     const timestamp = new Date().toISOString();
     const callInfo: ApiCallInfo = { url: config.url, method: config.method, timestamp };
-    
-    // Keep a log of recent API calls to help diagnose excessive refreshing
-    if (!global.apiCallHistory) {
-      global.apiCallHistory = [];
-    }
-    
-    global.apiCallHistory.push(callInfo);
-    // Keep only the last 20 calls in memory
-    if (global.apiCallHistory.length > 20) {
-      global.apiCallHistory.shift();
-    }
-    
+
+    // PERFORMANCE FIX: Use ring buffer for O(1) operations (replaces array push/shift)
+    apiCallHistoryBuffer.push(callInfo);
+
     // If we see multiple calls to the same endpoint within a short time, log a warning
-    const recentCalls = global.apiCallHistory.filter(
-      (call: ApiCallInfo) => call.url === config.url && 
-      new Date().getTime() - new Date(call.timestamp).getTime() < 5000
+    const now = Date.now();
+    const recentCalls = apiCallHistoryBuffer.filter(
+      (call: ApiCallInfo) => call.url === config.url &&
+      now - new Date(call.timestamp).getTime() < 5000
     );
     
     if (recentCalls.length > 2) {
@@ -651,48 +740,28 @@ apiClient.interceptors.response.use(
       rateLimitedEndpoints.set(endpoint, retryTime);
       logger.warn(`Rate limited for endpoint ${endpoint}. Retry after ${retryAfter}s`, "api");
     }
-    
-    // Log API error
-    if (error.response) {
-      // Skip logging for expected errors: 404s on direct interactions, 401s on token verification, and 401s on login endpoints (auto-detection)
-      const isExpectedError = 
-        (error.response.status === 404 && error.config?.url?.includes('/interactions/direct/')) || 
-        (error.response.status === 401 && error.config?.url?.includes('/auth/verify-token')) ||
-        (error.response.status === 401 && (error.config?.url?.includes('/auth/login') || error.config?.url?.includes('/auth/business/login')));
-        
-      if (!isExpectedError) {
-        logger.error(
-          `API Error ${JSON.stringify({
-            status: error.response.status,
-            url: error.config?.url,
-            message: error.message,
-            data: error.response.data,
-          })}`,
-          "api"
-        );
-      } else {
-        // Log at debug level instead for expected errors
-        logger.debug(
-          `Expected API status: ${error.response.status} for ${error.config?.url}`,
-          "api"
-        );
-      }
-    } else {
-      logger.error(
-        `API Network Error ${JSON.stringify({
-          url: error.config?.url,
-          message: error.message,
-        })}`,
-        "api"
-      );
-    }
-    
+
+    // NOTE: API error logging is handled by the development interceptor below
+    // This interceptor focuses on auth refresh and retry logic only
+
     return Promise.reject(error);
   }
 );
 
-// Log requests in development mode
+/**
+ * API LOGGING STRATEGY (Single Source of Truth)
+ *
+ * Log levels by HTTP status (industry standard):
+ * - 2xx Success:     debug  - Normal operation
+ * - 4xx Client:      debug  - Expected errors (validation, auth, not found) - UI handles these
+ * - 5xx Server:      error  - Unexpected errors - needs attention
+ * - Network failure: error  - Unexpected - needs attention
+ *
+ * This is the ONLY place API requests/responses are logged.
+ * The auth interceptor above handles retry logic only.
+ */
 if (IS_DEVELOPMENT) {
+  // Request logging
   apiClient.interceptors.request.use((request) => {
     logger.debug("API Request", "api", {
       method: request.method,
@@ -709,34 +778,31 @@ if (IS_DEVELOPMENT) {
     return request;
   });
 
+  // Response logging with HTTP semantics
   apiClient.interceptors.response.use(
     (response) => {
       logger.debug("API Response", "api", {
         status: response.status,
         url: response.config.url,
-        size: response.data ? (typeof response.data === 'string' ? response.data.length : 'object') : 0,
       });
       return response;
     },
     (error) => {
-      // Skip logging for expected errors
-      const isLoginEndpoint = error.config?.url?.includes('/auth/login') ||
-                             error.config?.url?.includes('/auth/business/login');
-      const is401Error = error.response?.status === 401;
-      const is404DirectInteraction = error.response?.status === 404 &&
-                                      error.config?.url?.includes('/interactions/direct/');
+      const status = error.response?.status;
+      const url = error.config?.url;
 
-      if ((isLoginEndpoint && is401Error) || is404DirectInteraction) {
-        logger.debug("Expected API status (not an error)", "api", {
-          status: error.response?.status,
-          url: error.config?.url,
-        });
+      if (status && status >= 400 && status < 500) {
+        // 4xx = Client errors (validation, permissions, not found)
+        // These are EXPECTED and handled by the UI - not errors
+        logger.debug("API 4xx response", "api", { status, url });
+      } else if (status && status >= 500) {
+        // 5xx = Server errors - UNEXPECTED, needs attention
+        logger.error("API 5xx server error", error, "api", { status, url });
       } else {
-        logger.error("API Error", error, "api", {
-          status: error.response?.status || "Network Error",
-          url: error.config?.url,
-        });
+        // Network errors - UNEXPECTED, needs attention
+        logger.error("API network error", error, "api", { url, message: error.message });
       }
+
       return Promise.reject(error);
     }
   );
@@ -826,10 +892,23 @@ const post = async (url: string, data?: any, config?: AxiosRequestConfig) => {
   }
 };
 
-// Override the get method
+// Override the get method with request deduplication
 const get = async (url: string, config?: AxiosRequestConfig) => {
-  
-  return apiClient.get(url, config);
+  // Generate dedup key for GET requests
+  const dedupKey = requestDeduplicator.getKey('GET', url, config?.params);
+
+  // Check if same request is already in-flight
+  const existingRequest = requestDeduplicator.get(dedupKey);
+  if (existingRequest) {
+    logger.debug(`[apiClient] Dedup: Returning in-flight request for ${url}`, 'api');
+    return existingRequest;
+  }
+
+  // Make request and track it
+  const requestPromise = apiClient.get(url, config);
+  requestDeduplicator.set(dedupKey, requestPromise);
+
+  return requestPromise;
 };
 
 // Override the put method

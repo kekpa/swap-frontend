@@ -42,6 +42,7 @@ import { sessionManager, SessionData } from '../../../services/auth/SessionManag
 import { loginService, LoginResult } from '../../../services/auth/LoginService';
 import { accountSwitcher } from '../../../services/auth/AccountSwitcher';
 import { walletSecurity } from '../../../services/auth/WalletSecurity';
+import { roscaRepository } from '../../../localdb/RoscaRepository';
 
 // MMKV for preferences
 const authStorage = new MMKV({
@@ -212,11 +213,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loginWithPin = useCallback(async (
     identifier: string,
-    pin: string
+    pin: string,
+    targetProfileId?: string
   ): Promise<{ success: boolean; message?: string }> => {
     setIsLoading(true);
     try {
-      const result = await loginService.loginWithPin(identifier, pin);
+      const result = await loginService.loginWithPin(identifier, pin, targetProfileId);
 
       if (result.success && result.user) {
         updateUserFromSession(result.user);
@@ -347,6 +349,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: result.account.email,
         profileId: result.account.profileId,
         entityId: result.account.entityId,
+        displayName: result.account.displayName,
         firstName: result.account.firstName || result.account.displayName.split(' ')[0],
         lastName: result.account.lastName || result.account.displayName.split(' ').slice(1).join(' '),
       } as User);
@@ -429,6 +432,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: session.userId,
       profileId: session.profileId,
       entityId: session.entityId,
+      displayName: session.profileType === 'business'
+        ? session.businessName
+        : `${session.firstName || ''} ${session.lastName || ''}`.trim(),
       firstName: session.firstName,
       lastName: session.lastName,
       username: session.username,
@@ -478,6 +484,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         id: profile.user_id || profile.id,
         profileId,
         entityId: profile.entity_id,
+        displayName: profile.type === 'business'
+          ? profile.business_name
+          : `${profile.first_name || ''} ${profile.last_name || ''}`.trim(),
         firstName: profile.type === 'business' ? profile.business_name : profile.first_name,
         lastName: profile.type === 'business' ? null : profile.last_name,
         username: profile.username,
@@ -486,6 +495,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         profileType: profile.type,
         businessName: profile.business_name,
       } as User);
+
+      // Clear Rosca cache on profile switch to ensure fresh data for new entity
+      roscaRepository.clearPoolsCacheTimestamp().catch((err) => {
+        logger.debug('[AuthContext] Failed to clear Rosca pools cache:', err);
+      });
 
       return true;
     } catch (error) {

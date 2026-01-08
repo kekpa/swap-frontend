@@ -215,7 +215,17 @@ export const useJoinPool = () => {
         logger.warn(`[useJoinPool] Failed to save to local cache:`, error);
       });
 
-      logger.debug(`[useJoinPool] ✅ Updated cache with new enrollment`);
+      // Invalidate pools cache to refresh member counts/available slots
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.roscaPools(),
+      });
+
+      // Clear pools cache timestamp to force fresh fetch next time
+      roscaRepository.clearPoolsCacheTimestamp().catch((error) => {
+        logger.warn(`[useJoinPool] Failed to clear pools cache timestamp:`, error);
+      });
+
+      logger.debug(`[useJoinPool] ✅ Updated enrollments + invalidated pools cache`);
     },
     onError: (error) => {
       logger.error(`[useJoinPool] ❌ Failed to join pool:`, error);
@@ -227,6 +237,7 @@ export const useJoinPool = () => {
  * useMakePayment Mutation
  *
  * Makes a contribution payment for an enrollment.
+ * Includes optimistic updates for instant UI feedback.
  */
 export const useMakePayment = () => {
   const queryClient = useQueryClient();
@@ -246,10 +257,61 @@ export const useMakePayment = () => {
       logger.debug(`[useMakePayment] ✅ Payment successful`);
       return response.data;
     },
-    onSuccess: (paymentResponse, dto) => {
+    onMutate: async (dto) => {
+      if (!currentEntityId) return { previousEnrollments: null };
+
+      // Cancel any outgoing refetches to prevent overwriting optimistic update
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.roscaEnrollmentsByEntity(currentEntityId),
+      });
+
+      // Snapshot the previous enrollments
+      const previousEnrollments = queryClient.getQueryData<RoscaEnrollment[]>(
+        queryKeys.roscaEnrollmentsByEntity(currentEntityId)
+      );
+
+      // Optimistically update the enrollment
+      if (previousEnrollments) {
+        const updatedEnrollments = previousEnrollments.map((enrollment) => {
+          if (enrollment.id === dto.enrollmentId) {
+            // Estimate periods covered (server will return actual)
+            const periodsCovered = Math.floor(dto.amount / enrollment.contributionAmount);
+            return {
+              ...enrollment,
+              totalContributed: enrollment.totalContributed + dto.amount,
+              contributionsCount: enrollment.contributionsCount + periodsCovered,
+              // Don't update nextPaymentDue optimistically - let server calculate
+            };
+          }
+          return enrollment;
+        });
+
+        queryClient.setQueryData(
+          queryKeys.roscaEnrollmentsByEntity(currentEntityId),
+          updatedEnrollments
+        );
+
+        logger.debug(`[useMakePayment] ⚡ OPTIMISTIC: Updated enrollment ${dto.enrollmentId} (+G${dto.amount})`);
+      }
+
+      return { previousEnrollments };
+    },
+    onError: (error, dto, context) => {
+      logger.error(`[useMakePayment] ❌ Payment failed:`, error);
+
+      // Rollback to the previous state on error
+      if (context?.previousEnrollments && currentEntityId) {
+        queryClient.setQueryData(
+          queryKeys.roscaEnrollmentsByEntity(currentEntityId),
+          context.previousEnrollments
+        );
+        logger.debug(`[useMakePayment] ↩️ ROLLBACK: Restored previous enrollment state`);
+      }
+    },
+    onSettled: (_data, _error, dto) => {
       if (!currentEntityId) return;
 
-      // Invalidate enrollments to refresh with new totals
+      // Refetch to get actual server data (reconciliation)
       queryClient.invalidateQueries({
         queryKey: queryKeys.roscaEnrollmentsByEntity(currentEntityId),
       });
@@ -269,10 +331,7 @@ export const useMakePayment = () => {
         queryKey: queryKeys.balancesByEntity(currentEntityId),
       });
 
-      logger.debug(`[useMakePayment] ✅ Invalidated related caches`);
-    },
-    onError: (error) => {
-      logger.error(`[useMakePayment] ❌ Payment failed:`, error);
+      logger.debug(`[useMakePayment] ✅ Invalidated related caches for reconciliation`);
     },
   });
 };
@@ -301,3 +360,4 @@ export const useRoscaPaymentHistory = (enrollmentId: string, options: UseRoscaEn
     gcTime: 1000 * 60 * 30, // 30 minutes
   });
 };
+

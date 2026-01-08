@@ -3,7 +3,7 @@
 // Updated: 2025-12-24 - TIMELINE_UPDATED_EVENT centralized in queryClient.ts (Revolut pattern)
 // Same pattern as useTimeline and useBalances for instant cached data display
 
-import { useCallback } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../tanstack-query/queryKeys';
 import { queryClient } from '../tanstack-query/queryClient';
@@ -355,28 +355,40 @@ const fetchTransactionListLocalFirst = async (
 };
 
 /**
- * Hook for transaction list page - Local-First Architecture
+ * Hook for transaction list page - Local-First Architecture with Pagination
  *
  * Shows cached transactions instantly, syncs in background.
  * Same pattern as useWalletTransactions.
  * PROFILE-SAFE: Disabled during profile switch to prevent stale queries
+ * PAGINATION: Implements loadMore with accumulated results
  *
  * @param walletId - Currency-specific wallet ID (for local SQLite query by from_wallet_id/to_wallet_id)
  * @param accountId - Parent account ID (for API call to /transactions/account/{accountId})
- * @param limit - Number of transactions to fetch
- * @param offset - Offset for pagination
+ * @param pageSize - Number of transactions per page (default 50)
  * @param enabled - Whether the query should be enabled
  */
 export const useTransactionList = (
   walletId: string,
   accountId: string,
-  limit: number = 50,
-  offset: number = 0,
+  pageSize: number = 50,
   enabled: boolean = true
-): BaseTransactionResult & { hasMore: boolean; loadMore: () => void } => {
+): BaseTransactionResult & { hasMore: boolean; loadMore: () => void; isLoadingMore: boolean } => {
   const isOffline = !networkService.isOnline();
   const entityId = useCurrentEntityId();
   const { isProfileSwitching } = useAuthContext();
+
+  // Pagination state
+  const [currentOffset, setCurrentOffset] = React.useState(0);
+  const [accumulatedTransactions, setAccumulatedTransactions] = React.useState<Transaction[]>([]);
+  const [hasMore, setHasMore] = React.useState(true);
+  const [isLoadingMore, setIsLoadingMore] = React.useState(false);
+
+  // Reset pagination when wallet changes
+  React.useEffect(() => {
+    setCurrentOffset(0);
+    setAccumulatedTransactions([]);
+    setHasMore(true);
+  }, [walletId, entityId]);
 
   // PROFILE SWITCH GUARD: Disable query during profile switch
   const shouldExecute = enabled && !!walletId && !!accountId && !!entityId && !isProfileSwitching;
@@ -388,15 +400,15 @@ export const useTransactionList = (
     error,
     refetch,
   } = useQuery({
-    queryKey: [...queryKeys.transactionsByAccount(entityId!, walletId, limit), 'offset', offset] as const,
+    queryKey: [...queryKeys.transactionsByAccount(entityId!, walletId, pageSize), 'offset', currentOffset] as const,
     queryFn: async (): Promise<{ data: Transaction[]; hasMore: boolean }> => {
       if (!walletId || !accountId || !entityId) {
         logger.debug('[useTransactionList] No walletId, accountId, or entityId provided');
         return { data: [], hasMore: false };
       }
 
-      logger.debug(`[useTransactionList] 📋 LIST: Loading ${limit} transactions for wallet: ${walletId?.substring(0, 8)}`);
-      return fetchTransactionListLocalFirst(entityId, walletId, accountId, limit, offset);
+      logger.debug(`[useTransactionList] 📋 LIST: Loading ${pageSize} transactions (offset: ${currentOffset}) for wallet: ${walletId?.substring(0, 8)}`);
+      return fetchTransactionListLocalFirst(entityId, walletId, accountId, pageSize, currentOffset);
     },
     enabled: shouldExecute,
 
@@ -417,24 +429,56 @@ export const useTransactionList = (
 
     // NO placeholderData - each wallet should show its own data
   });
-  
-  const loadMore = () => {
-    // TODO: Implement pagination logic
-    logger.debug('[useTransactionList] Load more requested');
-  };
+
+  // Accumulate transactions when new data arrives
+  React.useEffect(() => {
+    if (result?.data) {
+      if (currentOffset === 0) {
+        // First page - replace all
+        setAccumulatedTransactions(result.data);
+      } else {
+        // Subsequent pages - append (deduplicate by id)
+        setAccumulatedTransactions(prev => {
+          const existingIds = new Set(prev.map(t => t.id));
+          const newTransactions = result.data.filter(t => !existingIds.has(t.id));
+          return [...prev, ...newTransactions];
+        });
+      }
+      setHasMore(result.hasMore);
+      setIsLoadingMore(false);
+    }
+  }, [result, currentOffset]);
+
+  const loadMore = useCallback(() => {
+    if (!hasMore || isLoadingMore || isLoading) {
+      logger.debug('[useTransactionList] loadMore skipped (no more data or already loading)');
+      return;
+    }
+
+    logger.debug(`[useTransactionList] 📄 Loading more transactions (current offset: ${currentOffset})`);
+    setIsLoadingMore(true);
+    setCurrentOffset(prev => prev + pageSize);
+  }, [hasMore, isLoadingMore, isLoading, currentOffset, pageSize]);
 
   // NOTE: TIMELINE_UPDATED_EVENT listener is centralized in queryClient.ts
   // This follows the Revolut/WhatsApp pattern - single listener, single invalidation
   // See: _app/tanstack-query/queryClient.ts setupTimelineEventListener()
 
   return {
-    transactions: result?.data || [],
-    hasMore: result?.hasMore || false,
-    isLoading,
+    transactions: accumulatedTransactions,
+    hasMore,
+    isLoading: isLoading && currentOffset === 0, // Only show loading on first page
+    isLoadingMore,
     isError,
     error: error as Error | null,
     isOffline,
-    refetch,
+    refetch: () => {
+      // Reset pagination on manual refetch
+      setCurrentOffset(0);
+      setAccumulatedTransactions([]);
+      setHasMore(true);
+      refetch();
+    },
     loadMore,
   };
 };

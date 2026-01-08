@@ -33,12 +33,14 @@ import { AvailableProfile } from '../features/auth/hooks/useAvailableProfiles';
 import { getInitials, getAvatarColor } from '../utils/avatarUtils';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import apiClient from '../_api/apiClient';
-import { AUTH_PATHS } from '../_api/apiPaths';
+import { AUTH_PATHS, BUSINESS_PATHS } from '../_api/apiPaths';
 import { logger } from '../utils/logger';
 import { getPinWithBiometric, storePinForBiometric, hasPinForBiometric } from '../utils/pinUserStorage';
 import PinPad from '../components2/PinPad';
 import { loginService } from '../services/auth/LoginService';
 import { getDeviceFingerprint } from '../utils/deviceInfo';
+import { queryClient } from '../tanstack-query/queryClient';
+import { queryKeys } from '../tanstack-query/queryKeys';
 
 // Options for profile switch (biometric or PIN)
 export interface ProfileSwitchOptions {
@@ -63,6 +65,24 @@ interface CheckPinResponse {
   pinRequired: boolean;
   pinSet: boolean;
 }
+
+// Format deletion date as "in X days" or "on Jan 15"
+const formatDeletionDate = (isoDate: string): string => {
+  const date = new Date(isoDate);
+  const now = new Date();
+  const diffDays = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 0) {
+    return 'today';
+  }
+  if (diffDays === 1) {
+    return 'tomorrow';
+  }
+  if (diffDays <= 7) {
+    return `in ${diffDays} days`;
+  }
+  return `on ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+};
 
 const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
   visible,
@@ -93,6 +113,50 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
   const [isBiometricAvailable, setIsBiometricAvailable] = useState(false);
   const [biometricType, setBiometricType] = useState<'face' | 'fingerprint' | 'iris' | null>(null);
   const [hasBackendBiometric, setHasBackendBiometric] = useState(false); // True biometric (token-based)
+
+  // Deferred cancel deletion - only call API AFTER successful PIN/biometric
+  // Stores the profileId that needs deletion cancelled (null = no pending cancellation)
+  const [pendingCancelDeletionProfileId, setPendingCancelDeletionProfileId] = useState<string | null>(null);
+
+  /**
+   * Cancel pending deletion for a profile after successful authentication.
+   * Single source of truth - all auth success paths call this.
+   *
+   * Professional pattern: One function, one responsibility
+   * - Calls correct API based on profile type
+   * - Invalidates cache immediately (badge disappears)
+   * - Handles errors gracefully
+   * - Clears pending state
+   */
+  const executeCancelDeletion = useCallback(async (profile: AvailableProfile): Promise<void> => {
+    if (pendingCancelDeletionProfileId !== profile.profileId) return;
+
+    logger.debug('[ProfileSwitcherModal] Executing deferred cancel-deletion...');
+
+    try {
+      if (profile.type === 'business') {
+        await apiClient.post(BUSINESS_PATHS.CANCEL_DELETION(profile.profileId));
+      } else {
+        await apiClient.post(AUTH_PATHS.CANCEL_DELETION);
+      }
+
+      logger.info('[ProfileSwitcherModal] Deletion cancelled successfully');
+
+      // Invalidate cache immediately - badge disappears instantly
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.availableProfiles,
+        refetchType: 'active',
+      });
+    } catch (error: any) {
+      logger.error('[ProfileSwitcherModal] Failed to cancel deletion:', error);
+      Alert.alert(
+        'Warning',
+        'Could not cancel deletion. The account will still be deleted on the scheduled date.',
+      );
+    } finally {
+      setPendingCancelDeletionProfileId(null);
+    }
+  }, [pendingCancelDeletionProfileId]);
 
   // Check biometric availability on mount
   useEffect(() => {
@@ -211,6 +275,22 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
           fontSize: theme.typography.fontSize.sm,
           color: theme.colors.textSecondary,
           textTransform: 'capitalize',
+        },
+        deletionBadge: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginTop: 4,
+          paddingHorizontal: 6,
+          paddingVertical: 2,
+          backgroundColor: '#fff5f5',
+          borderRadius: 4,
+          alignSelf: 'flex-start',
+        },
+        deletionBadgeText: {
+          fontSize: 11,
+          color: '#dc3545',
+          marginLeft: 4,
+          fontWeight: '500',
         },
         currentIndicator: {
           width: 20,
@@ -415,24 +495,8 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
     }
   }, []);
 
-  const handleSelectProfile = useCallback(async (profile: AvailableProfile) => {
-    logger.debug('[ProfileSwitcherModal] Profile selected:', {
-      profileId: profile.profileId,
-      entityId: profile.entityId,
-      displayName: profile.displayName,
-      type: profile.type,
-      currentProfileId,
-      hasBackendBiometric,
-      isBiometricAvailable
-    });
-
-    if (profile.profileId === currentProfileId) {
-      // Already on this profile, just close modal
-      logger.debug('[ProfileSwitcherModal] Same profile selected, closing modal');
-      onClose();
-      return;
-    }
-
+  // Helper function to proceed with PIN/biometric check after deletion check passes
+  const proceedWithPinCheck = useCallback(async (profile: AvailableProfile) => {
     // UNIFIED AUTH: If user has backend biometric enabled, try biometric first
     // This skips PIN entirely - biometric proves auth_user identity for ALL profiles
     if (hasBackendBiometric && isBiometricAvailable) {
@@ -459,6 +523,9 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
             logger.warn('[ProfileSwitcherModal] Switch failed after biometric:', switchResult.error);
             // Biometric valid but switch failed - show error
             Alert.alert('Switch Failed', switchResult.error || 'Failed to switch profile');
+          } else {
+            // BIOMETRIC SUCCESS! Cancel deletion if pending
+            await executeCancelDeletion(profile);
           }
           setIsSubmittingPin(false);
           return;
@@ -515,7 +582,70 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
     // Personal profile without PIN requirement - allow switch
     logger.debug('[ProfileSwitcherModal] Personal profile, no PIN required, triggering switch...');
     onSelectProfile(profile);
-  }, [currentProfileId, onClose, onSelectProfile, onPinSetupRequired, checkPinRequired, hasBackendBiometric, isBiometricAvailable]);
+  }, [hasBackendBiometric, isBiometricAvailable, checkPinRequired, onClose, onSelectProfile, onPinSetupRequired, executeCancelDeletion]);
+
+  const handleSelectProfile = useCallback(async (profile: AvailableProfile) => {
+    logger.debug('[ProfileSwitcherModal] Profile selected:', {
+      profileId: profile.profileId,
+      entityId: profile.entityId,
+      displayName: profile.displayName,
+      type: profile.type,
+      currentProfileId,
+      hasBackendBiometric,
+      isBiometricAvailable
+    });
+
+    if (profile.profileId === currentProfileId) {
+      // Already on this profile, just close modal
+      logger.debug('[ProfileSwitcherModal] Same profile selected, closing modal');
+      onClose();
+      return;
+    }
+
+    // PENDING DELETION CHECK: Show dialog before allowing switch to pending_deletion profile
+    if (profile.status === 'pending_deletion') {
+      const deletionDate = profile.scheduledDeletionDate
+        ? new Date(profile.scheduledDeletionDate).toLocaleDateString('en-US', {
+            month: 'long',
+            day: 'numeric',
+            year: 'numeric',
+          })
+        : 'soon';
+
+      const profileTypeName = profile.type === 'business' ? 'business' : 'account';
+
+      Alert.alert(
+        'Account Closing',
+        `This ${profileTypeName} is scheduled for deletion on ${deletionDate}.\n\nWould you like to sign in and reactivate it?`,
+        [
+          {
+            text: 'Not now',
+            style: 'cancel',
+            onPress: () => {
+              logger.debug('[ProfileSwitcherModal] User chose to keep deletion scheduled');
+            },
+          },
+          {
+            text: 'Sign in & Reactivate',
+            style: 'default',
+            onPress: () => {
+              logger.debug('[ProfileSwitcherModal] User wants to reactivate, deferring API call until after PIN success');
+
+              // Just set the flag - API will be called AFTER successful PIN/biometric
+              setPendingCancelDeletionProfileId(profile.profileId);
+
+              // Proceed to PIN entry
+              proceedWithPinCheck(profile);
+            },
+          },
+        ],
+      );
+      return;
+    }
+
+    // Profile is not pending deletion - proceed with normal PIN/biometric check
+    proceedWithPinCheck(profile);
+  }, [currentProfileId, onClose, proceedWithPinCheck]);
 
   // Process error message and add guidance for lockout scenarios
   const processErrorMessage = useCallback((errorMsg: string, isBusinessProfile: boolean): string => {
@@ -561,6 +691,9 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
             setIsPinError(true);
             setPin('');
           } else {
+            // PIN SUCCESS! Cancel deletion if pending
+            await executeCancelDeletion(pinEntryProfile);
+
             setPinEntryProfile(null);
             setPin('');
             setPinErrorMessage(null);
@@ -575,7 +708,7 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
         }
       }, 100);
     }
-  }, [isSubmittingPin, pinEntryProfile, onSelectProfile, processErrorMessage]);
+  }, [isSubmittingPin, pinEntryProfile, onSelectProfile, processErrorMessage, executeCancelDeletion]);
 
   // Handle PIN submission (manual button press)
   const handlePinSubmit = useCallback(async () => {
@@ -604,7 +737,10 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
         setIsPinError(true);
         setPin('');
       } else {
-        // Success! Store PIN for future biometric access (non-blocking)
+        // PIN SUCCESS! Cancel deletion if pending
+        await executeCancelDeletion(pinEntryProfile);
+
+        // Store PIN for future biometric access (non-blocking)
         storePinForBiometric(pinEntryProfile.profileId, pin).catch((err) => {
           logger.warn('[ProfileSwitcherModal] Failed to store PIN for biometric (non-fatal):', err);
         });
@@ -620,7 +756,7 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
     } finally {
       setIsSubmittingPin(false);
     }
-  }, [pinEntryProfile, pin, onSelectProfile, processErrorMessage]);
+  }, [pinEntryProfile, pin, onSelectProfile, processErrorMessage, executeCancelDeletion]);
 
   // Handle biometric authentication as alternative to PIN
   // If backend biometric is enabled: True biometric (skip PIN entirely)
@@ -661,6 +797,9 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
             setPinErrorMessage(errorMessage);
             setIsPinError(true);
           } else {
+            // BIOMETRIC SUCCESS! Cancel deletion if pending
+            await executeCancelDeletion(pinEntryProfile);
+
             setPinEntryProfile(null);
             setPin('');
           }
@@ -699,6 +838,9 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
             [{ text: 'OK' }]
           );
         } else {
+          // BIOMETRIC SUCCESS! Cancel deletion if pending
+          await executeCancelDeletion(pinEntryProfile);
+
           // Success - parent will close modal
           setPinEntryProfile(null);
           setPin('');
@@ -725,7 +867,7 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
     } finally {
       setIsSubmittingPin(false);
     }
-  }, [pinEntryProfile, onSelectProfile, processErrorMessage, hasBackendBiometric]);
+  }, [pinEntryProfile, onSelectProfile, processErrorMessage, hasBackendBiometric, executeCancelDeletion]);
 
   // Handle back from PIN entry
   const handleBackFromPinEntry = useCallback(() => {
@@ -733,6 +875,8 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
     setPin('');
     setIsPinError(false);
     setPinErrorMessage(null);
+    // Clear pending cancellation - user backed out without completing auth
+    setPendingCancelDeletionProfileId(null);
   }, []);
 
   const handleRemoveAccount = React.useCallback((profile: AvailableProfile, event: any) => {
@@ -788,6 +932,15 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
             <Text style={styles.profileType}>
               {item.type === 'business' ? 'Business Profile' : 'Personal Profile'}
             </Text>
+            {/* Pending deletion badge */}
+            {item.status === 'pending_deletion' && item.scheduledDeletionDate && (
+              <View style={styles.deletionBadge}>
+                <Ionicons name="time-outline" size={12} color="#dc3545" />
+                <Text style={styles.deletionBadgeText}>
+                  Closing {formatDeletionDate(item.scheduledDeletionDate)}
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Current Indicator */}
@@ -815,6 +968,8 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
       handleIndicatorStyle={{ backgroundColor: theme.colors.textSecondary }}
       onChange={(index) => {
         if (index === -1) {
+          // Clear pending cancellation on modal close
+          setPendingCancelDeletionProfileId(null);
           onClose();
         }
       }}

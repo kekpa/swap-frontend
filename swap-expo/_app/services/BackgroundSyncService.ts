@@ -15,9 +15,18 @@ import { websocketService } from './websocketService';
 import { profileContextManager, ProfileSwitchStartData, ProfileSwitchCompleteData } from './ProfileContextManager';
 
 // Constants
-const SYNC_INTERVAL_MS = 3000; // Process queue every 3 seconds
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1000;
+
+/**
+ * PERFORMANCE FIX (2025-01-06): Adaptive sync intervals
+ * Before: Fixed 3s interval (wastes battery when idle)
+ * After: Adapts based on user activity (3s active → 30s idle)
+ */
+const SYNC_INTERVAL_ACTIVE_MS = 3000;    // 3s when user is active
+const SYNC_INTERVAL_IDLE_MS = 15000;     // 15s when user is idle
+const SYNC_INTERVAL_INACTIVE_MS = 30000; // 30s when app is backgrounded
+const ACTIVITY_TIMEOUT_MS = 30000;       // Consider idle after 30s no activity
 
 // WebSocket event types from backend
 const WS_TRANSACTION_COMPLETED = 'transaction.completed';
@@ -61,6 +70,11 @@ class BackgroundSyncService {
 
   // WebSocket cleanup function (React useEffect pattern)
   private cleanupWebSocketListeners: (() => void) | null = null;
+
+  // PERFORMANCE FIX: Adaptive sync intervals based on activity
+  private lastActivityTime: number = Date.now();
+  private isAppInBackground: boolean = false;
+  private currentSyncInterval: number = SYNC_INTERVAL_ACTIVE_MS;
 
   public static getInstance(): BackgroundSyncService {
     if (!BackgroundSyncService.instance) {
@@ -133,13 +147,83 @@ class BackgroundSyncService {
     // Setup network change listener
     this.setupNetworkListener();
 
-    // Start processing interval
-    this.syncInterval = setInterval(() => {
-      this.processQueue();
-    }, SYNC_INTERVAL_MS);
+    // Start processing interval with adaptive timing
+    this.scheduleNextSync();
 
     // Process immediately on start
     this.processQueue();
+  }
+
+  /**
+   * PERFORMANCE FIX: Schedule next sync with adaptive interval
+   * - Active: 3s (user recently interacted)
+   * - Idle: 15s (no activity for 30s)
+   * - Background: 30s (app not visible)
+   */
+  private scheduleNextSync(): void {
+    if (this.syncInterval) {
+      clearTimeout(this.syncInterval);
+    }
+
+    if (!this.isRunning) {
+      return;
+    }
+
+    // Calculate interval based on activity state
+    const newInterval = this.calculateSyncInterval();
+
+    // Only log if interval changed
+    if (newInterval !== this.currentSyncInterval) {
+      logger.debug(`[BackgroundSyncService] Sync interval: ${this.currentSyncInterval}ms → ${newInterval}ms`);
+      this.currentSyncInterval = newInterval;
+    }
+
+    this.syncInterval = setTimeout(() => {
+      this.processQueue();
+      this.scheduleNextSync(); // Schedule next after processing
+    }, this.currentSyncInterval);
+  }
+
+  /**
+   * Calculate sync interval based on activity state
+   */
+  private calculateSyncInterval(): number {
+    if (this.isAppInBackground) {
+      return SYNC_INTERVAL_INACTIVE_MS; // 30s when backgrounded
+    }
+
+    const timeSinceActivity = Date.now() - this.lastActivityTime;
+    if (timeSinceActivity > ACTIVITY_TIMEOUT_MS) {
+      return SYNC_INTERVAL_IDLE_MS; // 15s when idle
+    }
+
+    return SYNC_INTERVAL_ACTIVE_MS; // 3s when active
+  }
+
+  /**
+   * Call this when user performs an action (sends message, navigates, etc.)
+   * Reduces sync interval for more responsive updates
+   */
+  public recordActivity(): void {
+    this.lastActivityTime = Date.now();
+    // If we were idle, switch to active interval immediately
+    if (this.currentSyncInterval !== SYNC_INTERVAL_ACTIVE_MS && this.isRunning) {
+      this.scheduleNextSync();
+    }
+  }
+
+  /**
+   * Call when app goes to background/foreground
+   */
+  public setAppInBackground(inBackground: boolean): void {
+    if (this.isAppInBackground === inBackground) return;
+
+    this.isAppInBackground = inBackground;
+    logger.debug(`[BackgroundSyncService] App ${inBackground ? 'backgrounded' : 'foregrounded'}`);
+
+    if (this.isRunning) {
+      this.scheduleNextSync();
+    }
   }
 
   /**
@@ -153,9 +237,14 @@ class BackgroundSyncService {
     this.isPausedForProfileSwitch = false;
 
     if (this.syncInterval) {
-      clearInterval(this.syncInterval);
+      clearTimeout(this.syncInterval); // Changed from clearInterval
       this.syncInterval = null;
     }
+
+    // Reset adaptive state
+    this.lastActivityTime = Date.now();
+    this.isAppInBackground = false;
+    this.currentSyncInterval = SYNC_INTERVAL_ACTIVE_MS;
 
     // Unsubscribe from profile switch events
     if (this.unsubscribeSwitchStart) {

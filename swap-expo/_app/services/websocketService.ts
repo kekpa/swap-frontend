@@ -10,6 +10,60 @@ interface WebSocketOptions {
   enableLogs?: boolean;
 }
 
+/**
+ * PERFORMANCE FIX (2025-01-06): LRU cache for WebSocket interaction rooms
+ * Before: Set<string> grows unbounded as user visits chats
+ * After: Fixed-size LRU cache evicts least recently used rooms
+ */
+class LRURoomCache {
+  private cache: Map<string, number> = new Map(); // roomId -> lastAccessTime
+  private readonly maxSize: number;
+
+  constructor(maxSize: number = 10) {
+    this.maxSize = maxSize;
+  }
+
+  add(roomId: string): string | null {
+    // Update access time (moves to end of Map iteration order)
+    if (this.cache.has(roomId)) {
+      this.cache.delete(roomId);
+    }
+    this.cache.set(roomId, Date.now());
+
+    // Evict oldest if over capacity
+    if (this.cache.size > this.maxSize) {
+      const oldestKey = this.cache.keys().next().value;
+      if (oldestKey) {
+        this.cache.delete(oldestKey);
+        logger.debug(`[LRURoomCache] Evicted oldest room: ${oldestKey}`);
+        return oldestKey; // Return evicted room for cleanup
+      }
+    }
+    return null;
+  }
+
+  delete(roomId: string): boolean {
+    return this.cache.delete(roomId);
+  }
+
+  has(roomId: string): boolean {
+    return this.cache.has(roomId);
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+
+  get size(): number {
+    return this.cache.size;
+  }
+
+  // For rejoining after reconnection
+  forEach(callback: (roomId: string) => void): void {
+    this.cache.forEach((_, roomId) => callback(roomId));
+  }
+}
+
 class WebSocketService {
   private socket: Socket | null = null;
   private isConnected = false;
@@ -22,7 +76,27 @@ class WebSocketService {
   private isOfflineMode = false;
   // ✅ Track rooms to rejoin after reconnection (WhatsApp/Telegram pattern)
   private currentEntityId: string | null = null;
-  private activeInteractionRooms: Set<string> = new Set();
+  // PERFORMANCE FIX: LRU cache limits to 10 most recent rooms (prevents unbounded growth)
+  private activeInteractionRooms = new LRURoomCache(10);
+
+  // PERFORMANCE FIX (2025-01-06): Exponential backoff for room join retries
+  private roomJoinRetries = new Map<string, number>(); // roomId -> retry count
+  private readonly MAX_ROOM_JOIN_RETRIES = 5;
+  private readonly ROOM_JOIN_BASE_DELAY_MS = 1000; // 1s base delay
+  private readonly ROOM_JOIN_MAX_DELAY_MS = 30000; // 30s max delay
+
+  /**
+   * Calculate exponential backoff delay for room join retries
+   * Delay = min(baseDelay * 2^retryCount, maxDelay)
+   */
+  private calculateBackoffDelay(roomId: string): number {
+    const retryCount = this.roomJoinRetries.get(roomId) || 0;
+    const delay = Math.min(
+      this.ROOM_JOIN_BASE_DELAY_MS * Math.pow(2, retryCount),
+      this.ROOM_JOIN_MAX_DELAY_MS
+    );
+    return delay;
+  }
 
   // Profile switch cleanup function (React useEffect pattern)
   private cleanupProfileSwitch: (() => void) | null = null;
@@ -369,8 +443,15 @@ class WebSocketService {
 
     this.socket.emit('join_interaction', { interactionId }, (response: any) => {
       if (response?.success) {
-        // ✅ Track this room for auto-rejoin after reconnection
-        this.activeInteractionRooms.add(interactionId);
+        // ✅ Track this room for auto-rejoin after reconnection (LRU cache)
+        const evictedRoom = this.activeInteractionRooms.add(interactionId);
+        // Leave evicted room on server to free resources
+        if (evictedRoom && this.socket) {
+          this.socket.emit('leave_interaction', { interactionId: evictedRoom });
+          logger.debug(`[WebSocket] 🚪 Auto-left evicted room: ${evictedRoom}`);
+        }
+        // Reset retry counter on success
+        this.roomJoinRetries.delete(interactionId);
         logger.info(`[WebSocket] 🏠 Successfully joined interaction: ${interactionId}`);
         logger.debug('Interaction room join success', 'ws', {
           interactionId,
@@ -384,14 +465,25 @@ class WebSocketService {
           socketId: this.socket?.id
         });
 
-        // Retry once after a short delay if authentication failed
+        // PERFORMANCE FIX (2025-01-06): Exponential backoff for retries
         if (response?.error === 'Not authenticated') {
-          setTimeout(() => {
-            logger.debug('Retrying interaction room join after auth failure', 'ws');
-            if (this.isConnected && this.socket && this.isAuthenticated) {
-              this.joinInteraction(interactionId);
-            }
-          }, 1000);
+          const retryCount = this.roomJoinRetries.get(interactionId) || 0;
+
+          if (retryCount < this.MAX_ROOM_JOIN_RETRIES) {
+            this.roomJoinRetries.set(interactionId, retryCount + 1);
+            const delay = this.calculateBackoffDelay(interactionId);
+
+            logger.debug(`[WebSocket] Retry ${retryCount + 1}/${this.MAX_ROOM_JOIN_RETRIES} for room ${interactionId} in ${delay}ms`, 'ws');
+
+            setTimeout(() => {
+              if (this.isConnected && this.socket && this.isAuthenticated) {
+                this.joinInteraction(interactionId);
+              }
+            }, delay);
+          } else {
+            logger.error(`[WebSocket] ❌ Max retries (${this.MAX_ROOM_JOIN_RETRIES}) reached for room ${interactionId}`);
+            this.roomJoinRetries.delete(interactionId);
+          }
         }
       }
     });
@@ -432,6 +524,8 @@ class WebSocketService {
       if (response?.success) {
         // ✅ Track current entity room for auto-rejoin after reconnection
         this.currentEntityId = entityId;
+        // Reset retry counter on success
+        this.roomJoinRetries.delete(`entity:${entityId}`);
         logger.info(`[WebSocket] 🏠 Successfully joined entity room: ${entityId}`);
         logger.debug('Entity room join success', 'ws', {
           entityId,
@@ -446,14 +540,26 @@ class WebSocketService {
           socketId: this.socket?.id
         });
 
-        // Retry once after a short delay if authentication failed
+        // PERFORMANCE FIX (2025-01-06): Exponential backoff for retries
         if (response?.error === 'Not authenticated') {
-          setTimeout(() => {
-            logger.debug('Retrying entity room join after auth failure', 'ws');
-            if (this.isConnected && this.socket && this.isAuthenticated) {
-              this.joinEntityRoom(entityId);
-            }
-          }, 1000);
+          const roomKey = `entity:${entityId}`;
+          const retryCount = this.roomJoinRetries.get(roomKey) || 0;
+
+          if (retryCount < this.MAX_ROOM_JOIN_RETRIES) {
+            this.roomJoinRetries.set(roomKey, retryCount + 1);
+            const delay = this.calculateBackoffDelay(roomKey);
+
+            logger.debug(`[WebSocket] Retry ${retryCount + 1}/${this.MAX_ROOM_JOIN_RETRIES} for entity room ${entityId} in ${delay}ms`, 'ws');
+
+            setTimeout(() => {
+              if (this.isConnected && this.socket && this.isAuthenticated) {
+                this.joinEntityRoom(entityId);
+              }
+            }, delay);
+          } else {
+            logger.error(`[WebSocket] ❌ Max retries (${this.MAX_ROOM_JOIN_RETRIES}) reached for entity room ${entityId}`);
+            this.roomJoinRetries.delete(roomKey);
+          }
         }
       }
     });

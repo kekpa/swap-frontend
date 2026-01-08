@@ -84,8 +84,8 @@ export const queryKeys = {
 
   // Rosca (Sol) related queries - Pool-based savings system
   rosca: ['rosca'] as const,
-  roscaPools: (scope?: string, months?: number, sort?: string) =>
-    ['rosca', 'pools', { scope, months, sort }] as const,
+  roscaPools: (scope?: string, months?: number, sort?: string, monthStart?: string, monthEnd?: string) =>
+    ['rosca', 'pools', { scope, months, sort, monthStart, monthEnd }] as const,
   roscaPoolDetails: (poolId: string) => ['rosca', 'pools', poolId] as const,
   roscaEnrollmentsByEntity: (entityId: string) =>
     ['rosca', 'enrollments', 'entity', entityId] as const,

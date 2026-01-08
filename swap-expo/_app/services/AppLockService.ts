@@ -18,6 +18,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import { logger } from '../utils/logger';
 import { eventEmitter } from '../utils/eventEmitter';
+import { getLastActiveProfileId } from '../utils/pinUserStorage';
 
 // ============================================================================
 // Types
@@ -487,8 +488,11 @@ class AppLockService {
       // Dynamically import to avoid circular dependency
       const { loginService } = await import('./auth/LoginService');
 
-      logger.debug('[AppLockService] Verifying PIN via backend...');
-      const result = await loginService.loginWithPin(identifier, pin);
+      // Get current profile ID for proper profile targeting
+      const targetProfileId = await getLastActiveProfileId();
+
+      logger.debug(`[AppLockService] Verifying PIN via backend (targetProfileId: ${targetProfileId || 'none'})`);
+      const result = await loginService.loginWithPin(identifier, pin, targetProfileId || undefined);
 
       if (result.success) {
         // Success! Save PIN locally for future offline unlocks

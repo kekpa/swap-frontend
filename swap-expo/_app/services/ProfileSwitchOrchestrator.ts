@@ -961,9 +961,12 @@ export class ProfileSwitchOrchestrator {
       profileId: profileId,
       entityId: profile.entity_id,
       profileType: profile.type,
-      displayName: profile.type === 'business' ? profile.business_name : `${profile.first_name} ${profile.last_name}`,
-      firstName: profile.first_name,
-      lastName: profile.last_name,
+      displayName: profile.type === 'business'
+        ? profile.business_name
+        : `${profile.first_name || ''} ${profile.last_name || ''}`.trim(),
+      // For backward compat: firstName shows businessName for business profiles
+      firstName: profile.type === 'business' ? profile.business_name : profile.first_name,
+      lastName: profile.type === 'business' ? null : profile.last_name,
       businessName: profile.business_name,
       email: profile.email,
       username: profile.username,

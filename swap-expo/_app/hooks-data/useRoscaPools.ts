@@ -14,10 +14,15 @@ import { roscaRepository } from '../localdb/RoscaRepository';
 import { parseApiResponse } from '../utils/apiResponseParser';
 import type { RoscaPool, RoscaPoolDetails } from '../types/rosca.types';
 
+// Cache staleness threshold - if cache is older than this, show loading/skeletons instead
+const MAX_CACHE_AGE_MS = 2 * 60 * 1000; // 2 minutes (professional standard for financial data)
+
 interface UseRoscaPoolsOptions {
   enabled?: boolean;
   scope?: 'joinable' | 'upcoming' | 'all';
   months?: number;
+  monthStart?: string;  // YYYY-MM-DD for calendar pagination
+  monthEnd?: string;    // YYYY-MM-DD for calendar pagination
   sort?: 'recommended' | 'payout' | 'contribution' | 'duration' | 'popular';
 }
 
@@ -32,7 +37,7 @@ interface UseRoscaPoolsOptions {
  * @param options.sort - 'recommended' (default), 'payout', 'contribution', 'duration' (shortest first), 'popular'
  */
 export const useRoscaPools = (options: UseRoscaPoolsOptions = {}) => {
-  const { enabled = true, scope, months, sort } = options;
+  const { enabled = true, scope, months, monthStart, monthEnd, sort } = options;
   const queryClient = useQueryClient();
 
   const fetchPools = async (): Promise<RoscaPool[]> => {
@@ -42,39 +47,50 @@ export const useRoscaPools = (options: UseRoscaPoolsOptions = {}) => {
     const useLocalCache = !scope || scope === 'joinable';
 
     if (useLocalCache) {
-      // STEP 1: Load from local cache first
+      // STEP 1: Load from local cache and check staleness
       const cachedPools = await roscaRepository.getPools();
-      logger.debug(`[useRoscaPools] Loaded ${cachedPools.length} pools from SQLite cache`);
+      const cacheTimestamp = await roscaRepository.getPoolsCacheTimestamp();
+      const cacheAge = Date.now() - (cacheTimestamp || 0);
+      const isCacheFresh = cacheAge < MAX_CACHE_AGE_MS;
 
-      // STEP 2: Return cached data if available
-      if (cachedPools.length > 0) {
-        // Background sync
+      logger.debug(`[useRoscaPools] Cache: ${cachedPools.length} pools, age: ${Math.round(cacheAge / 1000)}s, fresh: ${isCacheFresh}`);
+
+      // STEP 2: Only return cached data if it's FRESH (< 2 min old)
+      if (cachedPools.length > 0 && isCacheFresh) {
+        logger.debug(`[useRoscaPools] ✅ Cache is fresh - showing instantly`);
+
+        // Background sync (non-blocking)
         setTimeout(async () => {
           try {
-            logger.debug(`[useRoscaPools] 🔄 BACKGROUND SYNC: Fetching fresh pools from API`);
+            logger.debug(`[useRoscaPools] 🔄 BACKGROUND SYNC: Fetching fresh pools`);
             const response = await apiClient.get(ROSCA_PATHS.POOLS, {
-              params: { scope, months, sort },
+              params: { scope, months, monthStart, monthEnd, sort },
             });
             const apiPools: RoscaPool[] = parseApiResponse(response.data, 'rosca-pools');
 
             if (apiPools.length > 0) {
               await roscaRepository.savePools(apiPools);
-              queryClient.setQueryData(queryKeys.roscaPools(scope, months, sort), apiPools);
+              queryClient.setQueryData(queryKeys.roscaPools(scope, months, sort, monthStart, monthEnd), apiPools);
               logger.debug(`[useRoscaPools] ✅ BACKGROUND SYNC: Updated ${apiPools.length} pools`);
             }
           } catch (error) {
             logger.debug(`[useRoscaPools] ⚠️ Background sync failed: ${error instanceof Error ? error.message : String(error)}`);
           }
-        }, 3000);
+        }, 2000);
 
         return cachedPools;
+      }
+
+      // Cache is STALE or empty - will show loading/skeletons and fetch fresh
+      if (cachedPools.length > 0) {
+        logger.debug(`[useRoscaPools] ⏳ Cache is stale (${Math.round(cacheAge / 1000)}s old) - fetching fresh`);
       }
     }
 
     // STEP 3: Fetch from API (either no cache or non-default scope)
     logger.debug(`[useRoscaPools] 📡 Fetching pools from API`);
     const response = await apiClient.get(ROSCA_PATHS.POOLS, {
-      params: { scope, months, sort },
+      params: { scope, months, monthStart, monthEnd, sort },
     });
     const apiPools: RoscaPool[] = parseApiResponse(response.data, 'rosca-pools');
 
@@ -87,7 +103,7 @@ export const useRoscaPools = (options: UseRoscaPoolsOptions = {}) => {
   };
 
   return useQuery({
-    queryKey: queryKeys.roscaPools(scope, months, sort),
+    queryKey: queryKeys.roscaPools(scope, months, sort, monthStart, monthEnd),
     queryFn: fetchPools,
     enabled: Boolean(enabled),
     staleTime: 1000 * 60 * 10, // 10 minutes - pools don't change often

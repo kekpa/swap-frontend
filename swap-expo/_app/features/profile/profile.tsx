@@ -30,6 +30,7 @@ import { profileSwitchOrchestrator } from '../../services/ProfileSwitchOrchestra
 import apiClient from '../../_api/apiClient';
 import { API_PATHS } from '../../_api/apiPaths';
 import { useQueryClient } from '@tanstack/react-query';
+import { clearProfilePinData, setLastActiveProfile } from '../../utils/pinUserStorage';
 
 // Define a type for the route params ProfileScreen might receive when opened as ProfileModal
 // These params are passed to ProfileModal, not ProfileStackParamList for the 'Profile' screen itself.
@@ -721,34 +722,59 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   };
 
   const handleDeleteAccount = () => {
+    // Detect profile type - business profiles should delete the business, not personal account
+    const isBusinessProfile = authContext.user?.profileType === 'business';
+    const profileId = authContext.user?.profileId;
+
+    const title = isBusinessProfile ? "Close Business" : "Delete Account";
+    const message = isBusinessProfile
+      ? "Are you sure you want to close this business? Your data will be marked for deletion and you have 30 days to cancel."
+      : "Are you sure you want to delete your account? Your data will be marked for deletion and you have 30 days to cancel by logging in again.";
+    const buttonText = isBusinessProfile ? "Close" : "Delete";
+    const successTitle = isBusinessProfile ? "Business Scheduled for Closure" : "Account Scheduled for Deletion";
+    const successMessage = isBusinessProfile
+      ? "Your business has been marked for closure. You have 30 days to cancel."
+      : "Your account has been marked for deletion. You have 30 days to cancel by logging in again.";
+
     Alert.alert(
-      "Delete Account",
-      "Are you sure you want to delete your account? Your data will be marked for deletion and you have 30 days to cancel by logging in again.",
+      title,
+      message,
       [
         {
           text: "Cancel",
           style: "cancel"
         },
         {
-          text: "Delete",
+          text: buttonText,
           style: "destructive",
           onPress: async () => {
             try {
-              logger.debug('Delete account requested', 'profile');
+              logger.debug(isBusinessProfile ? 'Close business requested' : 'Delete account requested', 'profile');
 
-              // Call the delete account API
-              await apiClient.delete(API_PATHS.AUTH.DELETE_ACCOUNT);
+              // Call the appropriate API based on profile type
+              if (isBusinessProfile && profileId) {
+                await apiClient.delete(API_PATHS.BUSINESS.DELETE(profileId));
+              } else {
+                await apiClient.delete(API_PATHS.AUTH.DELETE_ACCOUNT);
+              }
 
-              logger.info('Account marked for deletion', 'profile');
+              logger.info(isBusinessProfile ? 'Business marked for closure' : 'Account marked for deletion', 'profile');
 
               // Show success message
               Alert.alert(
-                "Account Scheduled for Deletion",
-                "Your account has been marked for deletion. You have 30 days to cancel by logging in again.",
+                successTitle,
+                successMessage,
                 [
                   {
                     text: "OK",
                     onPress: async () => {
+                      // Clear stored identifier for deleted profile to avoid confusion
+                      // (user shouldn't see "Welcome back [deleted profile]" on sign-in screen)
+                      if (profileId) {
+                        await clearProfilePinData(profileId);
+                      }
+                      await setLastActiveProfile('');
+
                       // Log out the user
                       await authContext.logout();
                     }
@@ -756,11 +782,48 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 ]
               );
             } catch (error: any) {
-              logger.error('Failed to delete account', error, 'profile');
-              Alert.alert(
-                "Error",
-                error.response?.data?.message || "Failed to delete account. Please try again."
-              );
+              // Log as debug since we handle this gracefully with alerts
+              logger.debug('Delete/close blocked', 'profile', {
+                status: error.response?.status,
+                code: error.response?.data?.errors?.[0]?.code
+              });
+
+              // Extract error details from API response
+              const errorData = error.response?.data;
+              const errorCode = errorData?.errors?.[0]?.code;
+              const errorMessage = errorData?.errors?.[0]?.message || errorData?.message;
+
+              // Handle specific error codes
+              if (errorCode === 'BUSINESS_OWNER_CANNOT_DELETE') {
+                Alert.alert(
+                  "Cannot Delete Account",
+                  errorMessage || "You are the sole owner of one or more businesses. Please transfer ownership or close the business(es) first.",
+                  [
+                    { text: "OK", style: "default" }
+                  ]
+                );
+              } else if (errorCode === 'ACCOUNT_HAS_BALANCE' || errorCode === 'BUSINESS_HAS_BALANCE') {
+                Alert.alert(
+                  isBusinessProfile ? "Cannot Close Business" : "Cannot Delete Account",
+                  errorMessage || "Please withdraw all funds first.",
+                  [
+                    { text: "OK", style: "default" }
+                  ]
+                );
+              } else if (errorCode === 'NOT_BUSINESS_OWNER' || errorCode === 'NOT_PRIMARY_OWNER') {
+                Alert.alert(
+                  "Cannot Close Business",
+                  errorMessage || "Only the primary owner can close this business.",
+                  [
+                    { text: "OK", style: "default" }
+                  ]
+                );
+              } else {
+                Alert.alert(
+                  "Error",
+                  errorMessage || (isBusinessProfile ? "Failed to close business. Please try again." : "Failed to delete account. Please try again.")
+                );
+              }
             }
           }
         }
@@ -881,7 +944,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <View style={{ flex: 1 }}>
               <View style={{ marginBottom: 4 }}>
                 <Text style={[styles.userName, { color: theme.colors.textPrimary, marginBottom: 0 }]}>
-                  {user?.businessName ? user.businessName : (user?.firstName || user?.lastName ? `${user?.firstName || ''} ${user?.lastName || ''}`.trim() : (user?.email || 'User'))}
+                  {user?.displayName || user?.businessName || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.email}
                 </Text>
                 {actualOverallStatus === 'completed' && (
                   <View style={[styles.verifiedBadge, { marginLeft: 0, marginTop: 4, alignSelf: 'flex-start' }]}>
@@ -988,11 +1051,11 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <Text style={[styles.logoutText, { color: theme.colors.textPrimary }]}>Log out</Text>
           </TouchableOpacity>
 
-          {/* HIDDEN FOR APPLE REVIEW - Uncomment when feature is ready
           <TouchableOpacity style={styles.deleteAccountContainer} onPress={handleDeleteAccount}>
-            <Text style={[styles.deleteAccountText, { color: theme.colors.error }]}>Delete account</Text>
+            <Text style={[styles.deleteAccountText, { color: theme.colors.error }]}>
+              {authContext.user?.profileType === 'business' ? 'Close business' : 'Delete account'}
+            </Text>
           </TouchableOpacity>
-          */}
         </ScrollView>
 
       {/* Profile Switcher Modal */}

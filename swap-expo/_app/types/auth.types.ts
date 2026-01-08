@@ -22,6 +22,9 @@ export interface User {
   // Professional profile fields
   profileType?: 'personal' | 'business';
   businessName?: string;
+  // Unified display name - single source of truth for UI display
+  // Personal: "FirstName LastName", Business: "Business Name"
+  displayName?: string;
 }
 
 // Auth error class
@@ -94,7 +97,7 @@ export interface AuthContextType {
   
   // Authentication Methods
   // NOTE: login() and loginBusiness() removed - use unifiedLogin() which auto-detects user type
-  loginWithPin: (identifier: string, pin: string) => Promise<{ success: boolean; message?: string }>;
+  loginWithPin: (identifier: string, pin: string, targetProfileId?: string) => Promise<{ success: boolean; message?: string }>;
   unifiedLogin: (identifier: string, password: string, skipStore?: boolean) => Promise<{ success: boolean; message?: string; user_type?: string }>;
   logout: () => Promise<void>;
 
