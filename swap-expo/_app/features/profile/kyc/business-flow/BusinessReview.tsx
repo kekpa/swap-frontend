@@ -1,6 +1,6 @@
 // Created: BusinessReview component for reviewing business information - 2025-11-11
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -45,7 +45,7 @@ const BusinessReview: React.FC = () => {
   const sourceRoute = route.params?.sourceRoute;
 
   // TODO: Fetch business info from API
-  const businessInfo: BusinessInfo | null = null;
+  const [businessInfo] = useState<BusinessInfo | null>(null);
 
   const handleEditBasicInfo = () => {
     navigation.navigate('BusinessInfoFlow', {
@@ -86,11 +86,11 @@ const BusinessReview: React.FC = () => {
       backgroundColor: theme.colors.card,
     },
     backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-    headerTitle: { fontSize: theme.typography.fontSize.lg, fontWeight: '600', color: theme.colors.textPrimary },
+    headerTitle: { fontSize: theme.typography.fontSize.lg, fontWeight: '600' as const, color: theme.colors.textPrimary },
     content: { flex: 1, padding: theme.spacing.lg },
     title: {
       fontSize: theme.typography.fontSize.xl,
-      fontWeight: '600',
+      fontWeight: '600' as const,
       color: theme.colors.textPrimary,
       marginBottom: theme.spacing.xs,
     },
@@ -110,7 +110,7 @@ const BusinessReview: React.FC = () => {
     },
     sectionTitle: {
       fontSize: theme.typography.fontSize.lg,
-      fontWeight: '600',
+      fontWeight: '600' as const,
       color: theme.colors.textPrimary,
     },
     editButton: {
@@ -120,7 +120,7 @@ const BusinessReview: React.FC = () => {
     },
     editButtonText: {
       fontSize: theme.typography.fontSize.sm,
-      fontWeight: '500',
+      fontWeight: '500' as const,
       color: theme.colors.primary,
     },
     infoBox: {
@@ -133,7 +133,7 @@ const BusinessReview: React.FC = () => {
     },
     infoLabel: {
       fontSize: theme.typography.fontSize.xs,
-      fontWeight: '500',
+      fontWeight: '500' as const,
       color: theme.colors.textSecondary,
       marginBottom: theme.spacing.xs / 2,
       textTransform: 'uppercase',
@@ -158,7 +158,7 @@ const BusinessReview: React.FC = () => {
     continueButtonText: {
       color: theme.colors.white,
       fontSize: theme.typography.fontSize.md,
-      fontWeight: '600',
+      fontWeight: '600' as const,
     },
   }), [theme]);
 

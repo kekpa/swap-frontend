@@ -5,6 +5,7 @@ import logger from '../utils/logger';
 
 export interface PersonalInfo {
   firstName: string;
+  middleName?: string;
   lastName: string;
   birthDate: string;
   countryOfResidence: string;

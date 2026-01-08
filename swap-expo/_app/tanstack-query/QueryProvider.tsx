@@ -23,7 +23,6 @@ const QueryErrorHandlerWrapper: React.FC<{ children: React.ReactNode }> = ({ chi
   // PROFESSIONAL INTEGRATION: Connect existing error handler to Toast system
   // This completes the infrastructure that was built but never integrated
   useQueryErrorHandler({
-    queryClient,
     showNotification: (message, type) => {
       Toast.show({
         type: type as 'success' | 'error' | 'info' | 'warning',

@@ -118,7 +118,6 @@ const styles = StyleSheet.create({
   strengthBarFill: {
     height: '100%',
     borderRadius: 2,
-    transition: 'width 0.3s ease',
   },
   strengthLabel: {
     fontSize: 12,

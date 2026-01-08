@@ -56,7 +56,7 @@ export const KycService = {
           logger.info('[KycService] ✅ Passcode also stored for biometric access');
         } catch (biometricError) {
           // Non-fatal - biometric storage is optional
-          logger.warn('[KycService] ⚠️ Failed to store for biometric (non-fatal):', biometricError);
+          logger.warn('[KycService] Failed to store for biometric (non-fatal)', 'kyc', { error: biometricError });
         }
       }
 

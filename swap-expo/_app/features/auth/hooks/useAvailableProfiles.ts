@@ -62,7 +62,7 @@ export const useAvailableProfiles = () => {
 
   // SECURITY FIX: Include user ID in cache key to prevent cross-user cache pollution
   // Without this, User A's profiles could be shown to User B after account switch
-  const userId = user?.userId || user?.profileId || 'anonymous';
+  const userId = user?.id || user?.profileId || 'anonymous';
 
   return useQuery({
     queryKey: [...queryKeys.availableProfiles, userId],

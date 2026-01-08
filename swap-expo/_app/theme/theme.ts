@@ -91,6 +91,7 @@ export interface ThemeColors {
   primaryDark: string;      // Darker variant for hover/press states
   primaryLight: string;     // Lighter shade for accents, borders, etc.
   primaryUltraLight: string; // Very light shade for backgrounds, selected states
+  primaryOpacity10: string; // Primary color with 10% opacity for subtle backgrounds
 
   // Secondary colors
   secondary: string;        // Secondary accent color
@@ -504,7 +505,7 @@ const createCommonStyles = (colors: ThemeColors, borderRadius: ThemeBorderRadius
   primaryButtonText: {
     color: colors.white, // Primary buttons always have white text
     fontSize: typography.fontSize.md,
-    fontWeight: "600", // Or typography.fontFamily.bold if defined
+    fontWeight: "600" as const, // Or typography.fontFamily.bold if defined
   },
     secondaryButton: {
     backgroundColor: colors.background,
@@ -519,7 +520,7 @@ const createCommonStyles = (colors: ThemeColors, borderRadius: ThemeBorderRadius
   secondaryButtonText: {
     color: colors.primary,
     fontSize: typography.fontSize.md,
-    fontWeight: "600",
+    fontWeight: "600" as const,
     },
 
   // Input styling
@@ -691,6 +692,7 @@ const violetThemeColors: ThemeColors = {
   primaryDark: PALETTE.primary.violetDark,
   primaryLight: PALETTE.primary.violetLight,
   primaryUltraLight: PALETTE.primary.violetUltraLight,
+  primaryOpacity10: 'rgba(139, 20, 253, 0.1)', // violet with 10% opacity
   secondary: PALETTE.secondary.indigo,
   secondaryDark: PALETTE.secondary.indigoDark,
   secondaryLight: PALETTE.secondary.indigoLight,
@@ -717,6 +719,7 @@ const darkVioletThemeColors: ThemeColors = {
   primaryDark: PALETTE.primary.violetDark,
   primaryLight: PALETTE.primary.violetLight,
   primaryUltraLight: "#2d1a3e", // Custom dark purple background
+  primaryOpacity10: 'rgba(139, 20, 253, 0.1)', // violet with 10% opacity
   secondary: PALETTE.secondary.indigo,
   secondaryDark: PALETTE.secondary.indigoDark,
   secondaryLight: PALETTE.secondary.indigoLight,
@@ -746,6 +749,7 @@ const oceanBlueThemeColors: ThemeColors = {
   primaryDark: PALETTE.primary.oceanBlueDark,
   primaryLight: PALETTE.primary.oceanBlueLight,
   primaryUltraLight: PALETTE.primary.oceanBlueUltraLight,
+  primaryOpacity10: 'rgba(0, 119, 182, 0.1)', // oceanBlue with 10% opacity
   secondary: PALETTE.secondary.indigo,
   secondaryDark: PALETTE.secondary.indigoDark,
   secondaryLight: PALETTE.secondary.indigoLight,
@@ -772,6 +776,7 @@ const darkOceanBlueThemeColors: ThemeColors = {
   primaryDark: PALETTE.primary.oceanBlueDark,
   primaryLight: PALETTE.primary.oceanBlueLight,
   primaryUltraLight: "#0a2a3c", // Dark blue-tinted background
+  primaryOpacity10: 'rgba(0, 119, 182, 0.1)', // oceanBlue with 10% opacity
   secondary: PALETTE.secondary.indigo,
   secondaryDark: PALETTE.secondary.indigoDark,
   secondaryLight: PALETTE.secondary.indigoLight,
@@ -801,6 +806,7 @@ const greenThemeColors: ThemeColors = {
   primaryDark: PALETTE.primary.greenDark,
   primaryLight: PALETTE.primary.greenLight,
   primaryUltraLight: PALETTE.primary.greenUltraLight,
+  primaryOpacity10: 'rgba(16, 185, 129, 0.1)', // green with 10% opacity
   secondary: PALETTE.secondary.indigo,
   secondaryDark: PALETTE.secondary.indigoDark,
   secondaryLight: PALETTE.secondary.indigoLight,
@@ -827,6 +833,7 @@ const darkGreenThemeColors: ThemeColors = {
   primaryDark: PALETTE.primary.greenDark,
   primaryLight: PALETTE.primary.greenLight,
   primaryUltraLight: "#0c291d", // Dark green-tinted background
+  primaryOpacity10: 'rgba(16, 185, 129, 0.1)', // green with 10% opacity
   secondary: PALETTE.secondary.indigo,
   secondaryDark: PALETTE.secondary.indigoDark,
   secondaryLight: PALETTE.secondary.indigoLight,
@@ -856,6 +863,7 @@ const amberThemeColors: ThemeColors = {
   primaryDark: PALETTE.primary.amberDark,
   primaryLight: PALETTE.primary.amberLight,
   primaryUltraLight: PALETTE.primary.amberUltraLight,
+  primaryOpacity10: 'rgba(255, 183, 68, 0.1)', // amber with 10% opacity
   secondary: PALETTE.secondary.indigo,
   secondaryDark: PALETTE.secondary.indigoDark,
   secondaryLight: PALETTE.secondary.indigoLight,
@@ -882,6 +890,7 @@ const darkAmberThemeColors: ThemeColors = {
   primaryDark: PALETTE.primary.amberDark,
   primaryLight: PALETTE.primary.amberLight,
   primaryUltraLight: "#332211", // Dark amber-tinted background
+  primaryOpacity10: 'rgba(255, 183, 68, 0.1)', // amber with 10% opacity
   secondary: PALETTE.secondary.indigo,
   secondaryDark: PALETTE.secondary.indigoDark,
   secondaryLight: PALETTE.secondary.indigoLight,

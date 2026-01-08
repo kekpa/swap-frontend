@@ -60,7 +60,7 @@ export const useEntityAwareQueryKey = (
 
     // Development logging for debugging entity context
     if (__DEV__) {
-      logger.debug('[useEntityAwareQueryKey] ✅ Entity-aware key generated:', {
+      logger.debug('[useEntityAwareQueryKey] Entity-aware key generated', 'data', {
         feature,
         entityId,
         queryKey,

@@ -388,7 +388,7 @@ const VerificationCodeScreen = () => {
           {code.map((digit, index) => (
             <TextInput
               key={index}
-              ref={(input) => (inputRefs.current[index] = input)}
+              ref={(input) => { inputRefs.current[index] = input; }}
               style={[
                 styles.codeInput, 
                 { 

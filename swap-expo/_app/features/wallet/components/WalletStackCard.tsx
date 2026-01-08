@@ -758,9 +758,8 @@ const WalletStackCard: React.FC<WalletStackCardProps> = React.memo(({
                   <TouchableOpacity
                     activeOpacity={0.95}
                     onPress={() => handleCardPress(wallet)}
-                    style={styles.cardTouchable}
+                    style={[styles.cardTouchable, { pointerEvents: isExpanded && isPrimaryCard ? 'none' : 'auto' }]}
                     disabled={isOfflineMode && isTransitioning}
-                    pointerEvents={isExpanded && isPrimaryCard ? 'none' : 'auto'}
                   >
                     <WalletCard
                       wallet={wallet}

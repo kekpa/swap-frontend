@@ -6,6 +6,7 @@
  */
 
 import logger from './logger';
+import { HttpError } from '../types/api.types';
 
 // Standard error categories for better organization
 export enum ErrorCategory {
@@ -138,9 +139,9 @@ export const isAppError = (error: unknown): error is AppError => {
 /**
  * Check if error is an HTTP/Axios error
  */
-export const isHttpError = (error: unknown): error is any => {
+export const isHttpError = (error: unknown): error is HttpError => {
   return (
-    error &&
+    error !== null &&
     typeof error === 'object' &&
     ('status' in error || 'response' in error || 'code' in error)
   );

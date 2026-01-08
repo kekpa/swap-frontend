@@ -109,10 +109,10 @@ export const useCurrencies = (): UseCurrenciesReturn => {
     }
   );
 
-  const response = createQueryResponse(queryResult, []);
+  const response = createQueryResponse<Currency[]>(queryResult, []);
 
   return {
-    currencies: response.data,
+    currencies: response.data ?? [],
     loading: response.loading,
     error: response.error,
     refetch: response.refetch,

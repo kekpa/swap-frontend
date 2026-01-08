@@ -98,7 +98,7 @@ export interface AuthContextType {
   // Authentication Methods
   // NOTE: login() and loginBusiness() removed - use unifiedLogin() which auto-detects user type
   loginWithPin: (identifier: string, pin: string, targetProfileId?: string) => Promise<{ success: boolean; message?: string }>;
-  unifiedLogin: (identifier: string, password: string, skipStore?: boolean) => Promise<{ success: boolean; message?: string; user_type?: string }>;
+  unifiedLogin: (identifier: string, password: string, skipStore?: boolean) => Promise<{ success: boolean; message?: string; user_type?: string; errorCode?: string }>;
   logout: () => Promise<void>;
 
   // Multi-account Management (Instagram-style)
@@ -122,7 +122,7 @@ export interface AuthContextType {
   setupBiometricLogin: (identifier: string, password: string) => Promise<void>;
   
   // Session Management
-  checkSession: () => Promise<void>;
+  checkSession: () => Promise<boolean>;
   completeProfileSwitch: (newProfileId: string) => Promise<boolean>;
   getAccessToken: () => Promise<string | null>;
   
@@ -132,7 +132,7 @@ export interface AuthContextType {
   handleSignUp: (userData: UserData) => Promise<any>;
   checkEmailConfirmation: (email: string) => Promise<boolean>;
   setIsAuthenticated: React.Dispatch<React.SetStateAction<boolean>>;
-  setUser: React.Dispatch<React.SetStateAction<User | null>>;
+  setUser: (user: User | null) => void;
   needsLogin: boolean;
   setNeedsLogin: React.Dispatch<React.SetStateAction<boolean>>;
   forceLogout: () => Promise<void>;
@@ -146,7 +146,7 @@ export interface AuthContextType {
   getLastUserForPin: () => Promise<string | null>;
   clearPinUser: () => Promise<void>;
   hasPinUserStored: () => Promise<boolean>;
-  getBiometricCredentials: () => Promise<{ identifier: string; password: string } | null>;
+  getBiometricCredentials: () => Promise<string | null>;
   enableGuestMode: () => Promise<void>;
   requireAuthentication: () => Promise<boolean>;
   persistentAuthEnabled: boolean;

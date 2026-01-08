@@ -104,7 +104,7 @@ class NavigationStateManager {
       isStable: true,
     };
 
-    logger.debug('[NavigationStateManager] 🏗️ Professional navigation state manager initialized');
+    logger.debug('[NavigationStateManager] 🏗️ Professional navigation state manager initialized', 'navigation');
   }
 
   /**
@@ -120,7 +120,7 @@ class NavigationStateManager {
 
     // Detect rapid navigation changes (potential glitch indicator)
     if (timeSinceLastChange < this.config.rapidChangeThreshold && this.state.lastRouteChange > 0) {
-      logger.warn('[NavigationStateManager] ⚠️ Rapid navigation changes detected', {
+      logger.warn('[NavigationStateManager] ⚠️ Rapid navigation changes detected', 'navigation', {
         timeSinceLastChange,
         currentRoute,
         previousRoute: this.state.currentRoute,
@@ -155,7 +155,7 @@ class NavigationStateManager {
     this.clearStabilityTimer();
     this.stabilityTimer = setTimeout(() => {
       this.state.isStable = true;
-      logger.debug('[NavigationStateManager] ✅ Navigation stabilized', {
+      logger.debug('[NavigationStateManager] ✅ Navigation stabilized', 'navigation', {
         route: this.state.currentRoute,
         duration: Date.now() - this.state.lastRouteChange
       });
@@ -166,7 +166,7 @@ class NavigationStateManager {
    * Professional route change handler
    */
   private handleRouteChange(newRoute: string, oldRoute: string, timestamp: number): void {
-    logger.debug('[NavigationStateManager] 🔄 Route change detected', {
+    logger.debug('[NavigationStateManager] 🔄 Route change detected', 'navigation', {
       from: oldRoute,
       to: newRoute,
       timestamp,
@@ -198,7 +198,7 @@ class NavigationStateManager {
 
     // Set transition timeout
     this.transitionTimer = setTimeout(() => {
-      logger.debug('[NavigationStateManager] Transition timeout reached (this is normal for slower devices)', {
+      logger.debug('[NavigationStateManager] Transition timeout reached (this is normal for slower devices)', 'navigation', {
         route,
         duration: Date.now() - timestamp,
         maxDuration: this.config.transitionTimeout
@@ -232,7 +232,7 @@ class NavigationStateManager {
     this.state.isTransitioning = false;
     this.clearTransitionTimer();
 
-    logger.debug('[NavigationStateManager] ✅ Transition completed', {
+    logger.debug('[NavigationStateManager] ✅ Transition completed', 'navigation', {
       route,
       duration: transitionDuration
     });
@@ -256,7 +256,7 @@ class NavigationStateManager {
                 this.state.isStable &&
                 (Date.now() - this.state.lastRouteChange) > this.config.stabilityWindow;
 
-    logger.debug('[NavigationStateManager] 🔐 Auth operation check', {
+    logger.debug('[NavigationStateManager] 🔐 Auth operation check', 'navigation', {
       reason: reason || 'unknown',
       canPerform: can,
       state: {
@@ -291,7 +291,7 @@ class NavigationStateManager {
   setPendingNavigation(pending: boolean, reason?: string): void {
     this.state.pendingNavigation = pending;
 
-    logger.debug('[NavigationStateManager] 📍 Pending navigation state changed', {
+    logger.debug('[NavigationStateManager] 📍 Pending navigation state changed', 'navigation', {
       pending,
       reason: reason || 'unknown',
       currentRoute: this.state.currentRoute
@@ -306,7 +306,7 @@ class NavigationStateManager {
       try {
         listener(event);
       } catch (error) {
-        logger.error('[NavigationStateManager] Error in event listener:', error);
+        logger.error('[NavigationStateManager] Error in event listener', error, 'navigation');
       }
     });
   }
@@ -365,7 +365,7 @@ class NavigationStateManager {
     this.clearStabilityTimer();
     this.eventListeners = [];
 
-    logger.debug('[NavigationStateManager] 🧹 Navigation state manager destroyed');
+    logger.debug('[NavigationStateManager] 🧹 Navigation state manager destroyed', 'navigation');
   }
 }
 

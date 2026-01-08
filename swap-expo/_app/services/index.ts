@@ -13,11 +13,11 @@ export { default as appLifecycleManager } from './AppLifecycleManager';
 export { networkService } from './NetworkService';
 
 // WebSocket services
-export { default as webSocketHandler } from './WebSocketHandler';
+export { webSocketHandler } from './WebSocketHandler';
 export { websocketService } from './websocketService';
 
 // Contact services
-export { contactsService } from './ContactsService';
+export { default as contactsService } from './ContactsService';
 
 // LOCAL-FIRST: Unified timeline services
 export { unifiedTimelineService } from './UnifiedTimelineService';

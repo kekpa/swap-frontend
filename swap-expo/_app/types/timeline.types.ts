@@ -44,9 +44,10 @@ export interface TransactionTimelineItem extends BaseTimelineItem {
   type?: 'transaction';
   transaction_id?: string;
   transaction_type?: 'payment' | 'request' | 'refund' | 'chargeback' | 'fee';
-  status?: 'pending' | 'completed' | 'failed' | 'cancelled' | 'reversed';
+  status?: 'pending' | 'completed' | 'failed' | 'cancelled' | 'reversed' | string;
   amount: number;
   currency_code?: string;
+  currency_symbol?: string;
   description?: string;
   /**
    * Entity identifiers for the sender/recipient when they are returned

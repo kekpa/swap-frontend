@@ -160,7 +160,7 @@ export const getAllProfilePinData = async (): Promise<ProfilePinDataMap> => {
     }
     return JSON.parse(dataStr) as ProfilePinDataMap;
   } catch (error) {
-    logger.error('[PIN Storage] Failed to get all profile PIN data:', error);
+    logger.error('[PIN Storage] Failed to get all profile PIN data', error, 'auth');
     return {};
   }
 };
@@ -175,7 +175,7 @@ export const getLastActiveProfileId = async (): Promise<string | null> => {
     const profileId = await SecureStore.getItemAsync(LAST_ACTIVE_PROFILE_KEY);
     return profileId || null;
   } catch (error) {
-    logger.error('[PIN Storage] Failed to get last active profile ID:', error);
+    logger.error('[PIN Storage] Failed to get last active profile ID', error, 'auth');
     return null;
   }
 };
@@ -266,9 +266,9 @@ export const clearProfilePinData = async (profileId: string): Promise<void> => {
       await setLastActiveProfile('');
     }
 
-    logger.debug('[PIN Storage] Cleared profile PIN data', { profileId });
+    logger.debug('[PIN Storage] Cleared profile PIN data', 'auth', { profileId });
   } catch (error) {
-    logger.error('[PIN Storage] Failed to clear profile PIN data:', error);
+    logger.error('[PIN Storage] Failed to clear profile PIN data', error, 'auth');
     throw error;
   }
 };
@@ -284,9 +284,9 @@ export const clearAllProfilePinData = async (): Promise<void> => {
     await SecureStore.deleteItemAsync(LAST_ACTIVE_PROFILE_KEY);
     await SecureStore.deleteItemAsync(LAST_PIN_USER_KEY); // Also clear legacy
 
-    logger.debug('[PIN Storage] Cleared all profile PIN data');
+    logger.debug('[PIN Storage] Cleared all profile PIN data', 'auth');
   } catch (error) {
-    logger.error('[PIN Storage] Failed to clear all profile PIN data:', error);
+    logger.error('[PIN Storage] Failed to clear all profile PIN data', error, 'auth');
     throw error;
   }
 };
@@ -301,7 +301,7 @@ export const hasAnyProfilePinData = async (): Promise<boolean> => {
     const allData = await getAllProfilePinData();
     return Object.keys(allData).length > 0;
   } catch (error) {
-    logger.error('[PIN Storage] Failed to check for profile PIN data:', error);
+    logger.error('[PIN Storage] Failed to check for profile PIN data', error, 'auth');
     return false;
   }
 };
@@ -335,9 +335,9 @@ export const getProfileDisplayName = (data: ProfilePinData): string => {
 export const storeLastUserForPin = async (identifier: string): Promise<void> => {
   try {
     await SecureStore.setItemAsync(LAST_PIN_USER_KEY, identifier);
-    logger.debug('[PIN Storage] [LEGACY] Stored last user for PIN');
+    logger.debug('[PIN Storage] [LEGACY] Stored last user for PIN', 'auth');
   } catch (error) {
-    logger.error('[PIN Storage] [LEGACY] Failed to store last user for PIN:', error);
+    logger.error('[PIN Storage] [LEGACY] Failed to store last user for PIN', error, 'auth');
     throw error;
   }
 };
@@ -356,10 +356,10 @@ export const getLastUserForPin = async (): Promise<string | null> => {
 
     // Fall back to legacy
     const identifier = await SecureStore.getItemAsync(LAST_PIN_USER_KEY);
-    logger.debug('[PIN Storage] [LEGACY] Retrieved last user for PIN', { found: !!identifier });
+    logger.debug('[PIN Storage] [LEGACY] Retrieved last user for PIN', 'auth', { found: !!identifier });
     return identifier;
   } catch (error) {
-    logger.error('[PIN Storage] [LEGACY] Failed to retrieve last user for PIN:', error);
+    logger.error('[PIN Storage] [LEGACY] Failed to retrieve last user for PIN', error, 'auth');
     return null;
   }
 };
@@ -372,9 +372,9 @@ export const clearLastUserForPin = async (): Promise<void> => {
   try {
     await SecureStore.deleteItemAsync(LAST_PIN_USER_KEY);
     await setLastActiveProfile(''); // Also clear new system's active profile
-    logger.debug('[PIN Storage] [LEGACY] Cleared last user for PIN');
+    logger.debug('[PIN Storage] [LEGACY] Cleared last user for PIN', 'auth');
   } catch (error) {
-    logger.error('[PIN Storage] [LEGACY] Failed to clear last user for PIN:', error);
+    logger.error('[PIN Storage] [LEGACY] Failed to clear last user for PIN', error, 'auth');
     throw error;
   }
 };
@@ -396,7 +396,7 @@ export const hasPinUserStored = async (): Promise<boolean> => {
     const identifier = await SecureStore.getItemAsync(LAST_PIN_USER_KEY);
     return identifier !== null && identifier.trim() !== '';
   } catch (error) {
-    logger.error('[PIN Storage] [LEGACY] Failed to check for stored PIN user:', error);
+    logger.error('[PIN Storage] [LEGACY] Failed to check for stored PIN user', error, 'auth');
     return false;
   }
 };
@@ -500,7 +500,7 @@ export const hasPinForBiometric = async (profileId: string): Promise<boolean> =>
 
     return !!pin;
   } catch (error) {
-    logger.error('[PIN Storage] Failed to check biometric PIN existence:', error);
+    logger.error('[PIN Storage] Failed to check biometric PIN existence', error, 'auth');
     return false;
   }
 };
@@ -520,6 +520,6 @@ export const clearPinForBiometric = async (profileId: string): Promise<void> => 
     });
     logger.debug('Cleared PIN for biometric', 'auth', { profileId });
   } catch (error) {
-    logger.error('[PIN Storage] Failed to clear biometric PIN:', error);
+    logger.error('[PIN Storage] Failed to clear biometric PIN', error, 'auth');
   }
 };

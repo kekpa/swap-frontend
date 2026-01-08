@@ -67,7 +67,7 @@ export async function logAccountSwitch(
     // Save back to storage
     auditStorage.set(AUDIT_LOG_KEY, JSON.stringify(trimmedHistory));
 
-    logger.debug('[AccountSwitchAudit] Logged switch:', {
+    logger.debug('[AccountSwitchAudit] Logged switch', 'auth', {
       from: fromUserId.substring(0, 8),
       to: toUserId.substring(0, 8),
       timestamp: new Date(entry.timestamp).toISOString(),

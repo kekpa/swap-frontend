@@ -24,22 +24,26 @@ Notifications.setNotificationHandler({
     // Get user state to determine notification behavior
     const userState = userStateManager.getUserState();
     const notificationData = notification.request.content.data;
-    
+
     // If user is viewing the same chat, don't show notification
-    if (userState.appState === 'foreground' && 
+    if (userState.appState === 'foreground' &&
         userState.currentChat === notificationData?.interactionId) {
       return {
         shouldShowAlert: false,
         shouldPlaySound: false,
         shouldSetBadge: false,
+        shouldShowBanner: false,
+        shouldShowList: false,
       };
     }
-    
+
     // Show notification for background or different chat
     return {
       shouldShowAlert: true,
       shouldPlaySound: true,
       shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
     };
   },
 });
@@ -72,31 +76,31 @@ class PushNotificationService {
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) {
-      logger.debug('[PushNotificationService] Already initialized');
+      logger.debug('[PushNotificationService] Already initialized', 'app');
       return;
     }
 
     try {
-      logger.debug('[PushNotificationService] 🚀 Initializing push notifications...');
+      logger.debug('[PushNotificationService] Initializing push notifications...', 'app');
 
       // Request permissions
       const hasPermission = await this.requestPermissions();
       if (!hasPermission) {
-        logger.debug('[PushNotificationService] ⚠️ Push notification permissions denied');
+        logger.debug('[PushNotificationService] Push notification permissions denied', 'app');
         return;
       }
 
       // Get Expo push token
-      await this.getExpoPushToken();
+      await this.fetchExpoPushToken();
 
       // Set up notification listeners
       this.setupNotificationListeners();
 
       this.isInitialized = true;
-      logger.info('[PushNotificationService] ✅ Push notifications initialized successfully');
-      
+      logger.info('[PushNotificationService] Push notifications initialized successfully', 'app');
+
     } catch (error) {
-      logger.error('[PushNotificationService] ❌ Initialization failed:', error);
+      logger.error('[PushNotificationService] Initialization failed', error, 'app');
     }
   }
 
@@ -105,7 +109,7 @@ class PushNotificationService {
    */
   private async requestPermissions(): Promise<boolean> {
     if (!Device.isDevice) {
-      logger.debug('[PushNotificationService] Must use physical device for push notifications');
+      logger.debug('[PushNotificationService] Must use physical device for push notifications', 'app');
       return false;
     }
 
@@ -118,25 +122,25 @@ class PushNotificationService {
     }
 
     if (finalStatus !== 'granted') {
-      logger.warn('[PushNotificationService] Push notification permission denied');
+      logger.warn('[PushNotificationService] Push notification permission denied', 'app');
       return false;
     }
 
-    logger.info('[PushNotificationService] ✅ Push notification permissions granted');
+    logger.info('[PushNotificationService] Push notification permissions granted', 'app');
     return true;
   }
 
   /**
-   * Get Expo push token for this device
+   * Fetch and store Expo push token for this device
    */
-  private async getExpoPushToken(): Promise<void> {
+  private async fetchExpoPushToken(): Promise<void> {
     try {
       const token = await Notifications.getExpoPushTokenAsync({
         projectId: process.env.EXPO_PROJECT_ID, // From app.json
       });
 
       this.expoPushToken = token.data;
-      logger.info('[PushNotificationService] ✅ Expo push token obtained:', {
+      logger.info('[PushNotificationService] Expo push token obtained', 'app', {
         tokenPreview: token.data.substring(0, 20) + '...',
       });
 
@@ -144,7 +148,7 @@ class PushNotificationService {
       // await this.registerTokenWithBackend(token.data);
 
     } catch (error) {
-      logger.error('[PushNotificationService] Failed to get Expo push token:', error);
+      logger.error('[PushNotificationService] Failed to get Expo push token', error, 'app');
     }
   }
 
@@ -155,15 +159,15 @@ class PushNotificationService {
   private async registerTokenWithBackend(token: string): Promise<void> {
     try {
       // TODO: Implement API call to register token
-      // await api.post('/push-tokens', { 
-      //   token, 
+      // await api.post('/push-tokens', {
+      //   token,
       //   platform: Platform.OS,
-      //   userId: userStateManager.getUserState().profileId 
+      //   userId: userStateManager.getUserState().profileId
       // });
-      
-      logger.info('[PushNotificationService] ✅ Push token registered with backend');
+
+      logger.info('[PushNotificationService] Push token registered with backend', 'app');
     } catch (error) {
-      logger.error('[PushNotificationService] Failed to register token with backend:', error);
+      logger.error('[PushNotificationService] Failed to register token with backend', error, 'app');
     }
   }
 
@@ -174,7 +178,7 @@ class PushNotificationService {
     // Handle notification received while app is open
     this.notificationSubscription = Notifications.addNotificationReceivedListener(
       (notification) => {
-        logger.debug('[PushNotificationService] 🔔 Notification received while app open:', {
+        logger.debug('[PushNotificationService] Notification received while app open', 'app', {
           title: notification.request.content.title,
           data: notification.request.content.data,
         });
@@ -184,9 +188,9 @@ class PushNotificationService {
     // Handle notification tapped/clicked
     this.responseSubscription = Notifications.addNotificationResponseReceivedListener(
       (response) => {
-        const data = response.notification.request.content.data as PushNotificationData;
-        
-        logger.info('[PushNotificationService] 👆 Notification tapped:', {
+        const data = response.notification.request.content.data as unknown as PushNotificationData;
+
+        logger.info('[PushNotificationService] Notification tapped', 'app', {
           interactionId: data.interactionId,
           messageId: data.messageId,
         });
@@ -207,10 +211,10 @@ class PushNotificationService {
 
       // TODO: Navigate to the specific chat
       // This would typically use navigation service
-      logger.debug('[PushNotificationService] 📱 Navigating to chat:', data.interactionId);
-      
+      logger.debug('[PushNotificationService] Navigating to chat', 'app', { interactionId: data.interactionId });
+
     } catch (error) {
-      logger.error('[PushNotificationService] Error handling notification tap:', error);
+      logger.error('[PushNotificationService] Error handling notification tap', error, 'app');
     }
   }
 
@@ -237,13 +241,13 @@ class PushNotificationService {
         trigger: null, // Send immediately
       });
 
-      logger.debug('[PushNotificationService] 📱 Local notification sent:', {
+      logger.debug('[PushNotificationService] Local notification sent', 'app', {
         title: payload.title,
         interactionId: payload.data.interactionId,
       });
 
     } catch (error) {
-      logger.error('[PushNotificationService] Failed to send local notification:', error);
+      logger.error('[PushNotificationService] Failed to send local notification', error, 'app');
     }
   }
 
@@ -254,7 +258,7 @@ class PushNotificationService {
   async requestBackendPushNotification(payload: NotificationPayload): Promise<void> {
     try {
       if (!this.expoPushToken) {
-        logger.warn('[PushNotificationService] No push token available for backend notification');
+        logger.warn('[PushNotificationService] No push token available for backend notification', 'app');
         return;
       }
 
@@ -268,13 +272,13 @@ class PushNotificationService {
       //   badge: payload.badge
       // });
 
-      logger.debug('[PushNotificationService] 📤 Backend push notification requested:', {
+      logger.debug('[PushNotificationService] Backend push notification requested', 'app', {
         title: payload.title,
         interactionId: payload.data.interactionId,
       });
 
     } catch (error) {
-      logger.error('[PushNotificationService] Failed to request backend push notification:', error);
+      logger.error('[PushNotificationService] Failed to request backend push notification', error, 'app');
     }
   }
 
@@ -284,9 +288,9 @@ class PushNotificationService {
   async clearAllNotifications(): Promise<void> {
     try {
       await Notifications.dismissAllNotificationsAsync();
-      logger.debug('[PushNotificationService] 🧹 All notifications cleared');
+      logger.debug('[PushNotificationService] All notifications cleared', 'app');
     } catch (error) {
-      logger.error('[PushNotificationService] Failed to clear notifications:', error);
+      logger.error('[PushNotificationService] Failed to clear notifications', error, 'app');
     }
   }
 
@@ -296,9 +300,9 @@ class PushNotificationService {
   async setBadgeCount(count: number): Promise<void> {
     try {
       await Notifications.setBadgeCountAsync(count);
-      logger.debug('[PushNotificationService] 🔢 Badge count updated:', count);
+      logger.debug('[PushNotificationService] Badge count updated', 'app', { count });
     } catch (error) {
-      logger.error('[PushNotificationService] Failed to update badge count:', error);
+      logger.error('[PushNotificationService] Failed to update badge count', error, 'app');
     }
   }
 
@@ -316,7 +320,7 @@ class PushNotificationService {
     switch (priority) {
       case 'max': return Notifications.AndroidNotificationPriority.MAX;
       case 'high': return Notifications.AndroidNotificationPriority.HIGH;
-      case 'normal': return Notifications.AndroidNotificationPriority.NORMAL;
+      case 'normal': return Notifications.AndroidNotificationPriority.DEFAULT;
       default: return Notifications.AndroidNotificationPriority.DEFAULT;
     }
   }
@@ -325,7 +329,7 @@ class PushNotificationService {
    * Cleanup notification service
    */
   cleanup(): void {
-    logger.debug('[PushNotificationService] 🧹 Cleaning up...');
+    logger.debug('[PushNotificationService] Cleaning up...', 'app');
 
     if (this.notificationSubscription) {
       this.notificationSubscription.remove();
@@ -340,7 +344,7 @@ class PushNotificationService {
     this.isInitialized = false;
     this.expoPushToken = null;
 
-    logger.info('[PushNotificationService] ✅ Cleanup complete');
+    logger.info('[PushNotificationService] Cleanup complete', 'app');
   }
 }
 

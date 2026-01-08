@@ -55,7 +55,7 @@ class TransactionPollingManager {
     // Subscribe to profile switch events
     this.subscribeToProfileSwitch();
 
-    logger.info('[TransactionPollingManager] ✅ Initialized');
+    logger.info('[TransactionPollingManager] Initialized', 'data');
   }
 
   /**
@@ -67,22 +67,22 @@ class TransactionPollingManager {
   private subscribeToProfileSwitch(): void {
     // On profile switch START: Stop all polls immediately
     this.unsubscribeSwitchStart = profileContextManager.onSwitchStart((data: ProfileSwitchStartData) => {
-      logger.info('[TransactionPollingManager] 🔄 Profile switch starting - stopping all polls');
+      logger.info('[TransactionPollingManager] Profile switch starting - stopping all polls', 'data');
       this.isPausedForProfileSwitch = true;
       this.stopAllPolls();
 
-      logger.debug('[TransactionPollingManager] ✅ All polls stopped for profile switch');
+      logger.debug('[TransactionPollingManager] All polls stopped for profile switch', 'data');
     });
 
     // On profile switch COMPLETE: Resume polling capability (no active polls to resume)
     this.unsubscribeSwitchComplete = profileContextManager.onSwitchComplete((data: ProfileSwitchCompleteData) => {
-      logger.info(`[TransactionPollingManager] ✅ Profile switch complete - resuming (${data.profileType})`);
+      logger.info('[TransactionPollingManager] Profile switch complete - resuming', 'data', { profileType: data.profileType });
       this.isPausedForProfileSwitch = false;
     });
 
     // On profile switch FAILED: Resume with old context
     profileContextManager.onSwitchFailed(() => {
-      logger.warn('[TransactionPollingManager] ⚠️ Profile switch failed - resuming with old context');
+      logger.warn('[TransactionPollingManager] Profile switch failed - resuming with old context', 'data');
       this.isPausedForProfileSwitch = false;
     });
   }
@@ -96,29 +96,30 @@ class TransactionPollingManager {
   startPolling(transactionId: string, interactionId?: string): void {
     // Check if paused for profile switch
     if (this.isPausedForProfileSwitch) {
-      logger.debug('[TransactionPollingManager] Polling paused for profile switch - skipping');
+      logger.debug('[TransactionPollingManager] Polling paused for profile switch - skipping', 'data');
       return;
     }
 
     if (!this.queryClient) {
-      logger.warn('[TransactionPollingManager] ⚠️ Not initialized - skipping poll');
+      logger.warn('[TransactionPollingManager] Not initialized - skipping poll', 'data');
       return;
     }
 
     // Check if already polling this transaction
     if (this.activePolls.has(transactionId)) {
-      logger.debug(`[TransactionPollingManager] Already polling ${transactionId}`);
+      logger.debug('[TransactionPollingManager] Already polling transaction', 'data', { transactionId });
       return;
     }
 
     // Check network state
     const networkState = networkService.getNetworkState();
     if (!networkState.isConnected || networkState.isOfflineMode) {
-      logger.debug('[TransactionPollingManager] Offline - skipping poll (will sync on reconnect)');
+      logger.debug('[TransactionPollingManager] Offline - skipping poll (will sync on reconnect)', 'data');
       return;
     }
 
-    logger.info(`[TransactionPollingManager] 🚀 Starting smart poll for transaction ${transactionId}`, {
+    logger.info('[TransactionPollingManager] Starting smart poll for transaction', 'data', {
+      transactionId,
       interactionId,
       strategy: 'burst polling (5s, 15s, 30s)',
     });
@@ -144,7 +145,8 @@ class TransactionPollingManager {
    */
   private schedulePoll(poll: ActivePoll): void {
     if (poll.currentAttempt >= poll.maxAttempts) {
-      logger.info(`[TransactionPollingManager] ✅ Completed polling for ${poll.transactionId}`, {
+      logger.info('[TransactionPollingManager] Completed polling for transaction', 'data', {
+        transactionId: poll.transactionId,
         attempts: poll.currentAttempt,
       });
       this.activePolls.delete(poll.transactionId);
@@ -153,8 +155,9 @@ class TransactionPollingManager {
 
     const delay = poll.intervals[poll.currentAttempt];
 
-    logger.debug(`[TransactionPollingManager] 📡 Scheduling poll attempt ${poll.currentAttempt + 1}/${poll.maxAttempts}`, {
+    logger.debug('[TransactionPollingManager] Scheduling poll attempt', 'data', {
       transactionId: poll.transactionId,
+      attempt: `${poll.currentAttempt + 1}/${poll.maxAttempts}`,
       delay: `${delay}ms`,
     });
 
@@ -169,8 +172,9 @@ class TransactionPollingManager {
   private async executePoll(poll: ActivePoll): Promise<void> {
     if (!this.queryClient) return;
 
-    logger.info(`[TransactionPollingManager] 🔄 Poll attempt ${poll.currentAttempt + 1}/${poll.maxAttempts}`, {
+    logger.info('[TransactionPollingManager] Poll attempt', 'data', {
       transactionId: poll.transactionId,
+      attempt: `${poll.currentAttempt + 1}/${poll.maxAttempts}`,
     });
 
     try {
@@ -188,16 +192,15 @@ class TransactionPollingManager {
         });
       }
 
-      logger.debug(`[TransactionPollingManager] ✅ Poll executed successfully`, {
+      logger.debug('[TransactionPollingManager] Poll executed successfully', 'data', {
         transactionId: poll.transactionId,
         attempt: poll.currentAttempt + 1,
       });
 
     } catch (error) {
-      logger.error(`[TransactionPollingManager] ❌ Poll failed`, {
+      logger.error('[TransactionPollingManager] Poll failed', error, 'data', {
         transactionId: poll.transactionId,
         attempt: poll.currentAttempt + 1,
-        error: error instanceof Error ? error.message : String(error),
       });
     }
 
@@ -212,11 +215,12 @@ class TransactionPollingManager {
   stopPolling(transactionId: string): void {
     const poll = this.activePolls.get(transactionId);
     if (!poll) {
-      logger.debug(`[TransactionPollingManager] No active poll for ${transactionId}`);
+      logger.debug('[TransactionPollingManager] No active poll for transaction', 'data', { transactionId });
       return;
     }
 
-    logger.info(`[TransactionPollingManager] 🛑 Stopping poll for ${transactionId}`, {
+    logger.info('[TransactionPollingManager] Stopping poll', 'data', {
+      transactionId,
       attemptsSoFar: poll.currentAttempt,
     });
 
@@ -234,7 +238,7 @@ class TransactionPollingManager {
    * Stop all active polls
    */
   stopAllPolls(): void {
-    logger.debug(`[TransactionPollingManager] 🛑 Stopping all polls (${this.activePolls.size} active)`);
+    logger.debug('[TransactionPollingManager] Stopping all polls', 'data', { activeCount: this.activePolls.size });
 
     for (const [transactionId] of this.activePolls) {
       this.stopPolling(transactionId);
@@ -272,7 +276,7 @@ class TransactionPollingManager {
    * Cleanup - stop all polls
    */
   cleanup(): void {
-    logger.debug('[TransactionPollingManager] 🧹 Cleaning up...');
+    logger.debug('[TransactionPollingManager] Cleaning up...', 'data');
     this.stopAllPolls();
     this.queryClient = null;
 
@@ -286,7 +290,7 @@ class TransactionPollingManager {
       this.unsubscribeSwitchComplete = null;
     }
 
-    logger.info('[TransactionPollingManager] ✅ Cleanup complete');
+    logger.info('[TransactionPollingManager] Cleanup complete', 'data');
   }
 
   /**
@@ -296,7 +300,7 @@ class TransactionPollingManager {
   reset(): void {
     this.stopAllPolls();
     this.isPausedForProfileSwitch = false;
-    logger.debug('[TransactionPollingManager] Reset completed');
+    logger.debug('[TransactionPollingManager] Reset completed', 'data');
   }
 }
 

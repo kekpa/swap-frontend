@@ -36,7 +36,7 @@ export const useAdaptiveStaleTime = (options: UseAdaptiveStaleTimeOptions) => {
         setCurrentStaleTime(newStaleTime);
         onStaleTimeChange?.(newStaleTime);
         
-        logger.debug('[useAdaptiveStaleTime] Stale time updated due to behavior change:', {
+        logger.debug('[useAdaptiveStaleTime] Stale time updated due to behavior change', 'data', {
           dataType,
           oldStaleTime: currentStaleTime,
           newStaleTime,
@@ -55,7 +55,7 @@ export const useAdaptiveStaleTime = (options: UseAdaptiveStaleTimeOptions) => {
         setCurrentStaleTime(newStaleTime);
         onStaleTimeChange?.(newStaleTime);
         
-        logger.debug('[useAdaptiveStaleTime] Stale time updated due to app state change:', {
+        logger.debug('[useAdaptiveStaleTime] Stale time updated due to app state change', 'data', {
           dataType,
           appState: nextAppState,
           oldStaleTime: currentStaleTime,

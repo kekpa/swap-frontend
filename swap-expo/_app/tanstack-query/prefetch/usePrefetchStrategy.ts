@@ -88,7 +88,7 @@ export const usePrefetchStrategy = (options: UsePrefetchStrategyOptions = {}) =>
         logger.warn('[usePrefetchStrategy] Unknown user flow:', userFlow);
     }
     
-    logger.debug('[usePrefetchStrategy] Manual prefetch triggered:', {
+    logger.debug('[usePrefetchStrategy] Manual prefetch triggered', 'data', {
       userFlow,
       additionalParams,
     });
@@ -163,7 +163,7 @@ export const usePrefetchMonitoring = () => {
         const { query } = event;
         
         // Track if a query was served from cache (prefetch hit)
-        if (query.state.status === 'success' && query.state.isFetching === false) {
+        if (query.state.status === 'success' && query.state.fetchStatus === 'idle') {
           const wasServedFromCache = query.state.dataUpdatedAt < Date.now() - 1000; // Rough heuristic
           
           if (wasServedFromCache) {

@@ -42,20 +42,20 @@ export const inviteContactViaSMS = async (
     // Create SMS URL
     const smsUrl = `sms:${cleanPhoneNumber}?body=${encodeURIComponent(defaultMessage)}`;
 
-    logger.debug(`[InviteUtils] Opening SMS app for ${contact.name} (${cleanPhoneNumber}) with message length: ${defaultMessage.length}`, 'InviteUtils');
+    logger.debug(`[InviteUtils] Opening SMS app for ${contact.name} (${cleanPhoneNumber}) with message length: ${defaultMessage.length}`, 'app');
 
     // Check if SMS is supported
     const canOpenSMS = await Linking.canOpenURL(smsUrl);
     
     if (canOpenSMS) {
       await Linking.openURL(smsUrl);
-      logger.info(`[InviteUtils] Successfully opened SMS app for ${contact.name}`, 'InviteUtils');
+      logger.info(`[InviteUtils] Successfully opened SMS app for ${contact.name}`, 'app');
     } else {
       throw new Error('SMS not supported on this device');
     }
 
   } catch (error) {
-    logger.error(`[InviteUtils] Failed to open SMS for ${contact.name}:`, error);
+    logger.error(`[InviteUtils] Failed to open SMS for ${contact.name}`, error, 'app');
     
     // Fallback: copy message to clipboard and show alert
     Alert.alert(
@@ -88,10 +88,10 @@ export const shareInviteMessage = async (
       title: `Invite ${contact.name} to Swap`,
     });
 
-    logger.info(`[InviteUtils] Successfully shared invite for ${contact.name}`, 'InviteUtils');
+    logger.info(`[InviteUtils] Successfully shared invite for ${contact.name}`, 'app');
 
   } catch (error) {
-    logger.error(`[InviteUtils] Failed to share invite for ${contact.name}:`, error);
+    logger.error(`[InviteUtils] Failed to share invite for ${contact.name}`, error, 'app');
     Alert.alert('Share Failed', 'Unable to share invitation. Please try again.');
   }
 };

@@ -83,7 +83,7 @@ export type ProfileStackParamList = {
     personalUsername?: string;       // For "via @username" display during business profile switch
   } | undefined;
   VerifyYourIdentity: { sourceRoute?: string } | undefined;
-  VerificationComplete: undefined;
+  VerificationComplete: { returnToTimeline?: boolean } | undefined;
   PhoneEntry: { 
     sourceRoute?: string;
     returnToTimeline?: boolean;

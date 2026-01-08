@@ -95,7 +95,6 @@ const TransactionListScreen: React.FC = () => {
     targetAccount?.wallet_id || '',   // For local_timeline SQLite query
     targetAccount?.account_id || '',  // For API: /transactions/account/{accountId}
     50, // limit to 50 transactions
-    0,  // offset
     !!targetAccount?.wallet_id && !!targetAccount?.account_id // only enabled when we have both IDs
   );
 
@@ -116,7 +115,8 @@ const TransactionListScreen: React.FC = () => {
   }, [allAccountTransactions, targetAccount]);
 
   // Industry-standard refresh hook - per-screen local state (TanStack Query pattern)
-  const { refreshing, onRefresh } = useRefreshByUser(refetch);
+  // Wrap refetch to return a Promise as required by useRefreshByUser
+  const { refreshing, onRefresh } = useRefreshByUser(async () => { refetch(); });
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'received' | 'sent'>('all');
@@ -532,7 +532,6 @@ const TransactionListScreen: React.FC = () => {
           data={filteredTransactions}
           renderItem={renderTransactionItem}
           keyExtractor={(item) => item.id}
-          estimatedItemSize={80}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

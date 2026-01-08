@@ -4,8 +4,8 @@ import { createNavigationContainerRef } from '@react-navigation/native';
 // Used for navigation after profile switches
 export const navigationRef = createNavigationContainerRef();
 
-export function navigate(name: string, params?: any) {
+export function navigate(name: string, params?: Record<string, unknown>) {
   if (navigationRef.isReady()) {
-    navigationRef.navigate(name as never, params as never);
+    (navigationRef.navigate as (name: string, params?: Record<string, unknown>) => void)(name, params);
   }
 }

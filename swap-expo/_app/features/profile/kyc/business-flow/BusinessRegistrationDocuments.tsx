@@ -23,7 +23,7 @@ import { BUSINESS_DOCUMENT_TYPES, DocumentTypeConfig } from '../../../../constan
 import UploadOptionsSheet from '../../../../components/UploadOptionsSheet';
 import CameraCapture from '../../../../components2/CameraCapture';
 import { useUploadModal } from '../../../../hooks/useUploadModal';
-import { useDocumentUpload } from '../../../../hooks-actions/useDocumentUpload';
+import { useDocumentUpload, DocumentType } from '../../../../hooks-actions/useDocumentUpload';
 import { invalidateQueries } from '../../../../tanstack-query/queryClient';
 import { useKycStatus } from '../../../../hooks-data/useKycQuery';
 import { Image } from 'expo-image';
@@ -59,7 +59,7 @@ const BusinessRegistrationDocuments: React.FC = () => {
 
     const docMap: Record<string, { url: string; status: string; created_at: string }> = {};
     documentTypes.forEach(type => {
-      const doc = kycStatus.documents.find(d => d.document_type === type.id);
+      const doc = kycStatus.documents.find((d: { document_type: string; document_url?: string; verification_status?: string; created_at?: string }) => d.document_type === type.id);
       if (doc && doc.document_url) {
         docMap[type.id] = {
           url: doc.document_url,
@@ -532,7 +532,15 @@ const BusinessRegistrationDocuments: React.FC = () => {
 
   // Full-screen camera mode (render at root level, outside SafeAreaView)
   if (uploadModal.showCamera) {
-    return <CameraCapture {...uploadModal.cameraProps} />;
+    return (
+      <CameraCapture
+        mode={uploadModal.cameraProps.mode}
+        documentType={uploadModal.cameraProps.documentType as DocumentType | undefined}
+        documentSide={uploadModal.cameraProps.documentSide}
+        onCapture={uploadModal.cameraProps.onCapture}
+        onCancel={uploadModal.cameraProps.onCancel}
+      />
+    );
   }
 
   return (

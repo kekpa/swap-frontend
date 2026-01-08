@@ -24,7 +24,7 @@ import { Theme } from "../../theme/theme";
 import { useKycStatus } from '../../hooks-data/useKycQuery';
 import { useUserProfile } from '../../hooks-data/useUserProfile';
 import { useBiometricAvailability } from '../../hooks-data/useBiometricAvailability';
-import useAvailableProfiles from '../auth/hooks/useAvailableProfiles';
+import useAvailableProfiles, { AvailableProfile } from '../auth/hooks/useAvailableProfiles';
 import ProfileSwitcherModal from '../../components/ProfileSwitcherModal';
 import { profileSwitchOrchestrator } from '../../services/ProfileSwitchOrchestrator';
 import apiClient from '../../_api/apiClient';
@@ -198,9 +198,11 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const { isAvailable: isBiometricAvailable } = useBiometricAvailability();
 
   // Multi-profile switching hooks
-  const { data: availableProfiles, isLoading: isLoadingProfiles } = useAvailableProfiles();
+  const { data: availableProfiles, isLoading: isLoadingProfiles, refetch: refetchProfiles } = useAvailableProfiles();
   const [isProfileSwitcherVisible, setIsProfileSwitcherVisible] = React.useState(false);
   const queryClient = useQueryClient();
+
+  const user = authContext.user; // Get user from AuthContext
 
   // Debug logging for profile switcher
   React.useEffect(() => {
@@ -221,8 +223,6 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     isInitialLoadComplete,
     isKycLoading,
   });
-
-  const user = authContext.user; // Get user from AuthContext
 
   // REMOVED: Problematic useFocusEffect that was causing infinite refresh loop
   // TanStack Query handles data fetching and caching automatically
@@ -580,8 +580,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     setIsProfileSwitcherVisible(false);
   };
 
-  const handleProfileSelect = async (profile: any, pin?: string): Promise<{ success: boolean; error?: string }> => {
-    logger.info('[ProfileScreen] Profile selected for switching:', {
+  const handleProfileSelect = async (profile: AvailableProfile, pin?: string | null): Promise<{ success: boolean; error?: string }> => {
+    logger.info('[ProfileScreen] Profile selected for switching', 'profile', {
       targetProfileId: profile.profileId,
       displayName: profile.displayName,
       hasPin: !!pin,
@@ -596,7 +596,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       // If no PIN, use biometric as the authentication method.
       const result = await profileSwitchOrchestrator.switchProfile({
         targetProfileId: profile.profileId,
-        pin, // Business access PIN (if required)
+        pin: pin ?? undefined, // Business access PIN (if required), convert null to undefined
         requireBiometric: pin ? false : isBiometricAvailable, // Skip biometric if PIN provided
         apiClient,
         authContext,
@@ -605,7 +605,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
       });
 
       if (result.success) {
-        logger.info('[ProfileScreen] ✅ Profile switch successful:', {
+        logger.info('[ProfileScreen] ✅ Profile switch successful', 'profile', {
           newProfileId: result.newProfileId,
         });
         // Close modal on SUCCESS only
@@ -630,8 +630,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     navigation.navigate('AddAccount');
   };
 
-  const handleRemoveAccount = async (profile: any) => {
-    logger.info('[ProfileScreen] Remove account requested:', {
+  const handleRemoveAccount = async (profile: AvailableProfile) => {
+    logger.info('[ProfileScreen] Remove account requested', 'profile', {
       profileId: profile.profileId,
       displayName: profile.displayName,
     });
@@ -640,7 +640,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
     setIsProfileSwitcherVisible(false);
 
     // Call auth context removeAccount method
-    const success = await authContext.removeAccount(profile.entityId || profile.userId);
+    const success = await authContext.removeAccount(profile.entityId);
 
     if (success) {
       logger.info('[ProfileScreen] ✅ Account removed successfully');
@@ -651,8 +651,8 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   // Handle business profile PIN setup requirement
   // Called when user tries to switch to a business profile that has no PIN set
-  const handlePinSetupRequired = (profile: any) => {
-    logger.info('[ProfileScreen] Business PIN setup required for:', {
+  const handlePinSetupRequired = (profile: AvailableProfile) => {
+    logger.info('[ProfileScreen] Business PIN setup required for', 'profile', {
       profileId: profile.profileId,
       displayName: profile.displayName,
     });

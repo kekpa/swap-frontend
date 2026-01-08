@@ -29,7 +29,7 @@ export const AUTH_PATHS = {
   RESET_PASSWORD: '/auth/reset-password',
   PHONE_SIGNIN: '/auth/phone-signin',
   VERIFY_PHONE: '/auth/verify-phone',
-  REGISTER_PHONE: '/auth/register-phone',
+  // REGISTER_PHONE removed - use VERIFY_OTP + COMPLETE_REGISTRATION flow instead
   CHECK_PHONE: '/auth/check-phone',
   CHECK_USERNAME: '/auth/check-username',
   COMPLETE_PROFILE: '/auth/complete-profile',
@@ -38,9 +38,9 @@ export const AUTH_PATHS = {
   // New registration flow (verify OTP immediately)
   VERIFY_OTP: '/auth/verify-otp',
   COMPLETE_REGISTRATION: '/auth/complete-registration',
-  // Email verification disabled for Haiti market - keeping for future use
-  // VERIFY_EMAIL: '/auth/verify-email',
-  // RESEND_EMAIL_CODE: '/auth/resend-email-code',
+  // Email verification - used by VerificationCodeScreen
+  VERIFY_EMAIL: '/auth/verify-email',
+  RESEND_EMAIL_CODE: '/auth/resend-email-code',
   VERIFY_RESET_CODE: '/auth/verify-reset-code',
   // Multi-account management (Instagram-style)
   AVAILABLE_PROFILES: '/auth/available-profiles',
@@ -182,6 +182,7 @@ export const INTERACTION_PATHS = {
  */
 export const BUSINESS_PATHS = {
   PROFILES: '/business/profiles',
+  CREATE: '/business/profiles',
   PROFILE_DETAILS: (id: string) => `/business/profiles/${id}`,
   LOCATIONS: '/business/locations',
   LOCATION_DETAILS: (id: string) => `/business/locations/${id}`,

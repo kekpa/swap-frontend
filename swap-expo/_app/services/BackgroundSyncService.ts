@@ -9,6 +9,7 @@ import { LocalTimelineItem } from '../localdb/schema/local-timeline-schema';
 import apiClient from '../_api/apiClient';
 import { API_PATHS } from '../_api/apiPaths';
 import { MessagesApiService } from '../_api/messages.api';
+import { MessageType } from '../types/message.types';
 import { networkService } from './NetworkService';
 import { eventEmitter } from '../utils/eventEmitter';
 import { websocketService } from './websocketService';
@@ -378,7 +379,7 @@ class BackgroundSyncService {
     const response = await MessagesApiService.sendDirectMessage({
       to_entity_id: item.to_entity_id!,  // Aligned with Supabase from_entity_id/to_entity_id
       content: item.content || '',
-      message_type: (item.message_type || 'text') as 'text' | 'image' | 'file' | 'audio',
+      message_type: (item.message_type || 'text') as MessageType,
       idempotency_key: item.id, // Use local ID as idempotency key
       metadata: {
         ...metadata,

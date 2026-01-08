@@ -32,6 +32,20 @@ const isDevelopment = process.env.NODE_ENV === "development" || process.env.EXPO
 
 const Stack = createStackNavigator<RootStackParamList>();
 
+// Shared type for deep navigation params passed through nested navigators
+export interface DeepNavigationParams {
+  navigateToContact?: {
+    contactId: string;
+    contactName: string;
+    contactInitials: string;
+    contactAvatarColor: string;
+    forceRefresh?: boolean;
+    timestamp?: number;
+    isGroup?: boolean;
+  };
+  navigateToNewChat?: boolean;
+}
+
 // Define ParamList for the Root Stack
 export type RootStackParamList = {
   App: { 
@@ -243,7 +257,7 @@ export default function RootNavigator() {
           />
           <Stack.Screen
             name="ReviewTransfer"
-            component={ReviewTransferScreen}
+            component={ReviewTransferScreen as React.ComponentType<{}>}
             options={{
               ...TransitionPresets.SlideFromRightIOS,
               gestureEnabled: true,
@@ -293,7 +307,7 @@ export default function RootNavigator() {
             component={AuthNavigator}
             options={{
               gestureEnabled: false,
-              animationEnabled: true,
+              animation: 'default',
             }}
           />
         </>

@@ -16,7 +16,7 @@ import {
 export type TimelineUpdateEvent = {
   interactionId: string;
   itemId: string;
-  action: 'add' | 'update' | 'delete';
+  action: 'add' | 'update' | 'delete' | 'batch_sync';
   entityId: string;  // Backend's universal identifier
 };
 
@@ -185,7 +185,7 @@ export class UnifiedTimelineRepository {
         `UPDATE local_timeline
          SET sync_status = ?, local_status = ?, server_id = COALESCE(?, server_id), last_error = ?
          WHERE id = ?`,
-        [syncStatus, localStatus, serverId, lastError, itemId]
+        [syncStatus, localStatus, serverId ?? null, lastError ?? null, itemId]
       );
 
       // Get the item to emit the correct event
@@ -561,41 +561,41 @@ export class UnifiedTimelineRepository {
                description = COALESCE(?, description),
                timeline_metadata = COALESCE(?, timeline_metadata)
            WHERE id = ?`,
-          shouldUpdateId ? [
+          (shouldUpdateId ? [
             item.id,
             item.id,
-            item.item_type,
-            item.local_status,
-            item.content,
-            item.amount,
-            item.currency_code,
-            item.currency_id,
-            item.currency_symbol,
-            item.from_entity_id,
-            item.to_entity_id,
-            item.from_wallet_id,
-            item.to_wallet_id,
-            item.transaction_type,
-            item.description,
+            item.item_type ?? null,
+            item.local_status ?? null,
+            item.content ?? null,
+            item.amount ?? null,
+            item.currency_code ?? null,
+            item.currency_id ?? null,
+            item.currency_symbol ?? null,
+            item.from_entity_id ?? null,
+            item.to_entity_id ?? null,
+            item.from_wallet_id ?? null,
+            item.to_wallet_id ?? null,
+            item.transaction_type ?? null,
+            item.description ?? null,
             item.timeline_metadata ? JSON.stringify(item.timeline_metadata) : null,
             existingItem.id,
           ] : [
-            item.item_type,
-            item.local_status,
-            item.content,
-            item.amount,
-            item.currency_code,
-            item.currency_id,
-            item.currency_symbol,
-            item.from_entity_id,
-            item.to_entity_id,
-            item.from_wallet_id,
-            item.to_wallet_id,
-            item.transaction_type,
-            item.description,
+            item.item_type ?? null,
+            item.local_status ?? null,
+            item.content ?? null,
+            item.amount ?? null,
+            item.currency_code ?? null,
+            item.currency_id ?? null,
+            item.currency_symbol ?? null,
+            item.from_entity_id ?? null,
+            item.to_entity_id ?? null,
+            item.from_wallet_id ?? null,
+            item.to_wallet_id ?? null,
+            item.transaction_type ?? null,
+            item.description ?? null,
             item.timeline_metadata ? JSON.stringify(item.timeline_metadata) : null,
             existingItem.id,
-          ]
+          ]).filter((v): v is NonNullable<typeof v> | null => v !== undefined)
         );
 
         eventEmitter.emit(TIMELINE_UPDATED_EVENT, {
@@ -715,41 +715,41 @@ export class UnifiedTimelineRepository {
                description = COALESCE(?, description),
                timeline_metadata = COALESCE(?, timeline_metadata)
            WHERE id = ?`,
-          shouldUpdateId ? [
+          (shouldUpdateId ? [
             item.id,
             item.id,
-            item.item_type,
-            item.local_status,
-            item.content,
-            item.amount,
-            item.currency_code,
-            item.currency_id,
-            item.currency_symbol,
-            item.from_entity_id,
-            item.to_entity_id,
-            item.from_wallet_id,
-            item.to_wallet_id,
-            item.transaction_type,
-            item.description,
+            item.item_type ?? null,
+            item.local_status ?? null,
+            item.content ?? null,
+            item.amount ?? null,
+            item.currency_code ?? null,
+            item.currency_id ?? null,
+            item.currency_symbol ?? null,
+            item.from_entity_id ?? null,
+            item.to_entity_id ?? null,
+            item.from_wallet_id ?? null,
+            item.to_wallet_id ?? null,
+            item.transaction_type ?? null,
+            item.description ?? null,
             item.timeline_metadata ? JSON.stringify(item.timeline_metadata) : null,
             existingItem.id,
           ] : [
-            item.item_type,
-            item.local_status,
-            item.content,
-            item.amount,
-            item.currency_code,
-            item.currency_id,
-            item.currency_symbol,
-            item.from_entity_id,
-            item.to_entity_id,
-            item.from_wallet_id,
-            item.to_wallet_id,
-            item.transaction_type,
-            item.description,
+            item.item_type ?? null,
+            item.local_status ?? null,
+            item.content ?? null,
+            item.amount ?? null,
+            item.currency_code ?? null,
+            item.currency_id ?? null,
+            item.currency_symbol ?? null,
+            item.from_entity_id ?? null,
+            item.to_entity_id ?? null,
+            item.from_wallet_id ?? null,
+            item.to_wallet_id ?? null,
+            item.transaction_type ?? null,
+            item.description ?? null,
             item.timeline_metadata ? JSON.stringify(item.timeline_metadata) : null,
             existingItem.id,
-          ]
+          ]).filter((v): v is NonNullable<typeof v> | null => v !== undefined)
         );
         // NO eventEmitter.emit() - silent!
       } else {

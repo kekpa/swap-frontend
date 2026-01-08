@@ -361,21 +361,13 @@ export default function MyRoscasScreen() {
   };
 
   const handleRoscaPress = (rosca: ActiveRoscaUI) => {
-    // Navigate to RoscaDetailScreen with enrollment data
-    const enrollment = {
-      id: rosca.id,
-      roscaName: rosca.name,
-      contributionAmount: rosca.contributionAmount,
-      frequency: rosca.frequency,
-      payoutAmount: rosca.payoutAmount,
-      isPayoutTurn: rosca.isPayoutTurn,
-      daysUntilNextPayment: rosca.daysLeft,
-      totalContributed: rosca.totalContributed,
-      progress: rosca.progress,
-      queuePosition: rosca.queuePosition,
-      totalMembers: rosca.totalMembers,
-    };
-    (navigation as any).navigate('RoscaDetailScreen', { enrollment });
+    // Find the full enrollment object (not the transformed ActiveRoscaUI)
+    const enrollment = enrollments.find(e => e.id === rosca.id);
+    if (enrollment) {
+      (navigation as any).navigate('RoscaDetailScreen', { enrollment });
+    } else {
+      logger.warn('[MyRoscasScreen] Could not find enrollment for rosca', 'rosca', { roscaId: rosca.id });
+    }
   };
 
   const handleJoinRosca = () => {

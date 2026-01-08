@@ -302,7 +302,7 @@ class TimelineSyncService {
             entity_id: this.currentEntityId!,
             // Determine item type from backend 'type' field
             item_type: (item as any).type === 'transaction' ? 'transaction' : 'message',
-            created_at: (item as any).createdAt || item.created_at || new Date().toISOString(),
+            created_at: (item as any).createdAt || (item as any).created_at || new Date().toISOString(),
             // Entity IDs - aligned with Supabase (who sent / who received)
             from_entity_id: (item as any).from_entity_id || '',
             to_entity_id: (item as any).to_entity_id || null,

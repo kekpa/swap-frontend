@@ -28,11 +28,11 @@ import logger from './logger';
 export function parseApiResponse<T = any>(data: any, context: string = 'api'): T[] {
   const logPrefix = `[apiResponseParser:${context}]`;
 
-  logger.debug(`${logPrefix} 🔍 Parsing response:`,
-    typeof data === 'string'
+  logger.debug(`${logPrefix} 🔍 Parsing response`, 'api', {
+    preview: typeof data === 'string'
       ? data.substring(0, 200) + '...'
       : JSON.stringify(data)?.substring(0, 200) + '...'
-  );
+  });
 
   let result = data;
 
@@ -41,12 +41,13 @@ export function parseApiResponse<T = any>(data: any, context: string = 'api'): T
   let parseAttempts = 0;
   while (typeof result === 'string' && parseAttempts < 5) {
     try {
-      logger.debug(`${logPrefix} 🔄 Parsing JSON string (attempt ${parseAttempts + 1})`);
+      logger.debug(`${logPrefix} 🔄 Parsing JSON string (attempt ${parseAttempts + 1})`, 'api');
       result = JSON.parse(result);
       parseAttempts++;
     } catch (parseError) {
-      logger.error(`${logPrefix} ❌ Failed to parse JSON string (attempt ${parseAttempts + 1}):`,
-        parseError instanceof Error ? parseError : new Error(String(parseError))
+      logger.error(`${logPrefix} ❌ Failed to parse JSON string (attempt ${parseAttempts + 1})`,
+        parseError instanceof Error ? parseError : new Error(String(parseError)),
+        'api'
       );
       break;
     }
@@ -54,19 +55,19 @@ export function parseApiResponse<T = any>(data: any, context: string = 'api'): T
 
   // STEP 2: Handle direct array response
   if (Array.isArray(result)) {
-    logger.debug(`${logPrefix} ✅ Found direct array response with ${result.length} items`);
+    logger.debug(`${logPrefix} ✅ Found direct array response with ${result.length} items`, 'api');
     return result;
   }
 
   // STEP 3: Handle object wrapper formats
   if (result && typeof result === 'object') {
     const keys = Object.keys(result);
-    logger.debug(`${logPrefix} 🔍 Object keys: ${keys.join(', ')}`);
+    logger.debug(`${logPrefix} 🔍 Object keys: ${keys.join(', ')}`, 'api');
 
     // Check for numbered keys structure (legacy format): { "0": {...}, "1": {...} }
     const numberedKeys = keys.filter(key => /^\d+$/.test(key)).sort((a, b) => parseInt(a) - parseInt(b));
     if (numberedKeys.length > 0) {
-      logger.debug(`${logPrefix} ✅ Found numbered keys structure with ${numberedKeys.length} items`);
+      logger.debug(`${logPrefix} ✅ Found numbered keys structure with ${numberedKeys.length} items`, 'api');
       return numberedKeys.map(key => {
         const item = result[key];
         return typeof item === 'string' ? JSON.parse(item) : item;
@@ -75,31 +76,31 @@ export function parseApiResponse<T = any>(data: any, context: string = 'api'): T
 
     // Check for 'result' property (standard backend format: { result: [...], meta: {...} })
     if (result.result) {
-      logger.debug(`${logPrefix} ✅ Found 'result' property, recursing`);
+      logger.debug(`${logPrefix} ✅ Found 'result' property, recursing`, 'api');
       return parseApiResponse(result.result, context);
     }
 
     // Check for 'data' property (alternative format: { data: [...] })
     if (result.data) {
-      logger.debug(`${logPrefix} ✅ Found 'data' property, recursing`);
+      logger.debug(`${logPrefix} ✅ Found 'data' property, recursing`, 'api');
       return parseApiResponse(result.data, context);
     }
 
     // Check for 'wallets' property (wallet-specific format: { wallets: [...] })
     if (result.wallets) {
-      logger.debug(`${logPrefix} ✅ Found 'wallets' property, recursing`);
+      logger.debug(`${logPrefix} ✅ Found 'wallets' property, recursing`, 'api');
       return parseApiResponse(result.wallets, context);
     }
 
     // Check for 'items' property (generic list format: { items: [...] })
     if (result.items) {
-      logger.debug(`${logPrefix} ✅ Found 'items' property, recursing`);
+      logger.debug(`${logPrefix} ✅ Found 'items' property, recursing`, 'api');
       return parseApiResponse(result.items, context);
     }
   }
 
   // STEP 4: Fallback - unexpected structure
-  logger.warn(`${logPrefix} ⚠️ Unexpected response structure, returning empty array`);
+  logger.warn(`${logPrefix} ⚠️ Unexpected response structure, returning empty array`, 'api');
   return [];
 }
 

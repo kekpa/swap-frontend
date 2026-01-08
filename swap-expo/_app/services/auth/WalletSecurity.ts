@@ -190,7 +190,7 @@ class WalletSecurity {
     try {
       await SecureStore.setItemAsync(LAST_WALLET_UNLOCK_KEY, now.toString());
     } catch (error) {
-      logger.warn('[WalletSecurity] Failed to persist unlock time:', error);
+      logger.error('[WalletSecurity] Failed to persist unlock time', error, 'auth');
     }
 
     logger.debug('[WalletSecurity] Wallet unlocked');
@@ -206,7 +206,7 @@ class WalletSecurity {
     try {
       await SecureStore.deleteItemAsync(LAST_WALLET_UNLOCK_KEY);
     } catch (error) {
-      logger.warn('[WalletSecurity] Failed to clear unlock time:', error);
+      logger.error('[WalletSecurity] Failed to clear unlock time', error, 'auth');
     }
 
     logger.debug('[WalletSecurity] Wallet locked');
@@ -249,7 +249,7 @@ class WalletSecurity {
       return false;
 
     } catch (error) {
-      logger.warn('[WalletSecurity] Failed to restore state:', error);
+      logger.error('[WalletSecurity] Failed to restore state', error, 'auth');
       return false;
     }
   }

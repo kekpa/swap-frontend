@@ -43,7 +43,7 @@ export interface UseInteractionsResult {
   isLoading: boolean;
   isError: boolean;
   error: Error | null;
-  refetch: () => void;
+  refetch: () => Promise<any>;
   isRefetching: boolean;
   isFetching: boolean;
 }

@@ -77,7 +77,7 @@ export const useFullTextSearch = (
         return { all: [], transactions: [], contacts: [], messages: [] };
       }
 
-      logger.debug(`[useFullTextSearch] 🔍 INSTANT SEARCH: "${debouncedQuery}"`);
+      logger.debug(`[useFullTextSearch] INSTANT SEARCH: "${debouncedQuery}"`, 'data');
       
       try {
         // Initialize FTS if not already done
@@ -86,11 +86,11 @@ export const useFullTextSearch = (
         // Perform the search
         const searchResults = await fullTextSearchRepository.searchAll(debouncedQuery, limit);
         
-        logger.debug(`[useFullTextSearch] ✅ INSTANT SEARCH: Found ${searchResults.all.length} results`);
+        logger.debug(`[useFullTextSearch] INSTANT SEARCH: Found ${searchResults.all.length} results`, 'data');
         return searchResults;
-        
+
       } catch (error) {
-        logger.error(`[useFullTextSearch] ❌ INSTANT SEARCH failed:`, error);
+        logger.error('[useFullTextSearch] INSTANT SEARCH failed', error, 'data');
         throw error;
       }
     },
@@ -112,7 +112,7 @@ export const useFullTextSearch = (
     retry: false,
     
     // Use placeholder data for smooth transitions
-    placeholderData: (previousData: any) => previousData,
+    placeholderData: (previousData) => previousData,
   });
 
   const finalResults = results || { all: [], transactions: [], contacts: [], messages: [] };
@@ -159,35 +159,43 @@ export const useContactSearch = (query: string, limit: number = 10) => {
  * Hook for indexing content for search
  */
 export const useSearchIndexer = () => {
-  const indexTransaction = React.useCallback(async (transaction: any) => {
+  const indexTransaction = React.useCallback(async (transaction: Record<string, unknown>) => {
     try {
       await fullTextSearchRepository.indexTransaction(transaction);
     } catch (error) {
-      logger.warn('[useSearchIndexer] Failed to index transaction:', error);
+      logger.warn('[useSearchIndexer] Failed to index transaction', 'data', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }, []);
 
-  const indexContact = React.useCallback(async (contact: any) => {
+  const indexContact = React.useCallback(async (contact: Record<string, unknown>) => {
     try {
       await fullTextSearchRepository.indexContact(contact);
     } catch (error) {
-      logger.warn('[useSearchIndexer] Failed to index contact:', error);
+      logger.warn('[useSearchIndexer] Failed to index contact', 'data', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }, []);
 
-  const indexMessage = React.useCallback(async (message: any) => {
+  const indexMessage = React.useCallback(async (message: Record<string, unknown>) => {
     try {
       await fullTextSearchRepository.indexMessage(message);
     } catch (error) {
-      logger.warn('[useSearchIndexer] Failed to index message:', error);
+      logger.warn('[useSearchIndexer] Failed to index message', 'data', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }, []);
 
-  const batchIndex = React.useCallback(async (items: { type: 'transaction' | 'contact' | 'message'; data: any }[]) => {
+  const batchIndex = React.useCallback(async (items: { type: 'transaction' | 'contact' | 'message'; data: Record<string, unknown> }[]) => {
     try {
       await fullTextSearchRepository.batchIndex(items);
     } catch (error) {
-      logger.warn('[useSearchIndexer] Failed to batch index items:', error);
+      logger.warn('[useSearchIndexer] Failed to batch index items', 'data', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }, []);
 
@@ -195,7 +203,9 @@ export const useSearchIndexer = () => {
     try {
       await fullTextSearchRepository.clearIndex();
     } catch (error) {
-      logger.warn('[useSearchIndexer] Failed to clear search index:', error);
+      logger.warn('[useSearchIndexer] Failed to clear search index', 'data', {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }, []);
 

@@ -42,7 +42,7 @@ export default function HomeScreen() {
   const [isSearchActive, setIsSearchActive] = useState(false);
 
   // Get primary wallet balance
-  const { data: wallets = [], isLoading } = useBalances(user?.entityId);
+  const { data: wallets = [], isLoading } = useBalances(user?.entityId ?? '');
   const primaryWallet = wallets.find(w => w.isPrimary) || wallets[0];
 
   // Get KYC status and transaction limits for Account Review card

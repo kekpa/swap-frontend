@@ -360,7 +360,7 @@ export const useInitializeWallet = () => {
             const eligibilityResponse = await apiClient.get(`/wallets/eligibility?entityId=${entityId}`);
 
             if (eligibilityResponse.data?.hasWallets) {
-              logger.log(`[useInitializeWallet] ✅ RACE RECOVERY: Wallets exist despite error - initialization succeeded via concurrent request`);
+              logger.info('[useInitializeWallet] ✅ RACE RECOVERY: Wallets exist despite error - initialization succeeded via concurrent request', 'wallet');
 
               // Fetch the actual wallet data
               const walletsResponse = await apiClient.get(API_PATHS.WALLET.BY_ENTITY(entityId));
@@ -621,7 +621,7 @@ export const useCreateCurrencyWallet = () => {
         logger.debug(`[useCreateCurrencyWallet] ✅ Set ${transformedWallet.currency_code} as primary wallet`);
       } catch (primaryError) {
         // Non-critical - wallet was still created, just not set as primary
-        logger.warn(`[useCreateCurrencyWallet] ⚠️ Failed to set as primary:`, primaryError);
+        logger.warn('[useCreateCurrencyWallet] ⚠️ Failed to set as primary', 'wallet', { error: primaryError });
       }
 
       return { wallet: transformedWallet, entityId };
@@ -820,11 +820,11 @@ export const useDeactivateWallet = () => {
           is_synced: true,
         }));
 
-        await currencyWalletsRepository.clearAllCurrencyWallets();
+        await currencyWalletsRepository.clearAllCurrencyWallets(currentEntityId);
         await currencyWalletsRepository.saveCurrencyWallets(repositoryBalances, currentEntityId);
         logger.debug(`[useDeactivateWallet] ✅ Refreshed local cache with ${repositoryBalances.length} wallets`);
       } catch (error) {
-        logger.warn(`[useDeactivateWallet] ⚠️ Failed to refresh local cache:`, error);
+        logger.warn('[useDeactivateWallet] ⚠️ Failed to refresh local cache', 'wallet', { error });
       }
     },
     onSettled: (_, error, { entityId }) => {

@@ -539,6 +539,23 @@ export class InteractionRepository {
       logger.error(`[InteractionRepository] Error updating last activity for interaction ${interactionId}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
+
+  /**
+   * Get recent conversations - stub method for useRecentConversations hook
+   * Returns empty array as this feature uses the interactions list instead
+   */
+  public async getRecentConversations(_entityId: string, _options?: { limit?: number; includeArchived?: boolean }): Promise<any[]> {
+    logger.debug('[InteractionRepository] getRecentConversations: Using interactions list instead');
+    return [];
+  }
+
+  /**
+   * Save recent conversations - stub method for useRecentConversations hook
+   * No-op as recent conversations are derived from interactions
+   */
+  public async saveRecentConversations(_entityId: string, _conversations: any[]): Promise<void> {
+    logger.debug('[InteractionRepository] saveRecentConversations: No-op (using interactions)');
+  }
 }
 
 // Export singleton instance

@@ -24,9 +24,6 @@ export * from './avatarUtils';
 // Event emitter utilities
 export * from './eventEmitter';
 
-// Auth manager utilities
-export * from './authManager';
-
 // Local storage polyfill
 export * from './localStoragePolyfill';
 

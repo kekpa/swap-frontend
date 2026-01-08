@@ -138,7 +138,7 @@ class SessionManager {
       // Set profile ID in API client
       apiClient.setProfileId(sessionData.profileId);
 
-      logger.debug('[SessionManager] Session validated successfully', {
+      logger.debug('[SessionManager] Session validated successfully', 'auth', {
         userId: sessionData.userId,
         profileId: sessionData.profileId
       });
@@ -178,7 +178,7 @@ class SessionManager {
 
       return { isValid: true, expiresIn };
     } catch (error) {
-      logger.warn('[SessionManager] Token decode failed:', error);
+      logger.warn('[SessionManager] Token decode failed', 'auth', { error: String(error) });
       return { isValid: false };
     }
   }
@@ -286,7 +286,7 @@ class SessionManager {
   setSession(session: SessionData): void {
     this.currentSession = session;
     this.lastValidation = Date.now();
-    logger.debug('[SessionManager] Session set', { profileId: session.profileId });
+    logger.debug('[SessionManager] Session set', 'auth', { profileId: session.profileId });
   }
 
   /**

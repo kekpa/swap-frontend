@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useTheme } from '../../theme/ThemeContext';
-import api from '../../services/api';
+import apiClient from '../../_api/apiClient';
 import logger from '../../utils/logger';
 
 type BusinessProfileViewRouteProp = RouteProp<
@@ -54,7 +54,7 @@ const BusinessProfileView: React.FC = () => {
   const fetchBusinessData = async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/businesses/${businessId}`);
+      const response = await apiClient.get(`/businesses/${businessId}`);
       setBusiness(response.data);
     } catch (error: any) {
       logger.error('Error fetching business', error, 'business');

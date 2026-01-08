@@ -47,7 +47,7 @@ export const QUERY_DEFAULTS = {
  * Create a standardized query hook with consistent error handling
  */
 export function useStandardQuery<T>(
-  queryKey: unknown[],
+  queryKey: readonly unknown[],
   queryFn: () => Promise<T>,
   preset: keyof typeof QUERY_DEFAULTS = 'standard',
   options?: Partial<UseQueryOptions<T>>

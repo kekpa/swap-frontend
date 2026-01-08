@@ -95,16 +95,16 @@ export const useBackgroundSync = (options: BackgroundSyncOptions = {}) => {
     if (!syncBalances || !entityId) return;
 
     try {
-      logger.debug('[useBackgroundSync] Syncing balance data...');
+      logger.debug('[useBackgroundSync] Syncing balance data...', 'data');
       
       await queryClient.invalidateQueries({
         queryKey: queryKeys.balancesByEntity(entityId),
         refetchType: 'active',
       });
       
-      logger.debug('[useBackgroundSync] ✅ Balance data synced');
+      logger.debug('[useBackgroundSync] Balance data synced', 'data');
     } catch (error) {
-      logger.error('[useBackgroundSync] ❌ Failed to sync balance data:', error);
+      logger.error('[useBackgroundSync] Failed to sync balance data', error, 'data');
       syncMetricsRef.current.failureCount++;
     }
   };
@@ -113,16 +113,16 @@ export const useBackgroundSync = (options: BackgroundSyncOptions = {}) => {
     if (!syncTransactions || !entityId) return;
 
     try {
-      logger.debug('[useBackgroundSync] Syncing transaction data...');
+      logger.debug('[useBackgroundSync] Syncing transaction data...', 'data');
       
       await queryClient.invalidateQueries({
         queryKey: queryKeys.recentTransactions(entityId, 20),
         refetchType: 'active',
       });
       
-      logger.debug('[useBackgroundSync] ✅ Transaction data synced');
+      logger.debug('[useBackgroundSync] Transaction data synced', 'data');
     } catch (error) {
-      logger.error('[useBackgroundSync] ❌ Failed to sync transaction data:', error);
+      logger.error('[useBackgroundSync] Failed to sync transaction data', error, 'data');
       syncMetricsRef.current.failureCount++;
     }
   };
@@ -131,16 +131,16 @@ export const useBackgroundSync = (options: BackgroundSyncOptions = {}) => {
     if (!syncInteractions || !entityId) return;
 
     try {
-      logger.debug('[useBackgroundSync] Syncing interaction data...');
+      logger.debug('[useBackgroundSync] Syncing interaction data...', 'data');
       
       await queryClient.invalidateQueries({
         queryKey: queryKeys.interactionsByEntity(entityId),
         refetchType: 'active',
       });
       
-      logger.debug('[useBackgroundSync] ✅ Interaction data synced');
+      logger.debug('[useBackgroundSync] Interaction data synced', 'data');
     } catch (error) {
-      logger.error('[useBackgroundSync] ❌ Failed to sync interaction data:', error);
+      logger.error('[useBackgroundSync] Failed to sync interaction data', error, 'data');
       syncMetricsRef.current.failureCount++;
     }
   };
@@ -149,7 +149,7 @@ export const useBackgroundSync = (options: BackgroundSyncOptions = {}) => {
     if (!syncNotifications || !entityId) return;
 
     try {
-      logger.debug('[useBackgroundSync] Syncing notification data...');
+      logger.debug('[useBackgroundSync] Syncing notification data...', 'data');
       
       // Invalidate notification-related queries
       await queryClient.invalidateQueries({
@@ -161,22 +161,22 @@ export const useBackgroundSync = (options: BackgroundSyncOptions = {}) => {
         refetchType: 'active',
       });
       
-      logger.debug('[useBackgroundSync] ✅ Notification data synced');
+      logger.debug('[useBackgroundSync] Notification data synced', 'data');
     } catch (error) {
-      logger.error('[useBackgroundSync] ❌ Failed to sync notification data:', error);
+      logger.error('[useBackgroundSync] Failed to sync notification data', error, 'data');
       syncMetricsRef.current.failureCount++;
     }
   };
 
   // Perform comprehensive sync
   const performSync = async (reason: string): Promise<void> => {
-    if (!networkService.isOnline) {
-      logger.debug('[useBackgroundSync] Skipping sync - device offline');
+    if (!networkService.isOnline()) {
+      logger.debug('[useBackgroundSync] Skipping sync - device offline', 'data');
       return;
     }
 
     const startTime = Date.now();
-    logger.info(`[useBackgroundSync] 🔄 Starting sync (${reason})...`);
+    logger.info(`[useBackgroundSync] Starting sync (${reason})...`, 'data');
 
     try {
       if (batchSync) {
@@ -202,9 +202,9 @@ export const useBackgroundSync = (options: BackgroundSyncOptions = {}) => {
       metrics.syncCount++;
       metrics.avgSyncDuration = (metrics.avgSyncDuration * (metrics.syncCount - 1) + duration) / metrics.syncCount;
       
-      logger.info(`[useBackgroundSync] ✅ Sync completed in ${duration}ms (${reason})`);
+      logger.info(`[useBackgroundSync] Sync completed in ${duration}ms (${reason})`, 'data');
     } catch (error) {
-      logger.error(`[useBackgroundSync] ❌ Sync failed (${reason}):`, error);
+      logger.error(`[useBackgroundSync] Sync failed (${reason})`, error, 'data');
       syncMetricsRef.current.failureCount++;
     }
   };
@@ -215,12 +215,12 @@ export const useBackgroundSync = (options: BackgroundSyncOptions = {}) => {
       const previousState = appStateRef.current;
       appStateRef.current = nextAppState;
 
-      logger.debug(`[useBackgroundSync] App state changed: ${previousState} → ${nextAppState}`);
+      logger.debug(`[useBackgroundSync] App state changed: ${previousState} -> ${nextAppState}`, 'app');
 
       if (previousState === 'active' && nextAppState.match(/inactive|background/)) {
         // App going to background
         const activeTime = Date.now() - lastActiveTimeRef.current;
-        logger.debug(`[useBackgroundSync] App backgrounded after ${activeTime}ms active`);
+        logger.debug(`[useBackgroundSync] App backgrounded after ${activeTime}ms active`, 'app');
         
         // Update background time tracking
         syncMetricsRef.current.backgroundTime = Date.now();
@@ -230,7 +230,7 @@ export const useBackgroundSync = (options: BackgroundSyncOptions = {}) => {
         const backgroundTime = Date.now() - syncMetricsRef.current.backgroundTime;
         syncMetricsRef.current.backgroundTime = backgroundTime;
         
-        logger.debug(`[useBackgroundSync] App foregrounded after ${backgroundTime}ms background`);
+        logger.debug(`[useBackgroundSync] App foregrounded after ${backgroundTime}ms background`, 'app');
         
         // Determine sync strategy based on background time
         let syncReason = 'foreground_return';
@@ -281,7 +281,7 @@ export const useBackgroundSync = (options: BackgroundSyncOptions = {}) => {
   useEffect(() => {
     const handleNetworkReconnection = () => {
       if (AppState.currentState === 'active') {
-        logger.debug('[useBackgroundSync] Network reconnected, performing sync...');
+        logger.debug('[useBackgroundSync] Network reconnected, performing sync...', 'data');
         performSync('network_reconnection');
       }
     };
@@ -318,7 +318,7 @@ export const useBackgroundSync = (options: BackgroundSyncOptions = {}) => {
     forceSync,
     getSyncStatus,
     // Utility functions
-    isOnline: networkService.isOnline,
+    isOnline: () => networkService.isOnline(),
     appState: appStateRef.current,
   };
 };
@@ -333,8 +333,8 @@ export const useOfflineQueueSync = (entityId?: string) => {
 
   useEffect(() => {
     const handleOnlineStatus = async () => {
-      if (networkService.isOnline && entityId) {
-        logger.info('[useOfflineQueueSync] Device online, processing offline queue...');
+      if (networkService.isOnline() && entityId) {
+        logger.info('[useOfflineQueueSync] Device online, processing offline queue...', 'data');
         
         try {
           // Process any queued offline operations
@@ -344,9 +344,9 @@ export const useOfflineQueueSync = (entityId?: string) => {
             refetchType: 'active',
           });
           
-          logger.info('[useOfflineQueueSync] ✅ Offline queue processed');
+          logger.info('[useOfflineQueueSync] Offline queue processed', 'data');
         } catch (error) {
-          logger.error('[useOfflineQueueSync] ❌ Failed to process offline queue:', error);
+          logger.error('[useOfflineQueueSync] Failed to process offline queue', error, 'data');
         }
       }
     };

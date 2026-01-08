@@ -71,7 +71,7 @@ const DEFAULT_PREFETCH_CONFIGS: Record<PrefetchPriority, PrefetchConfig> = {
 
 // Prefetch item definition
 interface PrefetchItem {
-  queryKey: unknown[];
+  queryKey: readonly unknown[];
   queryFn: () => Promise<any>;
   config: PrefetchConfig;
   userFlow: UserFlow;
@@ -102,7 +102,7 @@ export class PrefetchStrategy {
 
     if (!exists) {
       this.prefetchQueue.push(item);
-      logger.debug('[PrefetchStrategy] Queued prefetch:', {
+      logger.debug('[PrefetchStrategy] Queued prefetch', 'data', {
         queryKey: item.queryKey,
         priority: item.config.priority,
         userFlow: item.userFlow,
@@ -131,7 +131,7 @@ export class PrefetchStrategy {
       priorityOrder[a.config.priority] - priorityOrder[b.config.priority]
     );
 
-    logger.debug('[PrefetchStrategy] Processing prefetch queue:', {
+    logger.debug('[PrefetchStrategy] Processing prefetch queue', 'data', {
       items: this.prefetchQueue.length,
       priorities: this.prefetchQueue.map(item => item.config.priority),
     });
@@ -142,9 +142,8 @@ export class PrefetchStrategy {
       try {
         await this.executePrefetch(item);
       } catch (error) {
-        logger.error('[PrefetchStrategy] Prefetch failed:', {
+        logger.error('[PrefetchStrategy] Prefetch failed', error, 'data', {
           queryKey: item.queryKey,
-          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     }
@@ -161,13 +160,13 @@ export class PrefetchStrategy {
 
     // Check if prefetch is enabled
     if (!config.enabled) {
-      logger.debug('[PrefetchStrategy] Prefetch disabled for:', description);
+      logger.debug(`[PrefetchStrategy] Prefetch disabled for: ${description}`, 'data');
       return;
     }
 
     // Check network conditions
     if (!this.shouldPrefetchBasedOnNetwork(config.networkCondition)) {
-      logger.debug('[PrefetchStrategy] Network conditions not suitable for prefetch:', {
+      logger.debug('[PrefetchStrategy] Network conditions not suitable for prefetch', 'data', {
         description,
         requiredCondition: config.networkCondition,
         currentCondition: this.getCurrentNetworkCondition(),
@@ -179,9 +178,9 @@ export class PrefetchStrategy {
     const existingData = this.queryClient.getQueryData(queryKey);
     const queryState = this.queryClient.getQueryState(queryKey);
     
-    if (existingData && queryState && 
+    if (existingData && queryState &&
         Date.now() - queryState.dataUpdatedAt < (config.staleTime || 0)) {
-      logger.debug('[PrefetchStrategy] Skipping prefetch - data is fresh:', {
+      logger.debug('[PrefetchStrategy] Skipping prefetch - data is fresh', 'data', {
         description,
         dataAge: Date.now() - queryState.dataUpdatedAt,
         staleTime: config.staleTime,
@@ -199,7 +198,7 @@ export class PrefetchStrategy {
       return;
     }
 
-    logger.debug('[PrefetchStrategy] Executing prefetch:', {
+    logger.debug('[PrefetchStrategy] Executing prefetch', 'data', {
       description,
       queryKey,
       priority: config.priority,
@@ -214,12 +213,9 @@ export class PrefetchStrategy {
         gcTime: config.gcTime,
       });
 
-      logger.debug('[PrefetchStrategy] ✅ Prefetch completed:', description);
+      logger.debug(`[PrefetchStrategy] Prefetch completed: ${description}`, 'data');
     } catch (error) {
-      logger.error('[PrefetchStrategy] ❌ Prefetch failed:', {
-        description,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
+      logger.error(`[PrefetchStrategy] Prefetch failed: ${description}`, error, 'data');
     }
   }
 
@@ -263,7 +259,7 @@ export class PrefetchStrategy {
     this.prefetchQueue.length = 0;
     this.isProcessing = false;
     
-    logger.debug('[PrefetchStrategy] All prefetches cancelled');
+    logger.debug('[PrefetchStrategy] All prefetches cancelled', 'data');
   }
 
   /**

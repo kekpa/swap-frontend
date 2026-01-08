@@ -150,7 +150,7 @@ class AuthStateMachine {
     this.initializeTransitions();
     this.setupNavigationListener();
 
-    logger.debug('[AuthStateMachine] 🏗️ Professional auth state machine initialized', {
+    logger.debug('[AuthStateMachine] 🏗️ Professional auth state machine initialized', 'auth', {
       initialState,
       timestamp: this.stateData.lastTransition
     });
@@ -205,7 +205,7 @@ class AuthStateMachine {
         const canPerform = navigationStateManager.canPerformAuthOperation('session_refresh');
 
         if (!canPerform) {
-          logger.debug('[AuthStateMachine] 🚫 Session refresh blocked by navigation state', {
+          logger.debug('[AuthStateMachine] 🚫 Session refresh blocked by navigation state', 'auth', {
             navigationState: navigationStateManager.getState(),
             event: context.event
           });
@@ -246,7 +246,7 @@ class AuthStateMachine {
         // Only allow session refresh if navigation allows it
         const canPerform = navigationStateManager.canPerformAuthOperation('data_updated');
 
-        logger.debug('[AuthStateMachine] 🔍 Data updated - checking navigation state', {
+        logger.debug('[AuthStateMachine] 🔍 Data updated - checking navigation state', 'auth', {
           canPerformAuth: canPerform,
           currentState: this.stateData.currentState,
           navigationState: navigationStateManager.getState()
@@ -268,7 +268,7 @@ class AuthStateMachine {
       action: (context) => this.handleReset(context)
     });
 
-    logger.debug('[AuthStateMachine] ✅ State transitions initialized');
+    logger.debug('[AuthStateMachine] ✅ State transitions initialized', 'auth');
   }
 
   /**
@@ -321,7 +321,7 @@ class AuthStateMachine {
     });
 
     if (this.isTransitioning) {
-      logger.warn('[AuthStateMachine] ⚠️ Transition already in progress, queuing event', {
+      logger.warn('[AuthStateMachine] ⚠️ Transition already in progress, queuing event', 'auth', {
         event,
         currentState: this.stateData.currentState
       });
@@ -376,9 +376,8 @@ class AuthStateMachine {
 
       return true;
     } catch (error) {
-      logger.error('[AuthStateMachine] ❌ Error during state transition', {
+      logger.error('[AuthStateMachine] ❌ Error during state transition', error, 'auth', {
         event,
-        error: error.message,
         currentState: this.stateData.currentState
       });
 
@@ -430,7 +429,7 @@ class AuthStateMachine {
    * Professional action handlers
    */
   private handleCredentialsFound(context: AuthTransitionContext): void {
-    logger.debug('[AuthStateMachine] 🔑 Credentials found, starting session restoration');
+    logger.debug('[AuthStateMachine] 🔑 Credentials found, starting session restoration', 'auth');
   }
 
   private handleLoginSuccess(context: AuthTransitionContext): void {
@@ -439,7 +438,7 @@ class AuthStateMachine {
     this.stateData.hasValidSession = true;
     this.stateData.sessionExpiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
 
-    logger.debug('[AuthStateMachine] ✅ Login successful', {
+    logger.debug('[AuthStateMachine] ✅ Login successful', 'auth', {
       userId: this.stateData.userId,
       profileId: this.stateData.profileId
     });
@@ -451,7 +450,7 @@ class AuthStateMachine {
     this.stateData.hasValidSession = true;
     this.stateData.sessionExpiresAt = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
 
-    logger.debug('[AuthStateMachine] ✅ Session refresh successful');
+    logger.debug('[AuthStateMachine] ✅ Session refresh successful', 'auth');
   }
 
   private handleLogout(context: AuthTransitionContext): void {
@@ -460,7 +459,7 @@ class AuthStateMachine {
     this.stateData.hasValidSession = false;
     this.stateData.sessionExpiresAt = null;
 
-    logger.debug('[AuthStateMachine] 👋 User logged out');
+    logger.debug('[AuthStateMachine] 👋 User logged out', 'auth');
   }
 
   private handleError(context: AuthTransitionContext): void {
@@ -471,9 +470,8 @@ class AuthStateMachine {
         event: context.event
       });
 
-      logger.error('[AuthStateMachine] ❌ Authentication error', {
-        event: context.event,
-        error: context.error?.message
+      logger.error('[AuthStateMachine] ❌ Authentication error', context.error, 'auth', {
+        event: context.event
       });
     }
     // If no error provided, this is a normal transition (e.g., no token = not logged in)
@@ -486,7 +484,7 @@ class AuthStateMachine {
     this.stateData.sessionExpiresAt = null;
     this.stateData.errors = [];
 
-    logger.debug('[AuthStateMachine] 🔄 Authentication state reset');
+    logger.debug('[AuthStateMachine] 🔄 Authentication state reset', 'auth');
   }
 
   /**
@@ -497,7 +495,7 @@ class AuthStateMachine {
       try {
         listener(newState, context);
       } catch (error) {
-        logger.error('[AuthStateMachine] Error in state change listener:', error);
+        logger.error('[AuthStateMachine] Error in state change listener', error, 'auth');
       }
     });
   }

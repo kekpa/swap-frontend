@@ -22,7 +22,7 @@ import { Theme } from '../../../theme/theme';
 import { useAuthContext } from '../../auth/context/AuthContext';
 import apiClient from '../../../_api/apiClient';
 import { BUSINESS_PATHS, AUTH_PATHS } from '../../../_api/apiPaths';
-import { logger } from '../../../utils/logger';
+import logger from '../../../utils/logger';
 import { loginService } from '../../../services/auth/LoginService';
 
 // Session type from backend
@@ -182,7 +182,7 @@ const SecurityPrivacyScreen: React.FC = () => {
   const queryClient = useQueryClient();
 
   // Business PIN state
-  const isBusinessProfile = user?.profile_type === 'business';
+  const isBusinessProfile = user?.profileType === 'business';
   const [hasBusinessPin, setHasBusinessPin] = useState(false);
   const [isLoadingPinStatus, setIsLoadingPinStatus] = useState(false);
 
@@ -206,7 +206,7 @@ const SecurityPrivacyScreen: React.FC = () => {
           setIsBiometricEnabled(enabled);
         }
       } catch (error) {
-        logger.warn('[SecurityPrivacy] Failed to check biometric status:', error);
+        logger.warn('[SecurityPrivacy] Failed to check biometric status', 'auth');
       }
     };
     checkBiometric();
@@ -222,9 +222,9 @@ const SecurityPrivacyScreen: React.FC = () => {
   } = useQuery({
     queryKey: ['active-sessions'],
     queryFn: async (): Promise<Session[]> => {
-      logger.debug('[SecurityPrivacy] Fetching active sessions');
+      logger.debug('[SecurityPrivacy] Fetching active sessions', 'auth');
       const response = await apiClient.get<{ sessions: Session[] }>(AUTH_PATHS.SESSIONS);
-      logger.debug(`[SecurityPrivacy] Loaded ${response.data.sessions?.length || 0} sessions`);
+      logger.debug(`[SecurityPrivacy] Loaded ${response.data.sessions?.length || 0} sessions`, 'auth');
       return response.data.sessions || [];
     },
     staleTime: 30 * 1000, // 30 seconds
@@ -234,7 +234,7 @@ const SecurityPrivacyScreen: React.FC = () => {
   // Mutation to revoke a specific session
   const revokeSessionMutation = useMutation({
     mutationFn: async (sessionId: string) => {
-      logger.debug(`[SecurityPrivacy] Revoking session: ${sessionId}`);
+      logger.debug(`[SecurityPrivacy] Revoking session: ${sessionId}`, 'auth');
       await apiClient.delete(AUTH_PATHS.SESSION_REVOKE(sessionId));
     },
     onSuccess: () => {
@@ -242,7 +242,7 @@ const SecurityPrivacyScreen: React.FC = () => {
       Alert.alert('Success', 'Device has been signed out successfully.');
     },
     onError: (error: any) => {
-      logger.error('[SecurityPrivacy] Failed to revoke session:', error);
+      logger.error('[SecurityPrivacy] Failed to revoke session', error, 'auth');
       Alert.alert('Error', 'Failed to sign out device. Please try again.');
     },
   });
@@ -250,7 +250,7 @@ const SecurityPrivacyScreen: React.FC = () => {
   // Mutation to revoke all sessions
   const revokeAllSessionsMutation = useMutation({
     mutationFn: async () => {
-      logger.debug('[SecurityPrivacy] Revoking all sessions');
+      logger.debug('[SecurityPrivacy] Revoking all sessions', 'auth');
       await apiClient.delete(AUTH_PATHS.SESSIONS_REVOKE_ALL);
     },
     onSuccess: () => {
@@ -258,7 +258,7 @@ const SecurityPrivacyScreen: React.FC = () => {
       Alert.alert('Success', 'All devices have been signed out.');
     },
     onError: (error: any) => {
-      logger.error('[SecurityPrivacy] Failed to revoke all sessions:', error);
+      logger.error('[SecurityPrivacy] Failed to revoke all sessions', error, 'auth');
       Alert.alert('Error', 'Failed to sign out all devices. Please try again.');
     },
   });
@@ -289,7 +289,7 @@ const SecurityPrivacyScreen: React.FC = () => {
       );
       setHasBusinessPin(data.pinSet);
     } catch (error: any) {
-      logger.warn('[SecurityPrivacy] Failed to check business PIN status:', error.message);
+      logger.warn('[SecurityPrivacy] Failed to check business PIN status', 'business');
     } finally {
       setIsLoadingPinStatus(false);
     }
@@ -301,7 +301,7 @@ const SecurityPrivacyScreen: React.FC = () => {
 
   const handleChangePasscode = () => {
     // Business profiles share PIN with personal profile - warn user
-    if (user?.profile_type === 'business') {
+    if (user?.profileType === 'business') {
       Alert.alert(
         'Changing Personal PIN',
         'Your PIN is shared across all your profiles (personal and business). Changing it here will affect all profiles.',
@@ -338,7 +338,7 @@ const SecurityPrivacyScreen: React.FC = () => {
         });
 
         if (!authResult.success) {
-          logger.debug('[SecurityPrivacy] Biometric verification cancelled/failed');
+          logger.debug('[SecurityPrivacy] Biometric verification cancelled/failed', 'auth');
           setIsBiometricLoading(false);
           return; // User cancelled or failed verification
         }
@@ -358,7 +358,7 @@ const SecurityPrivacyScreen: React.FC = () => {
         Alert.alert('Disabled', 'Biometric login has been disabled.');
       }
     } catch (error: any) {
-      logger.error('[SecurityPrivacy] Biometric toggle error:', error);
+      logger.error('[SecurityPrivacy] Biometric toggle error', error, 'auth');
       Alert.alert('Error', 'An error occurred. Please try again.');
     } finally {
       setIsBiometricLoading(false);

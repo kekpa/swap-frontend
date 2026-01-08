@@ -158,7 +158,6 @@ const CountryCodePicker = forwardRef<CountryCodePickerRef, CountryCodePickerProp
                 )}
               </TouchableOpacity>
             )}
-            estimatedItemSize={60}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContent}
           />

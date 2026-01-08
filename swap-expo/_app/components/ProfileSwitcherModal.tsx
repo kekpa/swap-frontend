@@ -190,9 +190,9 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
         // This determines if we can skip PIN entirely
         const backendEnabled = await loginService.isBiometricEnabled();
         setHasBackendBiometric(backendEnabled);
-        logger.debug('[ProfileSwitcherModal] Backend biometric enabled:', backendEnabled);
+        logger.debug('[ProfileSwitcherModal] Backend biometric enabled', 'auth', { backendEnabled });
       } catch (error) {
-        logger.warn('[ProfileSwitcherModal] Biometric check failed:', error);
+        logger.warn('[ProfileSwitcherModal] Biometric check failed', 'auth', { error: error instanceof Error ? error.message : String(error) });
         setIsBiometricAvailable(false);
       }
     };
@@ -543,7 +543,7 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
     setIsCheckingPin(true);
     try {
       const pinStatus = await checkPinRequired(profile.profileId);
-      logger.debug('[ProfileSwitcherModal] PIN status:', pinStatus);
+      logger.debug('[ProfileSwitcherModal] PIN status', 'auth', pinStatus);
 
       if (pinStatus.pinRequired) {
         // PIN exists - show inline PIN entry
@@ -585,7 +585,7 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
   }, [hasBackendBiometric, isBiometricAvailable, checkPinRequired, onClose, onSelectProfile, onPinSetupRequired, executeCancelDeletion]);
 
   const handleSelectProfile = useCallback(async (profile: AvailableProfile) => {
-    logger.debug('[ProfileSwitcherModal] Profile selected:', {
+    logger.debug('[ProfileSwitcherModal] Profile selected', 'auth', {
       profileId: profile.profileId,
       entityId: profile.entityId,
       displayName: profile.displayName,
@@ -766,7 +766,7 @@ const ProfileSwitcherModal: React.FC<ProfileSwitcherModalProps> = ({
 
     setIsSubmittingPin(true);
     setIsPinError(false);
-    logger.debug('[ProfileSwitcherModal] Starting biometric authentication...', { hasBackendBiometric });
+    logger.debug('[ProfileSwitcherModal] Starting biometric authentication', 'auth', { hasBackendBiometric });
 
     try {
       // TRUE BIOMETRIC: If user has backend biometric enabled, skip PIN entirely

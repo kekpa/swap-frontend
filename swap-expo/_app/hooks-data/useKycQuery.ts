@@ -27,6 +27,8 @@ export interface KycDocument {
   created_at: string;
   updated_at: string;
   document_number?: string;
+  document_url?: string;
+  document_side?: 'front' | 'back' | 'single';
   review_notes?: string;
   verified_at?: string;
 }
@@ -41,6 +43,9 @@ export interface KycStatus {
   // Entity info
   entity_type: 'profile' | 'business';
   kyc_status: KycLevel;
+
+  // Active document type (which document is currently selected for verification)
+  active_document_type?: KycDocumentType;
 
   // Documents
   documents: KycDocument[];
@@ -143,13 +148,13 @@ export const useKycQuery = (config: KycQueryConfig) => {
   const query = useQuery({
     queryKey,
     queryFn: async () => {
-      logger.debug('[useKycQuery] Fetching KYC status for entity:', config.entityId);
+      logger.debug('[useKycQuery] Fetching KYC status for entity', 'kyc', { entityId: config.entityId });
 
       try {
         // STEP 1: Check local database first (local-first pattern)
         const localKycStatus = await userRepository.getKycStatus(entityId!);
         if (localKycStatus) {
-          logger.debug('[useKycQuery] 💾 Returning cached KYC status from local DB (entityId:', entityId, ')');
+          logger.debug('[useKycQuery] Returning cached KYC status from local DB', 'kyc', { entityId });
 
           // PROFESSIONAL FIX: Parse local database format to match API response format
           let parsedLocalData;
@@ -157,9 +162,9 @@ export const useKycQuery = (config: KycQueryConfig) => {
             try {
               // Parse JSON string from local database
               parsedLocalData = JSON.parse(localKycStatus.data);
-              logger.debug('[useKycQuery] 🔧 Parsed local KYC data from JSON string');
+              logger.debug('[useKycQuery] Parsed local KYC data from JSON string', 'kyc');
             } catch (parseError) {
-              logger.warn('[useKycQuery] ⚠️ Failed to parse local KYC data JSON, using raw data');
+              logger.warn('[useKycQuery] Failed to parse local KYC data JSON, using raw data', 'kyc');
               parsedLocalData = localKycStatus;
             }
           } else {
@@ -170,7 +175,7 @@ export const useKycQuery = (config: KycQueryConfig) => {
           // STEP 2: Background sync if data might be stale (non-blocking)
           setTimeout(async () => {
             try {
-              logger.debug('[useKycQuery] 🔄 Background sync: Fetching fresh KYC status');
+              logger.debug('[useKycQuery] Background sync: Fetching fresh KYC status', 'kyc');
               const response = await apiClient.get('/kyc/verification-status');
 
               if (response.data) {
@@ -186,13 +191,14 @@ export const useKycQuery = (config: KycQueryConfig) => {
                 const currentData = queryClient.getQueryData(queryKey);
                 if (JSON.stringify(currentData) !== JSON.stringify(response.data)) {
                   queryClient.setQueryData(queryKey, response.data);
-                  logger.debug('[useKycQuery] ✅ Background sync: Updated with fresh data');
+                  logger.debug('[useKycQuery] Background sync: Updated with fresh data', 'kyc');
                 } else {
-                  logger.debug('[useKycQuery] ✅ Background sync: Data unchanged, skipping cache update');
+                  logger.debug('[useKycQuery] Background sync: Data unchanged, skipping cache update', 'kyc');
                 }
               }
-            } catch (error) {
-              logger.debug('[useKycQuery] ⚠️ Background sync failed (non-critical):', error.message);
+            } catch (syncError) {
+              const errorMessage = syncError instanceof Error ? syncError.message : String(syncError);
+              logger.debug('[useKycQuery] Background sync failed (non-critical)', 'kyc', { error: errorMessage });
             }
           }, 1000); // 1 second delay for background sync
 
@@ -201,7 +207,7 @@ export const useKycQuery = (config: KycQueryConfig) => {
         }
 
         // STEP 3: No local cache - fetch from API (first time only)
-        logger.debug('[useKycQuery] 🌐 No local cache, fetching from API (entityId:', entityId, ')');
+        logger.debug('[useKycQuery] No local cache, fetching from API', 'kyc', { entityId });
         const response = await apiClient.get('/kyc/verification-status');
 
         if (response.data) {
@@ -212,25 +218,25 @@ export const useKycQuery = (config: KycQueryConfig) => {
             entity_id: entityId!,
             is_synced: true
           });
-          logger.debug('[useKycQuery] ✅ KYC status fetched and saved to local DB (entityId:', entityId, ')');
+          logger.debug('[useKycQuery] KYC status fetched and saved to local DB', 'kyc', { entityId });
           return response.data;
         } else {
           throw new Error('No KYC status data received');
         }
-      } catch (error) {
+      } catch (err) {
         // Check if we have local data as fallback
         const localKycStatus = await userRepository.getKycStatus(entityId!);
         if (localKycStatus) {
-          logger.debug('[useKycQuery] 📱 Using local cache as fallback due to error (entityId:', entityId, ')');
+          logger.debug('[useKycQuery] Using local cache as fallback due to error', 'kyc', { entityId });
 
           // PROFESSIONAL FIX: Apply same parsing logic for fallback data
           let parsedLocalData;
           if (localKycStatus.data && typeof localKycStatus.data === 'string') {
             try {
               parsedLocalData = JSON.parse(localKycStatus.data);
-              logger.debug('[useKycQuery] 🔧 Parsed fallback KYC data from JSON string');
+              logger.debug('[useKycQuery] Parsed fallback KYC data from JSON string', 'kyc');
             } catch (parseError) {
-              logger.warn('[useKycQuery] ⚠️ Failed to parse fallback KYC data JSON, using raw data');
+              logger.warn('[useKycQuery] Failed to parse fallback KYC data JSON, using raw data', 'kyc');
               parsedLocalData = localKycStatus;
             }
           } else {
@@ -240,8 +246,8 @@ export const useKycQuery = (config: KycQueryConfig) => {
           return parsedLocalData;
         }
 
-        logger.error('[useKycQuery] ❌ Failed to fetch KYC status:', error);
-        throw error;
+        logger.error('[useKycQuery] Failed to fetch KYC status', err, 'kyc');
+        throw err;
       }
     },
     enabled: !!config.entityId && !!entityId,
@@ -274,14 +280,14 @@ export const useKycQuery = (config: KycQueryConfig) => {
   useFocusEffect(
     React.useCallback(() => {
       if (config.enableFocusRefresh !== false) {
-        logger.debug('[useKycQuery] Screen focused, checking for stale data');
+        logger.debug('[useKycQuery] Screen focused, checking for stale data', 'kyc');
 
         // Only refetch if data is stale or we're in critical flow
         const shouldRefetch = config.criticalFlow ||
           (query.dataUpdatedAt && Date.now() - query.dataUpdatedAt > staleTime);
 
         if (shouldRefetch && !query.isFetching) {
-          logger.debug('[useKycQuery] Triggering focus-based refresh');
+          logger.debug('[useKycQuery] Triggering focus-based refresh', 'kyc');
           query.refetch();
         }
       }
@@ -300,7 +306,7 @@ export const useKycQuery = (config: KycQueryConfig) => {
       stepType: string;
       stepData: any
     }) => {
-      logger.debug(`[useKycQuery] Completing KYC step: ${stepType}`);
+      logger.debug(`[useKycQuery] Completing KYC step: ${stepType}`, 'kyc');
 
       // Execute the API call
       const response = await apiClient.post(`/kyc/${stepType.replace('_', '-')}`, stepData);
@@ -308,7 +314,7 @@ export const useKycQuery = (config: KycQueryConfig) => {
     },
 
     onSuccess: (data, variables) => {
-      logger.debug(`[useKycQuery] ✅ Step completion successful: ${variables.stepType}`);
+      logger.debug(`[useKycQuery] Step completion successful: ${variables.stepType}`, 'kyc');
 
       // Systematic cache invalidation for dependent queries
       queryClient.invalidateQueries({ queryKey });
@@ -326,7 +332,7 @@ export const useKycQuery = (config: KycQueryConfig) => {
     },
 
     onError: (error, variables) => {
-      logger.error(`[useKycQuery] ❌ Step completion failed: ${variables.stepType}`, error);
+      logger.error(`[useKycQuery] Step completion failed: ${variables.stepType}`, error, 'kyc');
     },
 
     // Retry configuration for critical mutations
@@ -338,7 +344,7 @@ export const useKycQuery = (config: KycQueryConfig) => {
    * Intelligent refresh function that respects context
    */
   const refresh = React.useCallback(async () => {
-    logger.debug('[useKycQuery] Manual refresh triggered');
+    logger.debug('[useKycQuery] Manual refresh triggered', 'kyc');
 
     // Update behavior context for active refresh
     staleTimeManager.updateBehavior({
@@ -353,7 +359,7 @@ export const useKycQuery = (config: KycQueryConfig) => {
    * Smart invalidation that handles dependency chains
    */
   const invalidate = React.useCallback(() => {
-    logger.debug('[useKycQuery] Invalidating KYC queries');
+    logger.debug('[useKycQuery] Invalidating KYC queries', 'kyc');
 
     queryClient.invalidateQueries({ queryKey });
 
@@ -437,9 +443,9 @@ export const useKycRequirement = (entityId?: string, requiredLevel: KycLevel = '
     return { isRequired: false, isBlocked: false, isLoading: true };
   }
 
-  const levelHierarchy = { not_started: 0, pending: 1, approved: 2, rejected: 0 };
-  const currentLevelValue = levelHierarchy[kycStatus.kyc_status];
-  const requiredLevelValue = levelHierarchy[requiredLevel];
+  const levelHierarchy: Record<string, number> = { not_started: 0, pending: 1, in_review: 1, approved: 2, rejected: 0 };
+  const currentLevelValue = levelHierarchy[kycStatus.kyc_status] ?? 0;
+  const requiredLevelValue = levelHierarchy[requiredLevel] ?? 0;
 
   return {
     isRequired: currentLevelValue < requiredLevelValue,
@@ -481,7 +487,7 @@ export const usePendingKycDocuments = (entityId?: string) => {
 
   if (!kycStatus) return [];
 
-  return kycStatus.documents.filter(doc => doc.verification_status === 'pending');
+  return kycStatus.documents.filter((doc: { verification_status: string }) => doc.verification_status === 'pending');
 };
 
 /**
@@ -606,12 +612,12 @@ export const useKycStatusDirect = (entityIdParam?: string) => {
         // Check local cache first (offline-first pattern)
         const localData = await userRepository.getKycStatus(entityId);
         if (localData) {
-          logger.debug('[useKycStatusDirect] Using cached KYC data');
+          logger.debug('[useKycStatusDirect] Using cached KYC data', 'kyc');
           return localData as KycStatus;
         }
 
         // Fetch from backend
-        logger.debug('[useKycStatusDirect] Fetching KYC status from backend');
+        logger.debug('[useKycStatusDirect] Fetching KYC status from backend', 'kyc');
         const response = await apiClient.get<KycStatus>('/kyc/verification-status', {
           params: { entityId: targetEntityId },
         });
@@ -623,7 +629,7 @@ export const useKycStatusDirect = (entityIdParam?: string) => {
 
         return response.data;
       } catch (error) {
-        logger.error('[useKycStatusDirect] Failed to fetch KYC status:', error);
+        logger.error('[useKycStatusDirect] Failed to fetch KYC status', error, 'kyc');
         throw error;
       }
     },

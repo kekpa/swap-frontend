@@ -11,13 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import React, { useEffect } from "react";
+import React, { useEffect, ComponentProps } from "react";
 import { View, Text, StyleSheet, Animated, Dimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+type IoniconsName = ComponentProps<typeof Ionicons>['name'];
+
 interface ProcessingModalProps {
   visible: boolean;
-  icon?: string; // Icon name from Ionicons
+  icon?: IoniconsName; // Icon name from Ionicons
   iconColor?: string;
   heading?: string; // Optional heading text
   message?: string; // Optional message text (takes precedence if provided)

@@ -134,7 +134,7 @@ export const useLocalTimeline = (
   const loadTimeline = useCallback(
     async (reset: boolean = true) => {
       if (!interactionId || !entityId || !enabled) {
-        logger.debug('[useLocalTimeline] Skipping load - missing requirements', {
+        logger.debug('[useLocalTimeline] Skipping load - missing requirements', 'data', {
           interactionId,
           entityId,
           enabled,
@@ -159,7 +159,7 @@ export const useLocalTimeline = (
 
         const offset = reset ? 0 : offsetRef.current;
 
-        logger.debug(`[useLocalTimeline] Loading timeline for ${interactionId}`, {
+        logger.debug(`[useLocalTimeline] Loading timeline for ${interactionId}`, 'data', {
           offset,
           pageSize,
           entityId,
@@ -209,7 +209,7 @@ export const useLocalTimeline = (
         setIsLoading(false);
         setIsLoadingMore(false);
 
-        logger.debug(`[useLocalTimeline] Loaded ${timelineItems.length} items (instant display)`, {
+        logger.debug(`[useLocalTimeline] Loaded ${timelineItems.length} items (instant display)`, 'data', {
           total: count,
           offset: offsetRef.current,
           hasMore: offsetRef.current < count,
@@ -314,7 +314,7 @@ export const useLocalTimeline = (
         return;
       }
 
-      logger.debug(`[useLocalTimeline] Received update event for ${interactionId}`, event);
+      logger.debug(`[useLocalTimeline] Received update event for ${interactionId}`, 'data', { event });
 
       // Use debounced reload to batch multiple events
       debouncedLoadTimeline();

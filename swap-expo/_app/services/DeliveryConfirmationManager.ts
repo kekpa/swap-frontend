@@ -188,7 +188,7 @@ class DeliveryConfirmationManager {
       // await this.sendBatchConfirmationToBackend(confirmations);
 
       // Placeholder for backend call
-      logger.debug(`[DeliveryConfirmationManager] 📤 Backend confirmation (placeholder):`, {
+      logger.debug('[DeliveryConfirmationManager] Backend confirmation (placeholder)', 'ws', {
         count: confirmations.length,
         statuses: confirmations.reduce((acc, conf) => {
           acc[conf.status] = (acc[conf.status] || 0) + 1;

@@ -23,8 +23,15 @@ import { API_PATHS } from '../../../_api/apiPaths';
 import { useAuthContext } from '../../../features/auth/context/AuthContext';
 import logger from '../../../utils/logger';
 
-type KycEmailEntryRouteProp = RouteProp<ProfileStackParamList, 'KycEmailEntry'>;
-type KycEmailEntryNavigationProp = StackNavigationProp<ProfileStackParamList, 'KycEmailEntry'>;
+// KycEmailEntry route params (defined inline since route is disabled for Haiti market)
+type KycEmailEntryParams = {
+  returnToTimeline?: boolean;
+  sourceRoute?: string;
+  currentEmail?: string | null;
+};
+
+type KycEmailEntryRouteProp = RouteProp<{ KycEmailEntry: KycEmailEntryParams }, 'KycEmailEntry'>;
+type KycEmailEntryNavigationProp = StackNavigationProp<ProfileStackParamList>;
 
 const KycEmailEntryScreen = () => {
   const navigation = useNavigation<KycEmailEntryNavigationProp>();
@@ -74,7 +81,7 @@ const KycEmailEntryScreen = () => {
       });
 
     } catch (err: any) {
-      logger.error("Error during email entry", err, "app");
+      logger.error("Error during email entry", err, 'app');
       Alert.alert("Error", "An unexpected error occurred. Please try again.");
     } finally {
       setIsLoading(false);

@@ -8,8 +8,9 @@ import ht from './locales/ht.json';
 import fr from './locales/fr.json';
 
 // Get device language (e.g., "en-US" -> "en")
-// Localization.locale can be undefined in some environments
-const deviceLang = Localization.locale?.split('-')[0] || 'en';
+// Using getLocales() which is the current API in expo-localization
+const locales = Localization.getLocales();
+const deviceLang = locales[0]?.languageCode || 'en';
 const supportedLangs = ['en', 'ht', 'fr'];
 const defaultLang = supportedLangs.includes(deviceLang) ? deviceLang : 'en';
 

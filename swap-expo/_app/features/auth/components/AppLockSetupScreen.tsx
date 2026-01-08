@@ -267,10 +267,10 @@ const AppLockSetupContent: React.FC<AppLockSetupContentProps> = ({
           if (syncResult.success) {
             logger.info('[AppLockSetup] ✅ Passcode synced to backend!');
           } else {
-            logger.warn('[AppLockSetup] ⚠️ Backend sync failed (non-fatal):', syncResult.error);
+            logger.warn('[AppLockSetup] Backend sync failed (non-fatal)', 'auth', { error: syncResult.error });
           }
         } catch (syncError) {
-          logger.warn('[AppLockSetup] ⚠️ Backend sync failed (non-fatal):', syncError);
+          logger.warn('[AppLockSetup] Backend sync failed (non-fatal)', 'auth', { error: String(syncError) });
         }
 
         setIsLoading(false);
@@ -666,9 +666,10 @@ const AppLockSetupScreen: React.FC = () => {
   // Map route params to callbacks
   const handleComplete = useCallback(() => {
     if (route.params?.returnRoute) {
-      navigation.navigate(route.params.returnRoute as never, {
-        businessId: route.params?.businessProfileId,
-      } as never);
+      (navigation.navigate as (name: string, params?: Record<string, unknown>) => void)(
+        route.params.returnRoute,
+        { businessId: route.params?.businessProfileId }
+      );
     } else {
       navigation.goBack();
     }

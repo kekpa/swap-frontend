@@ -96,27 +96,25 @@ const NewInteraction2: React.FC = () => {
   const recentContacts = useMemo((): DisplayableContact[] => {
     if (!interactions || interactions.length === 0) return [];
 
-    return interactions
-      .filter(i => !i.is_group) // Only direct conversations
-      .slice(0, 10) // Last 10 interactions
-      .map(i => {
-        // Find the other member (not current user)
-        const other = i.members?.find(m => m.entity_id !== user?.entityId);
-        if (!other) return null;
+    const result: DisplayableContact[] = [];
+    const seen = new Set<string>();
 
-        const displayName = other.display_name || 'Unknown';
-        return {
-          id: other.entity_id,
-          name: displayName,
-          initials: getInitials(displayName),
-          avatarColor: getAvatarColor(other.entity_id), // Use entity_id for consistent colors
-          avatarUrl: other.avatar_url,
-          statusOrPhone: 'Recent',
-        };
-      })
-      .filter((c): c is DisplayableContact => c !== null)
-      // Deduplicate by id
-      .filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+    for (const interaction of interactions.filter(i => !i.is_group).slice(0, 10)) {
+      const other = interaction.members?.find(m => m.entity_id !== user?.entityId);
+      if (!other || seen.has(other.entity_id)) continue;
+      seen.add(other.entity_id);
+
+      const displayName = other.display_name || 'Unknown';
+      result.push({
+        id: other.entity_id,
+        name: displayName,
+        initials: getInitials(displayName),
+        avatarColor: getAvatarColor(other.entity_id),
+        avatarUrl: other.avatar_url,
+        statusOrPhone: 'Recent',
+      });
+    }
+    return result;
   }, [interactions, user?.entityId]);
 
   // Search is now handled by useUnifiedSearch hook (combinedSearchResults)

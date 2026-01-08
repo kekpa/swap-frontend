@@ -37,7 +37,7 @@ export function useNetworkStatus(): NetworkStatus {
         type: state.type,
       });
 
-      logger.debug('[NetworkStatus] Updated:', {
+      logger.debug('[NetworkStatus] Updated', 'app', {
         isConnected,
         isOnline,
         type: state.type,

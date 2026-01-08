@@ -59,7 +59,7 @@ class FullTextSearchRepository {
    * Initialize FTS virtual tables
    */
   async initializeFTS(): Promise<void> {
-    logger.debug('[FullTextSearch] 🔍 Initializing FTS virtual tables');
+    logger.debug('[FullTextSearch] Initializing FTS virtual tables', 'data');
     const db = await this.getDatabase();
 
     try {
@@ -107,9 +107,9 @@ class FullTextSearchRepository {
         );
       `);
 
-      logger.info('[FullTextSearch] ✅ FTS virtual tables initialized successfully');
+      logger.info('[FullTextSearch] FTS virtual tables initialized successfully', 'data');
     } catch (error) {
-      logger.error('[FullTextSearch] ❌ Failed to initialize FTS tables:', error);
+      logger.error('[FullTextSearch] Failed to initialize FTS tables', error, 'data');
       throw error;
     }
   }
@@ -122,10 +122,10 @@ class FullTextSearchRepository {
       return { transactions: [], contacts: [], messages: [], all: [] };
     }
 
-    logger.debug(`[FullTextSearch] 🔍 UNIVERSAL SEARCH: "${query}"`);
-    
+    logger.debug('[FullTextSearch] UNIVERSAL SEARCH', 'data', { query });
+
     const normalizedQuery = this.normalizeSearchQuery(query);
-    
+
     try {
       const [transactions, contacts, messages] = await Promise.all([
         this.searchTransactions(normalizedQuery, Math.ceil(limit / 3)),
@@ -138,7 +138,7 @@ class FullTextSearchRepository {
         .sort((a, b) => b.relevanceScore - a.relevanceScore)
         .slice(0, limit);
 
-      logger.debug(`[FullTextSearch] ✅ UNIVERSAL SEARCH: Found ${allResults.length} results`);
+      logger.debug('[FullTextSearch] UNIVERSAL SEARCH complete', 'data', { resultCount: allResults.length });
 
       return {
         transactions,
@@ -147,7 +147,7 @@ class FullTextSearchRepository {
         all: allResults,
       };
     } catch (error) {
-      logger.error(`[FullTextSearch] ❌ UNIVERSAL SEARCH failed:`, error);
+      logger.error('[FullTextSearch] UNIVERSAL SEARCH failed', error, 'data');
       return { transactions: [], contacts: [], messages: [], all: [] };
     }
   }
@@ -193,7 +193,7 @@ class FullTextSearchRepository {
         relevanceScore: 100 - index, // Higher score for better FTS ranking
       }));
     } catch (error) {
-      logger.warn(`[FullTextSearch] ⚠️ Transaction search failed:`, error);
+      logger.warn('[FullTextSearch] Transaction search failed', 'data', { error: String(error) });
       return [];
     }
   }
@@ -241,7 +241,7 @@ class FullTextSearchRepository {
         };
       });
     } catch (error) {
-      logger.warn(`[FullTextSearch] ⚠️ Contact search failed:`, error);
+      logger.warn('[FullTextSearch] Contact search failed', 'data', { error: String(error) });
       return [];
     }
   }
@@ -282,7 +282,7 @@ class FullTextSearchRepository {
         relevanceScore: 80 - index, // Lowest priority for messages
       }));
     } catch (error) {
-      logger.warn(`[FullTextSearch] ⚠️ Message search failed:`, error);
+      logger.warn('[FullTextSearch] Message search failed', 'data', { error: String(error) });
       return [];
     }
   }
@@ -312,7 +312,7 @@ class FullTextSearchRepository {
         transaction.to_entity_name || '',
       ]);
     } catch (error) {
-      logger.warn(`[FullTextSearch] ⚠️ Failed to index transaction ${transaction.id}:`, error);
+      logger.warn('[FullTextSearch] Failed to index transaction', 'data', { transactionId: transaction.id, error: String(error) });
     }
   }
 
@@ -337,7 +337,7 @@ class FullTextSearchRepository {
         contact.lastName || contact.last_name || '',
       ]);
     } catch (error) {
-      logger.warn(`[FullTextSearch] ⚠️ Failed to index contact ${contact.entityId || contact.entity_id}:`, error);
+      logger.warn('[FullTextSearch] Failed to index contact', 'data', { entityId: contact.entityId || contact.entity_id, error: String(error) });
     }
   }
 
@@ -361,7 +361,7 @@ class FullTextSearchRepository {
         message.created_at || new Date().toISOString(),
       ]);
     } catch (error) {
-      logger.warn(`[FullTextSearch] ⚠️ Failed to index message ${message.id}:`, error);
+      logger.warn('[FullTextSearch] Failed to index message', 'data', { messageId: message.id, error: String(error) });
     }
   }
 
@@ -369,7 +369,7 @@ class FullTextSearchRepository {
    * Batch index multiple items
    */
   async batchIndex(items: { type: 'transaction' | 'contact' | 'message'; data: any }[]): Promise<void> {
-    logger.debug(`[FullTextSearch] 📦 BATCH INDEX: Indexing ${items.length} items`);
+    logger.debug('[FullTextSearch] BATCH INDEX: Starting', 'data', { count: items.length });
 
     for (const item of items) {
       try {
@@ -385,11 +385,11 @@ class FullTextSearchRepository {
             break;
         }
       } catch (error) {
-        logger.warn(`[FullTextSearch] ⚠️ Failed to index ${item.type}:`, error);
+        logger.warn('[FullTextSearch] Failed to index item', 'data', { type: item.type, error: String(error) });
       }
     }
 
-    logger.info(`[FullTextSearch] ✅ BATCH INDEX: Completed indexing ${items.length} items`);
+    logger.info('[FullTextSearch] BATCH INDEX: Completed', 'data', { count: items.length });
   }
 
   /**
@@ -397,15 +397,15 @@ class FullTextSearchRepository {
    */
   async clearIndex(): Promise<void> {
     const db = await this.getDatabase();
-    
+
     try {
       await db.execAsync(`DELETE FROM ${FullTextSearchRepository.FTS_TRANSACTIONS};`);
       await db.execAsync(`DELETE FROM ${FullTextSearchRepository.FTS_CONTACTS};`);
       await db.execAsync(`DELETE FROM ${FullTextSearchRepository.FTS_MESSAGES};`);
-      
-      logger.info('[FullTextSearch] 🧹 All FTS indexes cleared');
+
+      logger.info('[FullTextSearch] All FTS indexes cleared', 'data');
     } catch (error) {
-      logger.error('[FullTextSearch] ❌ Failed to clear indexes:', error);
+      logger.error('[FullTextSearch] Failed to clear indexes', error, 'data');
     }
   }
 

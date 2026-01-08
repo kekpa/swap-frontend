@@ -52,7 +52,7 @@ const calculateRelativeTime = (dateString: string): string => {
       return `${formattedDate}, ${timeString}`;
     }
   } catch (error) {
-    logger.debug('[dateFormatting] Error calculating relative time:', String(error));
+    logger.debug('[dateFormatting] Error calculating relative time: ' + String(error), 'data');
     return 'Recent';
   }
 };
@@ -111,7 +111,7 @@ export const clearOldTimestampCache = (): void => {
   }
 
   if (cleared > 0) {
-    logger.debug(`[dateFormatting] Cleared ${cleared} old timestamp cache entries`);
+    logger.debug(`[dateFormatting] Cleared ${cleared} old timestamp cache entries`, 'data');
   }
 };
 
@@ -122,7 +122,7 @@ export const clearOldTimestampCache = (): void => {
 export const clearTimestampCache = (): void => {
   const size = timestampCache.size;
   timestampCache.clear();
-  logger.debug(`[dateFormatting] Cleared all ${size} timestamp cache entries`);
+  logger.debug(`[dateFormatting] Cleared all ${size} timestamp cache entries`, 'data');
 };
 
 /**

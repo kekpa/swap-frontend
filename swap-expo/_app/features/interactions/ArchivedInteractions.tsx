@@ -22,10 +22,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useTheme } from '../../theme/ThemeContext';
+import { RootStackParamList } from '../../navigation/rootNavigator';
 import { useArchivedInteractions, useUnarchiveInteraction } from '../../hooks-actions/useDeleteInteraction';
-import { logger } from '../../utils/logger';
+import logger from '../../utils/logger';
 import { useRefreshByUser } from '../../hooks/useRefreshByUser';
 import { getAvatarColor } from '../../utils/avatarUtils';
 
@@ -60,8 +62,10 @@ const formatTime = (dateString?: string): string => {
   }
 };
 
+type NavigationProp = StackNavigationProp<RootStackParamList>;
+
 const ArchivedInteractions: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -91,10 +95,10 @@ const ArchivedInteractions: React.FC = () => {
           text: 'Unarchive',
           onPress: async () => {
             try {
-              logger.info(`[ArchivedInteractions] Unarchiving: ${interactionId}`);
+              logger.info(`[ArchivedInteractions] Unarchiving: ${interactionId}`, 'data');
               await unarchiveMutation.mutateAsync(interactionId);
             } catch (error) {
-              logger.error(`[ArchivedInteractions] Failed to unarchive: ${interactionId}`, error);
+              logger.error(`[ArchivedInteractions] Failed to unarchive: ${interactionId}`, error, 'data');
               Alert.alert('Error', 'Failed to unarchive conversation. Please try again.');
             }
           },
@@ -108,10 +112,13 @@ const ArchivedInteractions: React.FC = () => {
     // Find the other member (not current user)
     const otherMember = interaction.members?.find((m: any) => m.entity_id);
     if (otherMember) {
-      navigation.navigate('ContactInteractionHistory2' as never, {
-        contactEntityId: otherMember.entity_id,
+      navigation.navigate('ContactInteractionHistory2', {
+        contactId: otherMember.entity_id,
         contactName: interaction.name || otherMember.display_name || 'Unknown',
-      } as never);
+        contactInitials: getInitials(interaction.name || otherMember.display_name || 'Unknown'),
+        contactAvatarColor: getAvatarColor(otherMember.entity_id),
+        interactionId: interaction.id,
+      });
     }
   }, [navigation]);
 

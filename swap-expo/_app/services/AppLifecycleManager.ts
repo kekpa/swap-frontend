@@ -34,7 +34,7 @@ interface AuthContext {
   isAuthenticated: boolean;
   isLoading: boolean;
   user: User | null;
-  getAccessToken: () => Promise<string>;
+  getAccessToken: () => Promise<string | null>;
 }
 
 class AppLifecycleManager {
@@ -119,7 +119,7 @@ class AppLifecycleManager {
   /**
    * Initialize WebSocket connection and handlers
    */
-  private async initializeWebSocket(getAccessToken: () => Promise<string>, user: User | null = null): Promise<void> {
+  private async initializeWebSocket(getAccessToken: () => Promise<string | null>, user: User | null = null): Promise<void> {
     try {
       // CRITICAL: Log NetworkService state BEFORE attempting WebSocket connection
       const networkState = networkService.getNetworkState();

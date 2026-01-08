@@ -872,14 +872,14 @@ const getEntityId = async (): Promise<string | null> => {
 };
 
 // Update the post method with custom timeout
-const post = async (url: string, data?: any, config?: AxiosRequestConfig) => {
+const post = async <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> => {
 
   const requestConfig = {
     timeout: url.includes("/transactions") ? 60000 : 30000,
     ...config,
   };
   try {
-    const response = await apiClient.post(url, data, requestConfig);
+    const response = await apiClient.post<T>(url, data, requestConfig);
     return response;
   } catch (error) {
     if (axios.isAxiosError(error) && error.code === "ECONNABORTED") {
@@ -893,7 +893,7 @@ const post = async (url: string, data?: any, config?: AxiosRequestConfig) => {
 };
 
 // Override the get method with request deduplication
-const get = async (url: string, config?: AxiosRequestConfig) => {
+const get = async <T = any>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> => {
   // Generate dedup key for GET requests
   const dedupKey = requestDeduplicator.getKey('GET', url, config?.params);
 
@@ -905,7 +905,7 @@ const get = async (url: string, config?: AxiosRequestConfig) => {
   }
 
   // Make request and track it
-  const requestPromise = apiClient.get(url, config);
+  const requestPromise = apiClient.get<T>(url, config);
   requestDeduplicator.set(dedupKey, requestPromise);
 
   return requestPromise;

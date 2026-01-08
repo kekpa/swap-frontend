@@ -483,7 +483,7 @@ const SignInScreen = ({ route }: any) => {
 
     try {
       // SECURITY: Validate that the logged-in user matches the original user who initiated the switch
-      const currentUserId = authContext?.user?.user_id;
+      const currentUserId = authContext?.user?.id;
 
       if (sourceUserId && currentUserId && currentUserId !== sourceUserId) {
         logger.warn('Profile switch aborted: Different user logged in', 'auth', {
@@ -927,7 +927,7 @@ const SignInScreen = ({ route }: any) => {
                 {pin.map((digit, index) => (
                   <TextInput
                     key={index}
-                    ref={(input) => (pinInputRefs.current[index] = input)}
+                    ref={(input) => { pinInputRefs.current[index] = input; }}
                     style={[
                       styles.pinInput,
                       !hasPinUser && { opacity: 0.5 } // Dim PIN inputs if no user
@@ -1004,9 +1004,9 @@ const SignInScreen = ({ route }: any) => {
           )}
           
           {/* Sign In Button */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.signInButton}
-            onPress={handleSignIn}
+            onPress={() => handleSignIn()}
             disabled={isLoading}
           >
             <Text style={styles.signInButtonText}>

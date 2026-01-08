@@ -51,6 +51,8 @@ export const queryKeys = {
   search: ['search'] as const,
   searchEntities: (query: string) => ['search', 'entities', query] as const,
   searchContacts: (query: string) => ['search', 'contacts', query] as const,
+  fullTextSearch: (query: string, limit?: number) =>
+    ['search', 'fulltext', query, limit ?? 50] as const,
 
   // User/Profile related queries
   profile: ['profile'] as const,
@@ -237,15 +239,15 @@ export const validateQueryKey = <T extends AllQueryKeys>(key: T): T => {
 
 // Type-safe query key matcher
 export const matchesQueryKey = <T extends AllQueryKeys>(
-  queryKey: unknown[],
+  queryKey: readonly unknown[],
   pattern: T
-): queryKey is T => {
+): boolean => {
   if (queryKey.length !== pattern.length) {
     return false;
   }
-  
+
   return queryKey.every((segment, index) => {
-    const patternSegment = pattern[index];
+    const patternSegment = (pattern as readonly unknown[])[index];
     return segment === patternSegment || patternSegment === '*'; // '*' as wildcard
   });
 };
@@ -416,9 +418,9 @@ export type EntityAwareQueryKey<T extends readonly unknown[] = readonly unknown[
  * Throws if query key doesn't follow the entity-aware pattern
  */
 export function assertEntityAware(
-  queryKey: unknown[],
+  queryKey: readonly unknown[],
   context?: string
-): asserts queryKey is EntityAwareQueryKey<unknown[]> {
+): void {
   const contextMsg = context ? ` (context: ${context})` : '';
 
   if (!Array.isArray(queryKey)) {
@@ -451,7 +453,7 @@ export function assertEntityAware(
  * Type guard to check if a query key is entity-aware
  * Non-throwing version of assertEntityAware
  */
-export function isEntityAware(queryKey: unknown[]): queryKey is EntityAwareQueryKey<unknown[]> {
+export function isEntityAware(queryKey: readonly unknown[]): boolean {
   try {
     assertEntityAware(queryKey);
     return true;
@@ -464,11 +466,11 @@ export function isEntityAware(queryKey: unknown[]): queryKey is EntityAwareQuery
  * Extract entityId from an entity-aware query key
  * Returns null if query key is not entity-aware
  */
-export function extractEntityIdFromKey(queryKey: unknown[]): string | null {
+export function extractEntityIdFromKey(queryKey: readonly unknown[]): string | null {
   if (!isEntityAware(queryKey)) {
     return null;
   }
-  return queryKey[2];
+  return queryKey[2] as string;
 }
 
 /**

@@ -36,7 +36,7 @@ class SmartNotificationHandler {
   evaluateNotification(message: MessageEvent): NotificationDecision {
     const userState = userStateManager.getUserState();
     
-    logger.debug('[SmartNotificationHandler] 🤔 Evaluating notification for message:', {
+    logger.debug('[SmartNotificationHandler] 🤔 Evaluating notification for message', 'notifications', {
       messageId: message.id,
       interactionId: message.interaction_id,
       userCurrentChat: userState.currentChat,
@@ -103,7 +103,7 @@ class SmartNotificationHandler {
   handleMessageNotification(message: MessageEvent): void {
     const decision = this.evaluateNotification(message);
     
-    logger.info('[SmartNotificationHandler] 🔔 Notification decision:', {
+    logger.info('[SmartNotificationHandler] 🔔 Notification decision', 'notifications', {
       messageId: message.id,
       shouldNotify: decision.shouldNotify,
       reason: decision.reason,
@@ -125,7 +125,7 @@ class SmartNotificationHandler {
         // Already handled above
         break;
       default:
-        logger.warn('[SmartNotificationHandler] Unknown notification type:', decision.notificationType);
+        logger.warn('[SmartNotificationHandler] Unknown notification type: ' + decision.notificationType, 'app');
     }
   }
 
@@ -135,7 +135,7 @@ class SmartNotificationHandler {
    */
   private async sendPushNotification(message: MessageEvent): Promise<void> {
     try {
-      logger.debug('[SmartNotificationHandler] 📱 Sending push notification:', {
+      logger.debug('[SmartNotificationHandler] 📱 Sending push notification', 'notifications', {
         messageId: message.id,
         content: message.content.substring(0, 50) + '...',
       });
@@ -170,7 +170,7 @@ class SmartNotificationHandler {
       }
 
     } catch (error) {
-      logger.error('[SmartNotificationHandler] Failed to send push notification:', error);
+      logger.error('[SmartNotificationHandler] Failed to send push notification', error, 'app');
     }
   }
 
@@ -179,7 +179,7 @@ class SmartNotificationHandler {
    */
   private async playNotificationSound(message: MessageEvent): Promise<void> {
     try {
-      logger.debug('[SmartNotificationHandler] 🔊 Playing notification sound:', {
+      logger.debug('[SmartNotificationHandler] 🔊 Playing notification sound', 'notifications', {
         messageId: message.id,
       });
 
@@ -201,10 +201,10 @@ class SmartNotificationHandler {
         badge: 1, // Set badge count for local notifications
       });
 
-      logger.debug('[SmartNotificationHandler] 🔊 Notification sound played via local notification');
+      logger.debug('[SmartNotificationHandler] Notification sound played via local notification', 'app');
       
     } catch (error) {
-      logger.error('[SmartNotificationHandler] Failed to play notification sound:', error);
+      logger.error('[SmartNotificationHandler] Failed to play notification sound', error, 'app');
     }
   }
 
@@ -244,7 +244,7 @@ class SmartNotificationHandler {
      * WebSocket delivery failed - force push notification
      */
     websocketFailed: (message: MessageEvent) => {
-      logger.warn('[SmartNotificationHandler] 🚨 WebSocket delivery failed, forcing push notification');
+      logger.warn('[SmartNotificationHandler] WebSocket delivery failed, forcing push notification', 'app');
       this.sendPushNotification(message);
     },
 
@@ -257,7 +257,7 @@ class SmartNotificationHandler {
         
         // If user still not viewing the chat, send reminder
         if (userState.currentChat !== message.interaction_id) {
-          logger.info('[SmartNotificationHandler] ⏰ Unseen message reminder');
+          logger.info('[SmartNotificationHandler] Unseen message reminder', 'app');
           this.playNotificationSound(message);
         }
       }, timeoutMs);

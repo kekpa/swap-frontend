@@ -1,15 +1,13 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { AuthProvider } from './_app/features/auth/context/AuthContext';
+import { AuthProvider, useAuthContext } from './_app/features/auth/context/AuthContext';
 import { ThemeProvider } from './_app/theme/ThemeContext';
 import AppNavigator from './_app/navigation/appNavigator';
 import { appLifecycleManager } from './_app/services/AppLifecycleManager';
-import { useAuthContext } from './_app/features/auth/context/AuthContext';
 import OfflineIndicator from './_app/components/OfflineIndicator';
-import React, { useEffect } from 'react';
 import logger from './_app/utils/logger';
 
 // Component to handle AppLifecycleManager initialization

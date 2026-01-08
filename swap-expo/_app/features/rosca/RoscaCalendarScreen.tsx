@@ -42,6 +42,7 @@ interface CalendarEvent {
   frequency: string;
   color: string;
   poolId?: string;
+  enrollmentId?: string; // For enrollment events (payment_due, payout, joined)
   count?: number; // For pools_available type
 }
 
@@ -155,6 +156,7 @@ export default function RoscaCalendarScreen() {
             amount: enrollment.contributionAmount,
             frequency: freq,
             color: '#F1C40F',
+            enrollmentId: enrollment.id,
           });
         }
 
@@ -178,6 +180,7 @@ export default function RoscaCalendarScreen() {
                   amount: enrollment.contributionAmount,
                   frequency: freq,
                   color: theme.colors.primary,
+                  enrollmentId: enrollment.id,
                 });
               });
           }
@@ -240,6 +243,7 @@ export default function RoscaCalendarScreen() {
             amount: enrollment.expectedPayout,
             frequency: enrollment.frequency || 'weekly',
             color: '#2ECC71', // Green for payout
+            enrollmentId: enrollment.id,
           });
         }
       });
@@ -372,10 +376,8 @@ export default function RoscaCalendarScreen() {
 
   const handleEventPress = (event: CalendarEvent) => {
     // Enrollment events (user's active roscas) should go to detail screen
-    if (['payment_due', 'payout', 'joined'].includes(event.type)) {
-      // Extract enrollment ID from event ID (format: payment-{id}, payout-{id}, joined-{id})
-      const enrollmentId = event.id.replace(/^(payment|payout|joined)-/, '');
-      const enrollment = enrollments.find(e => e.id === enrollmentId);
+    if (event.enrollmentId) {
+      const enrollment = enrollments.find(e => e.id === event.enrollmentId);
       if (enrollment) {
         (navigation as any).navigate('RoscaDetailScreen', { enrollment });
         return;

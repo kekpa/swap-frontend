@@ -87,7 +87,8 @@ export class UserRepository {
       );
 
       if (existingRows.length > 0) {
-        const existingDataRaw = existingRows[0]?.data;
+        const existingRow = existingRows[0] as Record<string, unknown> | undefined;
+        const existingDataRaw = existingRow?.data;
         if (existingDataRaw) {
           try {
             existingData = typeof existingDataRaw === 'string'

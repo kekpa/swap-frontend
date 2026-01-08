@@ -45,7 +45,7 @@ export const useLoadingState = (): UseLoadingStateResult => {
   const isAuthenticated = authContext?.isAuthenticated || false;
 
   // Users can view balances regardless of KYC status
-  const shouldLoadBalances = isAuthenticated && entityId && entityId !== '';
+  const shouldLoadBalances = isAuthenticated && !!entityId;
 
 
   // Get loading states from individual hooks - with authentication guard

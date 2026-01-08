@@ -79,7 +79,7 @@ const fetchCountries = async (): Promise<CountryOption[]> => {
         countriesData = valuesArray[0];
       } else {
         logger.debug(`[useCountries] 📍 Using valuesArray directly`);
-        countriesData = valuesArray;
+        countriesData = valuesArray as Country[];
       }
     }
   }
@@ -121,9 +121,9 @@ export const useCountries = (): UseCountriesReturn => {
   );
 
   const response = createQueryResponse(queryResult, [{ label: 'Select country', value: '' }]);
-  
+
   return {
-    countries: response.data,
+    countries: response.data ?? [{ label: 'Select country', value: '' }],
     loading: response.loading,
     error: response.error,
     refetch: response.refetch,

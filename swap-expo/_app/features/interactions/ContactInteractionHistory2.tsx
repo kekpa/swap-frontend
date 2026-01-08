@@ -17,12 +17,12 @@ import {
   Dimensions,
   Modal,
 } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
+import { FlashList, FlashListRef } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import apiClient from '../../_api/apiClient';
 import { useRoute, useNavigation, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { InteractionsStackParamList } from '../../navigation/interactions/interactionsNavigator';
+import { RootStackParamList } from '../../navigation/rootNavigator';
 import { useAuthContext } from '../auth/context/AuthContext';
 import { formatDate, formatTime } from '../../utils/dateFormatters';
 import { Toast } from '../../components/Toast';
@@ -61,8 +61,8 @@ interface TransferDetails {
   createdAt?: string;
 }
 
-type ContactTransactionHistoryRouteProp = RouteProp<{ ContactInteractionHistory2: { contactId: string; contactName: string; contactInitials: string; contactAvatarColor: string; silentErrorMode?: boolean; interactionId?: string; forceRefresh?: boolean; timestamp?: number; isGroup?: boolean; showTransferCompletedModal?: boolean; transferDetails?: TransferDetails; }; }, 'ContactInteractionHistory2'>;
-type NavigationProp = StackNavigationProp<InteractionsStackParamList, 'ContactInteractionHistory2'>;
+type ContactTransactionHistoryRouteProp = RouteProp<RootStackParamList, 'ContactInteractionHistory2'>;
+type NavigationProp = StackNavigationProp<RootStackParamList, 'ContactInteractionHistory2'>;
 
 // Timeline activity components (TransactionBubble, MessageBubble, DateSeparator)
 // are now imported from ./components/TimelineActivity.tsx
@@ -178,6 +178,16 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
   // ALIGNED WITH SUPABASE: from_entity_id = who sent (for message alignment)
   const timelineItems = useMemo(() => {
     return localTimelineItems.map((item): TimelineItem => {
+      // Parse timeline_metadata from LocalTimelineItem (stored as JSON string)
+      let parsedMetadata: Record<string, unknown> = {};
+      if (item.timeline_metadata) {
+        try {
+          parsedMetadata = JSON.parse(item.timeline_metadata);
+        } catch {
+          // Ignore parsing errors
+        }
+      }
+
       if (item.item_type === 'message') {
         return {
           id: item.id,
@@ -190,7 +200,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
           timestamp: item.created_at,
           createdAt: item.created_at,
           status: item.local_status as any,
-          metadata: item.metadata ? JSON.parse(item.metadata) : {},
+          metadata: parsedMetadata,
         } as MessageTimelineItem;
       } else {
         return {
@@ -207,9 +217,8 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
           createdAt: item.created_at,
           status: item.local_status,
           // Entity IDs for transaction direction (who sent / who received)
-          from_entity_id: item.from_entity_id,
           to_entity_id: item.to_entity_id,
-          metadata: item.metadata ? JSON.parse(item.metadata) : {},
+          metadata: parsedMetadata,
         } as TransactionTimelineItem;
       }
     });
@@ -243,7 +252,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
   // Network state for offline handling
   const [isOfflineMode, setIsOfflineMode] = useState(false);
   
-  const flatListRef = useRef<FlashList<TimelineItem>>(null);
+  const flatListRef = useRef<FlashListRef<TimelineItem>>(null);
   const styles = useMemo(() => createGlobalStyles(theme), [theme]);
 
   useEffect(() => {
@@ -542,7 +551,7 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
     let lastDate: string | null = null;
 
     for (const item of items) {
-      const itemTimestamp = item.created_at || item.timestamp || item.createdAt;
+      const itemTimestamp = item.createdAt || item.timestamp;
       const itemDate = itemTimestamp ? formatDate(new Date(itemTimestamp)) : null;
 
       if (itemDate && itemDate !== lastDate) {
@@ -745,29 +754,24 @@ const ContactTransactionHistoryScreen2: React.FC = () => {
             data={filteredItems}
             keyExtractor={(item, index) => `${item.type || item.itemType || 'unknown'}-${item.id}-${index}`}
             renderItem={renderTimelineItem}
-            estimatedItemSize={80}
             contentContainerStyle={[
               styles.timelineContent,
               { flexGrow: 1, justifyContent: filteredItems.length > 0 ? 'flex-start' : 'center' }
             ]}
-            inverted={false} // Keep chronological order: oldest at top, newest at bottom
-            ListEmptyComponent={renderEmptyState}
-            showsVerticalScrollIndicator={false}
-            onScroll={(event) => {
-              // Defensive check for FlashList layout timing issue
-              if (!event?.nativeEvent?.contentOffset) {
-                return;
-              }
-
-              // Load older messages when scrolling UP to the TOP
-              const yOffset = event.nativeEvent.contentOffset.y;
-              const threshold = 100; // Trigger when within 100px of top
-
-              if (yOffset <= threshold && hasNextPage && !isFetchingNextPage) {
-                logger.debug('[ContactInteractionHistory] Near top - loading older messages...', 'ContactInteractionHistory');
+            maintainVisibleContentPosition={{
+              autoscrollToBottomThreshold: 0.2,
+              startRenderingFromBottom: true,
+            }}
+            onStartReached={() => {
+              // Load older items when scrolling UP to the TOP
+              if (hasNextPage && !isFetchingNextPage) {
+                logger.debug('[ContactInteractionHistory] Near top - loading older items...', 'data');
                 fetchNextPage();
               }
             }}
+            onStartReachedThreshold={0.1}
+            ListEmptyComponent={renderEmptyState}
+            showsVerticalScrollIndicator={false}
             scrollEventThrottle={400}
             ListHeaderComponent={
               isFetchingNextPage ? (

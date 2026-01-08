@@ -26,6 +26,7 @@ import logger from '../utils/logger';
 import { tokenManager, saveAccessToken, saveRefreshToken } from './token';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { Alert } from 'react-native';
+import { QueryClient } from '@tanstack/react-query';
 import { queryKeys } from '../tanstack-query/queryKeys';
 import { clearProfileLocalDB } from '../localdb';
 import { profileContextManager } from './ProfileContextManager';
@@ -108,7 +109,7 @@ export interface ProfileSwitchOptions {
   requireBiometric?: boolean; // Default: true
   apiClient: any; // Axios instance
   authContext: any; // AuthContext instance
-  queryClient?: any; // TanStack Query client (optional)
+  queryClient?: QueryClient; // TanStack Query client (optional)
   availableProfiles?: AvailableProfile[]; // For optimistic UI updates (Phase 3)
 }
 
@@ -207,7 +208,7 @@ export class ProfileSwitchOrchestrator {
       // The switch-profile API call will fail with 401 if token is expired,
       // which will trigger automatic rollback. This is faster than preemptive refresh.
       if (tokenManager.shouldRefreshToken()) {
-        logger.warn('[ProfileSwitchOrchestrator] ⚠️ Token expires soon - switch API may trigger refresh');
+        logger.warn('[ProfileSwitchOrchestrator] Token expires soon - switch API may trigger refresh', 'auth');
       }
 
       // ============================================================================
@@ -235,20 +236,20 @@ export class ProfileSwitchOrchestrator {
       // FALLBACK: If availableProfiles not passed or target not found, try queryClient cache
       // This ensures optimistic updates work on FIRST switch, not just cached switches
       if (!targetProfile && queryClient) {
-        logger.debug('[ProfileSwitchOrchestrator] 🔍 FALLBACK: availableProfiles not provided, checking queryClient cache...');
+        logger.debug('[ProfileSwitchOrchestrator] FALLBACK: availableProfiles not provided, checking queryClient cache...', 'auth');
         const cachedProfiles = queryClient.getQueryData<AvailableProfile[]>(queryKeys.availableProfiles);
 
         if (cachedProfiles && cachedProfiles.length > 0) {
-          targetProfile = cachedProfiles.find(p => p.profileId === targetProfileId);
+          targetProfile = cachedProfiles.find((p: AvailableProfile) => p.profileId === targetProfileId);
           if (targetProfile) {
-            logger.debug('[ProfileSwitchOrchestrator] ✅ FALLBACK: Found target profile in queryClient cache');
+            logger.debug('[ProfileSwitchOrchestrator] FALLBACK: Found target profile in queryClient cache', 'auth');
           }
         }
       }
 
       // If we have target profile data (from props OR cache), perform optimistic update
       if (targetProfile) {
-        logger.debug('[ProfileSwitchOrchestrator] 🚀 OPTIMISTIC: Setting optimistic user data for instant UI update');
+        logger.debug('[ProfileSwitchOrchestrator] OPTIMISTIC: Setting optimistic user data for instant UI update', 'auth');
 
         // PROFESSIONAL FIX: Parse displayName into firstName/lastName or businessName
         // This prevents "UA" (Unknown Avatar) flash during profile switch by providing
@@ -274,20 +275,20 @@ export class ProfileSwitchOrchestrator {
 
         // REMOVED: Optimistic UI update moved to AFTER token update (lines 691-697)
         // This prevents race condition where queries fire with stale tokens
-        logger.debug('[ProfileSwitchOrchestrator] ⏳ Optimistic update deferred until after token refresh (prevents race condition)');
+        logger.debug('[ProfileSwitchOrchestrator] Optimistic update deferred until after token refresh (prevents race condition)', 'auth');
 
         // OPTIMIZATION: Prefetch avatar image for instant display
         if (targetProfile.avatarUrl) {
           try {
             const { Image } = await import('react-native');
             await Image.prefetch(targetProfile.avatarUrl);
-            logger.debug('[ProfileSwitchOrchestrator] ✅ OPTIMISTIC: Avatar image prefetched');
+            logger.debug('[ProfileSwitchOrchestrator] OPTIMISTIC: Avatar image prefetched', 'auth');
           } catch (imgError: any) {
-            logger.warn('[ProfileSwitchOrchestrator] ⚠️ Avatar prefetch failed (non-critical):', imgError);
+            logger.warn('[ProfileSwitchOrchestrator] Avatar prefetch failed (non-critical)', 'auth', { error: String(imgError) });
           }
         }
       } else {
-        logger.warn('[ProfileSwitchOrchestrator] ⚠️ No target profile data available for optimistic update (will update after API)');
+        logger.warn('[ProfileSwitchOrchestrator] No target profile data available for optimistic update (will update after API)', 'auth');
       }
 
       // ============================================================================
@@ -304,17 +305,17 @@ export class ProfileSwitchOrchestrator {
         const biometricApproved = await this.requestBiometricAuth();
 
         if (!biometricApproved) {
-          logger.warn('[ProfileSwitchOrchestrator] ❌ Biometric authentication rejected');
+          logger.warn('[ProfileSwitchOrchestrator] Biometric authentication rejected', 'auth');
           // No need to rollback - optimistic update hasn't happened yet
           throw new Error('Biometric authentication required');
         }
 
-        logger.debug('[ProfileSwitchOrchestrator] ✅ Biometric authentication approved');
+        logger.debug('[ProfileSwitchOrchestrator] Biometric authentication approved', 'auth');
 
         // Wait for prefetch to complete (likely already done by now!)
         const prefetchedData = await prefetchPromise;
         if (prefetchedData) {
-          logger.debug('[ProfileSwitchOrchestrator] ✅ PHASE 4: Profile data prefetched during biometric prompt');
+          logger.debug('[ProfileSwitchOrchestrator] PHASE 4: Profile data prefetched during biometric prompt', 'auth');
         }
       }
 
@@ -332,7 +333,7 @@ export class ProfileSwitchOrchestrator {
         options.deviceFingerprint
       );
 
-      logger.debug('[ProfileSwitchOrchestrator] ✅ API call successful', 'profile_switch');
+      logger.debug('[ProfileSwitchOrchestrator] API call successful', 'auth');
 
       // ============================================================================
       // STEP 4: Update tokens (ATOMIC)
@@ -390,13 +391,13 @@ export class ProfileSwitchOrchestrator {
           try {
             const { websocketService } = await import('./websocketService');
             if (websocketService && websocketService.isSocketConnected()) {
-              logger.debug('[ProfileSwitchOrchestrator] Disconnecting WebSocket for profile context update...');
+              logger.debug('[ProfileSwitchOrchestrator] Disconnecting WebSocket for profile context update...', 'auth');
               await websocketService.disconnect();
               // WebSocket will auto-reconnect with new profile context when needed
-              logger.debug('[ProfileSwitchOrchestrator] ✅ WebSocket disconnected (will auto-reconnect with new profile)');
+              logger.debug('[ProfileSwitchOrchestrator] WebSocket disconnected (will auto-reconnect with new profile)', 'auth');
             }
           } catch (wsError: any) {
-            logger.warn('[ProfileSwitchOrchestrator] ⚠️ WebSocket disconnect failed (non-critical):', wsError);
+            logger.warn('[ProfileSwitchOrchestrator] WebSocket disconnect failed (non-critical)', 'auth', { error: String(wsError) });
           }
         })(),
       ];
@@ -409,21 +410,21 @@ export class ProfileSwitchOrchestrator {
       const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected');
       if (failures.length > 0 && queryClient) {
         const reasons = failures.map(f => String(f.reason)).join(', ');
-        logger.warn(`[ProfileSwitchOrchestrator] ⚠️ Surgical cache clear failed: ${reasons}`);
-        logger.info('[ProfileSwitchOrchestrator] 🔄 Going NUCLEAR - clearing ALL cached data for consistency');
+        logger.warn('[ProfileSwitchOrchestrator] Surgical cache clear failed', 'auth', { reasons });
+        logger.info('[ProfileSwitchOrchestrator] Going NUCLEAR - clearing ALL cached data for consistency', 'auth');
 
         try {
           // NUCLEAR: Clear ALL TanStack Query cache
           queryClient.clear();
-          logger.debug('[ProfileSwitchOrchestrator] ✅ Nuclear cache clear completed - all data will be fetched fresh');
+          logger.debug('[ProfileSwitchOrchestrator] Nuclear cache clear completed - all data will be fetched fresh', 'auth');
         } catch (nuclearError) {
-          logger.error('[ProfileSwitchOrchestrator] ❌ Nuclear cache clear failed:', nuclearError);
+          logger.error('[ProfileSwitchOrchestrator] Nuclear cache clear failed', nuclearError, 'auth');
           // Continue anyway - hooks will fetch fresh data on next render
         }
       }
 
       logger.debug('STEP 7 DONE: Cache clearing completed', 'auth');
-      logger.debug('[ProfileSwitchOrchestrator] ✅ Cache operations completed (cache + WebSocket)');
+      logger.debug('[ProfileSwitchOrchestrator] Cache operations completed (cache + WebSocket)', 'auth');
 
       // ============================================================================
       // STEP 8: Update PIN storage for new profile (Instagram-style multi-profile)
@@ -436,10 +437,10 @@ export class ProfileSwitchOrchestrator {
         // Business profiles share auth user with personal profile
         const identifier = tokenManager.getAuthUserIdentifier();
 
-        logger.debug(`[ProfileSwitchOrchestrator] STEP 8: Storing PIN data for ${newProfile.type} profile`);
+        logger.debug('[ProfileSwitchOrchestrator] STEP 8: Storing PIN data for profile', 'auth', { profileType: newProfile.type });
 
         if (!identifier) {
-          logger.warn('[ProfileSwitchOrchestrator] ⚠️ Cannot store PIN data - no phone in JWT');
+          logger.warn('[ProfileSwitchOrchestrator] Cannot store PIN data - no phone in JWT', 'auth');
         } else {
           await storeProfilePinData(newProfile.id, {
             identifier,
@@ -452,14 +453,14 @@ export class ProfileSwitchOrchestrator {
             avatarUrl: newProfile.avatar_url || newProfile.logo_url,
           });
 
-          logger.debug('[ProfileSwitchOrchestrator] ✅ PIN data stored for profile');
+          logger.debug('[ProfileSwitchOrchestrator] PIN data stored for profile', 'auth');
         }
 
         await setLastActiveProfile(newProfile.id);
 
-        logger.debug('[ProfileSwitchOrchestrator] ✅ Last active profile updated');
+        logger.debug('[ProfileSwitchOrchestrator] Last active profile updated', 'auth');
       } catch (pinError: any) {
-        logger.warn('[ProfileSwitchOrchestrator] ⚠️ PIN data update failed (non-critical):', pinError);
+        logger.warn('[ProfileSwitchOrchestrator] PIN data update failed (non-critical)', 'auth', { error: String(pinError) });
       }
 
       // ============================================================================
@@ -477,7 +478,7 @@ export class ProfileSwitchOrchestrator {
       this.updateProgress(this.state, 'Profile switched successfully');
       this.snapshot = null; // Clear snapshot on success
 
-      logger.info('[ProfileSwitchOrchestrator] ✅ Profile switch completed successfully', 'profile_switch');
+      logger.info('[ProfileSwitchOrchestrator] Profile switch completed successfully', 'profile');
 
       return {
         success: true,
@@ -528,7 +529,7 @@ export class ProfileSwitchOrchestrator {
         }
       }
 
-      logger.error('[ProfileSwitchOrchestrator] ❌ Profile switch failed:', error);
+      logger.error('[ProfileSwitchOrchestrator] Profile switch failed', error, 'auth');
 
       // PROFESSIONAL FIX: Distinguish PIN errors from system errors
       // PIN errors (401/403) should NOT trigger rollback - user just entered wrong PIN
@@ -538,8 +539,8 @@ export class ProfileSwitchOrchestrator {
 
       if (isPinError) {
         // PIN error - don't rollback, just return error to modal for retry
-        logger.debug('[ProfileSwitchOrchestrator] PIN error detected - skipping rollback, user can retry');
-        logger.debug('[ProfileSwitchOrchestrator] PIN error - user can retry in modal');
+        logger.debug('[ProfileSwitchOrchestrator] PIN error detected - skipping rollback, user can retry', 'auth');
+        logger.debug('[ProfileSwitchOrchestrator] PIN error - user can retry in modal', 'auth');
       } else {
         // System/network error - rollback to previous state
         profileContextManager.onProfileSwitchFailed();
@@ -583,13 +584,13 @@ export class ProfileSwitchOrchestrator {
       // Check if biometrics are available
       const compatible = await LocalAuthentication.hasHardwareAsync();
       if (!compatible) {
-        logger.warn('[ProfileSwitchOrchestrator] ⚠️ Biometric hardware not available');
+        logger.warn('[ProfileSwitchOrchestrator] Biometric hardware not available', 'auth');
         return true; // Skip biometric if not available
       }
 
       const enrolled = await LocalAuthentication.isEnrolledAsync();
       if (!enrolled) {
-        logger.warn('[ProfileSwitchOrchestrator] ⚠️ No biometrics enrolled');
+        logger.warn('[ProfileSwitchOrchestrator] No biometrics enrolled', 'auth');
         return true; // Skip biometric if not enrolled
       }
 
@@ -602,7 +603,7 @@ export class ProfileSwitchOrchestrator {
 
       return result.success;
     } catch (error) {
-      logger.error('[ProfileSwitchOrchestrator] ❌ Biometric authentication error:', error);
+      logger.error('[ProfileSwitchOrchestrator] Biometric authentication error', error, 'auth');
       return false;
     }
   }
@@ -648,10 +649,10 @@ export class ProfileSwitchOrchestrator {
       const newProfileId = tokenManager.getCurrentProfileId();
       if (newProfileId) {
         apiClient.setProfileId(newProfileId);
-        logger.debug('[ProfileSwitchOrchestrator] ✅ X-Profile-ID header updated:', newProfileId);
+        logger.debug('[ProfileSwitchOrchestrator] X-Profile-ID header updated', 'auth', { newProfileId });
       }
 
-      logger.debug('[ProfileSwitchOrchestrator] ✅ In-memory tokens and axios headers updated');
+      logger.debug('[ProfileSwitchOrchestrator] In-memory tokens and axios headers updated', 'auth');
 
       // Step 2: Persist to storage (ASYNCHRONOUS - can fail)
       await Promise.all([
@@ -659,7 +660,7 @@ export class ProfileSwitchOrchestrator {
         tokenManager.setRefreshToken(apiResponse.refresh_token),
       ]);
 
-      logger.debug('[ProfileSwitchOrchestrator] ✅ Tokens persisted to storage');
+      logger.debug('[ProfileSwitchOrchestrator] Tokens persisted to storage', 'auth');
 
     } catch (error) {
       // Rollback in-memory tokens and axios headers on storage failure
@@ -672,7 +673,7 @@ export class ProfileSwitchOrchestrator {
         }
       }
 
-      logger.error('[ProfileSwitchOrchestrator] ❌ Token update failed, rolled back in-memory tokens and axios headers');
+      logger.error('[ProfileSwitchOrchestrator] Token update failed, rolled back in-memory tokens and axios headers', error, 'auth');
       throw error;
     }
   }
@@ -709,7 +710,7 @@ export class ProfileSwitchOrchestrator {
     queryClient: any | undefined
   ): Promise<any | null> {
     try {
-      logger.debug('[ProfileSwitchOrchestrator] 🚀 PHASE 4: Starting parallel prefetch during biometric prompt');
+      logger.debug('[ProfileSwitchOrchestrator] PHASE 4: Starting parallel prefetch during biometric prompt', 'auth');
 
       // Don't wait for biometric - fetch in background!
       // Note: We're NOT updating tokens yet (that requires biometric approval)
@@ -734,15 +735,15 @@ export class ProfileSwitchOrchestrator {
           staleTime: 300000, // 5 minutes
         });
 
-        logger.debug('[ProfileSwitchOrchestrator] ✅ PHASE 4: Available profiles prefetched');
+        logger.debug('[ProfileSwitchOrchestrator] PHASE 4: Available profiles prefetched', 'auth');
       } catch (error: any) {
-        logger.warn('[ProfileSwitchOrchestrator] ⚠️ PHASE 4: Prefetch failed (non-critical):', error);
+        logger.warn('[ProfileSwitchOrchestrator] PHASE 4: Prefetch failed (non-critical)', 'auth', { error: String(error) });
       }
 
       return { prefetched: true };
     } catch (error: any) {
       // Prefetch failures are non-critical - switch will still work
-      logger.warn('[ProfileSwitchOrchestrator] ⚠️ PHASE 4: Prefetch error (non-critical):', error);
+      logger.warn('[ProfileSwitchOrchestrator] PHASE 4: Prefetch error (non-critical)', 'auth', { error: String(error) });
       return null;
     }
   }
@@ -776,7 +777,7 @@ export class ProfileSwitchOrchestrator {
       const { queryKeyUtils } = await import('../tanstack-query/queryKeys');
 
       // Get all OLD profile's query keys (profile-aware)
-      const oldProfileKeys = queryKeyUtils.getUserDataKeys(oldProfileId, oldEntityId);
+      const oldProfileKeys = queryKeyUtils.getUserDataKeys(oldEntityId);
 
       // Invalidate ONLY old profile's queries (surgical, not nuclear)
       await Promise.all(
@@ -798,18 +799,18 @@ export class ProfileSwitchOrchestrator {
       // Industry standard: Clear ALL tenant-specific caches on authentication context switch
       // Prevents data leakage between profiles (OWASP security best practice)
       await queryClient.invalidateQueries({
-        predicate: (query) => {
+        predicate: (query: { queryKey: unknown[] }) => {
           const key = query.queryKey;
           // Invalidate any query containing 'kyc' or 'verification'
           // This ensures fresh KYC data after profile switch with zero stale data risk
-          return key.some(part =>
+          return key.some((part: unknown) =>
             typeof part === 'string' &&
             (part.includes('kyc') || part.includes('verification'))
           );
         }
       });
 
-      logger.debug('[ProfileSwitchOrchestrator] ✅ Old profile caches surgically invalidated (including KYC)');
+      logger.debug('[ProfileSwitchOrchestrator] Old profile caches surgically invalidated (including KYC)', 'auth');
 
       // OPTIMIZATION: Prefetch NEW profile's critical data BEFORE clearing old data
       // This is the Revolut/Wise pattern - data is ready before switch completes
@@ -889,7 +890,7 @@ export class ProfileSwitchOrchestrator {
                   isPrimary: wallet.is_primary ?? false,
                 }));
 
-                const queryKey = queryKeys.balancesByEntity(newProfileId, newEntityId);
+                const queryKey = queryKeys.balancesByEntity(newEntityId);
                 logger.debug('PREFETCH 8/8: Caching in TanStack', 'auth');
                 queryClient.setQueryData(queryKey, transformedBalances);
                 logger.debug('PREFETCH COMPLETE: All steps finished', 'auth');
@@ -904,7 +905,7 @@ export class ProfileSwitchOrchestrator {
           }
         } catch (walletError: any) {
           // Wallet prefetch failure is non-critical - useBalances will fetch later
-          logger.warn('[ProfileSwitchOrchestrator] ⚠️ Wallet prefetch failed (non-critical):', walletError?.message);
+          logger.warn('[ProfileSwitchOrchestrator] Wallet prefetch failed (non-critical)', 'auth', { error: walletError?.message });
         }
 
         // STEP B: Prefetch current profile (uses already-fetched data from /auth/me)
@@ -914,7 +915,7 @@ export class ProfileSwitchOrchestrator {
             queryFn: () => Promise.resolve(newProfile),
             staleTime: 60000, // Cache for 1 minute
           });
-          logger.debug('[ProfileSwitchOrchestrator] ✅ Profile data prefetched');
+          logger.debug('[ProfileSwitchOrchestrator] Profile data prefetched', 'auth');
         }
       }
 
@@ -923,9 +924,9 @@ export class ProfileSwitchOrchestrator {
       // NOTE: Happens AFTER prefetch so new profile data is already in SQLite
       try {
         await clearProfileLocalDB(oldProfileId);
-        logger.debug('[ProfileSwitchOrchestrator] ✅ Local DB cleared for old profile (messages, interactions, transactions, wallets cleared)');
+        logger.debug('[ProfileSwitchOrchestrator] Local DB cleared for old profile (messages, interactions, transactions, wallets cleared)', 'auth');
       } catch (dbError: any) {
-        logger.warn('[ProfileSwitchOrchestrator] ⚠️ Local DB clear failed (non-critical):', dbError);
+        logger.warn('[ProfileSwitchOrchestrator] Local DB clear failed (non-critical)', 'auth', { error: String(dbError) });
       }
     }
   }
@@ -941,7 +942,7 @@ export class ProfileSwitchOrchestrator {
     authContext.setUser(mappedUser);
     authContext.setIsAuthenticated(true);
 
-    logger.debug('[ProfileSwitchOrchestrator] ✅ AuthContext updated with new profile');
+    logger.debug('[ProfileSwitchOrchestrator] AuthContext updated with new profile', 'auth');
   }
 
   /**
@@ -979,14 +980,14 @@ export class ProfileSwitchOrchestrator {
    */
   private async rollback(apiClient: any, authContext: any): Promise<void> {
     if (!this.snapshot) {
-      logger.warn('[ProfileSwitchOrchestrator] ⚠️ No snapshot available for rollback');
+      logger.warn('[ProfileSwitchOrchestrator] No snapshot available for rollback', 'auth');
       this.state = ProfileSwitchState.ROLLED_BACK;
       this.showErrorAlert('Profile switch failed. Please try again.');
       return;
     }
 
     try {
-      logger.info('[ProfileSwitchOrchestrator] 🔄 Rolling back to previous state...');
+      logger.info('[ProfileSwitchOrchestrator] Rolling back to previous state...', 'auth');
 
       // Restore in-memory tokens
       if (this.snapshot.accessToken) {
@@ -1005,7 +1006,7 @@ export class ProfileSwitchOrchestrator {
       // Without this, API calls use new profile context but old tokens = mismatch
       if (this.snapshot.profileId) {
         apiClient.setProfileId(this.snapshot.profileId);
-        logger.debug('[ProfileSwitchOrchestrator] ✅ X-Profile-ID header restored:', this.snapshot.profileId);
+        logger.debug('[ProfileSwitchOrchestrator] X-Profile-ID header restored', 'auth', { profileId: this.snapshot.profileId });
       }
 
       // Restore AuthContext
@@ -1014,12 +1015,12 @@ export class ProfileSwitchOrchestrator {
       }
 
       this.state = ProfileSwitchState.ROLLED_BACK;
-      logger.info('[ProfileSwitchOrchestrator] ✅ Rollback completed successfully');
+      logger.info('[ProfileSwitchOrchestrator] Rollback completed successfully', 'auth');
 
       this.showErrorAlert('Profile switch failed. You remain in your current profile.');
 
     } catch (rollbackError) {
-      logger.error('[ProfileSwitchOrchestrator] ❌ Rollback failed:', rollbackError);
+      logger.error('[ProfileSwitchOrchestrator] Rollback failed', rollbackError, 'auth');
       this.showErrorAlert('Profile switch failed and rollback encountered errors. Please restart the app.');
     }
   }

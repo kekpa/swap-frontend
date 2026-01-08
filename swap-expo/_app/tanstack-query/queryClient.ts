@@ -96,19 +96,6 @@ export const queryClient = new QueryClient({
 
       // UX: Use placeholder data for smoother transitions
       placeholderData: (previousData: any) => previousData,
-
-      // SECURITY (DEV ONLY): Entity isolation validation
-      onError: __DEV__ ? (error: unknown, query: any) => {
-        // Validate query key for entity isolation in development
-        try {
-          if (query?.queryKey) {
-            validateQueryKeyForEntityIsolation(query.queryKey);
-          }
-        } catch (validationError) {
-          // Don't throw, just log the validation error
-          logger.error('[Entity Isolation Guard] Validation failed:', validationError);
-        }
-      } : undefined,
     },
     mutations: {
       // RELIABILITY: Retry mutations more aggressively

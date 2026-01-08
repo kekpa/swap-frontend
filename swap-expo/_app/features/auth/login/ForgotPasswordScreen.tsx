@@ -99,15 +99,15 @@ const ForgotPasswordScreen = () => {
   const styles = useMemo(() => StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.background },
     content: { flex: 1, padding: theme.spacing.lg },
-    backButton: { width: 40, height: 40, justifyContent: "center", marginBottom: theme.spacing.lg, alignSelf: 'flex-start' },
-    header: { marginBottom: theme.spacing.xl, alignItems: "center" },
-    title: { fontSize: theme.typography.fontSize.xxl, fontWeight: "700" as const, marginBottom: theme.spacing.sm, textAlign: "center", color: theme.colors.textPrimary },
-    subtitle: { fontSize: theme.typography.fontSize.md, color: theme.colors.textSecondary, textAlign: "center" },
+    backButton: { width: 40, height: 40, justifyContent: 'center' as const, marginBottom: theme.spacing.lg, alignSelf: 'flex-start' as const },
+    header: { marginBottom: theme.spacing.xl, alignItems: 'center' as const },
+    title: { fontSize: theme.typography.fontSize.xxl, fontWeight: '700' as const, marginBottom: theme.spacing.sm, textAlign: 'center' as const, color: theme.colors.textPrimary },
+    subtitle: { fontSize: theme.typography.fontSize.md, color: theme.colors.textSecondary, textAlign: 'center' as const },
     formContainer: { marginBottom: theme.spacing.lg },
-    label: { fontSize: theme.typography.fontSize.md, fontWeight: "500" as const, marginBottom: theme.spacing.sm, color: theme.colors.textPrimary },
+    label: { fontSize: theme.typography.fontSize.md, fontWeight: '500' as const, marginBottom: theme.spacing.sm, color: theme.colors.textPrimary },
     input: { ...theme.commonStyles.input, height: 56 },
     errorText: { color: theme.colors.error, marginTop: theme.spacing.sm, fontSize: theme.typography.fontSize.sm },
-    buttonContainer: { marginTop: "auto" },
+    buttonContainer: { marginTop: 'auto' as const },
     sendButton: { ...theme.commonStyles.primaryButton, height: 56 },
     sendButtonText: { ...theme.commonStyles.primaryButtonText },
     // Contact Support styles
@@ -119,31 +119,31 @@ const ForgotPasswordScreen = () => {
       borderLeftWidth: 4,
       borderLeftColor: theme.colors.primary
     },
-    contactSupportTitle: { 
-      fontSize: theme.typography.fontSize.lg, 
-      fontWeight: "600" as const, 
-      color: theme.colors.textPrimary, 
+    contactSupportTitle: {
+      fontSize: theme.typography.fontSize.lg,
+      fontWeight: '600' as const,
+      color: theme.colors.textPrimary,
       marginBottom: theme.spacing.sm,
-      textAlign: "center" 
+      textAlign: 'center' as const
     },
-    contactSupportText: { 
-      fontSize: theme.typography.fontSize.md, 
-      color: theme.colors.textSecondary, 
-      textAlign: "center",
+    contactSupportText: {
+      fontSize: theme.typography.fontSize.md,
+      color: theme.colors.textSecondary,
+      textAlign: 'center' as const,
       lineHeight: 22,
-      marginBottom: theme.spacing.md 
+      marginBottom: theme.spacing.md
     },
-    contactSupportButton: { 
-      backgroundColor: theme.colors.primary, 
-      paddingVertical: theme.spacing.sm, 
-      paddingHorizontal: theme.spacing.md, 
-      borderRadius: theme.borderRadius.sm, 
-      alignSelf: "center" 
+    contactSupportButton: {
+      backgroundColor: theme.colors.primary,
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.borderRadius.sm,
+      alignSelf: 'center' as const
     },
-    contactSupportButtonText: { 
-      color: theme.colors.white, 
-      fontWeight: "500" as const, 
-      fontSize: theme.typography.fontSize.sm 
+    contactSupportButtonText: {
+      color: theme.colors.white,
+      fontWeight: '500' as const,
+      fontSize: theme.typography.fontSize.sm
     },
   }), [theme]);
 

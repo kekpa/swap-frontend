@@ -125,7 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           event: AuthEvent.SESSION_REFRESH_SUCCESS,
           timestamp: Date.now(),
           authData: {
-            userId: result.user.userId,
+            userId: result.user.userId, // SessionData has userId
             profileId: result.user.profileId,
           }
         });
@@ -167,7 +167,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     identifier: string,
     password: string,
     skipStore = false
-  ): Promise<{ success: boolean; message?: string; user_type?: string }> => {
+  ): Promise<{ success: boolean; message?: string; user_type?: string; errorCode?: string }> => {
     const result = await loginService.login(identifier, password);
 
     if (result.success && result.user) {
@@ -177,9 +177,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsGuestMode(false);
       setHasPersistedSession(true);
 
-      // Save credentials for biometric if not skipped
+      // Enable biometric login if not skipped (uses secure device token, not password storage)
       if (!skipStore && persistentAuthEnabled && rememberMe) {
-        await loginService.setupBiometricLogin(identifier, password);
+        await loginService.enableBiometricLogin();
       }
 
       // Store PIN data for Instagram-style multi-profile support
@@ -199,7 +199,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await setLastActiveProfile(profileId);
           logger.debug('[AuthContext] PIN data stored for profile (unifiedLogin)');
         } catch (pinError) {
-          logger.warn('[AuthContext] Failed to store PIN data (non-critical):', pinError);
+          logger.warn('[AuthContext] Failed to store PIN data (non-critical)', pinError instanceof Error ? pinError.message : String(pinError));
         }
       }
     }
@@ -207,7 +207,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return {
       success: result.success,
       message: result.message,
-      user_type: result.userType
+      user_type: result.userType,
+      errorCode: result.errorCode,
     };
   }, [persistentAuthEnabled, rememberMe]);
 
@@ -244,7 +245,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await setLastActiveProfile(profileId);
             logger.debug('[AuthContext] PIN data stored for profile (loginWithPin)');
           } catch (pinError) {
-            logger.warn('[AuthContext] Failed to store PIN data (non-critical):', pinError);
+            logger.warn('[AuthContext] Failed to store PIN data (non-critical)', pinError instanceof Error ? pinError.message : String(pinError));
           }
         }
 
@@ -272,8 +273,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: result.success, message: result.message };
   }, []);
 
-  const setupBiometricLogin = useCallback(async (identifier: string, password: string): Promise<void> => {
-    await loginService.setupBiometricLogin(identifier, password);
+  const setupBiometricLogin = useCallback(async (_identifier: string, _password: string): Promise<void> => {
+    // New secure biometric flow: uses device token from backend, not password storage
+    // Parameters kept for backward compatibility but are not used
+    await loginService.enableBiometricLogin();
   }, []);
 
   const getBiometricCredentials = useCallback(async () => {
@@ -339,20 +342,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const switchAccount = useCallback(async (userId: string): Promise<boolean> => {
-    const result = await accountSwitcher.switchAccount(userId, user?.userId);
+    const result = await accountSwitcher.switchAccount(userId, user?.id);
 
     if (result.success && result.account) {
       // Update state from switched account
       // Use stored firstName/lastName if available, fallback to displayName parsing for backward compatibility
       setUser({
-        userId: result.account.userId,
+        id: result.account.userId,
         email: result.account.email,
         profileId: result.account.profileId,
         entityId: result.account.entityId,
         displayName: result.account.displayName,
         firstName: result.account.firstName || result.account.displayName.split(' ')[0],
         lastName: result.account.lastName || result.account.displayName.split(' ').slice(1).join(' '),
-      } as User);
+      });
       setIsAuthenticated(true);
       setAuthLevel(AuthLevel.AUTHENTICATED);
 
@@ -372,7 +375,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!accessToken) return;
 
     const sessionData: SessionData = {
-      userId: user.userId || '',
+      userId: user.id || '',
       profileId: user.profileId || '',
       entityId: user.entityId,
       email: user.email || '',
@@ -392,7 +395,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user, isAuthenticated, loadAvailableAccounts]);
 
   const removeAccount = useCallback(async (userId: string): Promise<boolean> => {
-    const result = await accountSwitcher.removeAccount(userId, user?.userId);
+    const result = await accountSwitcher.removeAccount(userId, user?.id);
     if (result) {
       await loadAvailableAccounts();
     }

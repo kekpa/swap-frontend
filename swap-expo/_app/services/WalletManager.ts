@@ -181,7 +181,7 @@ class WalletManager {
                 try {
                   transactionData = JSON.parse(transactionData);
                 } catch (parseError) {
-                  logger.warn(`[WalletManager] Failed to parse transaction ${key}:`, parseError);
+                  logger.error(`[WalletManager] Failed to parse transaction ${key}`, parseError, 'wallet');
                   continue;
                 }
               }

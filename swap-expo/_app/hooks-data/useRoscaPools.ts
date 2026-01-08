@@ -160,5 +160,6 @@ export const useRoscaFriends = (enrollmentId: string, entityId: string, options:
     enabled: Boolean(shouldExecute),
     staleTime: 1000 * 60 * 2, // 2 minutes
     gcTime: 1000 * 60 * 15, // 15 minutes
+    placeholderData: [], // Ensure data is never undefined while loading
   });
 };

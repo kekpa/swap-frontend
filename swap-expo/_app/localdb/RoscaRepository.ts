@@ -51,16 +51,16 @@ export class RoscaRepository {
     try {
       await this.getDatabase();
       const available = databaseManager.isDatabaseReady();
-      logger.debug(`[RoscaRepository] Database ready: ${available}`);
+      logger.debug('[RoscaRepository] Database ready check', 'data', { available });
 
       if (Platform.OS === 'web') {
-        logger.debug('[RoscaRepository] Platform is web, SQLite not supported');
+        logger.debug('[RoscaRepository] Platform is web, SQLite not supported', 'data');
         return false;
       }
 
       return available;
     } catch (error) {
-      logger.debug('[RoscaRepository] Database not available:', error instanceof Error ? error.message : String(error));
+      logger.debug('[RoscaRepository] Database not available', 'data', { error: error instanceof Error ? error.message : String(error) });
       return false;
     }
   }
@@ -71,10 +71,10 @@ export class RoscaRepository {
    * Get all cached pools
    */
   public async getPools(): Promise<RoscaPool[]> {
-    logger.debug('[RoscaRepository] Getting all pools from local database');
+    logger.debug('[RoscaRepository] Getting all pools from local database', 'rosca');
 
     if (!(await this.isSQLiteAvailable())) {
-      logger.debug('[RoscaRepository] SQLite not available, returning empty array');
+      logger.debug('[RoscaRepository] SQLite not available, returning empty array', 'rosca');
       return [];
     }
 
@@ -87,10 +87,10 @@ export class RoscaRepository {
       `);
 
       const pools = result.map((row: any) => this.mapRowToPool(row));
-      logger.debug(`[RoscaRepository] Retrieved ${pools.length} pools from local database`);
+      logger.debug('[RoscaRepository] Retrieved pools from local database', 'rosca', { count: pools.length });
       return pools;
     } catch (error) {
-      logger.error('[RoscaRepository] Error getting pools:', error instanceof Error ? error.message : String(error));
+      logger.error('[RoscaRepository] Error getting pools', error, 'rosca');
       return [];
     }
   }
@@ -103,7 +103,7 @@ export class RoscaRepository {
       const result = await AsyncStorage.getItem(POOLS_CACHE_TIMESTAMP_KEY);
       return result ? parseInt(result, 10) : null;
     } catch (error) {
-      logger.debug('[RoscaRepository] Error getting pools cache timestamp:', error);
+      logger.debug('[RoscaRepository] Error getting pools cache timestamp', 'rosca', { error: String(error) });
       return null;
     }
   }
@@ -115,7 +115,7 @@ export class RoscaRepository {
     try {
       await AsyncStorage.setItem(POOLS_CACHE_TIMESTAMP_KEY, Date.now().toString());
     } catch (error) {
-      logger.debug('[RoscaRepository] Error setting pools cache timestamp:', error);
+      logger.debug('[RoscaRepository] Error setting pools cache timestamp', 'rosca', { error: String(error) });
     }
   }
 
@@ -125,9 +125,9 @@ export class RoscaRepository {
   public async clearPoolsCacheTimestamp(): Promise<void> {
     try {
       await AsyncStorage.removeItem(POOLS_CACHE_TIMESTAMP_KEY);
-      logger.debug('[RoscaRepository] Cleared pools cache timestamp');
+      logger.debug('[RoscaRepository] Cleared pools cache timestamp', 'rosca');
     } catch (error) {
-      logger.debug('[RoscaRepository] Error clearing pools cache timestamp:', error);
+      logger.debug('[RoscaRepository] Error clearing pools cache timestamp', 'rosca', { error: String(error) });
     }
   }
 
@@ -142,7 +142,7 @@ export class RoscaRepository {
       const result = await AsyncStorage.getItem(key);
       return result ? parseInt(result, 10) : null;
     } catch (error) {
-      logger.debug('[RoscaRepository] Error getting enrollments cache timestamp:', error);
+      logger.debug('[RoscaRepository] Error getting enrollments cache timestamp', 'rosca', { error: String(error) });
       return null;
     }
   }
@@ -155,7 +155,7 @@ export class RoscaRepository {
       const key = `${ENROLLMENTS_CACHE_TIMESTAMP_PREFIX}${entityId}`;
       await AsyncStorage.setItem(key, Date.now().toString());
     } catch (error) {
-      logger.debug('[RoscaRepository] Error setting enrollments cache timestamp:', error);
+      logger.debug('[RoscaRepository] Error setting enrollments cache timestamp', 'rosca', { error: String(error) });
     }
   }
 
@@ -166,9 +166,9 @@ export class RoscaRepository {
     try {
       const key = `${ENROLLMENTS_CACHE_TIMESTAMP_PREFIX}${entityId}`;
       await AsyncStorage.removeItem(key);
-      logger.debug(`[RoscaRepository] Cleared enrollments cache timestamp for entity: ${entityId}`);
+      logger.debug('[RoscaRepository] Cleared enrollments cache timestamp for entity', 'rosca', { entityId });
     } catch (error) {
-      logger.debug('[RoscaRepository] Error clearing enrollments cache timestamp:', error);
+      logger.debug('[RoscaRepository] Error clearing enrollments cache timestamp', 'rosca', { error: String(error) });
     }
   }
 
@@ -177,22 +177,22 @@ export class RoscaRepository {
    * Uses DELETE + INSERT to ensure deleted pools are removed from cache
    */
   public async savePools(pools: RoscaPool[]): Promise<void> {
-    logger.debug(`[RoscaRepository] Replacing cache with ${pools?.length || 0} fresh pools`);
+    logger.debug('[RoscaRepository] Replacing cache with fresh pools', 'rosca', { count: pools?.length || 0 });
 
     if (!(await this.isSQLiteAvailable())) {
-      logger.warn('[RoscaRepository] SQLite not available, aborting save');
+      logger.warn('[RoscaRepository] SQLite not available, aborting save', 'rosca');
       return;
     }
 
     if (!pools || pools.length === 0) {
-      logger.debug('[RoscaRepository] No pools to save, clearing cache');
+      logger.debug('[RoscaRepository] No pools to save, clearing cache', 'rosca');
       // If API returns empty, clear the cache too
       try {
         const db = await this.getDatabase();
         await db.runAsync('DELETE FROM rosca_pools');
         await this.setPoolsCacheTimestamp();
       } catch (error) {
-        logger.error('[RoscaRepository] Error clearing pools:', error);
+        logger.error('[RoscaRepository] Error clearing pools', error, 'rosca');
       }
       return;
     }
@@ -225,9 +225,9 @@ export class RoscaRepository {
           pool.expectedPayout,
           pool.totalMembers ?? (pool as any).memberCount ?? 0,
           pool.availableSlots ?? null,
-          pool.minMembers,
+          pool.minMembers ?? null,
           pool.maxMembers ?? null,
-          pool.gracePeriodDays,
+          pool.gracePeriodDays ?? null,
           pool.status,
           (pool as any).visibility || 'public',
           (pool as any).createdAt || new Date().toISOString(),
@@ -240,10 +240,10 @@ export class RoscaRepository {
       // STEP 3: Update cache timestamp
       await this.setPoolsCacheTimestamp();
 
-      logger.info(`[RoscaRepository] ✅ Replaced cache with ${pools.length} fresh pools`);
+      logger.info('[RoscaRepository] Replaced cache with fresh pools', 'rosca', { count: pools.length });
       eventEmitter.emit('data_updated', { type: 'rosca_pools', data: pools });
     } catch (error) {
-      logger.error('[RoscaRepository] Error saving pools:', error instanceof Error ? error.message : String(error));
+      logger.error('[RoscaRepository] Error saving pools', error, 'rosca');
     }
   }
 
@@ -251,7 +251,7 @@ export class RoscaRepository {
    * Get pool by ID
    */
   public async getPoolById(poolId: string): Promise<RoscaPool | null> {
-    logger.debug(`[RoscaRepository] Getting pool: ${poolId}`);
+    logger.debug('[RoscaRepository] Getting pool', 'rosca', { poolId });
 
     if (!(await this.isSQLiteAvailable())) {
       return null;
@@ -267,7 +267,7 @@ export class RoscaRepository {
 
       return this.mapRowToPool(result as any);
     } catch (error) {
-      logger.error(`[RoscaRepository] Error getting pool ${poolId}:`, error instanceof Error ? error.message : String(error));
+      logger.error('[RoscaRepository] Error getting pool', error, 'rosca', { poolId });
       return null;
     }
   }
@@ -278,10 +278,10 @@ export class RoscaRepository {
    * Get enrollments for an entity (ENTITY-ISOLATED)
    */
   public async getEnrollments(entityId: string): Promise<RoscaEnrollment[]> {
-    logger.debug(`[RoscaRepository] Getting enrollments for entity: ${entityId}`);
+    logger.debug('[RoscaRepository] Getting enrollments for entity', 'rosca', { entityId });
 
     if (!(await this.isSQLiteAvailable())) {
-      logger.debug('[RoscaRepository] SQLite not available, returning empty array');
+      logger.debug('[RoscaRepository] SQLite not available, returning empty array', 'rosca');
       return [];
     }
 
@@ -294,10 +294,10 @@ export class RoscaRepository {
       `, [entityId]);
 
       const enrollments = result.map((row: any) => this.mapRowToEnrollment(row));
-      logger.debug(`[RoscaRepository] Retrieved ${enrollments.length} enrollments for entity: ${entityId}`);
+      logger.debug('[RoscaRepository] Retrieved enrollments for entity', 'rosca', { entityId, count: enrollments.length });
       return enrollments;
     } catch (error) {
-      logger.error('[RoscaRepository] Error getting enrollments:', error instanceof Error ? error.message : String(error));
+      logger.error('[RoscaRepository] Error getting enrollments', error, 'rosca');
       return [];
     }
   }
@@ -306,15 +306,15 @@ export class RoscaRepository {
    * Save enrollments to local cache (ENTITY-ISOLATED)
    */
   public async saveEnrollments(enrollments: RoscaEnrollment[], entityId: string): Promise<void> {
-    logger.debug(`[RoscaRepository] Saving ${enrollments?.length || 0} enrollments for entity: ${entityId}`);
+    logger.debug('[RoscaRepository] Saving enrollments for entity', 'rosca', { entityId, count: enrollments?.length || 0 });
 
     if (!(await this.isSQLiteAvailable())) {
-      logger.warn('[RoscaRepository] SQLite not available, aborting save');
+      logger.warn('[RoscaRepository] SQLite not available, aborting save', 'rosca');
       return;
     }
 
     if (!enrollments || enrollments.length === 0) {
-      logger.debug('[RoscaRepository] No enrollments to save');
+      logger.debug('[RoscaRepository] No enrollments to save', 'rosca');
       return;
     }
 
@@ -363,10 +363,10 @@ export class RoscaRepository {
       // Update cache timestamp
       await this.setEnrollmentsCacheTimestamp(entityId);
 
-      logger.info(`[RoscaRepository] Successfully saved ${enrollments.length} enrollments for entity: ${entityId}`);
+      logger.info('[RoscaRepository] Successfully saved enrollments for entity', 'rosca', { entityId, count: enrollments.length });
       eventEmitter.emit('data_updated', { type: 'rosca_enrollments', data: enrollments, entityId });
     } catch (error) {
-      logger.error('[RoscaRepository] Error saving enrollments:', error instanceof Error ? error.message : String(error));
+      logger.error('[RoscaRepository] Error saving enrollments', error, 'rosca');
     }
   }
 
@@ -374,7 +374,7 @@ export class RoscaRepository {
    * Get enrollment by ID
    */
   public async getEnrollmentById(enrollmentId: string): Promise<RoscaEnrollment | null> {
-    logger.debug(`[RoscaRepository] Getting enrollment: ${enrollmentId}`);
+    logger.debug('[RoscaRepository] Getting enrollment', 'rosca', { enrollmentId });
 
     if (!(await this.isSQLiteAvailable())) {
       return null;
@@ -390,7 +390,7 @@ export class RoscaRepository {
 
       return this.mapRowToEnrollment(result as any);
     } catch (error) {
-      logger.error(`[RoscaRepository] Error getting enrollment ${enrollmentId}:`, error instanceof Error ? error.message : String(error));
+      logger.error('[RoscaRepository] Error getting enrollment', error, 'rosca', { enrollmentId });
       return null;
     }
   }
@@ -399,7 +399,7 @@ export class RoscaRepository {
    * Clear all enrollments for an entity (ENTITY-ISOLATED)
    */
   public async clearEnrollments(entityId: string): Promise<void> {
-    logger.debug(`[RoscaRepository] Clearing enrollments for entity: ${entityId}`);
+    logger.debug('[RoscaRepository] Clearing enrollments for entity', 'rosca', { entityId });
 
     if (!(await this.isSQLiteAvailable())) {
       return;
@@ -408,9 +408,9 @@ export class RoscaRepository {
     try {
       const db = await this.getDatabase();
       await db.runAsync('DELETE FROM rosca_enrollments WHERE entity_id = ?', [entityId]);
-      logger.info(`[RoscaRepository] Cleared enrollments for entity: ${entityId}`);
+      logger.info('[RoscaRepository] Cleared enrollments for entity', 'rosca', { entityId });
     } catch (error) {
-      logger.error('[RoscaRepository] Error clearing enrollments:', error instanceof Error ? error.message : String(error));
+      logger.error('[RoscaRepository] Error clearing enrollments', error, 'rosca');
     }
   }
 
@@ -420,7 +420,7 @@ export class RoscaRepository {
    * Get payments for an enrollment
    */
   public async getPayments(enrollmentId: string): Promise<RoscaPayment[]> {
-    logger.debug(`[RoscaRepository] Getting payments for enrollment: ${enrollmentId}`);
+    logger.debug('[RoscaRepository] Getting payments for enrollment', 'rosca', { enrollmentId });
 
     if (!(await this.isSQLiteAvailable())) {
       return [];
@@ -435,10 +435,10 @@ export class RoscaRepository {
       `, [enrollmentId]);
 
       const payments = result.map((row: any) => this.mapRowToPayment(row));
-      logger.debug(`[RoscaRepository] Retrieved ${payments.length} payments for enrollment: ${enrollmentId}`);
+      logger.debug('[RoscaRepository] Retrieved payments for enrollment', 'rosca', { enrollmentId, count: payments.length });
       return payments;
     } catch (error) {
-      logger.error('[RoscaRepository] Error getting payments:', error instanceof Error ? error.message : String(error));
+      logger.error('[RoscaRepository] Error getting payments', error, 'rosca');
       return [];
     }
   }
@@ -447,7 +447,7 @@ export class RoscaRepository {
    * Save payments to local cache
    */
   public async savePayments(payments: RoscaPayment[]): Promise<void> {
-    logger.debug(`[RoscaRepository] Saving ${payments?.length || 0} payments`);
+    logger.debug('[RoscaRepository] Saving payments', 'rosca', { count: payments?.length || 0 });
 
     if (!(await this.isSQLiteAvailable())) {
       return;
@@ -493,9 +493,9 @@ export class RoscaRepository {
         await statement.finalizeAsync();
       }
 
-      logger.info(`[RoscaRepository] Successfully saved ${payments.length} payments`);
+      logger.info('[RoscaRepository] Successfully saved payments', 'rosca', { count: payments.length });
     } catch (error) {
-      logger.error('[RoscaRepository] Error saving payments:', error instanceof Error ? error.message : String(error));
+      logger.error('[RoscaRepository] Error saving payments', error, 'rosca');
     }
   }
 
@@ -512,12 +512,20 @@ export class RoscaRepository {
       frequency: row.frequency,
       payoutMultiplier: Number(row.payout_multiplier),
       expectedPayout: Number(row.expected_payout),
+      memberCount: Number(row.member_count || row.total_members || 0),
       totalMembers: Number(row.total_members),
       availableSlots: row.available_slots ? Number(row.available_slots) : null,
       minMembers: Number(row.min_members),
       maxMembers: row.max_members ? Number(row.max_members) : null,
       gracePeriodDays: Number(row.grace_period_days),
       status: row.status,
+      // Cohort model fields
+      startDate: row.start_date || null,
+      endDate: row.end_date || null,
+      registrationOpens: row.registration_opens || null,
+      registrationDeadline: row.registration_deadline || null,
+      durationPeriods: row.duration_periods ? Number(row.duration_periods) : null,
+      cohortNumber: Number(row.cohort_number || 0),
     };
   }
 

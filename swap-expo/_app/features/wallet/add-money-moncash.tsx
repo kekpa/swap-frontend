@@ -85,9 +85,9 @@ export default function AddMoneyScreen() {
         // Process currencies from DataContext
         const mappedCurrencies = currencyBalances.map((balance, index) => ({
           id: `currency-${index}`,
-          code: balance.code,
-          name: balance.code,
-          symbol: balance.symbol,
+          code: balance.currency_code,
+          name: balance.currency_code,
+          symbol: balance.currency_symbol,
           is_fiat: true,
         }));
 
@@ -415,7 +415,6 @@ export default function AddMoneyScreen() {
                               )}
                             </TouchableOpacity>
                           )}
-                          estimatedItemSize={50}
                           ItemSeparatorComponent={() => (
                             <View style={styles.separator} />
                           )}

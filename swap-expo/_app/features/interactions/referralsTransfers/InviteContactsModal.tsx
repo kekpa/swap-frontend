@@ -22,6 +22,7 @@ import {
   Share,
   Clipboard,
   Alert,
+  Linking,
 } from "react-native";
 import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from "@expo/vector-icons";
@@ -148,7 +149,6 @@ const InviteContactsModal: React.FC<InviteContactsModalProps> = ({
         data={filteredContacts}
         renderItem={renderContactItem}
         keyExtractor={(item) => item.id}
-        estimatedItemSize={60}
         getItemType={() => 'contact'}
       />
 

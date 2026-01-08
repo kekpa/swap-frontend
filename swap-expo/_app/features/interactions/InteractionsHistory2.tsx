@@ -43,7 +43,7 @@ import logger from '../../utils/logger';
 import { getAvatarColor } from '../../utils/avatarUtils';
 import { useRefreshByUser } from '../../hooks/useRefreshByUser';
 import { MaterialIcons } from '@expo/vector-icons';
-import { RootStackParamList } from '../../navigation/rootNavigator';
+import { RootStackParamList, DeepNavigationParams } from '../../navigation/rootNavigator';
 import { CompositeScreenProps } from '@react-navigation/native';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { Swipeable, RectButton } from 'react-native-gesture-handler';
@@ -80,12 +80,15 @@ interface DisplayChat {
 
 // Contact interface is removed, DisplayableContact from ContactList will be used.
 
-// Tab enum for type safety
-enum InteractionTab {
-  All = 0,
-  Friends = 1,
-  Business = 2,
-}
+// Tab type for type safety (using string literal union per guidelines)
+type InteractionTab = 'all' | 'friends' | 'business';
+
+// Tab constants
+const InteractionTabValues = {
+  All: 'all' as const,
+  Friends: 'friends' as const,
+  Business: 'business' as const,
+};
 
 // Tab component props need theme
 interface TabProps {
@@ -162,7 +165,7 @@ const getInitials = (name: string): string => {
 // SearchHeader height constant (matches SearchHeader.tsx: 40px content + 10px padding)
 // SEARCH_HEADER_HEIGHT removed - no longer needed for padding calculation
 
-const InteractionsHistory2: React.FC = (): JSX.Element => {
+const InteractionsHistory2: React.FC = () => {
   const navigation = useNavigation<InteractionsNavigationProp>();
   const route = useRoute<InteractionsHistoryRouteProp>();
   const { theme } = useTheme();
@@ -200,7 +203,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
   // Industry-standard refresh hook - per-screen local state (TanStack Query pattern)
   const { refreshing, onRefresh } = useRefreshByUser(refreshInteractions);
 
-  const [activeTab, setActiveTab] = useState<InteractionTab>(InteractionTab.All);
+  const [activeTab, setActiveTab] = useState<InteractionTab>(InteractionTabValues.All);
   
   // Search state - Google Maps style
   const [isSearchActive, setIsSearchActive] = useState(false);
@@ -222,7 +225,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
   const hasInitialContactsRun = useRef(false);
   
   // 🚀 SIMPLIFIED: Remove complex render stability controls
-  const [swipeableRefs, setSwipeableRefs] = useState<{[key: string]: React.RefObject<Swipeable>}>({});
+  const [swipeableRefs, setSwipeableRefs] = useState<{[key: string]: React.RefObject<Swipeable | null>}>({});
   
   // Component lifecycle with mount stability
   const componentId = useRef(Date.now());
@@ -464,9 +467,11 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
           }
       }
 
-      // Handle navigation params
-      const navigateToContactParams = route.params?.navigateToContact;
-      const navigateToNewChat = route.params?.navigateToNewChat;
+      // Handle navigation params - extract from deeply nested structure
+      // Route params for App screen: { params?: { params?: { navigateToContact, navigateToNewChat } } }
+      const nestedParams = (route.params?.params as { params?: DeepNavigationParams } | undefined)?.params;
+      const navigateToContactParams = nestedParams?.navigateToContact;
+      const navigateToNewChat = nestedParams?.navigateToNewChat;
       
       if (navigateToContactParams) {
         const paramsForHistory: RootStackParamList['ContactInteractionHistory2'] = navigateToContactParams;
@@ -489,7 +494,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
         // Note: We don't leave profile room here since we want to receive messages
         // even when navigating to other screens within the app
       };
-    }, [route.params?.navigateToContact, route.params?.navigateToNewChat, contactsSynced, hasContactsPermission, initializeContacts, navigation, user?.entityId])
+    }, [route.params, contactsSynced, hasContactsPermission, initializeContacts, navigation, user?.entityId])
   );
 
   // Handle search activation
@@ -644,9 +649,9 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
   const getFilteredChats = () => {
     if (!mappedChats) return [];
     switch (activeTab) {
-      case InteractionTab.Friends:
+      case InteractionTabValues.Friends:
         return mappedChats.filter(chat => chat.type === 'friend');
-      case InteractionTab.Business:
+      case InteractionTabValues.Business:
         return mappedChats.filter(chat => chat.type === 'business');
       default:
         return mappedChats;
@@ -1028,8 +1033,9 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
   // Navigate to archived interactions screen
   const handleArchivedPress = () => {
     logger.debug('[InteractionsHistory] Navigating to archived interactions', "InteractionsHistory");
-    // Navigate to ArchivedInteractions screen
-    navigation.navigate('ArchivedInteractions' as never);
+    // Navigate to ArchivedInteractions screen (uses InteractionsStackParamList)
+    // Cast through unknown for nested navigator navigation
+    (navigation as unknown as StackNavigationProp<InteractionsStackParamList>).navigate('ArchivedInteractions');
   };
 
   // Render archived section (WhatsApp-style)
@@ -1354,7 +1360,7 @@ const InteractionsHistory2: React.FC = (): JSX.Element => {
             {filteredDisplayChats.length > 0 && filteredDisplayChats.map(chat => renderChatItem(chat))}
             
               {/* ContactList Integration - show in "All" tab */}
-            {activeTab === InteractionTab.All && (
+            {activeTab === InteractionTabValues.All && (
                 <ContactList
                   appUserContacts={appUserContacts}
                   phoneOnlyContacts={phoneOnlyContacts}

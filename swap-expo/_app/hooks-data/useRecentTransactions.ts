@@ -8,7 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '../tanstack-query/queryKeys';
 import { queryClient } from '../tanstack-query/queryClient';
 import { walletManager } from '../services/WalletManager';
-import { Transaction } from '../types/transaction.types';
+import { Transaction, ProcessedByType } from '../types/transaction.types';
 import logger from '../utils/logger';
 import { networkService } from '../services/NetworkService';
 import { useCurrentEntityId } from '../hooks/useCurrentEntityId';
@@ -24,8 +24,7 @@ import { LocalTimelineItem } from '../localdb/schema/local-timeline-schema';
  */
 const mapTimelineItemToTransaction = (item: LocalTimelineItem): Transaction => {
   return {
-    id: item.id,
-    server_id: item.server_id || item.id,
+    id: item.server_id || item.id, // Use server_id as the canonical ID if available
     interaction_id: item.interaction_id,
     amount: item.amount || 0,
     currency_id: item.currency_id || '',
@@ -37,11 +36,13 @@ const mapTimelineItemToTransaction = (item: LocalTimelineItem): Transaction => {
     to_entity_id: item.to_entity_id || '',
     from_wallet_id: item.from_wallet_id || '',
     to_wallet_id: item.to_wallet_id || '',
+    from_account_id: '', // Not stored in local_timeline, empty fallback
+    processed_by_type: ProcessedByType.PROFILE, // Default value for local display
     description: item.description || item.content || '',
     created_at: item.created_at,
     updated_at: item.created_at,
     metadata: item.timeline_metadata ? (typeof item.timeline_metadata === 'string' ? JSON.parse(item.timeline_metadata) : item.timeline_metadata) : {},
-  } as Transaction;
+  };
 };
 
 /**

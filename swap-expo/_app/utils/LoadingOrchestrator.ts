@@ -154,7 +154,7 @@ class LoadingOrchestrator {
     this.setupAuthStateListener();
     this.setupNavigationListener();
 
-    logger.debug('[LoadingOrchestrator] 🏗️ Professional loading orchestrator initialized', {
+    logger.debug('[LoadingOrchestrator] 🏗️ Professional loading orchestrator initialized', 'app', {
       config: this.config
     });
   }
@@ -186,7 +186,7 @@ class LoadingOrchestrator {
 
     this.operations.set(operation.id, operation);
 
-    logger.debug('[LoadingOrchestrator] 🚀 Loading operation started', {
+    logger.debug('[LoadingOrchestrator] 🚀 Loading operation started', 'app', {
       id: operation.id,
       type: operation.type,
       description: operation.description,
@@ -206,7 +206,7 @@ class LoadingOrchestrator {
     if (operation) {
       this.operations.delete(operationId);
 
-      logger.debug('[LoadingOrchestrator] ✅ Loading operation completed', {
+      logger.debug('[LoadingOrchestrator] ✅ Loading operation completed', 'app', {
         id: operationId,
         type: operation.type,
         duration: Date.now() - operation.timestamp
@@ -221,7 +221,7 @@ class LoadingOrchestrator {
    * This prevents the white flash after login
    */
   async coordinateAuthToAppTransition(): Promise<void> {
-    logger.debug('[LoadingOrchestrator] 🔄 Starting auth-to-app transition coordination');
+    logger.debug('[LoadingOrchestrator] 🔄 Starting auth-to-app transition coordination', 'app');
 
     this.transitionPhase = TransitionPhase.AUTH_COMPLETING;
     this.splashStartTime = Date.now();
@@ -266,10 +266,10 @@ class LoadingOrchestrator {
       this.transitionPhase = TransitionPhase.NONE;
       this.completeOperation(transitionId);
 
-      logger.debug('[LoadingOrchestrator] ✅ Auth-to-app transition completed successfully');
+      logger.debug('[LoadingOrchestrator] ✅ Auth-to-app transition completed successfully', 'app');
 
     } catch (error) {
-      logger.error('[LoadingOrchestrator] ❌ Error in auth-to-app transition:', error);
+      logger.error('[LoadingOrchestrator] ❌ Error in auth-to-app transition', error, 'app');
       this.transitionPhase = TransitionPhase.NONE;
       this.completeOperation(transitionId);
     }
@@ -405,7 +405,7 @@ class LoadingOrchestrator {
       try {
         listener(state);
       } catch (error) {
-        logger.error('[LoadingOrchestrator] Error in state change listener:', error);
+        logger.error('[LoadingOrchestrator] Error in state change listener', error, 'app');
       }
     });
   }
@@ -425,7 +425,7 @@ class LoadingOrchestrator {
 
     expiredOperations.forEach(id => {
       this.operations.delete(id);
-      logger.debug('[LoadingOrchestrator] 🗑️ Expired operation removed', { id });
+      logger.debug('[LoadingOrchestrator] 🗑️ Expired operation removed', 'app', { id });
     });
   }
 
@@ -500,7 +500,7 @@ class LoadingOrchestrator {
     this.transitionPhase = TransitionPhase.NONE;
     this.splashStartTime = null;
 
-    logger.debug('[LoadingOrchestrator] 🧹 Loading orchestrator destroyed');
+    logger.debug('[LoadingOrchestrator] 🧹 Loading orchestrator destroyed', 'app');
   }
 }
 

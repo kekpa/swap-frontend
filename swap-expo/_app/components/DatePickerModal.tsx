@@ -77,7 +77,13 @@ const DatePickerModal: React.FC<DatePickerModalProps> = ({
 
   const generateCalendarDays = () => {
     // This is a simplified version - in a real app, you would calculate this based on the actual month
-    const days = [
+    type CalendarDay = {
+      day: number;
+      month: "current" | "prev" | "next";
+      selected: boolean;
+      today: boolean;
+    };
+    const days: CalendarDay[] = [
       { day: 24, month: "prev", selected: false, today: false },
       { day: 25, month: "prev", selected: false, today: false },
       { day: 26, month: "prev", selected: false, today: false },

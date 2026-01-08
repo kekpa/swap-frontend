@@ -151,7 +151,7 @@ export default function HomeScreenV2() {
         onAddPress={handleAdd}
         onSendPress={handleSend}
         onQRPress={handleQR}
-        onJoinRoscaPress={handleJoinRosca}
+        onCalendarPress={handleJoinRosca}
         onProfilePress={handleProfile}
       />
     </SafeAreaView>

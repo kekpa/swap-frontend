@@ -5,7 +5,7 @@
  */
 
 // Export theme definitions
-export { default as theme, darkTheme, lightTheme } from "./theme";
+export { default as theme, darkVioletTheme as darkTheme, violetTheme as lightTheme } from "./theme";
 export type {
   Theme,
   ThemeColors,

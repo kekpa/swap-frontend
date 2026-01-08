@@ -114,7 +114,7 @@ export function useAuth() {
         setError(errorMessage);
 
         if (isDevelopment) {
-          logger.error('Login error: Identifier or password missing', 'auth', {
+          logger.error('Login error: Identifier or password missing', undefined, 'auth', {
             identifierProvided: !!identifier,
             passwordProvided: !!password
           });
@@ -186,8 +186,8 @@ export function useAuth() {
           } catch (businessLoginError: any) {
             // Both login attempts failed - now we can show the errors
             if (isDevelopment) {
-              logger.error('Personal login failed', 'auth', errorDetails);
-              logger.error('Business login also failed', 'auth', {
+              logger.error('Personal login failed', undefined, 'auth', errorDetails);
+              logger.error('Business login also failed', undefined, 'auth', {
                 status: businessLoginError.response?.status,
                 message: businessLoginError.response?.data?.message
               });
@@ -197,7 +197,7 @@ export function useAuth() {
         } else {
           // Personal login failed for other reasons (wrong password, etc.)
           if (isDevelopment) {
-            logger.error('Personal login failed', 'auth', errorDetails);
+            logger.error('Personal login failed', undefined, 'auth', errorDetails);
           }
           throw personalLoginError;
         }
@@ -213,7 +213,7 @@ export function useAuth() {
         try {
           actualData = JSON.parse(response.data);
         } catch (parseError) {
-          logger.error('Failed to parse backend login response', 'auth');
+          logger.error('Failed to parse backend login response', undefined, 'auth');
           throw new Error('Invalid response format from server (JSON parse failed).');
         }
       } else if (response.data && typeof response.data === 'object' && typeof response.data.access_token !== 'undefined') {
@@ -221,7 +221,7 @@ export function useAuth() {
         logger.debug('[useAuth] Using response.data directly as parsed object.', 'auth');
         actualData = response.data;
       } else {
-        logger.error('[useAuth] Unexpected backend login response structure:', { responseData: response.data }, 'auth');
+        logger.error('[useAuth] Unexpected backend login response structure', undefined, 'auth', { responseData: response.data });
         throw new Error('Unexpected response structure from server.');
       }
       
@@ -254,15 +254,14 @@ export function useAuth() {
       setError(errorMessage);
       
       if (isDevelopment) {
-        logger.error('LOGIN ERROR', 'auth', {
+        logger.error('LOGIN ERROR', err, 'auth', {
           status: statusCode,
-          message: err.message,
           url: err.config?.url,
         });
 
         // If it's a 500 error, could be a backend issue
         if (statusCode === 500) {
-          logger.error('Backend server error during login. Check server logs for details.', 'auth');
+          logger.error('Backend server error during login. Check server logs for details.', undefined, 'auth');
         }
       }
       
@@ -297,7 +296,7 @@ export function useAuth() {
           const errorMessage = apiError.response?.data?.message || apiError.message || "Backend logout failed";
           setError(errorMessage);
           if (isDevelopment) {
-            logger.error("Non-auth logout error:", { error: errorMessage });
+            logger.error("Non-auth logout error", undefined, 'auth', { error: errorMessage });
           }
         }
       }
@@ -312,13 +311,13 @@ export function useAuth() {
       // This should only catch errors from clearTokens() or clearCache()
       const errorMessage = err.message || "Local logout cleanup failed";
       setError(errorMessage);
-      logger.error("Critical logout error during cleanup:", { error: errorMessage });
+      logger.error("Critical logout error during cleanup", undefined, 'auth', { error: errorMessage });
       
       // Still try to clear tokens even if other cleanup fails
       try {
         await tokenManager.clearAllTokens();
       } catch (tokenError) {
-        logger.error("Failed to clear tokens during error recovery:", { error: tokenError });
+        logger.error("Failed to clear tokens during error recovery", tokenError, 'auth');
       }
     } finally {
       setIsLoading(false);
@@ -339,7 +338,7 @@ export function useAuth() {
         err.response?.data?.message || err.message || "Failed to fetch profile";
       setError(errorMessage);
       if (isDevelopment) {
-        logger.error("Profile fetch error:", { error: errorMessage });
+        logger.error("Profile fetch error", undefined, 'auth', { error: errorMessage });
       }
       throw new Error(errorMessage);
     } finally {
@@ -367,7 +366,7 @@ export function useAuth() {
         if (response.data && typeof response.data === 'object') {
           profileData = response.data;
         } else {
-          logger.error('[useAuth] Unexpected response structure for profile', 'auth');
+          logger.error('[useAuth] Unexpected response structure for profile', undefined, 'auth');
           return null;
         }
 
@@ -375,16 +374,16 @@ export function useAuth() {
         if (profileData && profileData.type && profileData.id) {
           return profileData;
         } else {
-          logger.error('[useAuth] Invalid profile structure - missing type or id', 'auth');
+          logger.error('[useAuth] Invalid profile structure - missing type or id', undefined, 'auth');
           return null;
         }
       } catch (error: any) {
         const errorMessage = error.response?.data?.error || error.message;
-        logger.error(`Profile fetch error: ${errorMessage}`, 'auth');
+        logger.error('Profile fetch error: ' + errorMessage, undefined, 'auth');
         throw error;
       }
     } catch (error: any) {
-      logger.error(`[auth] Failed to get current user profile: ${error.message}`, 'auth');
+      logger.error('[auth] Failed to get current user profile: ' + error.message, error, 'auth');
       throw error;
     }
   };

@@ -353,11 +353,12 @@ export const useRoscaPaymentHistory = (enrollmentId: string, options: UseRoscaEn
     queryFn: async () => {
       logger.debug(`[useRoscaPaymentHistory] Fetching payments for: ${enrollmentId}`);
       const response = await apiClient.get(ROSCA_PATHS.ENROLLMENT_PAYMENTS(enrollmentId));
-      return response.data;
+      return parseApiResponse(response.data, 'rosca-payments');
     },
     enabled: Boolean(shouldExecute),
     staleTime: 1000 * 60 * 2, // 2 minutes
     gcTime: 1000 * 60 * 30, // 30 minutes
+    placeholderData: [], // Ensure data is never undefined while loading
   });
 };
 

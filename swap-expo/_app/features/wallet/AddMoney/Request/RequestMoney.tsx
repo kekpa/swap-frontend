@@ -87,7 +87,8 @@ const RequestMoneyScreen: React.FC<RequestMoneyScreenProps> = (props) => {
     if (props.onSelectContact) {
       props.onSelectContact();
     } else {
-      navigation.navigate("SelectContact");
+      // SelectContact is in root stack, not wallet stack - use type assertion
+      (navigation.navigate as (name: string) => void)("SelectContact");
     }
   };
 

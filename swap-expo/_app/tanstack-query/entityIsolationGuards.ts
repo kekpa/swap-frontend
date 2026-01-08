@@ -76,7 +76,7 @@ export const validateQueryKeyForEntityIsolation = (queryKey: unknown[]): void =>
   }
 
   if (!Array.isArray(queryKey) || queryKey.length === 0) {
-    logger.warn('[Entity Isolation] Invalid query key:', queryKey);
+    logger.warn('[Entity Isolation] Invalid query key', 'data', { queryKey });
     return;
   }
 

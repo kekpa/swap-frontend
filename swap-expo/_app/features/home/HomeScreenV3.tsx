@@ -75,8 +75,9 @@ function transformEnrollment(enrollment: RoscaEnrollment): RoscaUI {
     totalContributed: enrollment.totalContributed,
     // Progress = payments made / total payments required
     // totalContributed / (contributionAmount * durationPeriods)
-    progress: enrollment.contributionAmount > 0 && enrollment.durationPeriods > 0
-      ? Math.min(enrollment.totalContributed / (enrollment.contributionAmount * enrollment.durationPeriods), 1)
+    // Progress calculation: use totalMembers as proxy for duration (each member = 1 payout period)
+    progress: enrollment.contributionAmount > 0 && enrollment.totalMembers > 0
+      ? Math.min(enrollment.totalContributed / (enrollment.contributionAmount * enrollment.totalMembers), 1)
       : 0,
     queuePosition: enrollment.queuePosition,
     totalMembers: enrollment.totalMembers,
@@ -617,21 +618,13 @@ export default function HomeScreenV3() {
   };
 
   const handleRoscaPress = (rosca: RoscaUI) => {
-    // Navigate to RoscaDetailScreen with enrollment data
-    const enrollment = {
-      id: rosca.id,
-      roscaName: rosca.name,
-      contributionAmount: rosca.contributionAmount,
-      frequency: rosca.frequency,
-      payoutAmount: rosca.payoutAmount,
-      isPayoutTurn: rosca.isPayoutTurn,
-      daysUntilNextPayment: rosca.daysLeft,
-      totalContributed: rosca.totalContributed,
-      progress: rosca.progress,
-      queuePosition: rosca.queuePosition,
-      totalMembers: rosca.totalMembers,
-    };
-    (navigation as any).navigate('RoscaDetailScreen', { enrollment });
+    // Find the full enrollment object (not the transformed RoscaUI)
+    const enrollment = enrollments.find(e => e.id === rosca.id);
+    if (enrollment) {
+      (navigation as any).navigate('RoscaDetailScreen', { enrollment });
+    } else {
+      logger.warn('[HomeScreenV3] Could not find enrollment for rosca', 'rosca', { roscaId: rosca.id });
+    }
   };
 
   const handleAvailableRoscaPress = (rosca: AvailableRoscaUI) => {
@@ -684,7 +677,7 @@ export default function HomeScreenV3() {
 
         {/* Greeting Header */}
         <GreetingHeader
-          firstName={user?.displayName || user?.firstName || user?.businessName}
+          firstName={user?.displayName || user?.firstName || user?.businessName || 'there'}
           activeCount={userRoscas.length}
           onSeeAll={handleSeeAll}
         />

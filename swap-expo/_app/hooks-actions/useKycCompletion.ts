@@ -11,7 +11,7 @@ import { useCallback } from 'react';
 import { Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { logger } from '../utils/logger';
+import logger from '../utils/logger';
 import apiClient from '../_api/apiClient';
 import { invalidateQueries } from '../tanstack-query/queryClient';
 import { ProfileStackParamList } from '../navigation/profileNavigator';
@@ -41,7 +41,8 @@ export type KycStepType =
   // Business KYC steps (verified with backend)
   | 'business_info'
   | 'business_address'
-  | 'business_owner_info';
+  | 'business_owner_info'
+  | 'beneficial_owners';
 
 /**
  * KYC Completion Options
@@ -85,6 +86,7 @@ export const useKycCompletion = () => {
       business_info: '/kyc/identity', // ✅ Same as personal - verified line 206
       business_address: '/kyc/address', // ✅ FIXED: was /kyc/business-address - verified line 296
       business_owner_info: '/kyc/team-members', // ✅ FIXED: was /kyc/business-owner-info - verified line 1177
+      beneficial_owners: '/kyc/team-members', // Uses same endpoint as business_owner_info
     };
 
     return endpointMap[stepType];
@@ -150,7 +152,7 @@ export const useKycCompletion = () => {
         if (nextStep === 'Passcode') {
           navigation.navigate('Passcode', { isKycFlow: true, ...navParams });
         } else {
-          navigation.navigate(nextStep, navParams);
+          (navigation.navigate as (name: string, params?: Record<string, unknown>) => void)(nextStep, navParams);
         }
         return;
       } else {
@@ -191,7 +193,7 @@ export const useKycCompletion = () => {
 
     const startTime = Date.now();
 
-    logger.info(`[useKycCompletion] 🚀 Starting KYC completion: ${stepType}`, {
+    logger.info(`[useKycCompletion] 🚀 Starting KYC completion: ${stepType}`, 'kyc', {
       stepType,
       returnToTimeline,
       dataSize: JSON.stringify(data || {}).length,
@@ -279,7 +281,7 @@ export const useKycCompletion = () => {
 
       // Phase 5: Success logging
       const duration = Date.now() - startTime;
-      logger.info(`[useKycCompletion] ✅ KYC completion successful: ${stepType}`, {
+      logger.info(`[useKycCompletion] ✅ KYC completion successful: ${stepType}`, 'kyc', {
         stepType,
         duration,
         cacheInvalidated: true,
@@ -288,13 +290,14 @@ export const useKycCompletion = () => {
 
       return { success: true };
 
-    } catch (error) {
+    } catch (err) {
+      const error = err as Error & { response?: { status?: number; data?: { message?: string } }; message?: string };
       const duration = Date.now() - startTime;
       const isOnline = networkService.isOnline();
 
       // If offline, the data is already saved locally and queued, so it's not a failure
       if (!isOnline && user?.entityId) {
-        logger.info(`[useKycCompletion] 📱 OFFLINE: ${stepType} saved locally and queued for later sync`, {
+        logger.info(`[useKycCompletion] 📱 OFFLINE: ${stepType} saved locally and queued for later sync`, 'kyc', {
           stepType,
           duration,
           queuedOperations: kycOfflineQueue.getPendingCount()
@@ -350,7 +353,7 @@ export const useKycCompletion = () => {
         ]
       );
 
-      return { success: false, error: error as Error };
+      return { success: false, error };
     }
   }, [getApiEndpoint, invalidateKycCache, handleNavigation, user]);
 

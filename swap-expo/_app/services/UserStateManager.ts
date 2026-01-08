@@ -266,7 +266,7 @@ class UserStateManager {
     });
 
     // 🚀 PHASE 2.2: Log state for smart notification debugging
-    logger.debug('[UserStateManager] 📊 User state updated:', {
+    logger.debug('[UserStateManager] User state updated', 'app', {
       isOnline: state.isOnline,
       currentChat: state.currentChat,
       appState: state.appState,

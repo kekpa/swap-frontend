@@ -338,7 +338,6 @@ const TransactionSearchScreen: React.FC<TransactionSearchScreenProps> = ({
             data={ftsResults.all}
             renderItem={renderFTSResult}
             keyExtractor={item => `${item.type}-${item.id}`}
-            estimatedItemSize={70}
             getItemType={(item) => item.type}
           />
         </View>
@@ -390,7 +389,6 @@ const TransactionSearchScreen: React.FC<TransactionSearchScreenProps> = ({
           data={searchResults}
           renderItem={renderTransaction}
           keyExtractor={item => item.id}
-          estimatedItemSize={60}
           ListHeaderComponent={() => searchResults.length > 0 ? renderDateHeader(searchResults[0].dateGroup) : null}
           getItemType={() => 'transaction'}
         />

@@ -185,7 +185,7 @@ class KycOfflineQueue {
       try {
         await this.processKycOperation(queuedOp);
       } catch (error) {
-        logger.warn(`[KycOfflineQueue] ⚠️ PROCESS ERROR: Failed to process KYC operation ${queuedOp.id}:`, error);
+        logger.error(`[KycOfflineQueue] PROCESS ERROR: Failed to process KYC operation ${queuedOp.id}`, error, 'kyc');
       }
     }
 
@@ -364,7 +364,7 @@ class KycOfflineQueue {
       try {
         listener(queue);
       } catch (error) {
-        logger.warn('[KycOfflineQueue] ⚠️ LISTENER ERROR: KYC queue listener failed:', error);
+        logger.error('[KycOfflineQueue] LISTENER ERROR: KYC queue listener failed', error, 'kyc');
       }
     }
   }

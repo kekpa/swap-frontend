@@ -33,28 +33,31 @@ export const useThemedStyles = <T extends StyleSheet.NamedStyles<T>>(
   return StyleSheet.create(stylesFn(theme));
 };
 
+// Type for simple color keys (excludes nested objects like status, statusBackground)
+type SimpleColorKey = Exclude<keyof Theme["colors"], 'status' | 'statusBackground'>;
+
 /**
  * Hook to get a specific color from the theme
- * @param colorName Name of the color in the theme
+ * @param colorName Name of the color in the theme (must be a simple color, not a nested object)
  * @returns The color value
  */
-export const useThemeColor = (colorName: keyof Theme["colors"]): string => {
+export const useThemeColor = (colorName: SimpleColorKey): string => {
   const { theme } = useTheme();
-  return theme.colors[colorName];
+  return theme.colors[colorName] as string;
 };
 
 // Props for themed components
 interface ThemedTextProps {
   style?: TextStyle | TextStyle[];
   variant?: "body" | "caption" | "title" | "heading" | "subheading";
-  color?: keyof Theme["colors"];
+  color?: SimpleColorKey;
   children: React.ReactNode;
   [key: string]: any;
 }
 
 interface ThemedViewProps {
   style?: ViewStyle | ViewStyle[];
-  backgroundColor?: keyof Theme["colors"];
+  backgroundColor?: SimpleColorKey;
   children: React.ReactNode;
   [key: string]: any;
 }

@@ -259,7 +259,6 @@ const SelectContactScreen: React.FC<SelectContactScreenProps> = ({
               </TouchableOpacity>
             )}
             keyExtractor={(item) => item.id}
-            estimatedItemSize={70}
             getItemType={() => 'contact'}
           />
         </View>

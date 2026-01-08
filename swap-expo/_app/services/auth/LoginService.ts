@@ -46,7 +46,7 @@ class LoginService {
   private static instance: LoginService;
 
   private constructor() {
-    logger.debug('[LoginService] Initialized');
+    logger.debug('[LoginService] Initialized', 'auth');
   }
 
   static getInstance(): LoginService {
@@ -61,12 +61,12 @@ class LoginService {
    * This is the ONLY login function - replaces login(), loginBusiness(), unifiedLogin()
    */
   async login(identifier: string, password: string): Promise<LoginResult> {
-    logger.debug('[LoginService] Starting unified login for:', identifier);
+    logger.debug('[LoginService] Starting unified login for: ' + identifier, 'auth');
 
     try {
       // Get device info for session tracking
       const deviceInfo = await getFullDeviceInfo();
-      logger.debug('[LoginService] Device info:', deviceInfo);
+      logger.debug('[LoginService] Device info', 'auth', deviceInfo);
 
       // Step 1: Call unified login endpoint with device headers
       const response = await apiClient.post(
@@ -100,7 +100,7 @@ class LoginService {
       }
 
       const userType = authData.user_type || 'personal';
-      logger.debug('[LoginService] User type detected:', userType);
+      logger.debug('[LoginService] User type detected: ' + userType, 'auth');
 
       // Step 2: Save tokens
       tokenManager.setAccessToken(authData.access_token);
@@ -170,12 +170,12 @@ class LoginService {
       // This prevents showing LockScreen after fresh password login
       try {
         await appLockService.unlock();
-        logger.debug('[LoginService] App lock auto-unlocked after password login');
+        logger.debug('[LoginService] App lock auto-unlocked after password login', 'auth');
       } catch (e) {
         // Non-fatal - app lock may not be configured
       }
 
-      logger.debug('[LoginService] Login completed successfully');
+      logger.debug('[LoginService] Login completed successfully', 'auth');
 
       return {
         success: true,
@@ -184,7 +184,7 @@ class LoginService {
       };
 
     } catch (error: any) {
-      logger.error('[LoginService] Login error:', error);
+      logger.error('[LoginService] Login error', error, 'auth');
 
       // Check for specific error codes from backend
       const errorCode = error.response?.data?.code;
@@ -221,7 +221,7 @@ class LoginService {
    * @param targetProfileId - Optional specific profile ID to log into (personal or business UUID)
    */
   async loginWithPin(identifier: string, pin: string, targetProfileId?: string): Promise<LoginResult> {
-    logger.debug('[LoginService] Attempting PIN login for:', identifier, targetProfileId ? `(target: ${targetProfileId})` : '');
+    logger.debug(`[LoginService] Attempting PIN login for: ${identifier}${targetProfileId ? ` (target: ${targetProfileId})` : ''}`, 'auth');
 
     try {
       // Get device info for session tracking
@@ -302,16 +302,16 @@ class LoginService {
       // Auto-unlock app lock - PIN login is explicit authentication
       try {
         await appLockService.unlock();
-        logger.debug('[LoginService] App lock auto-unlocked after PIN login');
+        logger.debug('[LoginService] App lock auto-unlocked after PIN login', 'auth');
       } catch (e) {
         // Non-fatal
       }
 
-      logger.debug('[LoginService] PIN login successful');
+      logger.debug('[LoginService] PIN login successful', 'auth');
       return { success: true, user: sessionData };
 
     } catch (error: any) {
-      logger.error('[LoginService] PIN login error:', error);
+      logger.error('[LoginService] PIN login error', error, 'auth');
 
       if (error.response?.status === 401) {
         return {
@@ -337,7 +337,7 @@ class LoginService {
    * 3. Backend verifies token and returns JWT
    */
   async loginWithBiometric(): Promise<LoginResult> {
-    logger.debug('[LoginService] Attempting biometric login');
+    logger.debug('[LoginService] Attempting biometric login', 'auth');
 
     try {
       const biometricToken = await SecureStore.getItemAsync(BIOMETRIC_TOKEN_KEY);
@@ -397,15 +397,15 @@ class LoginService {
       // Auto-unlock app lock
       try {
         await appLockService.unlock();
-        logger.debug('[LoginService] App lock auto-unlocked after biometric login');
+        logger.debug('[LoginService] App lock auto-unlocked after biometric login', 'auth');
       } catch (e) {
         // Non-fatal
       }
 
-      logger.debug('[LoginService] Biometric login successful');
+      logger.debug('[LoginService] Biometric login successful', 'auth');
       return { success: true, user: sessionData };
     } catch (error: any) {
-      logger.error('[LoginService] Biometric login error:', error);
+      logger.error('[LoginService] Biometric login error', error, 'auth');
 
       // If token expired/revoked, clear local token
       if (error.response?.status === 401) {
@@ -433,7 +433,7 @@ class LoginService {
    * 3. Store token in SecureStore
    */
   async enableBiometricLogin(): Promise<{ success: boolean; message?: string }> {
-    logger.debug('[LoginService] Enabling biometric login');
+    logger.debug('[LoginService] Enabling biometric login', 'auth');
 
     try {
       const deviceInfo = await getFullDeviceInfo();
@@ -458,7 +458,7 @@ class LoginService {
 
       return { success: false, message: 'No token received from server' };
     } catch (error: any) {
-      logger.error('[LoginService] Failed to enable biometric:', error);
+      logger.error('[LoginService] Failed to enable biometric', error, 'auth');
       return {
         success: false,
         message: error.response?.data?.message || 'Failed to enable biometric',
@@ -470,7 +470,7 @@ class LoginService {
    * Disable biometric login for this device
    */
   async disableBiometricLogin(): Promise<void> {
-    logger.debug('[LoginService] Disabling biometric login');
+    logger.debug('[LoginService] Disabling biometric login', 'auth');
 
     try {
       const deviceInfo = await getFullDeviceInfo();
@@ -478,12 +478,12 @@ class LoginService {
         headers: { 'X-Device-Fingerprint': deviceInfo.fingerprint },
       });
     } catch (error) {
-      logger.warn('[LoginService] Failed to disable biometric on server:', error);
+      logger.warn('[LoginService] Failed to disable biometric on server', 'auth');
     }
 
     // Always clear local token
     await SecureStore.deleteItemAsync(BIOMETRIC_TOKEN_KEY);
-    logger.debug('[LoginService] Biometric token cleared');
+    logger.debug('[LoginService] Biometric token cleared', 'auth');
   }
 
   /**
@@ -508,9 +508,9 @@ class LoginService {
   async clearBiometricCredentials(): Promise<void> {
     try {
       await SecureStore.deleteItemAsync(BIOMETRIC_TOKEN_KEY);
-      logger.debug('[LoginService] Biometric token cleared');
+      logger.debug('[LoginService] Biometric token cleared', 'auth');
     } catch (error) {
-      logger.warn('[LoginService] Failed to clear biometric token:', error);
+      logger.warn('[LoginService] Failed to clear biometric token', 'auth');
     }
   }
 
@@ -525,7 +525,7 @@ class LoginService {
       }
       return null;
     } catch (error) {
-      logger.warn('[LoginService] Failed to fetch profile:', error);
+      logger.warn('[LoginService] Failed to fetch profile', 'auth');
       return null;
     }
   }
@@ -590,10 +590,10 @@ class LoginService {
               identifier
             );
           } else {
-            logger.debug('[LoginService] PIN already configured locally');
+            logger.debug('[LoginService] PIN already configured locally', 'auth');
           }
         } else {
-          logger.debug('[LoginService] No PIN configured on backend');
+          logger.debug('[LoginService] No PIN configured on backend', 'auth');
         }
       } else if (profile.type === 'business') {
         // Business profile: Check pin_configured
@@ -606,10 +606,10 @@ class LoginService {
               profile.pin_set_at
             );
           } else {
-            logger.debug('[LoginService] Business PIN already configured locally');
+            logger.debug('[LoginService] Business PIN already configured locally', 'auth');
           }
         } else {
-          logger.debug('[LoginService] No business PIN configured on backend');
+          logger.debug('[LoginService] No business PIN configured on backend', 'auth');
         }
       }
     } catch (error: any) {

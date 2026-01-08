@@ -16,14 +16,14 @@ import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useTheme } from '../../theme/ThemeContext';
 import { useAuthContext } from '../auth/context/AuthContext';
-import { InteractionsStackParamList } from '../../navigation/interactions/interactionsNavigator';
+import { RootStackParamList } from '../../navigation/rootNavigator';
 import SearchResultsList from '../../components2/SearchResultsList';
 import { getAvatarProps } from '../../utils/avatarUtils';
 import logger from '../../utils/logger';
 import { useUnifiedSearch, SearchResult } from '../../hooks-data/useUnifiedSearch';
 import { useInteractions, InteractionItem } from '../../hooks-data/useInteractions';
 
-type NavigationProp = StackNavigationProp<InteractionsStackParamList>;
+type NavigationProp = StackNavigationProp<RootStackParamList>;
 
 interface SearchOverlayProps {
   searchQuery: string;
@@ -108,7 +108,7 @@ const SearchOverlay: React.FC<SearchOverlayProps> = React.memo(({
         ? item.originalData.contactEntityId 
         : item.id;
         
-      const navParams: InteractionsStackParamList['ContactInteractionHistory2'] = {
+      const navParams: RootStackParamList['ContactInteractionHistory2'] = {
         contactId: contactId,
         contactName: item.name,
         contactInitials: item.initials,

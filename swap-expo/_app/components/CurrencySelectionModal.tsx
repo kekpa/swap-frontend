@@ -185,7 +185,6 @@ const CurrencySelectionModal: React.FC = () => {
         data={filteredCurrencies}
         renderItem={renderCurrencyItem}
         keyExtractor={(item) => item.code}
-        estimatedItemSize={70}
         style={styles.currencyList}
         showsVerticalScrollIndicator={false}
       />

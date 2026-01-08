@@ -55,7 +55,7 @@ class AccountsManagerService {
       }
 
       const parsed: AccountsData = JSON.parse(data);
-      logger.debug('[AccountsManager] Loaded accounts data:', {
+      logger.debug('[AccountsManager] Loaded accounts data', 'auth', {
         currentUserId: parsed.currentUserId,
         accountCount: parsed.accounts.length,
       });
@@ -152,7 +152,7 @@ class AccountsManagerService {
       data.currentUserId = userId;
       await SecureStore.setItemAsync(ACCOUNTS_STORAGE_KEY, JSON.stringify(data));
 
-      logger.info('[AccountsManager] Switched to account:', {
+      logger.info('[AccountsManager] Switched to account', 'auth', {
         userId,
         displayName: account.displayName,
       });

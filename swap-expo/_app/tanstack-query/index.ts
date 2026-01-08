@@ -8,12 +8,11 @@
 // Core query client and setup
 export {
   queryClient,
-  asyncStoragePersister,
-  initializeCachePersistence,
-  setupAppStateRefetch,
-  setupNetworkRefetch,
   initializeQueryClient,
   cleanupQueryClient,
+  getQueryClient,
+  invalidateQueries,
+  prefetchQuery,
 } from './queryClient';
 
 // Query provider
@@ -32,7 +31,7 @@ export * from './mutations';
 export * from './errors';
 
 // Background sync exports
-export * from './sync';
+export * from './sync/useBackgroundSync';
 
 // Configuration exports
 export * from './config';

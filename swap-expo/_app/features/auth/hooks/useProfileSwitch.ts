@@ -118,7 +118,7 @@ const authenticateWithBiometric = async (): Promise<BiometricAuthResult> => {
  */
 const switchProfileAPI = async (request: ProfileSwitchRequest): Promise<ProfileSwitchResponse> => {
   try {
-    logger.debug('[useProfileSwitch] 🔄 Calling backend to switch profile:', {
+    logger.debug('[useProfileSwitch] Calling backend to switch profile', 'auth', {
       targetProfileId: request.targetProfileId,
       biometricVerified: request.biometricVerified,
     });
@@ -133,7 +133,7 @@ const switchProfileAPI = async (request: ProfileSwitchRequest): Promise<ProfileS
       }
     );
 
-    logger.info('[useProfileSwitch] ✅ Profile switch successful:', {
+    logger.info('[useProfileSwitch] Profile switch successful', 'auth', {
       newEntityId: data.profile.entityId,
       profileType: data.profile.profileType,
       displayName: data.profile.displayName,

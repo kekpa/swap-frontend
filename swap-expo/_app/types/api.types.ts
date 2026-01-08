@@ -29,6 +29,14 @@ export interface ApiError {
   path?: string;
 }
 
+// HTTP/Axios error type (for error handling)
+export interface HttpError extends Error {
+  status?: number;
+  code?: string;
+  config?: { url?: string };
+  response?: unknown;
+}
+
 // API request options
 export interface ApiRequestOptions {
   headers?: Record<string, string>;

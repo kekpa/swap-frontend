@@ -28,7 +28,7 @@ import { useTheme } from '../../../theme/ThemeContext';
 import { Theme } from '../../../theme/theme';
 import { useDocumentUpload, DocumentType } from '../../../hooks-actions/useDocumentUpload';
 import { invalidateQueries } from '../../../tanstack-query/queryClient';
-import { useKycStatus } from '../../../hooks-data/useKycQuery';
+import { useKycStatus, KycDocument } from '../../../hooks-data/useKycQuery';
 import CameraCapture from '../../../components2/CameraCapture';
 import logger from '../../../utils/logger';
 import UploadOptionsSheet from '../../../components/UploadOptionsSheet';
@@ -81,7 +81,7 @@ const UploadIdScreen: React.FC = () => {
     if (!kycStatus) return { status: 'not_submitted', isUploaded: false, isActive: false };
 
     // Check if document is uploaded based on documents array
-    const isUploaded = kycStatus.documents && kycStatus.documents.some(doc => doc.document_type === docType);
+    const isUploaded = kycStatus.documents && kycStatus.documents.some((doc: KycDocument) => doc.document_type === docType);
     const isActive = kycStatus.active_document_type === docType; // Check if this is the active document
     
     return {
@@ -246,7 +246,7 @@ const UploadIdScreen: React.FC = () => {
         logger.debug(`[UploadIdScreen] ${currentSide} photo selected: ${imageUri}`);
       }
     } catch (error) {
-      logger.error('[UploadIdScreen] Error picking from library:', error);
+      logger.error('[UploadIdScreen] Error picking from library', error, 'kyc');
       Alert.alert(
         'Library Error',
         'Failed to pick photo from library. Please make sure library permissions are granted.',
@@ -283,7 +283,7 @@ const UploadIdScreen: React.FC = () => {
         setUploadState('review');
       }
     } catch (error) {
-      logger.error('[UploadIdScreen] Error handling file selection:', error);
+      logger.error('[UploadIdScreen] Error handling file selection', error, 'kyc');
       Alert.alert(
         'File Selection Error',
         'Failed to process selected file. Please try again.',
@@ -416,7 +416,7 @@ const UploadIdScreen: React.FC = () => {
       logger.debug('[UploadIdScreen] ✅ Document upload completed with cache invalidation');
       
     } catch (error) {
-      logger.error('[UploadIdScreen] Error during upload:', error);
+      logger.error('[UploadIdScreen] Error during upload', error, 'kyc');
       Alert.alert(
         'Upload Error',
         'An unexpected error occurred. Please try again.',
@@ -965,13 +965,13 @@ const UploadIdScreen: React.FC = () => {
     const getDocumentUrls = () => {
       if (!kycStatus?.documents || !selectedDocType) return { front: null, back: null };
       
-      const docs = kycStatus.documents.filter(d => d.document_type === selectedDocType);
+      const docs = kycStatus.documents.filter((d: KycDocument) => d.document_type === selectedDocType);
       logger.trace('Looking for document type', 'kyc', { selectedDocType, docsFound: docs.length });
       
       if (needsBothSides(selectedDocType)) {
         // For dual-sided documents, find front and back
-        const frontDoc = docs.find(d => d.document_side === 'front');
-        const backDoc = docs.find(d => d.document_side === 'back');
+        const frontDoc = docs.find((d: KycDocument) => d.document_side === 'front');
+        const backDoc = docs.find((d: KycDocument) => d.document_side === 'back');
         
         return {
           front: frontDoc?.document_url || null,
@@ -979,7 +979,7 @@ const UploadIdScreen: React.FC = () => {
         };
       } else {
         // For single-sided documents, get the first one (should be 'single' side)
-        const doc = docs.find(d => d.document_side === 'single') || docs[0];
+        const doc = docs.find((d: KycDocument) => d.document_side === 'single') || docs[0];
         return {
           front: doc?.document_url || null,
           back: null
@@ -1019,7 +1019,7 @@ const UploadIdScreen: React.FC = () => {
                     onError={() => {
                       setFrontImageLoading(false);
                       setFrontImageError(true);
-                      logger.error('[UploadIdScreen] Front image failed to load:', documentUrls.front);
+                      logger.error('[UploadIdScreen] Front image failed to load', documentUrls.front, 'kyc');
                     }}
                   />
                   {frontImageLoading && (
@@ -1065,7 +1065,7 @@ const UploadIdScreen: React.FC = () => {
                     onError={() => {
                       setBackImageLoading(false);
                       setBackImageError(true);
-                      logger.error('[UploadIdScreen] Back image failed to load:', documentUrls.back);
+                      logger.error('[UploadIdScreen] Back image failed to load', documentUrls.back, 'kyc');
                     }}
                   />
                   {backImageLoading && (

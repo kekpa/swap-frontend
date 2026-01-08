@@ -107,7 +107,7 @@ const fetchRecentConversations = async (
       });
       
       if (fallbackConversations && fallbackConversations.length > 0) {
-        logger.info('[useRecentConversations] Using fallback cached conversations:', fallbackConversations.length);
+        logger.info(`[useRecentConversations] Using fallback cached conversations: ${fallbackConversations.length}`);
         return fallbackConversations;
       }
     } catch (fallbackError) {
